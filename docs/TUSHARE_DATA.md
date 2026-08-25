@@ -123,5 +123,12 @@ token bytes in every artifact were checked separately.
 This proves one real read/capture/validate path and the account permissions needed by that
 window. It does not establish general quota behavior, historical completeness, source
 correctness, or licensed replay validity. The Provider therefore remains `enabled: false`,
-with no verified capabilities and trust tier `unverified`. Converting this Data Snapshot into
-a replay remains a separate, explicit market-microstructure model gate.
+with no verified capabilities and trust tier `unverified`.
+
+The separate `tushare-xshg-modeled-open.v1` replay gate validates a bounded
+`600028.SH`/SSE bundle, then consumes hash-bound daily/calendar Parquet bytes in memory
+without a token, network call, or derived licensed fixture. Its one-lot daily-open liquidity
+is explicitly modeled rather than observed. Generated-bundle tests cover that contract; two
+token-free runs of the named private bundle completed with identical replay identity on
+2026-08-25. Only non-reversible identity hashes are recorded in `A_SHARE_REPLAY.md`; licensed
+observations and metrics stay private.

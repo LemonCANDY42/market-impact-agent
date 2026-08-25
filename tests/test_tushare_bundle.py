@@ -10,7 +10,14 @@ from typing import Any, cast
 
 import pytest
 
+from market_impact_agent.backtests import (
+    BacktestRequest,
+    BacktestRunStatus,
+    SimulationSpec,
+    backtest_request_to_dict,
+)
 from market_impact_agent.cli import main
+from market_impact_agent.domain import Side, SignalIntent
 from market_impact_agent.tushare import (
     TUSHARE_HTTP_ENDPOINT,
     TushareHttpAdapter,
@@ -146,6 +153,47 @@ def request() -> TushareDataRequest:
         as_of_date=date(2019, 9, 18),
         start_date=date(2019, 9, 19),
         end_date=date(2019, 9, 23),
+    )
+
+
+def replay_request(data_snapshot_id: str, /, **changes: object) -> BacktestRequest:
+    values: dict[str, object] = {
+        "request_id": "synthetic-tushare-modeled-open-v1",
+        "signal": replay_signal("600028.XSHG"),
+        "as_of": datetime(2019, 9, 18, 23, 59, 59, tzinfo=UTC),
+        "start_at": datetime(2019, 9, 19, 1, 30, tzinfo=UTC),
+        "end_at": datetime(2019, 9, 23, 7, tzinfo=UTC),
+        "market": "CN",
+        "instrument_ids": ("600028.XSHG",),
+        "data_snapshot_id": data_snapshot_id,
+        "target_selection_ref": "manual-integration-fixture:abqaiq-600028.v1",
+        "strategy_ref": "event-impact-hold.v1",
+        "horizons_sessions": (1,),
+        "simulation": SimulationSpec(
+            data_granularity="tushare_unadjusted_daily.v1",
+            book_type="modeled_open_one_lot.v1",
+            fill_model="modeled_open_one_lot_no_slippage.v1",
+            fee_model="xshg_2019_fee_assumption.v1",
+            venue_ruleset="xshg_600028_main_board_10pct.v1",
+            base_currency="CNY",
+            starting_cash=Decimal("1000000"),
+            random_seed=0,
+        ),
+    }
+    values.update(changes)
+    return BacktestRequest(**cast(Any, values))
+
+
+def replay_signal(instrument_id: str) -> SignalIntent:
+    return SignalIntent(
+        signal_id="synthetic-tushare-signal-v1",
+        event_id="abqaiq-khurais-attack-2019",
+        instrument_id=instrument_id,
+        side=Side.BUY,
+        valid_from=datetime(2019, 9, 18, 23, 59, 59, tzinfo=UTC),
+        expires_at=datetime(2019, 9, 24, 1, 30, tzinfo=UTC),
+        evidence_refs=("aramco-attack-confirmation",),
+        invalidation_conditions=("synthetic fixture invalidated",),
     )
 
 
@@ -663,3 +711,231 @@ def test_cli_validates_a_written_bundle(
     assert result["valid"] is True
     assert result["path"] == bundle_path.as_posix()
     assert result["data_snapshot_id"] == bundle_path.name
+
+
+def test_modeled_open_adapter_converts_timestamps_volume_and_one_lot_liquidity(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("nautilus_trader")
+    from market_impact_agent.tushare_replay import load_validated_tushare_modeled_open
+
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path)
+    snapshot, contract = load_validated_tushare_modeled_open(bundle_path)
+
+    assert snapshot.bars[0].session_open_at.isoformat() == "2019-09-19T09:30:00+08:00"
+    assert snapshot.bars[0].session_close_at.isoformat() == "2019-09-19T15:00:00+08:00"
+    assert snapshot.bars[0].volume == 100_000
+    assert snapshot.bars[0].open_bid_quantity == 100
+    assert snapshot.bars[0].open_ask_quantity == 100
+    assert contract.data_adapter_name == "tushare-xshg-modeled-open"
+    assert tuple(item.name for item in contract.input_hashes) == (
+        "bundle",
+        "daily.parquet",
+        "trade_calendar.parquet",
+    )
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        ("changed", "daily.parquet hash does not match"),
+        ("symlink", "daily.parquet must be a real private file"),
+    ],
+)
+def test_modeled_open_adapter_rebinds_parquet_bytes_after_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replacement: str,
+    message: str,
+) -> None:
+    pytest.importorskip("nautilus_trader")
+    import market_impact_agent.tushare_replay as tushare_replay
+
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path)
+    original_validate = tushare_replay.validate_tushare_data_bundle
+
+    def validate_then_replace(path: Path) -> object:
+        bundle = original_validate(path)
+        daily_path = bundle.path / "daily.parquet"
+        if replacement == "changed":
+            daily_path.write_bytes(daily_path.read_bytes() + b"post-validation replacement")
+        else:
+            daily_path.unlink()
+            daily_path.symlink_to(bundle.path / "trade_calendar.parquet")
+        return bundle
+
+    monkeypatch.setattr(tushare_replay, "validate_tushare_data_bundle", validate_then_replace)
+
+    with pytest.raises(ValueError, match=message):
+        tushare_replay.load_validated_tushare_modeled_open(bundle_path)
+
+
+def test_modeled_open_adapter_uses_zero_liquidity_on_the_locked_side(tmp_path: Path) -> None:
+    pytest.importorskip("nautilus_trader")
+    from market_impact_agent.tushare_replay import load_validated_tushare_modeled_open
+
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path)
+    daily = pq.read_table(bundle_path / "daily.parquet")
+    rows = cast(list[dict[str, object]], daily.to_pylist())
+    rows[0]["open"] = Decimal("5.48")
+    rows[0]["high"] = Decimal("5.48")
+    rows[1]["open"] = Decimal("4.55")
+    rows[1]["low"] = Decimal("4.55")
+    changed = pa.Table.from_pylist(rows, schema=daily.schema)
+    bundle_path = _replace_parquet_and_reseal(
+        bundle_path,
+        "daily",
+        changed,
+        update_source_content_hash=True,
+    )
+
+    snapshot, _ = load_validated_tushare_modeled_open(bundle_path)
+
+    assert snapshot.bars[0].open_bid_quantity == 100
+    assert snapshot.bars[0].open_ask_quantity == 0
+    assert snapshot.bars[1].open_bid_quantity == 0
+    assert snapshot.bars[1].open_ask_quantity == 100
+
+
+def test_validated_tushare_replay_is_deterministic_and_binds_all_inputs(tmp_path: Path) -> None:
+    pytest.importorskip("nautilus_trader")
+    from market_impact_agent.tushare_replay import run_validated_tushare_replay
+
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path)
+    request_value = replay_request(bundle_path.name)
+
+    first = run_validated_tushare_replay(request_value, bundle_path)
+    second = run_validated_tushare_replay(request_value, bundle_path)
+
+    assert first.status is BacktestRunStatus.COMPLETED
+    assert first.result_hash == second.result_hash
+    assert first.metrics == second.metrics
+    assert first.manifest.run_id != second.manifest.run_id
+    assert first.manifest.data_adapter_name == "tushare-xshg-modeled-open"
+    assert tuple(item.name for item in first.manifest.input_hashes) == (
+        "bundle",
+        "daily.parquet",
+        "trade_calendar.parquet",
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"data_snapshot_id": "wrong-snapshot"}, "unsupported data_snapshot_id"),
+        (
+            {
+                "signal": replay_signal("601857.XSHG"),
+                "instrument_ids": ("601857.XSHG",),
+            },
+            "supports exactly the snapshot instrument",
+        ),
+        (
+            {"start_at": datetime(2019, 9, 20, 1, 30, tzinfo=UTC)},
+            "request start_at does not match",
+        ),
+        ({"horizons_sessions": (3,)}, "does not cover the requested holding horizon"),
+        (
+            {
+                "simulation": SimulationSpec(
+                    data_granularity="tushare_unadjusted_daily.v1",
+                    book_type="modeled_open_one_lot.v1",
+                    fill_model="modeled_open_one_lot_no_slippage.v1",
+                    fee_model="xshg_2019_fee_assumption.v1",
+                    venue_ruleset="unsupported-rules.v1",
+                    base_currency="CNY",
+                    starting_cash=Decimal("1000000"),
+                    random_seed=0,
+                )
+            },
+            "unsupported venue_ruleset",
+        ),
+    ],
+)
+def test_validated_tushare_replay_fails_closed_on_request_scope_mismatch(
+    tmp_path: Path,
+    change: dict[str, object],
+    message: str,
+) -> None:
+    pytest.importorskip("nautilus_trader")
+    from market_impact_agent.tushare_replay import run_validated_tushare_replay
+
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path)
+    result = run_validated_tushare_replay(
+        replay_request(bundle_path.name, **change),
+        bundle_path,
+    )
+
+    assert result.status is BacktestRunStatus.FAILED
+    assert message in result.failure_reasons[0]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        (
+            "pre_close",
+            Decimal("5.04"),
+            "pre_close discontinuity is ambiguous with a corporate action or source gap",
+        ),
+        ("high", Decimal("5.49"), "breaches the modeled XSHG 10% price band"),
+        ("vol", Decimal("1200.001"), "cannot be converted exactly from hands to shares"),
+    ],
+)
+def test_modeled_open_adapter_rejects_ambiguous_or_malformed_daily_data(
+    tmp_path: Path,
+    field: str,
+    value: Decimal,
+    message: str,
+) -> None:
+    pytest.importorskip("nautilus_trader")
+    from market_impact_agent.tushare_replay import load_validated_tushare_modeled_open
+
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path)
+    daily = pq.read_table(bundle_path / "daily.parquet")
+    rows = cast(list[dict[str, object]], daily.to_pylist())
+    row_index = 1 if field == "pre_close" else 0
+    rows[row_index][field] = value
+    changed = pa.Table.from_pylist(rows, schema=daily.schema)
+    bundle_path = _replace_parquet_and_reseal(
+        bundle_path,
+        "daily",
+        changed,
+        update_source_content_hash=True,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_validated_tushare_modeled_open(bundle_path)
+
+
+def test_backtest_cli_succeeds_without_token_and_rejects_tampered_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pytest.importorskip("nautilus_trader")
+    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+    bundle_path = write_tushare_data_bundle(capture(), tmp_path / "bundles")
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(backtest_request_to_dict(replay_request(bundle_path.name))),
+        encoding="utf-8",
+    )
+
+    command = [
+        "backtest",
+        "run",
+        "--request",
+        str(request_path),
+        "--data-snapshot",
+        str(bundle_path),
+    ]
+    assert main(command) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "completed"
+
+    daily_path = bundle_path / "daily.parquet"
+    daily_path.write_bytes(daily_path.read_bytes() + b"tampered")
+    assert main(command) == 1
+    failure = json.loads(capsys.readouterr().err)
+    assert failure["completed"] is False
+    assert "hash does not match" in failure["error"]

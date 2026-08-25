@@ -29,7 +29,8 @@ The bootstrap implements:
 - canonical domain contracts for signals, order intents, mandates, and approval;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
-- engine-neutral Backtest Request, Simulation Specification, Run Manifest, and Result;
+- strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
+  Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
   A-share replay covering a suspension, opening limit lock, lot size, fees, and slippage;
 - a language-neutral Tushare HTTPS adapter for bounded stock-listing, exchange-calendar, and
@@ -37,6 +38,9 @@ The bootstrap implements:
   with a disabled, unverified Provider manifest;
 - a private, content-addressed local Tushare Data Snapshot bundle with Parquet tables,
   hash/permission validation, and a stable `data_snapshot_id` for later replay requests;
+- a narrowly versioned `600028.XSHG` modeled-open adapter and token-free backtest CLI that
+  consume a validated private bundle in memory, with repeated-result local acceptance and
+  no derived licensed fixture committed;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -58,8 +62,10 @@ The first official token-backed local Tushare capture and validation completed o
 for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily window.
 It proves the language-neutral HTTPS adapter/capture/validation path and that the local
 credential worked for that account, target, and window. It does not prove general
-quota/permissions, completeness, historical truth, full-universe prices, Nautilus replay, or
-paper/live readiness. The Tushare Provider therefore remains disabled and unverified. See
+quota/permissions, completeness, historical truth, full-universe prices, actual liquidity or
+fillability, alpha, or paper/live readiness. The Tushare Provider therefore remains disabled
+and unverified. The modeled-open replay implementation is a separate deterministic
+simulation gate, not a Provider or source-truth claim. See
 [docs/TUSHARE_DATA.md](docs/TUSHARE_DATA.md).
 
 ## Architecture at a glance
@@ -91,6 +97,7 @@ Requirements:
 uv sync --all-extras --python 3.13
 uv run market-impact status
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
+uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright

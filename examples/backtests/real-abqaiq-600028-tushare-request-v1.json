@@ -1,0 +1,40 @@
+{
+  "schema_version": "market-impact.backtest-request.v1",
+  "request_id": "abqaiq-600028-tushare-modeled-open-v1",
+  "signal": {
+    "schema_version": "market-impact.signal-intent.v1",
+    "signal_id": "manual-integration-fixture-abqaiq-600028-v1",
+    "event_id": "abqaiq-khurais-attack-2019",
+    "instrument_id": "600028.XSHG",
+    "side": "buy",
+    "valid_from": "2019-09-18T23:59:59Z",
+    "expires_at": "2019-09-27T01:30:00Z",
+    "evidence_refs": [
+      "aramco-attack-confirmation",
+      "aramco-recovery-update",
+      "aramco-shipment-update"
+    ],
+    "invalidation_conditions": [
+      "restored production and inventories fully remove the prompt supply shortfall"
+    ]
+  },
+  "as_of": "2019-09-18T23:59:59Z",
+  "start_at": "2019-09-19T01:30:00Z",
+  "end_at": "2019-10-10T07:00:00Z",
+  "market": "CN",
+  "instrument_ids": ["600028.XSHG"],
+  "data_snapshot_id": "tushare-600028-sh-20190919-20191010-5289178b9ba1a6bc",
+  "target_selection_ref": "manual-integration-fixture:abqaiq-600028.v1",
+  "strategy_ref": "event-impact-hold.v1",
+  "horizons_sessions": [3],
+  "simulation": {
+    "data_granularity": "tushare_unadjusted_daily.v1",
+    "book_type": "modeled_open_one_lot.v1",
+    "fill_model": "modeled_open_one_lot_no_slippage.v1",
+    "fee_model": "xshg_2019_fee_assumption.v1",
+    "venue_ruleset": "xshg_600028_main_board_10pct.v1",
+    "base_currency": "CNY",
+    "starting_cash": "1000000",
+    "random_seed": 0
+  }
+}

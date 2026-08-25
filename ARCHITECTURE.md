@@ -119,9 +119,12 @@ First-party code supports Python `>=3.13,<3.15`.
 - Tushare is accessed through a language-neutral HTTPS adapter; licensed data remains
   local. One official token-backed local capture and validation completed on 2026-08-25
   for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily
-  window; the local credential worked for that account, target, and window. This proves
-  the adapter/capture/validation path only, not general quota/permissions, completeness,
-  historical truth, full-universe prices, Nautilus replay, or paper/live readiness. The
+  window; the local credential worked for that account, target, and window. A separately
+  versioned modeled-open adapter validated and consumed that exact private bundle twice
+  with identical replay identity for the narrow `600028.XSHG` Nautilus gate. This proves
+  neither general
+  quota/permissions, completeness, historical truth, full-universe prices, observed
+  liquidity/fillability, alpha, nor paper/live readiness. The
   Tushare Provider remains disabled and unverified. A universe reconstructed from current
   listing metadata stays bound to that retrieval snapshot and is not treated as proof
   against source revision or survivorship bias.

@@ -64,8 +64,12 @@ Paper validation never upgrades a provider to live validation.
 
 - `mock-execution` is the only enabled implementation in the bootstrap.
 - `NautilusBacktestBridge` is the accepted reference implementation of the engine-neutral
-  backtest port for the bounded synthetic XSHG cash-equity fixture. It is not a Provider
-  and grants no market-data, paper, live, IBKR, or VeighNa capability.
+  backtest port for the bounded synthetic XSHG cash-equity fixture. A separate versioned
+  modeled-open adapter can feed it from any fully validated `600028.SH`/SSE bundle matching
+  its snapshot, request window, and versioned rules; generated bundles cover this path in
+  tests, while the named private bundle/request is the first local acceptance evidence.
+  Modeled liquidity is not a Provider observation. Neither path grants market-data, paper,
+  live, IBKR, or VeighNa capability.
 - `tushare-http` implements a bounded read-only HTTPS contract for SSE/SZSE listing
   metadata, exchange calendars, and unadjusted daily bars. Its manifest remains disabled
   and unverified after the first token-backed local acceptance: one account, target, and

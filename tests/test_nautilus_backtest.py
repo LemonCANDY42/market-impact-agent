@@ -58,6 +58,7 @@ def request(
         market="CN",
         instrument_ids=("600028.XSHG",),
         data_snapshot_id="synthetic-xshg-600028-20260825-v1",
+        target_selection_ref="manual-integration-fixture:synthetic.v1",
         strategy_ref="event-impact-hold.v1",
         horizons_sessions=(3,),
         simulation=SimulationSpec(
@@ -152,7 +153,7 @@ def test_nautilus_bridge_replay_is_stable_when_warnings_are_errors() -> None:
         result = NautilusBacktestBridge(SNAPSHOT_PATH).run(request())
 
     assert result.status is BacktestRunStatus.COMPLETED
-    assert result.result_hash == "d18eddabac9e67e72c4ff0e6ffd07b621d9e4815b6e3e31da25812eb4e8edbf2"
+    assert result.result_hash == "9ef80a5e9247e108a25af703fdd1356cc285214896351d0bd94921358d7091d8"
 
 
 def test_repeated_frozen_replays_have_the_same_result_identity() -> None:
@@ -165,13 +166,13 @@ def test_repeated_frozen_replays_have_the_same_result_identity() -> None:
     assert second.status is BacktestRunStatus.COMPLETED
     assert first.manifest.run_id != second.manifest.run_id
     assert first.manifest.request_hash == (
-        "9c633288a772b62e18116457237769622e2d1fc9f433a2a5bc1136bbb277b0da"
+        "7b4c27086bdd810aaf1853217df5f92a23010600e22a485c5929fcf267c2690b"
     )
     assert first.manifest.engine_config_hash == (
-        "2c6839122f50ffc71bcb505d5055517f315fb32bc53198d5f79ab283e84a3f35"
+        "0761605fe3adf6bd300ced939338e57e4c5ebae003b52472c4e0a8aa42fc5a41"
     )
     assert first.result_hash == second.result_hash
-    assert first.result_hash == ("d18eddabac9e67e72c4ff0e6ffd07b621d9e4815b6e3e31da25812eb4e8edbf2")
+    assert first.result_hash == ("9ef80a5e9247e108a25af703fdd1356cc285214896351d0bd94921358d7091d8")
     assert first.metrics == second.metrics
     assert first.artifact_refs == second.artifact_refs
 

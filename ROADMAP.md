@@ -40,6 +40,12 @@ broker or backtest mutation is reachable from the research skill.
   Backtest Request without committing licensed data.
 - [x] Pass the first token-backed Tushare acceptance and retain its licensed Data Snapshot
   privately and locally; keep the Provider disabled/unverified and make no replay claim.
+- [x] Implement the strict validated-bundle to modeled-open Nautilus gate, request/result
+  codecs, input identity binding, and generated-bundle acceptance without licensed fixtures.
+- [x] Record the local repeated-result acceptance for the named private Tushare bundle:
+  two token-free runs on 2026-08-25 produced result identity
+  `661063d99b4a596a66692ec6abe2e79803ca711cf54f1caf6c572a941ef10c61`;
+  licensed observations and metrics remain private and ignored.
 - Record the data granularity, book type, fill model, fee model, venue rules, engine
   version, adapter version, and configuration in every replay manifest.
 - Compare event reasoning with sentiment, momentum, fixed mapping, and simple

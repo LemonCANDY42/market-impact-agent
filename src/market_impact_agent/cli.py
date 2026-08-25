@@ -13,6 +13,11 @@ from typing import Protocol, cast
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 from market_impact_agent import __version__
+from market_impact_agent.backtests import (
+    BacktestRunStatus,
+    backtest_request_from_dict,
+    backtest_result_to_dict,
+)
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
@@ -66,6 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Validate one local Tushare data bundle"
     )
     tushare_validate_parser.add_argument("path", type=Path)
+
+    backtest_parser = subparsers.add_parser("backtest", help="Run deterministic backtests")
+    backtest_subparsers = backtest_parser.add_subparsers(dest="backtest_command", required=True)
+    backtest_run_parser = backtest_subparsers.add_parser(
+        "run", help="Replay one strict request from a validated private Data Snapshot"
+    )
+    backtest_run_parser.add_argument("--request", required=True, type=Path)
+    backtest_run_parser.add_argument("--data-snapshot", required=True, type=Path)
     return parser
 
 
@@ -245,4 +258,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 0
+    if args.command == "backtest" and args.backtest_command == "run":
+        try:
+            request_payload = json.loads(args.request.read_text(encoding="utf-8"))
+            request = backtest_request_from_dict(request_payload)
+            from market_impact_agent.tushare_replay import run_validated_tushare_replay
+
+            result = run_validated_tushare_replay(request, args.data_snapshot)
+        except (
+            ImportError,
+            KeyError,
+            ModuleNotFoundError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(backtest_result_to_dict(result), indent=2, sort_keys=True))
+        return 0 if result.status is BacktestRunStatus.COMPLETED else 1
     raise AssertionError("unreachable command")

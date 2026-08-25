@@ -1,9 +1,12 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol, cast
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+
+from market_impact_agent.backtests import backtest_request_from_dict
 
 ROOT = Path(__file__).parents[1]
 
@@ -16,6 +19,8 @@ class Validator(Protocol):
     "schema_name",
     [
         "event-transmission.schema.json",
+        "backtest-request.schema.json",
+        "backtest-result.schema.json",
         "order-intent.schema.json",
         "provider-manifest.schema.json",
         "signal-intent.schema.json",
@@ -29,6 +34,7 @@ def test_schema_is_valid(schema_name: str) -> None:
     "example_path",
     [
         "examples/events/real-abqaiq-geopolitical-supply-shock.json",
+        "examples/backtests/real-abqaiq-600028-tushare-request-v1.json",
         "examples/events/synthetic-energy-supply-shock.json",
         "examples/providers/tushare-http-unverified.json",
         "examples/providers/veighna-external-bridge.json",
@@ -38,6 +44,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
     instance = load_json(ROOT / example_path)
     if example_path.startswith("examples/events/"):
         schema_name = "event-transmission.schema.json"
+    elif example_path.startswith("examples/backtests/"):
+        schema_name = "backtest-request.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     validator = Draft202012Validator(
@@ -96,6 +104,152 @@ def test_event_schema_allows_unknown_expectation_delta() -> None:
     )
 
     cast(Validator, validator).validate(event)
+
+
+def test_backtest_result_schema_closes_manifest_and_embedded_request() -> None:
+    request_schema = load_json(ROOT / "schemas" / "backtest-request.schema.json")
+    result_schema = load_json(ROOT / "schemas" / "backtest-result.schema.json")
+    expected_request_definition = {
+        key: value
+        for key, value in request_schema.items()
+        if key not in {"$schema", "$id", "title"}
+    }
+    definitions = cast(dict[str, object], result_schema["$defs"])
+    assert definitions["backtest_request"] == expected_request_definition
+
+    properties = cast(dict[str, Any], result_schema["properties"])
+    manifest = cast(dict[str, Any], properties["manifest"])
+    manifest_properties = cast(dict[str, Any], manifest["properties"])
+    assert manifest_properties["request"] == {"$ref": "#/$defs/backtest_request"}
+    validator = Draft202012Validator(
+        result_schema,
+        format_checker=FormatChecker(),
+    )
+    request = load_json(
+        ROOT / "examples" / "backtests" / "real-abqaiq-600028-tushare-request-v1.json"
+    )
+    result = {
+        "schema_version": "market-impact.backtest-result.v1",
+        "manifest": {
+            "run_id": "test-run",
+            "request": request,
+            "request_hash": "a" * 64,
+            "engine_name": "nautilus_trader",
+            "engine_version": "1.231.0",
+            "bridge_name": "nautilus-backtest",
+            "bridge_version": "0.2.0",
+            "data_adapter_name": "tushare-xshg-modeled-open",
+            "data_adapter_version": "1.0.0",
+            "input_hashes": [{"name": "bundle", "value": "b" * 64}],
+            "engine_config_hash": "c" * 64,
+            "executed_at": "2026-08-25T12:00:00Z",
+        },
+        "status": "failed",
+        "result_hash": "d" * 64,
+        "metrics": [{"name": "synthetic_metric", "value": "1.25", "unit": "ratio"}],
+        "artifact_refs": [],
+        "failure_reasons": ["synthetic failure"],
+    }
+
+    cast(Validator, validator).validate(result)
+
+    noncanonical_metric_result = deepcopy(result)
+    metrics = cast(list[dict[str, object]], noncanonical_metric_result["metrics"])
+    metrics[0]["value"] = "1.0"
+    with pytest.raises(ValidationError):
+        cast(Validator, validator).validate(noncanonical_metric_result)
+
+    request["unexpected"] = True
+    with pytest.raises(ValidationError, match="Additional properties are not allowed"):
+        cast(Validator, validator).validate(result)
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [
+        ("0", True),
+        ("0.0125", True),
+        ("-0.0125", True),
+        ("1.25", True),
+        ("-1.25", True),
+        ("0.0", False),
+        ("0.01250", False),
+        ("-0", False),
+        ("-0.0", False),
+        ("01", False),
+    ],
+)
+def test_backtest_result_schema_accepts_exactly_canonical_decimal_metrics(
+    value: str,
+    valid: bool,
+) -> None:
+    schema = load_json(ROOT / "schemas" / "backtest-result.schema.json")
+    metric_schema = cast(
+        dict[str, object],
+        cast(dict[str, Any], cast(dict[str, Any], schema["properties"])["metrics"])["items"],
+    )
+    validator = Draft202012Validator(metric_schema)
+    metric = {"name": "return", "value": value, "unit": "ratio"}
+
+    if valid:
+        cast(Validator, validator).validate(metric)
+    else:
+        with pytest.raises(ValidationError):
+            cast(Validator, validator).validate(metric)
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value", "valid"),
+    [
+        ("signal", "evidence_refs", ["evidence-1"], True),
+        ("signal", "evidence_refs", ["evidence-1", "evidence-1"], False),
+        ("signal", "invalidation_conditions", ["invalidate"], True),
+        ("signal", "invalidation_conditions", ["invalidate", "invalidate"], False),
+        ("simulation", "starting_cash", "1.25", True),
+        ("simulation", "starting_cash", "0.5", True),
+        ("simulation", "starting_cash", "0", False),
+        ("simulation", "starting_cash", "1.0", False),
+        ("simulation", "starting_cash", "1.20", False),
+    ],
+)
+def test_backtest_request_schema_and_codec_agree_on_signal_refs_and_decimals(
+    section: str,
+    field: str,
+    value: object,
+    valid: bool,
+) -> None:
+    request = deepcopy(
+        load_json(ROOT / "examples" / "backtests" / "real-abqaiq-600028-tushare-request-v1.json")
+    )
+    cast(dict[str, object], request[section])[field] = value
+    validator = Draft202012Validator(
+        load_json(ROOT / "schemas" / "backtest-request.schema.json"),
+        format_checker=FormatChecker(),
+    )
+
+    if valid:
+        cast(Validator, validator).validate(request)
+        backtest_request_from_dict(request)
+    else:
+        with pytest.raises(ValidationError):
+            cast(Validator, validator).validate(request)
+        with pytest.raises(ValueError):
+            backtest_request_from_dict(request)
+
+
+def test_real_backtest_request_binds_the_existing_event_evidence_and_manual_target() -> None:
+    event = load_json(ROOT / "examples/events/real-abqaiq-geopolitical-supply-shock.json")
+    request = load_json(
+        ROOT / "examples" / "backtests" / "real-abqaiq-600028-tushare-request-v1.json"
+    )
+    signal = cast(dict[str, Any], request["signal"])
+    envelope = cast(dict[str, Any], event["envelope"])
+    evidence = cast(list[dict[str, Any]], envelope["evidence"])
+    evidence_ids = {item["evidence_id"] for item in evidence}
+
+    assert signal["event_id"] == event["event_id"]
+    assert set(cast(list[str], signal["evidence_refs"])) <= evidence_ids
+    assert request["target_selection_ref"] == "manual-integration-fixture:abqaiq-600028.v1"
 
 
 def load_json(path: Path) -> dict[str, Any]:

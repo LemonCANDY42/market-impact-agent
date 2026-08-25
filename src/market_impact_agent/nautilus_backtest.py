@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from hashlib import sha256
@@ -30,6 +30,7 @@ from nautilus_trader.trading.strategy import Strategy
 from pandas.errors import Pandas4Warning  # pyright: ignore[reportMissingTypeStubs]
 
 from market_impact_agent.backtests import (
+    BacktestInputHash,
     BacktestMetric,
     BacktestRequest,
     BacktestResult,
@@ -86,6 +87,38 @@ class AShareDailyBarSnapshot:
     slippage_ticks: int
     bars: tuple[AShareDailyBar, ...]
     content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class NautilusReplayContract:
+    data_adapter_name: str
+    data_adapter_version: str
+    input_hashes: tuple[BacktestInputHash, ...]
+    data_granularity: str
+    book_type: str
+    fill_model: str
+    fee_model: str
+    venue_ruleset: str
+    exact_as_of: datetime | None
+    exact_start_at: datetime | None
+    exact_end_at: datetime | None
+    target_selection_ref: str | None
+
+
+_SYNTHETIC_REPLAY_CONTRACT = NautilusReplayContract(
+    data_adapter_name="synthetic-a-share-daily-bar-fixture",
+    data_adapter_version="1.0.0",
+    input_hashes=(),
+    data_granularity=_SUPPORTED_DATA_GRANULARITY,
+    book_type=_SUPPORTED_BOOK_TYPE,
+    fill_model=_SUPPORTED_FILL_MODEL,
+    fee_model=_SUPPORTED_FEE_MODEL,
+    venue_ruleset=_SUPPORTED_VENUE_RULESET,
+    exact_as_of=None,
+    exact_start_at=None,
+    exact_end_at=None,
+    target_selection_ref=None,
+)
 
 
 class AShareFixtureFeeModel(FeeModel):
@@ -199,6 +232,21 @@ class _EventImpactHoldStrategy(Strategy):
 class NautilusBacktestBridge:
     def __init__(self, snapshot_path: Path) -> None:
         self._snapshot = load_a_share_daily_bar_snapshot(snapshot_path)
+        self._contract = replace(
+            _SYNTHETIC_REPLAY_CONTRACT,
+            input_hashes=(BacktestInputHash("snapshot", self._snapshot.content_hash),),
+        )
+
+    @classmethod
+    def from_snapshot(
+        cls,
+        snapshot: AShareDailyBarSnapshot,
+        contract: NautilusReplayContract,
+    ) -> NautilusBacktestBridge:
+        instance = cls.__new__(cls)
+        instance._snapshot = snapshot
+        instance._contract = contract
+        return instance
 
     def run(self, request: BacktestRequest) -> BacktestResult:
         manifest = self._manifest(request)
@@ -231,6 +279,9 @@ class NautilusBacktestBridge:
             engine_version=nautilus_trader.__version__,
             bridge_name=_BRIDGE_NAME,
             bridge_version=_BRIDGE_VERSION,
+            data_adapter_name=self._contract.data_adapter_name,
+            data_adapter_version=self._contract.data_adapter_version,
+            input_hashes=self._contract.input_hashes,
             engine_config_hash=self._engine_config_hash(request),
             executed_at=datetime.now(UTC),
         )
@@ -242,14 +293,14 @@ class NautilusBacktestBridge:
             "strategy_ref": (request.strategy_ref, _SUPPORTED_STRATEGY),
             "data_granularity": (
                 request.simulation.data_granularity,
-                _SUPPORTED_DATA_GRANULARITY,
+                self._contract.data_granularity,
             ),
-            "book_type": (request.simulation.book_type, _SUPPORTED_BOOK_TYPE),
-            "fill_model": (request.simulation.fill_model, _SUPPORTED_FILL_MODEL),
-            "fee_model": (request.simulation.fee_model, _SUPPORTED_FEE_MODEL),
+            "book_type": (request.simulation.book_type, self._contract.book_type),
+            "fill_model": (request.simulation.fill_model, self._contract.fill_model),
+            "fee_model": (request.simulation.fee_model, self._contract.fee_model),
             "venue_ruleset": (
                 request.simulation.venue_ruleset,
-                _SUPPORTED_VENUE_RULESET,
+                self._contract.venue_ruleset,
             ),
             "base_currency": (request.simulation.base_currency, self._snapshot.currency),
         }
@@ -264,7 +315,19 @@ class NautilusBacktestBridge:
             )
         if request.instrument_ids != (self._snapshot.instrument_id,):
             raise ValueError("the first replay supports exactly the snapshot instrument")
-        _entry_order_side(request.signal.side)
+        for name, actual, wanted in (
+            ("as_of", request.as_of, self._contract.exact_as_of),
+            ("start_at", request.start_at, self._contract.exact_start_at),
+            ("end_at", request.end_at, self._contract.exact_end_at),
+        ):
+            if wanted is not None and actual != wanted:
+                raise ValueError(f"request {name} does not match the validated data window")
+        if (
+            self._contract.target_selection_ref is not None
+            and request.target_selection_ref != self._contract.target_selection_ref
+        ):
+            raise ValueError("request target_selection_ref does not match the integration fixture")
+        _entry_order_side(request.signal.side, self._contract.venue_ruleset)
         if len(request.horizons_sessions) != 1:
             raise ValueError("the first replay supports exactly one holding horizon")
 
@@ -303,7 +366,7 @@ class NautilusBacktestBridge:
             instrument_id=instrument_id,
             trade_quantity=Decimal(snapshot.lot_size),
             horizon_sessions=request.horizons_sessions[0],
-            entry_side=_entry_order_side(request.signal.side),
+            entry_side=_entry_order_side(request.signal.side, self._contract.venue_ruleset),
         )
         engine = BacktestEngine(
             config=BacktestEngineConfig(
@@ -362,6 +425,8 @@ class NautilusBacktestBridge:
         return _canonical_sha256(
             {
                 "allow_cash_borrowing": False,
+                "data_adapter_name": self._contract.data_adapter_name,
+                "data_adapter_version": self._contract.data_adapter_version,
                 "bar_execution": True,
                 "commission_rate": str(self._snapshot.commission_rate),
                 "fill_model": request.simulation.fill_model,
@@ -404,7 +469,7 @@ def load_a_share_daily_bar_snapshot(path: Path) -> AShareDailyBarSnapshot:
         bars=bars,
         content_hash=sha256(raw_bytes).hexdigest(),
     )
-    _validate_snapshot(snapshot)
+    validate_a_share_daily_bar_snapshot(snapshot)
     return snapshot
 
 
@@ -428,7 +493,7 @@ def _parse_bar(payload: dict[str, Any]) -> AShareDailyBar:
     )
 
 
-def _validate_snapshot(snapshot: AShareDailyBarSnapshot) -> None:
+def validate_a_share_daily_bar_snapshot(snapshot: AShareDailyBarSnapshot) -> None:
     if not snapshot.snapshot_id or not snapshot.instrument_id or not snapshot.currency:
         raise ValueError("snapshot identifiers and currency must not be empty")
     if not snapshot.bars:
@@ -439,8 +504,8 @@ def _validate_snapshot(snapshot: AShareDailyBarSnapshot) -> None:
         raise ValueError("commission assumptions must not be negative")
     if snapshot.sell_stamp_tax_rate < 0:
         raise ValueError("sell stamp tax assumption must not be negative")
-    if snapshot.slippage_ticks != 1:
-        raise ValueError("the first replay requires exactly one tick of slippage")
+    if snapshot.slippage_ticks not in (0, 1):
+        raise ValueError("the accepted replay contracts support zero or one slippage tick")
 
     prior_close: Decimal | None = None
     prior_close_at: datetime | None = None
@@ -484,6 +549,11 @@ def _validate_bar(snapshot: AShareDailyBarSnapshot, bar: AShareDailyBar) -> None
             or any(price != bar.previous_close for price in prices[1:])
         ):
             raise ValueError("suspended sessions must be flat with no volume or liquidity")
+        return
+
+    if bar.volume == 0:
+        if bar.open_bid_quantity != 0 or bar.open_ask_quantity != 0:
+            raise ValueError("zero-volume sessions cannot have modeled opening liquidity")
         return
 
     for quantity in (bar.open_bid_quantity, bar.open_ask_quantity):
@@ -617,7 +687,7 @@ def _canonical_sha256(payload: dict[str, object]) -> str:
     return sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _entry_order_side(signal_side: Side) -> OrderSide:
+def _entry_order_side(signal_side: Side, venue_ruleset: str) -> OrderSide:
     if signal_side is Side.BUY:
         return OrderSide.BUY
-    raise ValueError("xshg_cash_equity_fixture.v1 is long-only and does not support SELL signals")
+    raise ValueError(f"{venue_ruleset} is long-only and does not support SELL signals")

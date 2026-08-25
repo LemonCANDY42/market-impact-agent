@@ -67,6 +67,10 @@ class SignalIntent:
             raise ValueError("signal intents require at least one evidence reference")
         if not self.invalidation_conditions:
             raise ValueError("signal intents require at least one invalidation condition")
+        if len(self.evidence_refs) != len(set(self.evidence_refs)):
+            raise ValueError("signal intent evidence references must be unique")
+        if len(self.invalidation_conditions) != len(set(self.invalidation_conditions)):
+            raise ValueError("signal intent invalidation conditions must be unique")
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,12 +6,17 @@ from typing import cast
 import pytest
 
 from market_impact_agent.backtests import (
+    BacktestInputHash,
     BacktestMetric,
     BacktestRequest,
     BacktestResult,
     BacktestRunManifest,
     BacktestRunStatus,
     SimulationSpec,
+    backtest_request_from_dict,
+    backtest_request_to_dict,
+    backtest_result_from_dict,
+    backtest_result_to_dict,
     canonical_backtest_request_hash,
     canonical_backtest_result_hash,
 )
@@ -56,6 +61,7 @@ def request() -> BacktestRequest:
         market="CN",
         instrument_ids=("600028.XSHG",),
         data_snapshot_id="tushare-2026-08-25-v1",
+        target_selection_ref="manual-integration-fixture:test.v1",
         strategy_ref="event-impact-hold.v1",
         horizons_sessions=(1, 3, 10),
         simulation=simulation(),
@@ -77,6 +83,9 @@ def manifest(
         engine_version="1.231.0",
         bridge_name="nautilus-backtest",
         bridge_version="0.1.0",
+        data_adapter_name="test-adapter",
+        data_adapter_version="1.0.0",
+        input_hashes=(BacktestInputHash("snapshot", "a" * 64),),
         engine_config_hash="b" * 64,
         executed_at=executed_at,
     )
@@ -95,6 +104,7 @@ def test_backtest_request_requires_a_frozen_forward_window() -> None:
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=values.horizons_sessions,
             simulation=values.simulation,
@@ -110,6 +120,7 @@ def test_backtest_request_requires_a_frozen_forward_window() -> None:
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=values.horizons_sessions,
             simulation=values.simulation,
@@ -129,6 +140,7 @@ def test_backtest_request_binds_signal_target_and_validity() -> None:
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=values.horizons_sessions,
             simulation=values.simulation,
@@ -144,6 +156,7 @@ def test_backtest_request_binds_signal_target_and_validity() -> None:
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=values.horizons_sessions,
             simulation=values.simulation,
@@ -159,6 +172,7 @@ def test_backtest_request_binds_signal_target_and_validity() -> None:
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=values.horizons_sessions,
             simulation=values.simulation,
@@ -178,6 +192,7 @@ def test_backtest_request_rejects_ambiguous_scope() -> None:
             market=values.market,
             instrument_ids=("600028.XSHG", "600028.XSHG"),
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=values.horizons_sessions,
             simulation=values.simulation,
@@ -193,6 +208,7 @@ def test_backtest_request_rejects_ambiguous_scope() -> None:
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=(3, 1, 3),
             simulation=values.simulation,
@@ -233,6 +249,7 @@ def test_backtest_request_rejects_non_integer_runtime_horizons(
             market=values.market,
             instrument_ids=values.instrument_ids,
             data_snapshot_id=values.data_snapshot_id,
+            target_selection_ref=values.target_selection_ref,
             strategy_ref=values.strategy_ref,
             horizons_sessions=horizons_sessions,
             simulation=values.simulation,
@@ -264,6 +281,9 @@ def test_manifest_binds_exact_engine_bridge_and_configuration() -> None:
             engine_version="1.231.0",
             bridge_name="nautilus-backtest",
             bridge_version="0.1.0",
+            data_adapter_name="test-adapter",
+            data_adapter_version="1.0.0",
+            input_hashes=(BacktestInputHash("snapshot", "a" * 64),),
             engine_config_hash="b" * 64,
             executed_at=AS_OF + timedelta(days=30),
         )
@@ -278,6 +298,9 @@ def test_manifest_binds_exact_engine_bridge_and_configuration() -> None:
             engine_version="1.231.0",
             bridge_name="nautilus-backtest",
             bridge_version="0.1.0",
+            data_adapter_name="test-adapter",
+            data_adapter_version="1.0.0",
+            input_hashes=(BacktestInputHash("snapshot", "a" * 64),),
             engine_config_hash="b" * 64,
             executed_at=AS_OF + timedelta(days=30),
         )
@@ -298,6 +321,7 @@ def test_canonical_request_hash_normalizes_timestamps_and_decimals() -> None:
         market=values.market,
         instrument_ids=values.instrument_ids,
         data_snapshot_id=values.data_snapshot_id,
+        target_selection_ref=values.target_selection_ref,
         strategy_ref=values.strategy_ref,
         horizons_sessions=values.horizons_sessions,
         simulation=SimulationSpec(
@@ -335,6 +359,7 @@ def test_manifest_rejects_a_reused_hash_for_a_different_request() -> None:
         market=original.market,
         instrument_ids=original.instrument_ids,
         data_snapshot_id=original.data_snapshot_id,
+        target_selection_ref=original.target_selection_ref,
         strategy_ref=original.strategy_ref,
         horizons_sessions=original.horizons_sessions,
         simulation=original.simulation,
@@ -349,6 +374,9 @@ def test_manifest_rejects_a_reused_hash_for_a_different_request() -> None:
             engine_version="1.231.0",
             bridge_name="nautilus-backtest",
             bridge_version="0.1.0",
+            data_adapter_name="test-adapter",
+            data_adapter_version="1.0.0",
+            input_hashes=(BacktestInputHash("snapshot", "a" * 64),),
             engine_config_hash="b" * 64,
             executed_at=AS_OF + timedelta(days=30),
         )
@@ -438,3 +466,46 @@ def test_result_hash_omits_per_run_manifest_metadata() -> None:
     )
 
     assert replay_hash == first_hash
+
+
+def test_backtest_request_codec_is_strict_and_round_trips() -> None:
+    values = request()
+    payload = backtest_request_to_dict(values)
+
+    assert backtest_request_from_dict(payload) == values
+
+    payload["unexpected"] = True
+    with pytest.raises(ValueError, match="unknown fields: unexpected"):
+        backtest_request_from_dict(payload)
+
+
+def test_backtest_result_codec_is_strict_and_round_trips() -> None:
+    manifest_value = manifest()
+    metrics = (BacktestMetric("return", Decimal("0.0125"), "ratio"),)
+    result = BacktestResult(
+        manifest=manifest_value,
+        status=BacktestRunStatus.COMPLETED,
+        result_hash=canonical_backtest_result_hash(
+            manifest=manifest_value,
+            status=BacktestRunStatus.COMPLETED,
+            metrics=metrics,
+            artifact_refs=("artifact://returns.parquet",),
+            failure_reasons=(),
+        ),
+        metrics=metrics,
+        artifact_refs=("artifact://returns.parquet",),
+        failure_reasons=(),
+    )
+    payload = backtest_result_to_dict(result)
+
+    assert backtest_result_from_dict(payload) == result
+
+    cast(dict[str, object], payload["manifest"])["unexpected"] = True
+    with pytest.raises(ValueError, match="unknown fields: unexpected"):
+        backtest_result_from_dict(payload)
+
+    payload = backtest_result_to_dict(result)
+    metrics_payload = cast(list[dict[str, object]], payload["metrics"])
+    metrics_payload[0]["value"] = "0.01250"
+    with pytest.raises(ValueError, match="canonical finite decimal string"):
+        backtest_result_from_dict(payload)

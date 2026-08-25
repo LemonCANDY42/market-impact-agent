@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/backtest-result.schema.json",
+  "title": "Market Impact Backtest Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "manifest", "status", "result_hash", "metrics", "artifact_refs",
+    "failure_reasons"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.backtest-result.v1"},
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id", "request", "request_hash", "engine_name", "engine_version",
+        "bridge_name", "bridge_version", "data_adapter_name", "data_adapter_version",
+        "input_hashes", "engine_config_hash", "executed_at"
+      ],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "request": {"$ref": "#/$defs/backtest_request"},
+        "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "engine_name": {"type": "string", "minLength": 1},
+        "engine_version": {"type": "string", "minLength": 1},
+        "bridge_name": {"type": "string", "minLength": 1},
+        "bridge_version": {"type": "string", "minLength": 1},
+        "data_adapter_name": {"type": "string", "minLength": 1},
+        "data_adapter_version": {"type": "string", "minLength": 1},
+        "input_hashes": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        },
+        "engine_config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "executed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "status": {"enum": ["completed", "failed"]},
+    "result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "value", "unit"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$"},
+          "unit": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "artifact_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "failure_reasons": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "completed"}}},
+      "then": {"properties": {"failure_reasons": {"maxItems": 0}}},
+      "else": {"properties": {"failure_reasons": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "backtest_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "request_id", "signal", "as_of", "start_at", "end_at",
+        "market", "instrument_ids", "data_snapshot_id", "target_selection_ref",
+        "strategy_ref", "horizons_sessions", "simulation"
+      ],
+      "properties": {
+        "schema_version": {"const": "market-impact.backtest-request.v1"},
+        "request_id": {"type": "string", "minLength": 1},
+        "signal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version", "signal_id", "event_id", "instrument_id", "side", "valid_from",
+            "expires_at", "evidence_refs", "invalidation_conditions"
+          ],
+          "properties": {
+            "schema_version": {"const": "market-impact.signal-intent.v1"},
+            "signal_id": {"type": "string", "minLength": 1},
+            "event_id": {"type": "string", "minLength": 1},
+            "instrument_id": {"type": "string", "minLength": 1},
+            "side": {"enum": ["buy", "sell"]},
+            "valid_from": {"type": "string", "format": "date-time"},
+            "expires_at": {"type": "string", "format": "date-time"},
+            "evidence_refs": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "invalidation_conditions": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "as_of": {"type": "string", "format": "date-time"},
+        "start_at": {"type": "string", "format": "date-time"},
+        "end_at": {"type": "string", "format": "date-time"},
+        "market": {"type": "string", "minLength": 1},
+        "instrument_ids": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "data_snapshot_id": {"type": "string", "minLength": 1},
+        "target_selection_ref": {"type": "string", "minLength": 1},
+        "strategy_ref": {"type": "string", "minLength": 1},
+        "horizons_sessions": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "simulation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "data_granularity", "book_type", "fill_model", "fee_model", "venue_ruleset",
+            "base_currency", "starting_cash", "random_seed"
+          ],
+          "properties": {
+            "data_granularity": {"type": "string", "minLength": 1},
+            "book_type": {"type": "string", "minLength": 1},
+            "fill_model": {"type": "string", "minLength": 1},
+            "fee_model": {"type": "string", "minLength": 1},
+            "venue_ruleset": {"type": "string", "minLength": 1},
+            "base_currency": {"type": "string", "minLength": 1},
+            "starting_cash": {"type": "string", "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"},
+            "random_seed": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    }
+  }
+}
