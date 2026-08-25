@@ -96,3 +96,9 @@ Remain in Phase 2. Before another gate run:
 
 Failure remains a valid result and stops expansion. Phase 3 event-family promotion and Phase
 4 paper execution do not begin until the gate accepts real out-of-sample evidence.
+
+The first real cohort and the pre-outcome correction for honest long-only abstention semantics
+are now frozen in `docs/PHASE2_REAL_COHORT.md` and
+`examples/calibration/energy-supply-shock-cohort-v1.json`. The existing v1 gate and its
+single-event rejection remain historical evidence; the registered cohort must use the
+versioned v2 semantics described there.

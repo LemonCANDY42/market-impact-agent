@@ -1,0 +1,210 @@
+{
+  "schema_version": "market-impact.phase2-calibration-registration.v1",
+  "registration_id": "energy-supply-shock-cohort-20260825-v1",
+  "registered_at": "2026-08-25T16:43:21Z",
+  "gate_version": "energy-supply-shock-calibration.v2",
+  "instrument_id": "600028.XSHG",
+  "tushare_code": "600028.SH",
+  "market": "CN",
+  "target_selection_ref": "registered-a-share-integrated-oil-proxy:600028.v1",
+  "horizons_sessions": [1, 3, 10],
+  "simulation": {
+    "data_granularity": "tushare_unadjusted_daily_with_source_limits.v2",
+    "book_type": "modeled_open_one_lot.v1",
+    "fill_model": "modeled_open_one_lot_no_slippage.v1",
+    "fee_model": "xshg_2019_fee_assumption.v1",
+    "venue_ruleset": "xshg_main_board_source_limit.v2",
+    "base_currency": "CNY",
+    "starting_cash": "1000000",
+    "random_seed": 0
+  },
+  "variants": {
+    "event_reasoning": {
+      "strategy_ref": "energy-persistence-long-or-abstain.v1",
+      "rule": "BUY only when point-in-time evidence supports a net crude-supply contraction expected to persist beyond 10 Chinese trading sessions after named mitigation and resolution evidence; otherwise ABSTAIN."
+    },
+    "sentiment": {
+      "strategy_ref": "first-disclosure-supply-tone-long-or-abstain.v1",
+      "rule": "Apply the frozen supply-tone lexicon only to first_disclosure_text; BUY when disruption terms outnumber relief or expansion terms, otherwise ABSTAIN."
+    },
+    "momentum": {
+      "strategy_ref": "three-session-adjusted-close-momentum-long-or-abstain.v1",
+      "rule": "Using only source-bound observations whose session close is no later than as_of, BUY when the last adjusted close is strictly above the adjusted close three open sessions earlier; otherwise ABSTAIN."
+    },
+    "fixed_mapping": {
+      "strategy_ref": "primary-supply-direction-long-or-abstain.v1",
+      "rule": "BUY every cluster whose frozen primary_supply_direction is contraction, without considering persistence, mitigation, or resolution; otherwise ABSTAIN."
+    },
+    "simple_hold": {
+      "strategy_ref": "unconditional-one-lot-hold.v1",
+      "rule": "BUY one lot for every registered cluster."
+    }
+  },
+  "sentiment_lexicon": {
+    "disruption_terms": [
+      "blockade",
+      "blocked",
+      "force majeure",
+      "production suspension",
+      "sanctions",
+      "shortfall",
+      "supply deficit",
+      "supply shock",
+      "tight"
+    ],
+    "relief_or_expansion_terms": [
+      "available",
+      "excess supply",
+      "full capacity",
+      "fully restored",
+      "no shortfall",
+      "resume",
+      "surplus"
+    ]
+  },
+  "event_clusters": [
+    {
+      "event_cluster_id": "iran-jcpoa-sanctions-reimposition-2018",
+      "partition": "train",
+      "visible_at": "2018-05-08T23:59:59Z",
+      "data_start_date": "2018-05-03",
+      "evaluation_start_date": "2018-05-09",
+      "evaluation_end_date": "2018-06-01",
+      "primary_supply_direction": "contraction",
+      "first_disclosure_text": "United States participation ends and sanctions are reimposed.",
+      "registered_decisions": {
+        "event_reasoning": "buy",
+        "sentiment": "buy",
+        "fixed_mapping": "buy",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://trumpwhitehouse.archives.gov/presidential-actions/ceasing-u-s-participation-jcpoa-taking-additional-action-counter-iran-paths-nuclear-weapon/"
+      ],
+      "decision_basis": "The order began reimposing oil-related sanctions with a deadline up to 180 days, exceeding the longest evaluation horizon."
+    },
+    {
+      "event_cluster_id": "abqaiq-khurais-attack-recovery-2019",
+      "partition": "train",
+      "visible_at": "2019-09-18T23:59:59Z",
+      "data_start_date": "2019-09-12",
+      "evaluation_start_date": "2019-09-19",
+      "evaluation_end_date": "2019-10-10",
+      "primary_supply_direction": "contraction",
+      "first_disclosure_text": "Production suspension of 5.7 million barrels per day.",
+      "registered_decisions": {
+        "event_reasoning": "abstain",
+        "sentiment": "buy",
+        "fixed_mapping": "buy",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://www.aramco.com/en/news-media/news/2019/incidents-at-abqaiq-and-khurais",
+        "https://www.aramco.com/en/news-media/news/2019/saudi-aramco-swiftly-restores-production-capacity"
+      ],
+      "decision_basis": "By the cutoff, Aramco reported rapid restoration, full capacity by month-end, inventory mitigation, and no missed customer shipment."
+    },
+    {
+      "event_cluster_id": "libya-oil-export-blockade-2020",
+      "partition": "test",
+      "visible_at": "2020-01-31T23:59:59Z",
+      "data_start_date": "2020-01-20",
+      "evaluation_start_date": "2020-02-03",
+      "evaluation_end_date": "2020-02-24",
+      "primary_supply_direction": "contraction",
+      "first_disclosure_text": "Oil blockade and force majeure halted exports from eastern ports and onshore fields.",
+      "registered_decisions": {
+        "event_reasoning": "buy",
+        "sentiment": "buy",
+        "fixed_mapping": "buy",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://digitallibrary.un.org/record/3849419/files/S_PV.8710-EN.pdf"
+      ],
+      "decision_basis": "The Security Council record described force majeure across ports and fields with no resolution at the cutoff."
+    },
+    {
+      "event_cluster_id": "opec-plus-no-additional-cut-demand-shock-2020",
+      "partition": "test",
+      "visible_at": "2020-03-09T23:59:59Z",
+      "data_start_date": "2020-03-04",
+      "evaluation_start_date": "2020-03-10",
+      "evaluation_end_date": "2020-03-31",
+      "primary_supply_direction": "expansion",
+      "first_disclosure_text": "No additional production adjustment was agreed while demand contracted and excess supply grew.",
+      "registered_decisions": {
+        "event_reasoning": "abstain",
+        "sentiment": "abstain",
+        "fixed_mapping": "abstain",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://www.opec.org/pr-detail/316-05-mar-2020.html",
+        "https://www.iea.org/reports/oil-market-report-march-2020"
+      ],
+      "decision_basis": "The available evidence combined an unadopted cut recommendation with a demand collapse and excess-supply risk, not a persistent net contraction."
+    },
+    {
+      "event_cluster_id": "suez-ever-given-navigation-restored-2021",
+      "partition": "test",
+      "visible_at": "2021-03-31T23:59:59Z",
+      "data_start_date": "2021-03-25",
+      "evaluation_start_date": "2021-04-01",
+      "evaluation_end_date": "2021-04-23",
+      "primary_supply_direction": "contraction",
+      "first_disclosure_text": "The canal was blocked by the grounded vessel and navigation returned at full capacity.",
+      "registered_decisions": {
+        "event_reasoning": "abstain",
+        "sentiment": "abstain",
+        "fixed_mapping": "buy",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://www.suezcanal.gov.eg/English/MediaCenter/News/Pages/31-3-2021.aspx"
+      ],
+      "decision_basis": "The evaluation begins only after the authority reported full-capacity navigation, so the physical interruption was resolved before entry."
+    },
+    {
+      "event_cluster_id": "opec-plus-output-policy-deadlock-2021",
+      "partition": "test",
+      "visible_at": "2021-07-14T23:59:59Z",
+      "data_start_date": "2021-07-08",
+      "evaluation_start_date": "2021-07-15",
+      "evaluation_end_date": "2021-08-05",
+      "primary_supply_direction": "contraction",
+      "first_disclosure_text": "OPEC plus talks were called off and the supply deficit remained tight.",
+      "registered_decisions": {
+        "event_reasoning": "buy",
+        "sentiment": "buy",
+        "fixed_mapping": "buy",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://www.opec.org/pr-detail/212-05-jul-2021.html",
+        "https://www.iea.org/reports/oil-market-report-july-2021"
+      ],
+      "decision_basis": "At the cutoff the meeting remained called off, July quotas remained in place, and the IEA described an unresolved supply deficit beyond ten sessions."
+    },
+    {
+      "event_cluster_id": "russia-ukraine-oil-supply-risk-2022",
+      "partition": "test",
+      "visible_at": "2022-03-01T23:59:59Z",
+      "data_start_date": "2022-02-23",
+      "evaluation_start_date": "2022-03-02",
+      "evaluation_end_date": "2022-03-23",
+      "primary_supply_direction": "contraction",
+      "first_disclosure_text": "Russia invasion created tight markets and a risk of supply shortfall.",
+      "registered_decisions": {
+        "event_reasoning": "buy",
+        "sentiment": "buy",
+        "fixed_mapping": "buy",
+        "simple_hold": "buy"
+      },
+      "evidence_refs": [
+        "https://www.iea.org/news/iea-member-countries-to-make-60-million-barrels-of-oil-available-following-russias-invasion-of-ukraine"
+      ],
+      "decision_basis": "The emergency stock release responded to already tight markets and an unresolved geopolitical supply risk expected beyond ten sessions."
+    }
+  ]
+}
