@@ -100,7 +100,7 @@
         {
           "step_id": "capacity-to-crude-benchmark",
           "from": "saudi_production_capacity",
-          "to": "crude_benchmark",
+          "to": "commodity:crude_benchmark",
           "channel": "capacity_cost_inventory",
           "directness": "second_order",
           "mechanism": "lower immediately available production tightens expected prompt supply",
@@ -168,7 +168,7 @@
         {
           "step_id": "jet-fuel-to-airline-margin",
           "from": "jet_fuel_cost",
-          "to": "airline_margin_expectation",
+          "to": "industry:airlines",
           "channel": "capacity_cost_inventory",
           "directness": "fourth_order",
           "mechanism": "unhedged fuel costs compress expected operating margins",
@@ -236,7 +236,7 @@
         {
           "step_id": "attention-to-a-share-flow",
           "from": "energy_theme_attention",
-          "to": "a_share_energy_theme",
+          "to": "theme:a_share_energy",
           "channel": "positioning_liquidity_mechanics",
           "directness": "fourth_order",
           "mechanism": "short-horizon thematic rotation may create mechanical buying pressure",

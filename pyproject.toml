@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = ["jsonschema>=4.25,<5"]
 
+[project.optional-dependencies]
+nautilus = ["nautilus-trader==1.231.0"]
+
 [project.scripts]
 market-impact = "market_impact_agent.cli:main"
 

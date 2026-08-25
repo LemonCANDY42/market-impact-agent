@@ -141,6 +141,20 @@ class EventEnvelope:
             raise ValueError("event envelope evidence_id values must be unique")
         if any(item.visible_at > self.as_of for item in self.evidence):
             raise ValueError("event envelope contains future-visible evidence")
+        _validate_revision_lineage(self.evidence)
+
+    @property
+    def current_evidence(self) -> tuple[EvidenceItem, ...]:
+        """Return the current leaf of each visible revision chain in stable order."""
+        superseded_ids = {
+            item.supersedes_id for item in self.evidence if item.supersedes_id is not None
+        }
+        return tuple(
+            sorted(
+                (item for item in self.evidence if item.evidence_id not in superseded_ids),
+                key=lambda item: (item.visible_at, item.evidence_id),
+            )
+        )
 
     @property
     def independent_claim_count(self) -> int:
@@ -158,12 +172,11 @@ def materialize_event_envelope(
     evidence_ids = [item.evidence_id for item in evidence]
     if len(evidence_ids) != len(set(evidence_ids)):
         raise ValueError("evidence_id values must be unique before materialization")
+    _validate_revision_lineage(evidence)
 
-    eligible = tuple(item for item in evidence if item.visible_at <= as_of)
-    superseded_ids = {item.supersedes_id for item in eligible if item.supersedes_id is not None}
-    current = tuple(
+    eligible = tuple(
         sorted(
-            (item for item in eligible if item.evidence_id not in superseded_ids),
+            (item for item in evidence if item.visible_at <= as_of),
             key=lambda item: (item.visible_at, item.evidence_id),
         )
     )
@@ -171,7 +184,7 @@ def materialize_event_envelope(
         envelope_id=envelope_id,
         event_id=event_id,
         as_of=as_of,
-        evidence=current,
+        evidence=eligible,
     )
 
 
@@ -206,7 +219,9 @@ def route_event_assessment(
     market_state_conflicting: bool = False,
     high_impact: bool = False,
 ) -> AssessmentRoute:
-    weak_evidence = any(item.source_tier not in _FAST_EVIDENCE_TIERS for item in envelope.evidence)
+    weak_evidence = any(
+        item.source_tier not in _FAST_EVIDENCE_TIERS for item in envelope.current_evidence
+    )
     if facts_disputed or not mapping_known or weak_evidence:
         reasons: list[str] = []
         if facts_disputed:
@@ -311,6 +326,8 @@ class TransmissionPath:
                 )
             if index and step.from_node != self.steps[index - 1].to_node:
                 raise ValueError("transmission path steps must be adjacent")
+        if self.steps[-1].to_node != self.target_ref:
+            raise ValueError("transmission path steps must end at target_ref")
         _require_unique(self.counterevidence_refs, "counterevidence_refs")
         _require_unique(self.blockers, "blockers")
         _require_unique_nonempty(self.invalidation_conditions, "invalidation_conditions")
@@ -346,12 +363,40 @@ class EventAssessment:
             path_ids.add(path.path_id)
             if len(path.steps) > self.route.max_depth:
                 raise ValueError("transmission path exceeds the route depth cap")
-            referenced = {ref for step in path.steps for ref in step.evidence_refs} | set(
-                path.counterevidence_refs
-            )
+            supporting = {ref for step in path.steps for ref in step.evidence_refs}
+            counterevidence = set(path.counterevidence_refs)
+            overlap = sorted(supporting & counterevidence)
+            if overlap:
+                raise ValueError(
+                    f"evidence cannot be both supporting and counterevidence: {', '.join(overlap)}"
+                )
+            referenced = supporting | counterevidence
             unknown = sorted(referenced - known_evidence)
             if unknown:
                 raise ValueError(f"unknown evidence reference: {', '.join(unknown)}")
+
+
+def _validate_revision_lineage(evidence: tuple[EvidenceItem, ...]) -> None:
+    by_id = {item.evidence_id: item for item in evidence}
+    successors: dict[str, int] = {}
+    for item in evidence:
+        target_id = item.supersedes_id
+        if target_id is None:
+            continue
+        target = by_id.get(target_id)
+        if target is None:
+            raise ValueError(
+                f"revision {item.evidence_id} supersedes unknown evidence: {target_id}"
+            )
+        if item.claim_id != target.claim_id:
+            raise ValueError(f"revision {item.evidence_id} must retain claim_id from {target_id}")
+        if item.visible_at <= target.visible_at:
+            raise ValueError(
+                f"revision {item.evidence_id} must be visible after superseded evidence {target_id}"
+            )
+        successors[target_id] = successors.get(target_id, 0) + 1
+        if successors[target_id] > 1:
+            raise ValueError(f"evidence {target_id} must have at most one direct revision")
 
 
 def _require_nonempty(value: str, field_name: str) -> None:

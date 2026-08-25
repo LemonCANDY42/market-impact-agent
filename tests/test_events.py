@@ -74,6 +74,74 @@ def test_event_validation_requires_directness_to_match_step_position() -> None:
     )
 
 
+def test_event_validation_requires_path_to_reach_target() -> None:
+    payload = load_event()
+    payload["transmission_paths"][0]["target_ref"] = "industry:unrelated"
+
+    assert event_transmission_chronology_errors(payload) == (
+        "transmission_paths[0].steps must end at target_ref",
+    )
+
+
+def test_event_validation_separates_supporting_and_counterevidence() -> None:
+    payload = load_event()
+    payload["transmission_paths"][0]["counterevidence_refs"].append("official-outage-confirmation")
+
+    assert event_transmission_chronology_errors(payload) == (
+        "transmission_paths[0] uses evidence as both supporting and counterevidence: "
+        "official-outage-confirmation",
+    )
+
+
+def test_event_validation_rejects_unknown_revision_target() -> None:
+    payload = load_event()
+    payload["envelope"]["evidence"][1]["supersedes_id"] = "missing-report"
+
+    assert event_transmission_chronology_errors(payload) == (
+        "revision official-outage-confirmation supersedes unknown evidence: missing-report",
+    )
+
+
+def test_event_validation_requires_revision_to_keep_claim_id() -> None:
+    payload = load_event()
+    original = payload["envelope"]["evidence"][0]
+    revision = payload["envelope"]["evidence"][1]
+    revision["supersedes_id"] = original["evidence_id"]
+
+    assert event_transmission_chronology_errors(payload) == (
+        "revision official-outage-confirmation must retain claim_id from "
+        "normal-throughput-baseline",
+    )
+
+
+def test_event_validation_requires_later_revision_visibility() -> None:
+    payload = load_event()
+    original = payload["envelope"]["evidence"][0]
+    revision = payload["envelope"]["evidence"][1]
+    original["claim_id"] = revision["claim_id"]
+    original["supersedes_id"] = revision["evidence_id"]
+
+    assert event_transmission_chronology_errors(payload) == (
+        "revision normal-throughput-baseline must be visible after superseded evidence "
+        "official-outage-confirmation",
+    )
+
+
+def test_event_validation_rejects_competing_direct_revisions() -> None:
+    payload = load_event()
+    original = payload["envelope"]["evidence"][0]
+    first_revision = payload["envelope"]["evidence"][1]
+    competing_revision = payload["envelope"]["evidence"][2]
+    first_revision["claim_id"] = original["claim_id"]
+    first_revision["supersedes_id"] = original["evidence_id"]
+    competing_revision["claim_id"] = original["claim_id"]
+    competing_revision["supersedes_id"] = original["evidence_id"]
+
+    assert event_transmission_chronology_errors(payload) == (
+        "evidence normal-throughput-baseline must have at most one direct revision",
+    )
+
+
 def test_event_validation_requires_values_for_known_expectation_delta() -> None:
     payload = load_event()
     payload["expectation_delta"]["expected"] = None

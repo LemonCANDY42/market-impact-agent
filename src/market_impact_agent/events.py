@@ -21,10 +21,12 @@ def event_transmission_chronology_errors(payload: object) -> tuple[str, ...]:
         errors.append("event_id must match envelope.event_id")
 
     evidence_ids: list[str] = []
+    revisions: list[tuple[str, str, datetime, str | None]] = []
     for index, item in enumerate(evidence):
         prefix = f"envelope.evidence[{index}]"
         evidence_id = _string_field(item, "evidence_id")
         evidence_ids.append(evidence_id)
+        claim_id = _string_field(item, "claim_id")
         claim = _string_field(item, "claim")
         claim_hash = _string_field(item, "claim_hash")
         published_at = _timestamp_field(item, "published_at")
@@ -38,13 +40,16 @@ def event_transmission_chronology_errors(payload: object) -> tuple[str, ...]:
             errors.append(f"{prefix}.visible_at must not be after retrieved_at")
         if visible_at > as_of:
             errors.append(f"{prefix}.visible_at must not be after envelope.as_of")
-        if item.get("supersedes_id") == evidence_id:
+        supersedes_id = _nullable_string_field(item, "supersedes_id")
+        revisions.append((evidence_id, claim_id, visible_at, supersedes_id))
+        if supersedes_id == evidence_id:
             errors.append(f"{prefix} must not supersede itself")
         if claim_hash != sha256(claim.encode()).hexdigest():
             errors.append(f"{prefix}.claim_hash must match claim")
 
     if len(evidence_ids) != len(set(evidence_ids)):
         errors.append("envelope evidence_id values must be unique")
+    errors.extend(_revision_lineage_errors(revisions))
 
     known_evidence = set(evidence_ids)
     expectation_delta = _object_field(fields, "expectation_delta")
@@ -78,7 +83,8 @@ def event_transmission_chronology_errors(payload: object) -> tuple[str, ...]:
             errors.append(f"{path_prefix}.steps exceed routing.max_depth")
         if len(steps) > len(_DIRECTNESS_BY_POSITION):
             errors.append(f"{path_prefix}.steps must not exceed fourth-order directness")
-        referenced = _string_array(path, "counterevidence_refs")
+        counterevidence = _string_array(path, "counterevidence_refs")
+        supporting: list[str] = []
         previous_to: str | None = None
         for step_index, step in enumerate(steps):
             step_prefix = f"{path_prefix}.steps[{step_index}]"
@@ -92,7 +98,16 @@ def event_transmission_chronology_errors(payload: object) -> tuple[str, ...]:
                     errors.append(
                         f"{step_prefix}.directness must be {expected_directness} for its position"
                     )
-            referenced.extend(_string_array(step, "evidence_refs"))
+            supporting.extend(_string_array(step, "evidence_refs"))
+        if previous_to != _string_field(path, "target_ref"):
+            errors.append(f"{path_prefix}.steps must end at target_ref")
+        overlap = sorted(set(supporting) & set(counterevidence))
+        if overlap:
+            errors.append(
+                f"{path_prefix} uses evidence as both supporting and counterevidence: "
+                f"{', '.join(overlap)}"
+            )
+        referenced = counterevidence + supporting
         unknown = sorted(set(referenced) - known_evidence)
         if unknown:
             errors.append(f"{path_prefix} has unknown evidence references: {', '.join(unknown)}")
@@ -154,6 +169,34 @@ def _positive_integer_field(payload: dict[str, object], name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         raise TypeError(f"{name} must be a positive integer")
     return value
+
+
+def _revision_lineage_errors(
+    revisions: list[tuple[str, str, datetime, str | None]],
+) -> list[str]:
+    by_id = {
+        evidence_id: (claim_id, visible_at) for evidence_id, claim_id, visible_at, _ in revisions
+    }
+    successors: dict[str, int] = {}
+    errors: list[str] = []
+    for evidence_id, claim_id, visible_at, supersedes_id in revisions:
+        if supersedes_id is None:
+            continue
+        target = by_id.get(supersedes_id)
+        if target is None:
+            errors.append(f"revision {evidence_id} supersedes unknown evidence: {supersedes_id}")
+            continue
+        target_claim_id, target_visible_at = target
+        if claim_id != target_claim_id:
+            errors.append(f"revision {evidence_id} must retain claim_id from {supersedes_id}")
+        if visible_at <= target_visible_at:
+            errors.append(
+                f"revision {evidence_id} must be visible after superseded evidence {supersedes_id}"
+            )
+        successors[supersedes_id] = successors.get(supersedes_id, 0) + 1
+        if successors[supersedes_id] > 1:
+            errors.append(f"evidence {supersedes_id} must have at most one direct revision")
+    return errors
 
 
 def _timestamp_field(payload: dict[str, object], name: str) -> datetime:

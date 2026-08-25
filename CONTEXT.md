@@ -61,6 +61,27 @@ Cluster to an affected security or market exposure. Each step states its
 directness, affected variable, counterevidence, blockers, and invalidation.
 _Avoid_: Correlation edge, causal score
 
+**Backtest Request**:
+An immutable, engine-neutral request embedding the exact Signal Intent content and binding
+it to a compatible point-in-time evaluation window, target-containing universe, data
+snapshot, strategy, and Simulation Specification.
+_Avoid_: Engine config, Order Intent
+
+**Simulation Specification**:
+The versioned market-data, fill, fee, venue-rule, capital, and randomness assumptions
+under which a Backtest Request is evaluated.
+_Avoid_: Trading Mandate, live venue configuration
+
+**Backtest Run Manifest**:
+An immutable record binding a Backtest Request to the exact engine, bridge, configuration,
+input hashes, and execution time used for one run.
+_Avoid_: Provider Manifest, backtest report
+
+**Backtest Result**:
+The normalized completed or failed outcome of one Backtest Run Manifest, including
+deterministic result identity, metrics, artifacts, or explicit failure reasons.
+_Avoid_: Broker receipt, live performance claim
+
 ## Decisions
 
 **Event Assessment**:

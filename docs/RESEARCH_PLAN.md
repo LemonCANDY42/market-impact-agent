@@ -120,7 +120,13 @@ technology-to-dividend/low-volatility rotation and El Niño-to-agriculture slice
 - Model A-share trading constraints: next executable price, T+1, price limits, suspensions,
   lot sizes, fees, slippage, and overnight gaps.
 - Split by event families and time, not random news rows.
-- Deduplicate syndicated reporting and keep revisions.
+- Deduplicate syndicated reporting, retain every revision visible at `as_of` for audit, and
+  derive a deterministic current-evidence view for research decisions.
+- Require each revision to reference one prior version of the same claim, advance its
+  visibility time, and avoid competing successor branches.
+- Require every Transmission Path to end at its declared target and keep supporting
+  evidence disjoint from explicit counterevidence; semantic truth remains a research
+  judgment rather than a validator guess.
 - Compare incremental value over price/volume and simple exposure baselines.
 - Report coverage, drawdown, turnover, calibration, and tail loss with Sharpe.
 - Run a forward paper shadow before any live-validation proposal.

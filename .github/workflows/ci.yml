@@ -23,7 +23,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --locked --python "${{ matrix.python-version }}"
+      - run: uv sync --locked --all-extras --python "${{ matrix.python-version }}"
       - run: uv run --locked ruff check .
       - run: uv run --locked ruff format --check .
       - run: uv run --locked pyright

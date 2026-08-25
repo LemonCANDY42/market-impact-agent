@@ -2,8 +2,9 @@
 
 Providers expose external market-data, account, or execution capabilities to the Harness.
 A provider may use a native Python adapter, MCP, HTTP, or gRPC. Transport is an
-integration choice, not a trust signal. The default Nautilus engine foundation is not a
-Provider by itself; Phase 2 defines a separate engine-neutral backtest request/result port.
+integration choice, not a trust signal. Backtest engines implement the separate
+engine-neutral `BacktestBridge` request/result port; doing so does not register a Provider
+or grant any market-data, paper, or live capability.
 
 ## Registration
 
@@ -62,9 +63,9 @@ Paper validation never upgrades a provider to live validation.
 ## Initial adapters
 
 - `mock-execution` is the only enabled implementation in the bootstrap.
-- NautilusTrader is the selected default engine foundation and behavioral reference. The
-  planned Phase 2 `NautilusBacktestBridge` is not an execution Provider and grants no
-  paper or live capability.
+- `NautilusBacktestBridge` is the accepted reference implementation of the engine-neutral
+  backtest port for the bounded synthetic XSHG cash-equity fixture. It is not a Provider
+  and grants no market-data, paper, live, IBKR, or VeighNa capability.
 - Tushare is a planned read-only A-share data provider.
 - `ibkr-nautilus-paper` is the first planned US/HK paper Provider identity. It binds a
   pinned Nautilus version, the official IB adapter, Harness translation, configuration,
@@ -83,11 +84,11 @@ stream and query recovery, external-order classification, and reconciliation—b
 Nautilus does not automatically satisfy them. Public schemas and normalized domain events
 never expose NautilusTrader types.
 
-The bootstrap runtime protocol is execution-only. Phase 2 introduces a separate narrow
-backtest port rather than forcing a replay request through `submit/cancel/reconcile`.
-Other engines implement the relevant Harness ports through their own adapters; they do
-not need to reproduce Nautilus-specific strategy APIs, OMS modes, execution algorithms,
-or unsupported order types.
+The bootstrap execution runtime remains separate from the narrow engine-neutral backtest
+port; replay requests never pass through `submit/cancel/reconcile`. Other engines can
+implement `BacktestBridge` through their own adapters and need not reproduce
+Nautilus-specific strategy APIs, OMS modes, execution algorithms, or unsupported order
+types.
 
 ## Failure behavior
 

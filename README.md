@@ -29,6 +29,9 @@ The bootstrap implements:
 - canonical domain contracts for signals, order intents, mandates, and approval;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
+- engine-neutral Backtest Request, Simulation Specification, Run Manifest, and Result;
+- a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
+  A-share replay covering a suspension, opening limit lock, lot size, fees, and slippage;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -37,16 +40,15 @@ The bootstrap implements:
 
 Planned integrations are documented but **not claimed as working**:
 
-- NautilusTrader as the default foundational engine, with a backtest bridge first and a
-  separately validated IBKR paper Provider later;
+- a separately validated Nautilus-to-IBKR paper Provider;
 - Tushare HTTP market data;
 - an external-process VeighNa bridge for future A-share gateways;
 - MCP, HTTP/gRPC, and native Python provider transports.
 
 NautilusTrader is the selected default engine foundation and behavioral reference. The
-Harness will first use it through an engine-neutral backtest bridge; later execution
-Providers still pass through the same policy, approval, and audit boundary. The bootstrap
-does not yet depend on, initialize, or pin a Nautilus version.
+Harness uses it through an engine-neutral backtest bridge; later execution Providers still
+pass through the same policy, approval, and audit boundary. Version `1.231.0` is an
+optional, exact dependency and grants backtest capability only.
 
 ## Architecture at a glance
 
@@ -74,7 +76,7 @@ Requirements:
 - [uv](https://docs.astral.sh/uv/)
 
 ```bash
-uv sync --python 3.13
+uv sync --all-extras --python 3.13
 uv run market-impact status
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
 uv run ruff check .

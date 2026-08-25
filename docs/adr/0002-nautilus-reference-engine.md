@@ -33,12 +33,19 @@ version and the official IB adapter. Keep VeighNa as a sibling external-process 
 bridge for supported A-share gateways. Allow a direct IBKR, LEAN, or other integration
 when it passes the relevant Harness acceptance suite.
 
-Do not pin a Nautilus version in the bootstrap. Phase 2 first compares the accepted 1.x
-line with the then-current stable 2.x line on Python 3.13 and 3.14; release-candidate
-availability alone is not production acceptance.
+The 2026-08-25 compatibility spike selected stable `1.231.0` as the first Phase 2 bridge
+implementation candidate after successful Python 3.13 and 3.14 engine construction.
+`2.0.0rc3` passed the same construction check but remains comparison-only because the
+NautilusTrader PyPI project page states that release candidates are for community testing
+and are not recommended for production. Add neither dependency to the bootstrap until the
+deterministic replay slice is implemented.
 
-The bootstrap records this decision but does not install, import, enable, or claim a
-working NautilusTrader integration.
+The deterministic slice subsequently passed against a frozen synthetic XSHG cash-equity
+snapshot: two runs produced the same normalized result identity while exercising a
+suspension, an opening upper-limit liquidity lock, a 100-share lot, one-tick slippage,
+fees, and a T+1-safe three-session hold. NautilusTrader `1.231.0` is therefore pinned as
+an optional dependency. This acceptance grants backtesting only; it does not install or
+claim IBKR, VeighNa, paper, or live capability.
 
 ## Consequences
 

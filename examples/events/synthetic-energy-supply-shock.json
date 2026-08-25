@@ -85,7 +85,7 @@
         {
           "step_id": "supply-to-crude",
           "from": "physical_supply",
-          "to": "crude_benchmark",
+          "to": "commodity:crude_benchmark",
           "channel": "capacity_cost_inventory",
           "directness": "direct",
           "mechanism": "lower near-term physical availability",
@@ -136,7 +136,7 @@
         {
           "step_id": "jet-fuel-to-airlines",
           "from": "jet_fuel_cost",
-          "to": "airline_margin_expectation",
+          "to": "industry:airlines",
           "channel": "capacity_cost_inventory",
           "directness": "third_order",
           "mechanism": "unhedged fuel costs compress expected operating margins",
@@ -184,7 +184,7 @@
         {
           "step_id": "attention-to-a-share-flow",
           "from": "energy_theme_attention",
-          "to": "a_share_energy_theme",
+          "to": "theme:a_share_energy",
           "channel": "positioning_liquidity_mechanics",
           "directness": "third_order",
           "mechanism": "short-horizon thematic rotation creates mechanical buying pressure",

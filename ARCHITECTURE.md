@@ -65,11 +65,16 @@ small engine-neutral backtest request/result port and a `NautilusBacktestBridge`
 Provider integrations bind an exact engine, adapter, version, configuration, market, and
 environment; using Nautilus never grants capability or conformance by itself.
 
+The 2026-08-25 compatibility spike selected stable NautilusTrader `1.231.0`; the first
+synthetic A-share replay then passed repeated-result acceptance and enabled it as an exact
+optional dependency. `2.0.0rc3` remains a migration comparison only until a final v2
+release passes the same replay acceptance.
+
 ```text
 Harness domain / policy / canonical artifacts
     -> engine-neutral backtest and execution ports
          -> Nautilus engine foundation (default/reference)
-              -> NautilusBacktestBridge                    [Phase 2]
+              -> NautilusBacktestBridge                    [Phase 2 accepted first slice]
               -> ibkr-nautilus-paper Provider              [Phase 4]
          -> VeighNa external Provider bridge               [later]
          -> future direct IBKR, LEAN, or other adapters
@@ -107,9 +112,9 @@ implemented when the first replay slice requires it—not before.
 
 First-party code supports Python `>=3.13,<3.15`.
 
-- NautilusTrader is the default engine foundation. Its Phase 2 backtest bridge and later
-  paper Provider integrations are planned and disabled in the bootstrap; a compatible
-  release is deliberately not pinned before the compatibility spike.
+- NautilusTrader is the default engine foundation. Stable `1.231.0` is an exact optional
+  dependency for the accepted first replay slice; paper Provider integration remains
+  unimplemented and disabled.
 - Tushare is accessed through a language-neutral HTTP adapter; licensed data
   remains local.
 - VeighNa is an external-process bridge. VeighNa 4.4 and current A-share vendor

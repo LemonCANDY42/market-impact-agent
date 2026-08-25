@@ -28,10 +28,12 @@ broker or backtest mutation is reachable from the research skill.
 
 ## Phase 2 — Historical replay and calibration
 
-- Compare the accepted Nautilus 1.x line with the then-current stable 2.x line on Python
-  3.13/3.14, then pin one exact engine version.
-- Define the narrow engine-neutral backtest request/result port and implement only the
-  `NautilusBacktestBridge`; Nautilus types do not cross the Harness boundary.
+- [x] Compare stable Nautilus `1.231.0` with `2.0.0rc3` on Python 3.13/3.14;
+  select `1.231.0` as the first implementation candidate and keep the RC comparison-only.
+- [x] Define the narrow engine-neutral Backtest Request, Run Manifest, Result, and bridge
+  protocol without importing Nautilus types.
+- [x] Implement the `NautilusBacktestBridge` against pinned optional dependency `1.231.0`
+  and pass the first deterministic synthetic A-share replay twice with identical results.
 - Add the Tushare HTTP adapter and fixed pre-event A-share universes.
 - Record the data granularity, book type, fill model, fee model, venue rules, engine
   version, adapter version, and configuration in every replay manifest.

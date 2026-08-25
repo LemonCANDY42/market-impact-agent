@@ -128,29 +128,111 @@ def test_event_envelope_rejects_future_visible_evidence() -> None:
         )
 
 
-def test_materialization_filters_future_evidence_and_keeps_latest_visible_revision() -> None:
-    original = evidence("report-v1")
+def test_materialization_filters_future_evidence_and_retains_visible_revision_history() -> None:
+    original = evidence("report-v1", claim_id="throughput")
     revision = evidence(
         "report-v2",
+        claim_id="throughput",
         visible_at=at(2, 5),
         retrieved_at=at(2, 6),
         supersedes_id="report-v1",
     )
     future_revision = evidence(
         "report-v3",
+        claim_id="throughput",
         visible_at=at(3, 5),
         retrieved_at=at(3, 6),
         supersedes_id="report-v2",
+    )
+    independent = evidence(
+        "independent-report",
+        visible_at=at(2, 4),
+        retrieved_at=at(2, 5),
     )
 
     envelope = materialize_event_envelope(
         envelope_id="envelope-1",
         event_id="event-1",
         as_of=at(3),
-        evidence=(original, revision, future_revision),
+        evidence=(revision, future_revision, independent, original),
     )
 
-    assert [item.evidence_id for item in envelope.evidence] == ["report-v2"]
+    assert [item.evidence_id for item in envelope.evidence] == [
+        "report-v1",
+        "independent-report",
+        "report-v2",
+    ]
+    assert [item.evidence_id for item in envelope.current_evidence] == [
+        "independent-report",
+        "report-v2",
+    ]
+
+
+def test_materialization_rejects_an_unknown_revision_target() -> None:
+    with pytest.raises(ValueError, match="unknown evidence: missing-report"):
+        materialize_event_envelope(
+            envelope_id="envelope-1",
+            event_id="event-1",
+            as_of=at(3),
+            evidence=(evidence("report-v2", supersedes_id="missing-report"),),
+        )
+
+
+def test_event_envelope_rejects_invalid_revision_lineage() -> None:
+    original = evidence("report-v1", claim_id="throughput")
+    too_early_revision = evidence(
+        "report-v2",
+        claim_id="throughput",
+        supersedes_id="report-v1",
+    )
+
+    with pytest.raises(ValueError, match="must be visible after superseded evidence"):
+        EventEnvelope(
+            envelope_id="envelope-1",
+            event_id="event-1",
+            as_of=at(3),
+            evidence=(original, too_early_revision),
+        )
+
+
+def test_materialization_rejects_cross_claim_and_forked_revisions() -> None:
+    original = evidence("report-v1", claim_id="throughput")
+    cross_claim = evidence(
+        "report-v2",
+        claim_id="inventory",
+        visible_at=at(2, 5),
+        retrieved_at=at(2, 6),
+        supersedes_id="report-v1",
+    )
+    with pytest.raises(ValueError, match="must retain claim_id"):
+        materialize_event_envelope(
+            envelope_id="envelope-1",
+            event_id="event-1",
+            as_of=at(3),
+            evidence=(original, cross_claim),
+        )
+
+    revision = evidence(
+        "report-v2",
+        claim_id="throughput",
+        visible_at=at(2, 5),
+        retrieved_at=at(2, 6),
+        supersedes_id="report-v1",
+    )
+    competing_revision = evidence(
+        "report-v3",
+        claim_id="throughput",
+        visible_at=at(2, 6),
+        retrieved_at=at(2, 7),
+        supersedes_id="report-v1",
+    )
+    with pytest.raises(ValueError, match="must have at most one direct revision"):
+        materialize_event_envelope(
+            envelope_id="envelope-1",
+            event_id="event-1",
+            as_of=at(3),
+            evidence=(original, revision, competing_revision),
+        )
 
 
 def test_duplicate_reporting_does_not_inflate_independent_claim_count() -> None:
@@ -205,6 +287,34 @@ def test_unverified_source_forces_deep_assessment() -> None:
     assert route_event_assessment(envelope, mapping_known=True).mode is AssessmentMode.DEEP
 
 
+def test_superseded_weak_source_does_not_force_deep_assessment() -> None:
+    weak_original = evidence(
+        "social-post",
+        visible_at=at(2, 3),
+        retrieved_at=at(2, 4),
+        claim_id="outage-status",
+        tier=EvidenceTier.UNVERIFIED,
+    )
+    official_revision = evidence(
+        "official-confirmation",
+        visible_at=at(2, 5),
+        retrieved_at=at(2, 6),
+        claim_id="outage-status",
+        tier=EvidenceTier.OFFICIAL,
+        supersedes_id="social-post",
+    )
+    envelope = EventEnvelope(
+        envelope_id="envelope-1",
+        event_id="event-1",
+        as_of=at(3),
+        evidence=(weak_original, official_revision),
+    )
+
+    assert envelope.evidence == (weak_original, official_revision)
+    assert envelope.current_evidence == (official_revision,)
+    assert route_event_assessment(envelope, mapping_known=True).mode is AssessmentMode.FAST
+
+
 def test_fast_route_cannot_exceed_second_order_depth() -> None:
     with pytest.raises(ValueError, match="fast assessment routes cannot exceed second-order depth"):
         AssessmentRoute(
@@ -226,7 +336,7 @@ def test_event_assessment_enforces_evidence_links_and_route_caps() -> None:
     step = TransmissionStep(
         step_id="step-1",
         from_node="physical_supply",
-        to_node="crude_benchmark",
+        to_node="asset:crude_benchmark",
         channel=TransmissionChannel.CAPACITY_COST_INVENTORY,
         directness=TransmissionDirectness.DIRECT,
         mechanism="lower near-term physical availability",
@@ -268,7 +378,7 @@ def test_event_assessment_enforces_evidence_links_and_route_caps() -> None:
     bad_step = TransmissionStep(
         step_id="step-2",
         from_node="physical_supply",
-        to_node="airlines",
+        to_node="industry:airlines",
         channel=TransmissionChannel.CAPACITY_COST_INVENTORY,
         directness=TransmissionDirectness.DIRECT,
         mechanism="higher expected fuel input cost",
@@ -398,4 +508,80 @@ def test_transmission_path_requires_adjacent_steps_and_directness_by_position() 
             counterevidence_refs=(),
             blockers=(),
             invalidation_conditions=("fuel hedges fully offset spot prices",),
+        )
+
+
+def test_transmission_path_must_reach_its_declared_target() -> None:
+    step = TransmissionStep(
+        step_id="step-1",
+        from_node="physical_supply",
+        to_node="commodity:crude_benchmark",
+        channel=TransmissionChannel.CAPACITY_COST_INVENTORY,
+        directness=TransmissionDirectness.DIRECT,
+        mechanism="lower near-term physical availability",
+        affected_variable="prompt crude availability",
+        expected_effect=ExpectedEffect.UP,
+        horizon_sessions=1,
+        confidence=0.8,
+        evidence_refs=("official-confirmation",),
+    )
+
+    with pytest.raises(ValueError, match="must end at target_ref"):
+        TransmissionPath(
+            path_id="unrelated-target-path",
+            target_ref="industry:airlines",
+            steps=(step,),
+            counterevidence_refs=(),
+            blockers=(),
+            invalidation_conditions=("replacement supply offsets the outage",),
+        )
+
+
+def test_event_assessment_rejects_supporting_evidence_as_counterevidence() -> None:
+    item = evidence("official-confirmation")
+    envelope = EventEnvelope(
+        envelope_id="envelope-1",
+        event_id="event-1",
+        as_of=at(3),
+        evidence=(item,),
+    )
+    step = TransmissionStep(
+        step_id="step-1",
+        from_node="physical_supply",
+        to_node="commodity:crude_benchmark",
+        channel=TransmissionChannel.CAPACITY_COST_INVENTORY,
+        directness=TransmissionDirectness.DIRECT,
+        mechanism="lower near-term physical availability",
+        affected_variable="prompt crude availability",
+        expected_effect=ExpectedEffect.UP,
+        horizon_sessions=1,
+        confidence=0.8,
+        evidence_refs=(item.evidence_id,),
+    )
+    path = TransmissionPath(
+        path_id="contradictory-path",
+        target_ref="commodity:crude_benchmark",
+        steps=(step,),
+        counterevidence_refs=(item.evidence_id,),
+        blockers=(),
+        invalidation_conditions=("replacement supply offsets the outage",),
+    )
+
+    with pytest.raises(ValueError, match="both supporting and counterevidence"):
+        EventAssessment(
+            assessment_id="assessment-1",
+            envelope=envelope,
+            archetype=EventArchetype.PHYSICAL_SUPPLY_LOGISTICS,
+            revelation_mode=RevelationMode.UNSCHEDULED,
+            stage=EventStage.CORROBORATED,
+            route=route_event_assessment(envelope, mapping_known=True),
+            expectation_delta=ExpectationDelta(
+                baseline_source_ref=item.evidence_id,
+                expected="normal throughput",
+                observed="material temporary outage",
+                direction=ExpectationDirection.NEGATIVE,
+                confidence=0.9,
+            ),
+            paths=(path,),
+            blockers=(),
         )
