@@ -22,6 +22,7 @@ classifiers = [
 dependencies = ["jsonschema>=4.25,<5"]
 
 [project.optional-dependencies]
+data = ["pyarrow==25.0.1"]
 nautilus = ["nautilus-trader==1.231.0"]
 
 [project.scripts]
@@ -34,6 +35,7 @@ Issues = "https://github.com/LemonCANDY42/market-impact-agent/issues"
 
 [dependency-groups]
 dev = [
+  "pyarrow==25.0.1",
   "pyright>=1.1.400,<2",
   "pytest>=8.4,<10",
   "ruff>=0.12,<1",

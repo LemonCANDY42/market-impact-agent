@@ -68,8 +68,11 @@ Paper validation never upgrades a provider to live validation.
   and grants no market-data, paper, live, IBKR, or VeighNa capability.
 - `tushare-http` implements a bounded read-only HTTPS contract for SSE/SZSE listing
   metadata, exchange calendars, and unadjusted daily bars. Its manifest remains disabled
-  and unverified: deterministic transport/shape/failure tests are not token-backed market
-  data acceptance, and no licensed response is committed.
+  and unverified after the first token-backed local acceptance: one account, target, and
+  window do not establish general permission, quota, completeness, or source correctness.
+  No licensed response is committed. Successful responses can be materialized only into
+  private local Data Snapshot bundles; this does not promote the Provider's capability or
+  grant the data source orchestration authority.
 - `ibkr-nautilus-paper` is the first planned US/HK paper Provider identity. It binds a
   pinned Nautilus version, the official IB adapter, Harness translation, configuration,
   market, and environment. A direct IBKR Provider remains possible if that stack cannot

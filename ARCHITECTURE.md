@@ -105,8 +105,9 @@ The initial state model is intentionally local:
 - Parquet for market and backtest series;
 - SQLite for run indexes, provider snapshots, intent outbox, and projected state.
 
-The bootstrap contains schemas and in-memory mock behavior only. Persistence is
-implemented when the first replay slice requires it—not before.
+The first persistence slice is a private, content-addressed local Tushare Data Snapshot:
+normalized listing, universe, calendar, and daily tables in Parquet plus a JSON manifest.
+SQLite state remains deferred until run indexing or execution lifecycle work requires it.
 
 ## Runtime boundary
 
@@ -116,9 +117,14 @@ First-party code supports Python `>=3.13,<3.15`.
   dependency for the accepted first replay slice; paper Provider integration remains
   unimplemented and disabled.
 - Tushare is accessed through a language-neutral HTTPS adapter; licensed data remains
-  local. The adapter is disabled and unverified until token-backed acceptance succeeds.
-  A universe reconstructed from current listing metadata stays bound to that retrieval
-  snapshot and is not treated as proof against source revision or survivorship bias.
+  local. One official token-backed local capture and validation completed on 2026-08-25
+  for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily
+  window; the local credential worked for that account, target, and window. This proves
+  the adapter/capture/validation path only, not general quota/permissions, completeness,
+  historical truth, full-universe prices, Nautilus replay, or paper/live readiness. The
+  Tushare Provider remains disabled and unverified. A universe reconstructed from current
+  listing metadata stays bound to that retrieval snapshot and is not treated as proof
+  against source revision or survivorship bias.
 - VeighNa is an external-process bridge. VeighNa 4.4 and current A-share vendor
   gateways do not provide a verified same-process Python 3.14/macOS path.
 - LEAN remains a comparison candidate in its own Docker/Python runtime and is

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import sys
 from collections.abc import Iterable, Sequence
+from datetime import date, datetime
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -14,6 +16,14 @@ from market_impact_agent import __version__
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
+from market_impact_agent.tushare import TushareHttpAdapter
+from market_impact_agent.tushare_bundle import (
+    TushareDataRequest,
+    ValidatedTushareDataBundle,
+    capture_tushare_data_bundle,
+    validate_tushare_data_bundle,
+    write_tushare_data_bundle,
+)
 
 
 class EventTransmissionValidator(Protocol):
@@ -40,6 +50,22 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Validate a point-in-time event assessment"
     )
     event_validate_parser.add_argument("path", type=Path)
+
+    tushare_parser = subparsers.add_parser(
+        "tushare", help="Capture or validate local Tushare data bundles"
+    )
+    tushare_subparsers = tushare_parser.add_subparsers(dest="tushare_command", required=True)
+    tushare_capture_parser = tushare_subparsers.add_parser(
+        "capture", help="Capture one token-backed read-only data window"
+    )
+    tushare_capture_parser.add_argument("--instrument", required=True)
+    tushare_capture_parser.add_argument("--as-of-date", required=True, type=_compact_date)
+    tushare_capture_parser.add_argument("--start-date", required=True, type=_compact_date)
+    tushare_capture_parser.add_argument("--end-date", required=True, type=_compact_date)
+    tushare_validate_parser = tushare_subparsers.add_parser(
+        "validate", help="Validate one local Tushare data bundle"
+    )
+    tushare_validate_parser.add_argument("path", type=Path)
     return parser
 
 
@@ -85,6 +111,26 @@ def validate_event(path: Path) -> dict[str, object]:
     }
 
 
+def capture_tushare(
+    *,
+    token: str,
+    tushare_code: str,
+    as_of_date: date,
+    start_date: date,
+    end_date: date,
+    output_root: Path = Path(".market-impact/tushare"),
+) -> ValidatedTushareDataBundle:
+    request = TushareDataRequest(
+        tushare_code=tushare_code,
+        as_of_date=as_of_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    capture = capture_tushare_data_bundle(TushareHttpAdapter(token), request)
+    path = write_tushare_data_bundle(capture, output_root)
+    return validate_tushare_data_bundle(path)
+
+
 def _event_transmission_schema_errors(payload: object) -> tuple[str, ...]:
     schema_path = _event_transmission_schema_path()
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -110,6 +156,13 @@ def _format_schema_error(error: ValidationError) -> str:
     return f"{error.json_path}: {error.message}"
 
 
+def _compact_date(value: str) -> date:
+    try:
+        return datetime.strptime(value, "%Y%m%d").date()
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("dates must use valid YYYYMMDD values") from exc
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
@@ -131,4 +184,65 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "tushare" and args.tushare_command == "capture":
+        token = os.environ.get("TUSHARE_TOKEN", "")
+        if not token:
+            print(
+                json.dumps({"captured": False, "error": "TUSHARE_TOKEN is not configured"}),
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            bundle = capture_tushare(
+                token=token,
+                tushare_code=args.instrument,
+                as_of_date=args.as_of_date,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"captured": False, "error": str(exc)}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "bundle_hash": bundle.bundle_hash,
+                    "captured": True,
+                    "data_snapshot_id": bundle.data_snapshot_id,
+                    "instrument_id": bundle.instrument_id,
+                    "listing_anomaly_count": bundle.listing_anomaly_count,
+                    "path": bundle.path.as_posix(),
+                    "provider_verified": False,
+                    "universe_id": bundle.universe_id,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "tushare" and args.tushare_command == "validate":
+        try:
+            bundle = validate_tushare_data_bundle(args.path)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "bundle_hash": bundle.bundle_hash,
+                    "data_snapshot_id": bundle.data_snapshot_id,
+                    "instrument_id": bundle.instrument_id,
+                    "listing_anomaly_count": bundle.listing_anomaly_count,
+                    "path": bundle.path.as_posix(),
+                    "universe_id": bundle.universe_id,
+                    "valid": True,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     raise AssertionError("unreachable command")

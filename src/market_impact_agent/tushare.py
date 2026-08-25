@@ -4,7 +4,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Protocol, cast
@@ -24,6 +24,7 @@ TUSHARE_PROVIDER_ID = "tushare-http"
 TUSHARE_ADAPTER_VERSION = "0.1.0"
 
 _DATE_PATTERN = re.compile(r"^\d{8}$")
+_STOCK_CODE_PATTERN = re.compile(r"^\d{6}\.(SH|SZ)$")
 _STOCK_FIELDS = (
     "ts_code",
     "symbol",
@@ -66,6 +67,7 @@ class TushareApiError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class TushareTable:
+    endpoint: str
     api_name: str
     params: tuple[tuple[str, str], ...]
     fields: tuple[str, ...]
@@ -87,11 +89,25 @@ class StockListing:
 
 
 @dataclass(frozen=True, slots=True)
+class StockListingAnomaly:
+    tushare_code: str
+    symbol: str
+    name: str
+    exchange: str
+    current_status: str
+    listed_on: date
+    delisted_on: date | None
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class StockListingSnapshot:
     provider_id: str
     provider_version: str
     retrieved_at: datetime
     listings: tuple[StockListing, ...]
+    anomalies: tuple[StockListingAnomaly, ...]
+    queries: tuple[TushareTable, ...]
     query_hashes: tuple[str, ...]
     snapshot_hash: str
 
@@ -106,6 +122,24 @@ class FixedAshareUniverse:
     built_at: datetime
 
 
+def tushare_provider_manifest() -> ProviderManifest:
+    return ProviderManifest(
+        schema_version="market-impact.provider-manifest.v1",
+        provider_id=TUSHARE_PROVIDER_ID,
+        provider_version=TUSHARE_ADAPTER_VERSION,
+        transport=ProviderTransport.HTTP,
+        environments=frozenset({TradingEnvironment.BACKTEST}),
+        declared_capabilities=frozenset({Capability.MARKET_DATA}),
+        verified_capabilities=frozenset(),
+        markets=("CN",),
+        order_types=(),
+        supports_streaming=False,
+        supports_reconciliation=False,
+        enabled=False,
+        trust_tier=TrustTier.UNVERIFIED,
+    )
+
+
 class TushareHttpAdapter:
     def __init__(
         self,
@@ -118,8 +152,8 @@ class TushareHttpAdapter:
     ) -> None:
         if not token:
             raise ValueError("Tushare token must not be empty")
-        if not endpoint.startswith("https://"):
-            raise ValueError("Tushare endpoint must use HTTPS")
+        if endpoint != TUSHARE_HTTP_ENDPOINT:
+            raise ValueError("Tushare adapter endpoint must be the official HTTPS endpoint")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         self._token = token
@@ -130,21 +164,7 @@ class TushareHttpAdapter:
 
     @property
     def manifest(self) -> ProviderManifest:
-        return ProviderManifest(
-            schema_version="market-impact.provider-manifest.v1",
-            provider_id=TUSHARE_PROVIDER_ID,
-            provider_version=TUSHARE_ADAPTER_VERSION,
-            transport=ProviderTransport.HTTP,
-            environments=frozenset({TradingEnvironment.BACKTEST}),
-            declared_capabilities=frozenset({Capability.MARKET_DATA}),
-            verified_capabilities=frozenset(),
-            markets=("CN",),
-            order_types=(),
-            supports_streaming=False,
-            supports_reconciliation=False,
-            enabled=False,
-            trust_tier=TrustTier.UNVERIFIED,
-        )
+        return tushare_provider_manifest()
 
     def fetch_trade_calendar(
         self,
@@ -177,7 +197,7 @@ class TushareHttpAdapter:
         end_date: str,
     ) -> TushareTable:
         _date_range(start_date, end_date)
-        _canonical_instrument_id(tushare_code)
+        canonical_instrument_id(tushare_code)
         table = self._query(
             api_name="daily",
             params={
@@ -207,11 +227,32 @@ class TushareHttpAdapter:
             for status in _LIST_STATUSES
         )
         listings_by_code: dict[str, StockListing] = {}
+        anomalies_by_key: dict[tuple[str, str, str], StockListingAnomaly] = {}
         for table in tables:
             _require_unique_rows(table, key_fields=("ts_code",))
             expected_status = dict(table.params)["list_status"]
             expected_exchange = dict(table.params)["exchange"]
             for row in table.rows:
+                tushare_code = _string(row[table.fields.index("ts_code")], "ts_code")
+                if _STOCK_CODE_PATTERN.fullmatch(tushare_code) is None:
+                    anomaly = _stock_listing_anomaly(
+                        table.fields,
+                        row,
+                        expected_exchange=expected_exchange,
+                        expected_status=expected_status,
+                    )
+                    anomaly_key = (
+                        anomaly.tushare_code,
+                        anomaly.exchange,
+                        anomaly.current_status,
+                    )
+                    existing_anomaly = anomalies_by_key.get(anomaly_key)
+                    if existing_anomaly is not None and existing_anomaly != anomaly:
+                        raise ValueError(
+                            f"conflicting stock_basic anomaly rows for {anomaly.tushare_code}"
+                        )
+                    anomalies_by_key[anomaly_key] = anomaly
+                    continue
                 listing = _stock_listing(
                     table.fields,
                     row,
@@ -225,6 +266,12 @@ class TushareHttpAdapter:
 
         retrieved_at = max(table.retrieved_at for table in tables)
         listings = tuple(sorted(listings_by_code.values(), key=lambda item: item.instrument_id))
+        anomalies = tuple(
+            sorted(
+                anomalies_by_key.values(),
+                key=lambda item: (item.exchange, item.current_status, item.tushare_code),
+            )
+        )
         query_hashes = tuple(table.content_hash for table in tables)
         snapshot_hash = _canonical_hash(
             {
@@ -232,6 +279,7 @@ class TushareHttpAdapter:
                 "provider_version": TUSHARE_ADAPTER_VERSION,
                 "retrieved_at": _canonical_timestamp(retrieved_at),
                 "listings": [_listing_payload(listing) for listing in listings],
+                "anomalies": [_listing_anomaly_payload(anomaly) for anomaly in anomalies],
                 "query_hashes": list(query_hashes),
             }
         )
@@ -240,6 +288,8 @@ class TushareHttpAdapter:
             provider_version=TUSHARE_ADAPTER_VERSION,
             retrieved_at=retrieved_at,
             listings=listings,
+            anomalies=anomalies,
+            queries=tables,
             query_hashes=query_hashes,
             snapshot_hash=snapshot_hash,
         )
@@ -285,15 +335,14 @@ class TushareHttpAdapter:
         retrieved_at = self._clock()
         require_aware(retrieved_at, "retrieved_at")
         params_tuple = tuple(sorted(params.items()))
-        content_hash = _canonical_hash(
-            {
-                "api_name": api_name,
-                "fields": list(fields),
-                "params": dict(params_tuple),
-                "rows": [list(row) for row in rows],
-            }
+        content_hash = tushare_table_content_hash(
+            api_name=api_name,
+            params=dict(params_tuple),
+            fields=fields,
+            rows=rows,
         )
         return TushareTable(
+            endpoint=self._endpoint,
             api_name=api_name,
             params=params_tuple,
             fields=fields,
@@ -428,7 +477,7 @@ def _stock_listing(
         raise ValueError(f"unsupported stock exchange: {exchange}")
     if exchange != expected_exchange:
         raise ValueError("stock_basic exchange conflicts with the query")
-    instrument_id = _canonical_instrument_id(tushare_code)
+    instrument_id = canonical_instrument_id(tushare_code)
     expected_exchange = "SSE" if instrument_id.endswith(".XSHG") else "SZSE"
     if exchange != expected_exchange:
         raise ValueError("stock_basic exchange conflicts with ts_code")
@@ -456,15 +505,154 @@ def _stock_listing(
     )
 
 
-def _canonical_instrument_id(tushare_code: str) -> str:
+def _stock_listing_anomaly(
+    fields: tuple[str, ...],
+    row: tuple[object, ...],
+    *,
+    expected_exchange: str,
+    expected_status: str,
+) -> StockListingAnomaly:
+    values = dict(zip(fields, row, strict=True))
+    tushare_code = _string(values["ts_code"], "ts_code")
     parts = tushare_code.split(".")
-    if len(parts) != 2 or not parts[0].isdigit() or len(parts[0]) != 6:
+    if len(parts) != 2 or not parts[0] or parts[1] not in {"SH", "SZ"}:
+        raise ValueError("unsupported stock_basic ts_code cannot be safely classified")
+    exchange = _string(values["exchange"], "exchange")
+    suffix_exchange = "SSE" if parts[1] == "SH" else "SZSE"
+    if exchange != expected_exchange or exchange != suffix_exchange:
+        raise ValueError("stock_basic anomaly exchange conflicts with the query")
+    symbol = _string(values["symbol"], "symbol")
+    if symbol != parts[0]:
+        raise ValueError("stock_basic anomaly symbol conflicts with ts_code")
+    current_status = _string(values["list_status"], "list_status")
+    if current_status != expected_status:
+        raise ValueError("stock_basic anomaly list_status conflicts with the query")
+    listed_on = _date(_string(values["list_date"], "list_date"), "list_date")
+    delisted_on = _optional_date(values["delist_date"], "delist_date")
+    if delisted_on is not None and delisted_on < listed_on:
+        raise ValueError("stock_basic anomaly delist_date must not precede list_date")
+    if current_status == "D" and delisted_on is None:
+        raise ValueError("delisted stock_basic anomaly requires delist_date")
+    return StockListingAnomaly(
+        tushare_code=tushare_code,
+        symbol=symbol,
+        name=_string(values["name"], "name"),
+        exchange=exchange,
+        current_status=current_status,
+        listed_on=listed_on,
+        delisted_on=delisted_on,
+        reason="unsupported_tushare_stock_code",
+    )
+
+
+def canonical_instrument_id(tushare_code: str) -> str:
+    if _STOCK_CODE_PATTERN.fullmatch(tushare_code) is None:
         raise ValueError("ts_code must use Tushare stock format such as 600000.SH")
+    parts = tushare_code.split(".")
     suffix_to_mic = {"SH": "XSHG", "SZ": "XSHE"}
     mic = suffix_to_mic.get(parts[1])
     if mic is None:
         raise ValueError("the first Tushare slice supports SH and SZ stocks only")
     return f"{parts[0]}.{mic}"
+
+
+def exchange_for_tushare_code(tushare_code: str) -> str:
+    instrument_id = canonical_instrument_id(tushare_code)
+    return "SSE" if instrument_id.endswith(".XSHG") else "SZSE"
+
+
+def tushare_table_content_hash(
+    *,
+    api_name: str,
+    params: dict[str, str],
+    fields: tuple[str, ...],
+    rows: tuple[tuple[object, ...], ...],
+) -> str:
+    expected_fields = {
+        "stock_basic": _STOCK_FIELDS,
+        "trade_cal": _CALENDAR_FIELDS,
+        "daily": _DAILY_FIELDS,
+    }.get(api_name)
+    if expected_fields is None or fields != expected_fields:
+        raise ValueError("unsupported Tushare table identity contract")
+    canonical_rows = tuple(
+        sorted(
+            (_canonical_source_row(api_name, fields, row) for row in rows),
+            key=_canonical_row_key,
+        )
+    )
+    return _canonical_hash(
+        {
+            "api_name": api_name,
+            "fields": list(fields),
+            "params": params,
+            "rows": [list(row) for row in canonical_rows],
+        }
+    )
+
+
+def _canonical_source_row(
+    api_name: str,
+    fields: tuple[str, ...],
+    row: tuple[object, ...],
+) -> tuple[object, ...]:
+    values = dict(zip(fields, row, strict=True))
+    if api_name == "stock_basic":
+        return (
+            _string(values["ts_code"], "ts_code"),
+            _string(values["symbol"], "symbol"),
+            _string(values["name"], "name"),
+            _string(values["exchange"], "exchange"),
+            _string(values["list_status"], "list_status"),
+            _date(_string(values["list_date"], "list_date"), "list_date").isoformat(),
+            _canonical_optional_date(values["delist_date"], "delist_date"),
+        )
+    if api_name == "trade_cal":
+        is_open = values["is_open"]
+        if is_open not in (0, 1, "0", "1"):
+            raise ValueError("is_open must be 0 or 1")
+        return (
+            _string(values["exchange"], "exchange"),
+            _date(_string(values["cal_date"], "cal_date"), "cal_date").isoformat(),
+            is_open in (1, "1"),
+            _canonical_optional_date(values["pretrade_date"], "pretrade_date"),
+        )
+    return (
+        _string(values["ts_code"], "ts_code"),
+        _date(_string(values["trade_date"], "trade_date"), "trade_date").isoformat(),
+        *(
+            _canonical_six_place_decimal(values[field], field, positive=True)
+            for field in ("open", "high", "low", "close", "pre_close")
+        ),
+        _canonical_six_place_decimal(values["vol"], "vol", positive=False),
+        _canonical_six_place_decimal(values["amount"], "amount", positive=False),
+    )
+
+
+def _canonical_optional_date(value: object, field_name: str) -> str | None:
+    parsed = _optional_date(value, field_name)
+    return parsed.isoformat() if parsed else None
+
+
+def _canonical_six_place_decimal(
+    value: object,
+    field_name: str,
+    *,
+    positive: bool,
+) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        raise ValueError(f"{field_name} must be a JSON number")
+    try:
+        number = Decimal(str(value))
+        scaled = number.quantize(Decimal("0.000001"))
+    except InvalidOperation as exc:
+        raise ValueError(f"{field_name} must fit the six-place normalized schema") from exc
+    if not number.is_finite() or number != scaled:
+        raise ValueError(f"{field_name} must fit the six-place normalized schema")
+    if number <= 0 if positive else number < 0:
+        qualifier = "positive" if positive else "non-negative"
+        raise ValueError(f"{field_name} must be finite and {qualifier}")
+    return format(scaled, "f")
 
 
 def _require_unique_rows(table: TushareTable, *, key_fields: tuple[str, ...]) -> None:
@@ -483,15 +671,24 @@ def _validate_trade_calendar(
 ) -> None:
     _require_unique_rows(table, key_fields=("exchange", "cal_date"))
     indexes = {field: table.fields.index(field) for field in table.fields}
+    calendar_dates: set[date] = set()
     for row in table.rows:
         if _string(row[indexes["exchange"]], "exchange") != exchange:
             raise ValueError("trade_cal exchange conflicts with the query")
         calendar_date = _date(_string(row[indexes["cal_date"]], "cal_date"), "cal_date")
         if not start_date <= calendar_date <= end_date:
             raise ValueError("trade_cal cal_date falls outside the query range")
+        calendar_dates.add(calendar_date)
         if row[indexes["is_open"]] not in (0, 1, "0", "1"):
             raise ValueError("trade_cal is_open must be 0 or 1")
         _optional_date(row[indexes["pretrade_date"]], "pretrade_date")
+    expected_dates = {
+        start_date + timedelta(days=offset) for offset in range((end_date - start_date).days + 1)
+    }
+    missing_dates = sorted(expected_dates - calendar_dates)
+    if missing_dates:
+        missing = ", ".join(item.strftime("%Y%m%d") for item in missing_dates)
+        raise ValueError(f"trade_cal response omits calendar dates: {missing}")
 
 
 def _validate_daily(
@@ -530,6 +727,19 @@ def _listing_payload(listing: StockListing) -> dict[str, object]:
         "name": listing.name,
         "symbol": listing.symbol,
         "tushare_code": listing.tushare_code,
+    }
+
+
+def _listing_anomaly_payload(anomaly: StockListingAnomaly) -> dict[str, object]:
+    return {
+        "current_status": anomaly.current_status,
+        "delisted_on": anomaly.delisted_on.isoformat() if anomaly.delisted_on else None,
+        "exchange": anomaly.exchange,
+        "listed_on": anomaly.listed_on.isoformat(),
+        "name": anomaly.name,
+        "reason": anomaly.reason,
+        "symbol": anomaly.symbol,
+        "tushare_code": anomaly.tushare_code,
     }
 
 

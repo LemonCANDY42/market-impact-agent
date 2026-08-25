@@ -69,6 +69,8 @@ def test_adapter_rejects_unsafe_configuration() -> None:
         TushareHttpAdapter("")
     with pytest.raises(ValueError):
         TushareHttpAdapter(TOKEN, endpoint="http://api.tushare.pro")
+    with pytest.raises(ValueError, match="official HTTPS endpoint"):
+        TushareHttpAdapter(TOKEN, endpoint="https://example.invalid/tushare")
     with pytest.raises(ValueError):
         TushareHttpAdapter(TOKEN, timeout_seconds=0.0)
 

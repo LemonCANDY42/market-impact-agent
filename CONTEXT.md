@@ -67,6 +67,12 @@ one retrieval time. It does not assert that the captured fields were known or
 unchanged at an earlier date.
 _Avoid_: Security master, historical truth
 
+**Data Snapshot**:
+An immutable, content-identified bundle of Provider observations and provenance
+that a Backtest Request can cite exactly. It is replay input, not proof of
+historical completeness, executable liquidity, or source infallibility.
+_Avoid_: Cache, market-data dump
+
 **Pre-event Universe**:
 A fixed set of instruments eligible at an event cutoff, reconstructed from and
 bound to one Listing Snapshot. It is not proof against source revision,

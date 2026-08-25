@@ -32,8 +32,11 @@ The bootstrap implements:
 - engine-neutral Backtest Request, Simulation Specification, Run Manifest, and Result;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
   A-share replay covering a suspension, opening limit lock, lot size, fees, and slippage;
-- a disabled, unverified Tushare HTTPS adapter for bounded stock-listing, exchange-calendar,
-  and unadjusted daily-bar reads plus deterministic pre-event A-share universe construction;
+- a language-neutral Tushare HTTPS adapter for bounded stock-listing, exchange-calendar, and
+  unadjusted daily-bar reads plus deterministic pre-event A-share universe construction,
+  with a disabled, unverified Provider manifest;
+- a private, content-addressed local Tushare Data Snapshot bundle with Parquet tables,
+  hash/permission validation, and a stable `data_snapshot_id` for later replay requests;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -43,7 +46,6 @@ The bootstrap implements:
 Planned integrations are documented but **not claimed as working**:
 
 - a separately validated Nautilus-to-IBKR paper Provider;
-- token-backed Tushare data acceptance and locally retained historical snapshots;
 - an external-process VeighNa bridge for future A-share gateways;
 - MCP, HTTP/gRPC, and native Python provider transports.
 
@@ -52,9 +54,12 @@ Harness uses it through an engine-neutral backtest bridge; later execution Provi
 pass through the same policy, approval, and audit boundary. Version `1.231.0` is an
 optional, exact dependency and grants backtest capability only.
 
-The Tushare adapter has deterministic contract tests but no token-backed success evidence
-on this machine. It remains disabled and unverified, and its current listing data cannot by
-itself prove a revision-free historical universe. See
+The first official token-backed local Tushare capture and validation completed on 2026-08-25
+for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily window.
+It proves the language-neutral HTTPS adapter/capture/validation path and that the local
+credential worked for that account, target, and window. It does not prove general
+quota/permissions, completeness, historical truth, full-universe prices, Nautilus replay, or
+paper/live readiness. The Tushare Provider therefore remains disabled and unverified. See
 [docs/TUSHARE_DATA.md](docs/TUSHARE_DATA.md).
 
 ## Architecture at a glance
@@ -91,6 +96,10 @@ uv run ruff format --check .
 uv run pyright
 uv run pytest
 ```
+
+Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment and
+writes licensed observations under the ignored `.market-impact/tushare/` directory. See the
+data-boundary document for the exact command and non-claims.
 
 GitHub Actions, when enabled, only repeats these commands on standard public
 runners. Local commands remain the source of truth; development and releases do

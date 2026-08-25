@@ -94,3 +94,34 @@ def test_validate_event_rejects_invalid_archetype_and_missing_required_field(
     result = json.loads(capsys.readouterr().out)
     assert any(error.startswith("$.event_archetype:") for error in result["errors"])
     assert any("'claim_hash' is a required property" in error for error in result["errors"])
+
+
+def test_tushare_capture_requires_environment_token_before_creating_local_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+
+    result = main(
+        [
+            "tushare",
+            "capture",
+            "--instrument",
+            "600028.SH",
+            "--as-of-date",
+            "20190918",
+            "--start-date",
+            "20190919",
+            "--end-date",
+            "20191010",
+        ]
+    )
+
+    assert result == 1
+    assert json.loads(capsys.readouterr().err) == {
+        "captured": False,
+        "error": "TUSHARE_TOKEN is not configured",
+    }
+    assert not (tmp_path / ".market-impact").exists()

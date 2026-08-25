@@ -94,12 +94,16 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+data = [
+    { name = "pyarrow" },
+]
 nautilus = [
     { name = "nautilus-trader" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "pyarrow" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "ruff" },
@@ -109,11 +113,13 @@ dev = [
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.25,<5" },
     { name = "nautilus-trader", marker = "extra == 'nautilus'", specifier = "==1.231.0" },
+    { name = "pyarrow", marker = "extra == 'data'", specifier = "==25.0.1" },
 ]
-provides-extras = ["nautilus"]
+provides-extras = ["data", "nautilus"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pyarrow", specifier = "==25.0.1" },
     { name = "pyright", specifier = ">=1.1.400,<2" },
     { name = "pytest", specifier = ">=8.4,<10" },
     { name = "ruff", specifier = ">=0.12,<1" },

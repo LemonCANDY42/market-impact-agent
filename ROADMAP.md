@@ -36,8 +36,10 @@ broker or backtest mutation is reachable from the research skill.
   and pass the first deterministic synthetic A-share replay twice with identical results.
 - [x] Add a disabled Tushare HTTP contract adapter and deterministic pre-event A-share
   universe builder.
-- [ ] Pass token-backed Tushare acceptance and retain licensed snapshots locally before
-  using real data in replay claims.
+- [x] Add private, content-addressed local Parquet bundles whose validated ID can bind a
+  Backtest Request without committing licensed data.
+- [x] Pass the first token-backed Tushare acceptance and retain its licensed Data Snapshot
+  privately and locally; keep the Provider disabled/unverified and make no replay claim.
 - Record the data granularity, book type, fill model, fee model, venue rules, engine
   version, adapter version, and configuration in every replay manifest.
 - Compare event reasoning with sentiment, momentum, fixed mapping, and simple
