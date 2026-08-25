@@ -34,7 +34,10 @@ broker or backtest mutation is reachable from the research skill.
   protocol without importing Nautilus types.
 - [x] Implement the `NautilusBacktestBridge` against pinned optional dependency `1.231.0`
   and pass the first deterministic synthetic A-share replay twice with identical results.
-- Add the Tushare HTTP adapter and fixed pre-event A-share universes.
+- [x] Add a disabled Tushare HTTP contract adapter and deterministic pre-event A-share
+  universe builder.
+- [ ] Pass token-backed Tushare acceptance and retain licensed snapshots locally before
+  using real data in replay claims.
 - Record the data granularity, book type, fill model, fee model, venue rules, engine
   version, adapter version, and configuration in every replay manifest.
 - Compare event reasoning with sentiment, momentum, fixed mapping, and simple

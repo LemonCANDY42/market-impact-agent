@@ -30,7 +30,7 @@ def test_schema_is_valid(schema_name: str) -> None:
     [
         "examples/events/real-abqaiq-geopolitical-supply-shock.json",
         "examples/events/synthetic-energy-supply-shock.json",
-        "examples/providers/tushare-http-planned.json",
+        "examples/providers/tushare-http-unverified.json",
         "examples/providers/veighna-external-bridge.json",
     ],
 )

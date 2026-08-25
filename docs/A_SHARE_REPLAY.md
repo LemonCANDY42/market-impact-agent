@@ -46,5 +46,6 @@ frozen runs must produce the same result hash.
 
 This slice does not yet cover board-specific limits, ST securities, IPO windows, corporate
 actions, auctions, partial fills, order queues, real suspensions, holidays, data revisions,
-survivorship, or real Tushare data. Those require separate fixtures and acceptance before
-the ruleset can be promoted beyond synthetic mechanics.
+survivorship, or real Tushare data. A disabled Tushare contract adapter and universe builder
+now exist, but token-backed snapshots and replay acceptance are still required before the
+ruleset can be promoted beyond synthetic mechanics.

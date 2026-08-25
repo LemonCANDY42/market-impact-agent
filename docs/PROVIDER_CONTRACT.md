@@ -66,7 +66,10 @@ Paper validation never upgrades a provider to live validation.
 - `NautilusBacktestBridge` is the accepted reference implementation of the engine-neutral
   backtest port for the bounded synthetic XSHG cash-equity fixture. It is not a Provider
   and grants no market-data, paper, live, IBKR, or VeighNa capability.
-- Tushare is a planned read-only A-share data provider.
+- `tushare-http` implements a bounded read-only HTTPS contract for SSE/SZSE listing
+  metadata, exchange calendars, and unadjusted daily bars. Its manifest remains disabled
+  and unverified: deterministic transport/shape/failure tests are not token-backed market
+  data acceptance, and no licensed response is committed.
 - `ibkr-nautilus-paper` is the first planned US/HK paper Provider identity. It binds a
   pinned Nautilus version, the official IB adapter, Harness translation, configuration,
   market, and environment. A direct IBKR Provider remains possible if that stack cannot

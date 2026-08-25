@@ -115,8 +115,10 @@ First-party code supports Python `>=3.13,<3.15`.
 - NautilusTrader is the default engine foundation. Stable `1.231.0` is an exact optional
   dependency for the accepted first replay slice; paper Provider integration remains
   unimplemented and disabled.
-- Tushare is accessed through a language-neutral HTTP adapter; licensed data
-  remains local.
+- Tushare is accessed through a language-neutral HTTPS adapter; licensed data remains
+  local. The adapter is disabled and unverified until token-backed acceptance succeeds.
+  A universe reconstructed from current listing metadata stays bound to that retrieval
+  snapshot and is not treated as proof against source revision or survivorship bias.
 - VeighNa is an external-process bridge. VeighNa 4.4 and current A-share vendor
   gateways do not provide a verified same-process Python 3.14/macOS path.
 - LEAN remains a comparison candidate in its own Docker/Python runtime and is
