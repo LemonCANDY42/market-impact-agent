@@ -209,6 +209,17 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# macOS
+.DS_Store
+
+# Local Market Impact Agent state and licensed data
+.market-impact/
+artifacts/
+data/
+secrets/
+*.sqlite
+*.sqlite3
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

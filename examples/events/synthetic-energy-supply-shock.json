@@ -1,0 +1,48 @@
+{
+  "schema_version": "market-impact.event-transmission.v1",
+  "event_id": "synthetic-energy-shock-001",
+  "event_family": "physical_supply_shock.energy",
+  "event_time": "2026-08-24T02:00:00Z",
+  "first_publication_time": "2026-08-24T02:03:00Z",
+  "as_of": "2026-08-24T02:05:00Z",
+  "source_refs": ["synthetic://official-notice/001"],
+  "surprise": {
+    "expected": "normal throughput",
+    "observed": "material temporary outage",
+    "direction": "negative",
+    "confidence": 0.9
+  },
+  "transmission_edges": [
+    {
+      "layer": "direct",
+      "from": "crude_supply",
+      "to": "crude_benchmark",
+      "mechanism": "lower near-term physical availability",
+      "expected_effect": "up",
+      "horizon_sessions": 1,
+      "confidence": 0.8
+    },
+    {
+      "layer": "second_order",
+      "from": "crude_benchmark",
+      "to": "airlines",
+      "mechanism": "higher expected fuel input cost",
+      "expected_effect": "down",
+      "horizon_sessions": 3,
+      "confidence": 0.6
+    },
+    {
+      "layer": "market_overlay",
+      "from": "energy_attention",
+      "to": "a_share_energy_theme",
+      "mechanism": "short-horizon thematic capital rotation",
+      "expected_effect": "up",
+      "horizon_sessions": 1,
+      "confidence": 0.4
+    }
+  ],
+  "invalidation_conditions": [
+    "outage is officially reversed",
+    "replacement supply fully offsets the outage"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "market-impact.provider-manifest.v1",
+  "provider_id": "veighna-external-bridge",
+  "provider_version": "0.0.0",
+  "transport": "grpc",
+  "environments": ["backtest", "paper", "live"],
+  "declared_capabilities": [
+    "market_data",
+    "backtest",
+    "paper_execution",
+    "live_execution",
+    "account"
+  ],
+  "verified_capabilities": [],
+  "markets": ["CN"],
+  "order_types": ["market", "limit"],
+  "supports_streaming": false,
+  "supports_reconciliation": false,
+  "enabled": false,
+  "trust_tier": "unverified"
+}

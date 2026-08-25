@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/provider-manifest.schema.json",
+  "title": "Market Impact Agent Provider Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider_id",
+    "provider_version",
+    "transport",
+    "environments",
+    "declared_capabilities",
+    "verified_capabilities",
+    "markets",
+    "order_types",
+    "supports_streaming",
+    "supports_reconciliation",
+    "enabled",
+    "trust_tier"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.provider-manifest.v1"
+    },
+    "provider_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "provider_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "transport": {
+      "enum": ["native", "mcp", "http", "grpc"]
+    },
+    "environments": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["backtest", "paper", "live"]
+      }
+    },
+    "declared_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "verified_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "markets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "order_types": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["market", "limit"]
+      }
+    },
+    "supports_streaming": {
+      "type": "boolean"
+    },
+    "supports_reconciliation": {
+      "type": "boolean"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "trust_tier": {
+      "enum": ["unverified", "mock", "paper_validated", "live_validated"]
+    }
+  },
+  "$defs": {
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "market_data",
+          "backtest",
+          "paper_execution",
+          "live_execution",
+          "account"
+        ]
+      }
+    }
+  }
+}

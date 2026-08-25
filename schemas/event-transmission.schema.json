@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/event-transmission.schema.json",
+  "title": "Point-in-time Event Transmission Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_family",
+    "event_time",
+    "first_publication_time",
+    "as_of",
+    "source_refs",
+    "surprise",
+    "transmission_edges",
+    "invalidation_conditions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.event-transmission.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "first_publication_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "surprise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed", "direction", "confidence"],
+      "properties": {
+        "expected": {
+          "type": "string"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": ["positive", "negative", "mixed", "unknown"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "transmission_edges": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layer",
+          "from",
+          "to",
+          "mechanism",
+          "expected_effect",
+          "horizon_sessions",
+          "confidence"
+        ],
+        "properties": {
+          "layer": {
+            "enum": ["direct", "second_order", "market_overlay", "empirical"]
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mechanism": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected_effect": {
+            "enum": ["up", "down", "mixed", "unknown"]
+          },
+          "horizon_sessions": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "invalidation_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

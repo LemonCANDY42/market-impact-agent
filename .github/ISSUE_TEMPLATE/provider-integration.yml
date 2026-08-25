@@ -1,0 +1,48 @@
+name: Provider integration proposal
+description: Propose a market-data, backtest, paper, or broker provider.
+title: "[Provider]: "
+labels: [provider]
+body:
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and official documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Proposed transport
+      options: [native, MCP, HTTP, gRPC, undecided]
+    validations:
+      required: true
+  - type: checkboxes
+    id: capabilities
+    attributes:
+      label: Declared capabilities
+      options:
+        - label: Market data
+        - label: Backtesting
+        - label: Paper execution
+        - label: Live execution
+        - label: Account state
+  - type: textarea
+    id: lifecycle
+    attributes:
+      label: Identity, streaming, and reconciliation evidence
+      description: Explain stable order IDs, reconnect behavior, fills, positions, and cash truth.
+    validations:
+      required: true
+  - type: textarea
+    id: platform
+    attributes:
+      label: Runtime and platform constraints
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope acknowledgement
+      options:
+        - label: Declared capabilities will remain unverified and disabled until contract tests pass.
+          required: true
