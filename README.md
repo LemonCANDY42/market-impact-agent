@@ -3,7 +3,7 @@
 Market Impact Agent is an auditable, event-driven trading agent harness. It is
 designed to turn point-in-time evidence into layered market-impact reasoning,
 versioned signal intents, and policy-gated actions executed by replaceable
-backtest, paper-trading, or broker providers.
+backtest engines and paper-trading or broker providers.
 
 > [!WARNING]
 > This repository is an early executable skeleton. It has no verified broker
@@ -27,6 +27,8 @@ capabilities, approval policy, and an auditable intent boundary.
 The bootstrap implements:
 
 - canonical domain contracts for signals, order intents, mandates, and approval;
+- immutable point-in-time Evidence Items, Event Envelopes, deterministic
+  fast/deep/combined routing, and evidence-linked Transmission Paths;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -35,19 +37,22 @@ The bootstrap implements:
 
 Planned integrations are documented but **not claimed as working**:
 
-- NautilusTrader as the default/reference engine for backtesting and IBKR paper trading;
+- NautilusTrader as the default foundational engine, with a backtest bridge first and a
+  separately validated IBKR paper Provider later;
 - Tushare HTTP market data;
 - an external-process VeighNa bridge for future A-share gateways;
 - MCP, HTTP/gRPC, and native Python provider transports.
 
-NautilusTrader is the selected default engine and reference implementation for execution
-semantics. It still passes through the same harness adapter, policy, approval, and audit
-boundary as every other engine. The bootstrap does not yet depend on or initialize it.
+NautilusTrader is the selected default engine foundation and behavioral reference. The
+Harness will first use it through an engine-neutral backtest bridge; later execution
+Providers still pass through the same policy, approval, and audit boundary. The bootstrap
+does not yet depend on, initialize, or pin a Nautilus version.
 
 ## Architecture at a glance
 
 ```text
 Evidence -> fast/deep event assessment -> SignalIntent
+       -> backtest request -> Nautilus backtest bridge
        -> deterministic policy -> optional semantic approval
        -> durable OrderIntent -> sealed submission capability -> execution provider
        <- order/fill/account events <- reconciliation <- provider
@@ -71,7 +76,6 @@ Requirements:
 ```bash
 uv sync --python 3.13
 uv run market-impact status
-uv run market-impact provider validate examples/providers/nautilus-planned.json
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
 uv run ruff check .
 uv run ruff format --check .

@@ -60,20 +60,22 @@ wheels = [
 name = "market-impact-agent"
 version = "0.1.0a0"
 source = { editable = "." }
+dependencies = [
+    { name = "jsonschema" },
+]
 
 [package.dev-dependencies]
 dev = [
-    { name = "jsonschema" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 
 [package.metadata]
+requires-dist = [{ name = "jsonschema", specifier = ">=4.25,<5" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "jsonschema", specifier = ">=4.25,<5" },
     { name = "pyright", specifier = ">=1.1.400,<2" },
     { name = "pytest", specifier = ">=8.4,<10" },
     { name = "ruff", specifier = ">=0.12,<1" },

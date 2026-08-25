@@ -1,8 +1,9 @@
 # Provider Contract
 
-Providers expose external market-data, backtest, account, and execution capabilities to
-the harness. A provider may use a native Python adapter, MCP, HTTP, or gRPC. Transport is
-an integration choice, not a trust signal.
+Providers expose external market-data, account, or execution capabilities to the Harness.
+A provider may use a native Python adapter, MCP, HTTP, or gRPC. Transport is an
+integration choice, not a trust signal. The default Nautilus engine foundation is not a
+Provider by itself; Phase 2 defines a separate engine-neutral backtest request/result port.
 
 ## Registration
 
@@ -14,6 +15,10 @@ Every provider supplies a versioned manifest that declares:
 - order types;
 - streaming and reconciliation support;
 - enabled state and trust tier.
+
+Verification evidence is scoped to the exact capability, market, environment,
+implementation version, dependency version, and relevant configuration. Passing a
+backtest check never verifies a paper Provider, and a paper check never verifies live.
 
 The JSON contract is defined in
 [`schemas/provider-manifest.schema.json`](../schemas/provider-manifest.schema.json).
@@ -57,29 +62,32 @@ Paper validation never upgrades a provider to live validation.
 ## Initial adapters
 
 - `mock-execution` is the only enabled implementation in the bootstrap.
-- NautilusTrader is the selected default engine and first real conformance/reference
-  Provider for backtest and paper execution. It receives no policy bypass and is not yet
-  installed or enabled.
+- NautilusTrader is the selected default engine foundation and behavioral reference. The
+  planned Phase 2 `NautilusBacktestBridge` is not an execution Provider and grants no
+  paper or live capability.
 - Tushare is a planned read-only A-share data provider.
-- IBKR is the first planned US/HK paper destination, initially through the NautilusTrader
-  adapter. A direct IBKR Provider remains possible if that path cannot satisfy recovery or
-  reconciliation acceptance. No account is connected by this repository.
+- `ibkr-nautilus-paper` is the first planned US/HK paper Provider identity. It binds a
+  pinned Nautilus version, the official IB adapter, Harness translation, configuration,
+  market, and environment. A direct IBKR Provider remains possible if that stack cannot
+  satisfy recovery or reconciliation acceptance. No account is connected.
 - VeighNa is represented as a disabled external-process bridge. Its core may be usable on
   Python 3.13, but common A-share gateways depend on vendor runtimes and are not claimed
   to work on macOS or Python 3.14.
 
 ## Reference semantics
 
-The common contract adopts the smallest useful subset of NautilusTrader's public
-execution constraints: command/event separation, stable client/venue/trade identities,
+The Harness owns its safety semantics. They are informed and exercised by
+NautilusTrader's public execution model—command/event separation, stable identities,
 definitive-versus-unknown outcomes, risk before execution, duplicate-fill protection,
-stream and query recovery, external-order classification, and reconciliation. These are
-behavioral acceptance requirements, not copied implementation or a re-export of
-NautilusTrader's types.
+stream and query recovery, external-order classification, and reconciliation—but using
+Nautilus does not automatically satisfy them. Public schemas and normalized domain events
+never expose NautilusTrader types.
 
-Other engines implement this harness contract through their own adapters. They do not
-need to implement Nautilus-specific strategy APIs, OMS modes, execution algorithms, or
-unsupported order types.
+The bootstrap runtime protocol is execution-only. Phase 2 introduces a separate narrow
+backtest port rather than forcing a replay request through `submit/cancel/reconcile`.
+Other engines implement the relevant Harness ports through their own adapters; they do
+not need to reproduce Nautilus-specific strategy APIs, OMS modes, execution algorithms,
+or unsupported order types.
 
 ## Failure behavior
 

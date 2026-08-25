@@ -22,13 +22,43 @@ or catalysts rather than by individual headlines.
 _Avoid_: Article group, duplicate news
 
 **Event Archetype**:
-A reusable class of events that share a transmission logic and validation
-method, such as a physical supply shock or cumulative industry narrative.
-_Avoid_: Topic, sector label
+A reusable class describing the root cause of new market-relevant information,
+such as an issuer action, geopolitical-security event, or physical disruption.
+One Event Cluster has one primary archetype; linked causes and consequences are
+represented as separate clusters and Transmission Paths.
+_Avoid_: Topic, sector label, transmission mechanism
+
+**Revelation Mode**:
+How evidence becomes observable: scheduled, unscheduled, continuously updated,
+or retrospectively revised.
+_Avoid_: Event type, source type
+
+**Event Stage**:
+The point reached in an event's evidence and market-diffusion lifecycle, from
+pre-event through first observation, corroboration, realization, resolution, or
+invalidation.
+_Avoid_: Order status, approval status
+
+**Expectation Delta**:
+The point-in-time difference between an observed outcome and a cited prior
+baseline. It may be explicitly unknown when no defensible baseline exists.
+_Avoid_: Sentiment, surprise score without a baseline
+
+**Transmission Channel**:
+The causal mechanism carried by one step of a Transmission Path, such as demand,
+capacity and cost, policy access, funding, uncertainty, attention, or forced
+market flow.
+_Avoid_: Event Archetype, industry label
+
+**Transmission Directness**:
+The number of causal hand-offs between the Event Cluster and an affected
+exposure: direct, second-order, third-order, or fourth-order.
+_Avoid_: Confidence, market overlay
 
 **Transmission Path**:
-An evidence-linked sequence from an Event Cluster through direct or indirect
-economic, market, or attention channels to an affected security.
+An ordered, evidence-linked sequence of Transmission Channels from an Event
+Cluster to an affected security or market exposure. Each step states its
+directness, affected variable, counterevidence, blockers, and invalidation.
 _Avoid_: Correlation edge, causal score
 
 ## Decisions

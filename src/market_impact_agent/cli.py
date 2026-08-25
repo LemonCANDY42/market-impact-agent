@@ -4,13 +4,20 @@ import argparse
 import json
 import platform
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Protocol, cast
+
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 from market_impact_agent import __version__
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
+
+
+class EventTransmissionValidator(Protocol):
+    def iter_errors(self, instance: object) -> Iterable[ValidationError]: ...
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     event_subparsers = event_parser.add_subparsers(dest="event_command", required=True)
     event_validate_parser = event_subparsers.add_parser(
-        "validate", help="Validate event transmission chronology"
+        "validate", help="Validate a point-in-time event assessment"
     )
     event_validate_parser.add_argument("path", type=Path)
     return parser
@@ -69,12 +76,38 @@ def validate_provider(path: Path) -> dict[str, object]:
 
 def validate_event(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    errors = event_transmission_chronology_errors(payload)
+    schema_errors = _event_transmission_schema_errors(payload)
+    errors = schema_errors or event_transmission_chronology_errors(payload)
     return {
         "path": path.as_posix(),
         "valid": not errors,
         "errors": list(errors),
     }
+
+
+def _event_transmission_schema_errors(payload: object) -> tuple[str, ...]:
+    schema_path = _event_transmission_schema_path()
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    validator = cast(
+        EventTransmissionValidator,
+        Draft202012Validator(schema, format_checker=FormatChecker()),
+    )
+    errors = sorted(
+        validator.iter_errors(payload), key=lambda error: (error.json_path, error.message)
+    )
+    return tuple(_format_schema_error(error) for error in errors)
+
+
+def _event_transmission_schema_path() -> Path:
+    package_root = Path(__file__).resolve().parent
+    installed_schema = package_root / "schemas" / "event-transmission.schema.json"
+    if installed_schema.is_file():
+        return installed_schema
+    return package_root.parents[1] / "schemas" / "event-transmission.schema.json"
+
+
+def _format_schema_error(error: ValidationError) -> str:
+    return f"{error.json_path}: {error.message}"
 
 
 def main(argv: Sequence[str] | None = None) -> int:

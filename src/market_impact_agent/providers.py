@@ -22,7 +22,6 @@ from market_impact_agent.policy import HardPolicyEvaluator
 
 class Capability(StrEnum):
     MARKET_DATA = "market_data"
-    BACKTEST = "backtest"
     PAPER_EXECUTION = "paper_execution"
     LIVE_EXECUTION = "live_execution"
     ACCOUNT = "account"

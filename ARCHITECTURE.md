@@ -12,14 +12,15 @@ Source adapters
     -> Evidence Items -> Event Envelope
     -> fast/deep router -> Event Assessment
     -> Signal Intent
-    -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
-    -> Semantic Auto Approver (optional; cannot override hard policy)
-    -> Approval Decision
-    -> durable Order Intent/outbox
-    -> paper execution gateway -> sealed submission capability
-    -> Provider Registry -> execution provider
-    <- Execution Events <- private stream + bounded polling
-    <- Reconciliation <- order/fill/position/account truth
+         -> Backtest Request -> engine-neutral backtest port
+              -> Nautilus backtest bridge -> deterministic replay and results
+         -> Order Intent -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
+              -> Semantic Auto Approver (optional; cannot override hard policy)
+              -> Approval Decision -> durable outbox
+              -> paper execution gateway -> sealed submission capability
+              -> Provider Registry -> execution provider
+              <- Execution Events <- private stream + bounded polling
+              <- Reconciliation <- order/fill/position/account truth
 ```
 
 ## Provider boundary
@@ -46,32 +47,38 @@ policy and provider capability before issuing the sealed input accepted by an
 execution provider. Providers do not accept a raw `OrderIntent`, and no
 equivalent live gateway exists.
 
-## Reference engine
+## Default engine foundation
 
-NautilusTrader is the selected default trading engine and reference Provider
-implementation. Its public execution architecture informs the harness conformance
-baseline: typed commands and events, risk before execution, stable client/venue/trade
-identities, explicit unknown outcomes, private-stream plus query recovery, startup and
-continuous reconciliation, external-order handling, and consistent simulation/live
-semantics.
+NautilusTrader is the selected default foundational trading and backtest engine and the
+behavioral reference for engine integration. Its common event-driven kernel, typed
+commands and events, clocks, cache, portfolio, risk, simulation, and execution lifecycle
+provide the first concrete path through which the Harness will replay frozen research.
 
-The harness does not import NautilusTrader types into its public contract. It defines the
-small low-frequency subset needed by event-driven trading, and `NautilusProviderAdapter`
-will translate that contract into NautilusTrader. This keeps the dependency direction
-stable and avoids forcing sibling engines to reproduce Nautilus-specific OMS, execution
-algorithms, or every supported order type.
+The Harness still owns Evidence Items, Event Assessments, Signal and Order Intents,
+Trading Mandates, approval, outbox identity, and normalized audit history. Nautilus owns
+engine-local strategy, clock, cache, portfolio, risk, simulated venue, and execution state
+for one configured run or node. A broker remains the external truth for orders, fills,
+positions, and cash.
+
+The Harness does not import NautilusTrader types into its public contracts. Phase 2 adds a
+small engine-neutral backtest request/result port and a `NautilusBacktestBridge`. Later
+Provider integrations bind an exact engine, adapter, version, configuration, market, and
+environment; using Nautilus never grants capability or conformance by itself.
 
 ```text
-Harness Provider Contract
-    -> NautilusProviderAdapter (default/reference)
-         -> Nautilus backtest
-         -> IBKR Paper
-    -> VeighNa external bridge -> supported A-share gateway
-    -> future direct IBKR, LEAN, or other adapters
+Harness domain / policy / canonical artifacts
+    -> engine-neutral backtest and execution ports
+         -> Nautilus engine foundation (default/reference)
+              -> NautilusBacktestBridge                    [Phase 2]
+              -> ibkr-nautilus-paper Provider              [Phase 4]
+         -> VeighNa external Provider bridge               [later]
+         -> future direct IBKR, LEAN, or other adapters
 ```
 
-All branches must pass the same capability, policy, idempotency, recovery, and
-reconciliation conformance suite. The default adapter has no privileged bypass.
+Nautilus reduces the semantic gap between backtest and live by sharing core components
+and strategy/command/event models. It does not make data arrival, fills, venue rules, or
+recovery behavior identical. A-share T+1, price limits, fees, executable-price timing,
+and every paper/live recovery property require explicit Harness acceptance.
 
 ## Approval model
 
@@ -100,8 +107,9 @@ implemented when the first replay slice requires it—not before.
 
 First-party code supports Python `>=3.13,<3.15`.
 
-- NautilusTrader is the default/reference backtest and paper engine. Its adapter is
-  planned and disabled in the bootstrap.
+- NautilusTrader is the default engine foundation. Its Phase 2 backtest bridge and later
+  paper Provider integrations are planned and disabled in the bootstrap; a compatible
+  release is deliberately not pinned before the compatibility spike.
 - Tushare is accessed through a language-neutral HTTP adapter; licensed data
   remains local.
 - VeighNa is an external-process bridge. VeighNa 4.4 and current A-share vendor

@@ -1,48 +1,204 @@
 {
-  "schema_version": "market-impact.event-transmission.v1",
+  "schema_version": "market-impact.event-assessment.v2",
   "event_id": "synthetic-energy-shock-001",
-  "event_family": "physical_supply_shock.energy",
-  "event_time": "2026-08-24T02:00:00Z",
-  "first_publication_time": "2026-08-24T02:03:00Z",
-  "as_of": "2026-08-24T02:05:00Z",
-  "source_refs": ["synthetic://official-notice/001"],
-  "surprise": {
+  "envelope": {
+    "schema_version": "market-impact.event-envelope.v1",
+    "envelope_id": "synthetic-energy-shock-001@2026-08-24T02:05:00Z",
+    "event_id": "synthetic-energy-shock-001",
+    "as_of": "2026-08-24T02:05:00Z",
+    "evidence": [
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "normal-throughput-baseline",
+        "claim_id": "normal-throughput-expected",
+        "source_ref": "synthetic://baseline/normal-throughput",
+        "source_tier": "primary",
+        "occurred_at": "2026-08-23T23:00:00Z",
+        "published_at": "2026-08-23T23:00:00Z",
+        "visible_at": "2026-08-23T23:00:00Z",
+        "retrieved_at": "2026-08-24T01:55:00Z",
+        "claim": "Normal throughput was expected before the shock.",
+        "claim_hash": "d5fb51a8555223ad29c1f36e424fe7b45ea53d9c22c0c1c2b22f3fe8a99d6f27"
+      },
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "official-outage-confirmation",
+        "claim_id": "material-temporary-outage",
+        "source_ref": "synthetic://official-notice/001",
+        "source_tier": "official",
+        "occurred_at": "2026-08-24T02:00:00Z",
+        "published_at": "2026-08-24T02:02:00Z",
+        "visible_at": "2026-08-24T02:03:00Z",
+        "retrieved_at": "2026-08-24T02:04:00Z",
+        "claim": "A material temporary outage was officially confirmed.",
+        "claim_hash": "d35d3f6b9a3beccf9e869cd83f01f9bd586686ef0e2f73492d79ef1bcdb9b5c1"
+      },
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "primary-shipping-observation",
+        "claim_id": "throughput-fell",
+        "source_ref": "synthetic://shipping-observation/001",
+        "source_tier": "primary",
+        "occurred_at": "2026-08-24T02:01:00Z",
+        "published_at": "2026-08-24T02:03:00Z",
+        "visible_at": "2026-08-24T02:04:00Z",
+        "retrieved_at": "2026-08-24T02:05:00Z",
+        "claim": "Observed throughput fell after the outage.",
+        "claim_hash": "83d512fa072d032fd223a5223646dbf30ccbf8e0f060aeceb21b2567a5d6f242"
+      },
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "replacement-supply-claim",
+        "claim_id": "replacement-capacity-available",
+        "source_ref": "synthetic://operator-statement/002",
+        "source_tier": "primary",
+        "occurred_at": "2026-08-24T02:01:00Z",
+        "published_at": "2026-08-24T02:04:00Z",
+        "visible_at": "2026-08-24T02:05:00Z",
+        "retrieved_at": "2026-08-24T02:05:00Z",
+        "claim": "Replacement capacity and inventory may offset customer impact.",
+        "claim_hash": "45364401be2bcf718711af67de5cd37c124f927413ac10d6d83b349a597fd342"
+      }
+    ]
+  },
+  "event_archetype": "physical_supply_logistics",
+  "revelation_mode": "unscheduled",
+  "stage": "corroborated",
+  "routing": {
+    "mode": "combined",
+    "max_depth": 4,
+    "max_branches": 6,
+    "reasons": ["high-impact event requires fast output and deep follow-up"]
+  },
+  "expectation_delta": {
+    "baseline_source_ref": "normal-throughput-baseline",
     "expected": "normal throughput",
     "observed": "material temporary outage",
     "direction": "negative",
     "confidence": 0.9
   },
-  "transmission_edges": [
+  "transmission_paths": [
     {
-      "layer": "direct",
-      "from": "crude_supply",
-      "to": "crude_benchmark",
-      "mechanism": "lower near-term physical availability",
-      "expected_effect": "up",
-      "horizon_sessions": 1,
-      "confidence": 0.8
+      "path_id": "crude-price-path",
+      "target_ref": "commodity:crude_benchmark",
+      "steps": [
+        {
+          "step_id": "supply-to-crude",
+          "from": "physical_supply",
+          "to": "crude_benchmark",
+          "channel": "capacity_cost_inventory",
+          "directness": "direct",
+          "mechanism": "lower near-term physical availability",
+          "affected_variable": "prompt crude availability",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.8,
+          "evidence_refs": [
+            "official-outage-confirmation",
+            "primary-shipping-observation"
+          ]
+        }
+      ],
+      "counterevidence_refs": ["replacement-supply-claim"],
+      "blockers": ["exact lost throughput is not yet quantified"],
+      "invalidation_conditions": ["replacement supply fully offsets the outage"]
     },
     {
-      "layer": "second_order",
-      "from": "crude_benchmark",
-      "to": "airlines",
-      "mechanism": "higher expected fuel input cost",
-      "expected_effect": "down",
-      "horizon_sessions": 3,
-      "confidence": 0.6
+      "path_id": "airline-input-cost-path",
+      "target_ref": "industry:airlines",
+      "steps": [
+        {
+          "step_id": "airline-supply-to-crude",
+          "from": "physical_supply",
+          "to": "crude_benchmark",
+          "channel": "capacity_cost_inventory",
+          "directness": "direct",
+          "mechanism": "lower near-term physical availability",
+          "affected_variable": "prompt crude price",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.8,
+          "evidence_refs": ["official-outage-confirmation"]
+        },
+        {
+          "step_id": "crude-to-jet-fuel",
+          "from": "crude_benchmark",
+          "to": "jet_fuel_cost",
+          "channel": "capacity_cost_inventory",
+          "directness": "second_order",
+          "mechanism": "higher feedstock price raises unhedged refined-product cost",
+          "affected_variable": "jet fuel input cost",
+          "expected_effect": "up",
+          "horizon_sessions": 3,
+          "confidence": 0.6,
+          "evidence_refs": ["primary-shipping-observation"]
+        },
+        {
+          "step_id": "jet-fuel-to-airlines",
+          "from": "jet_fuel_cost",
+          "to": "airline_margin_expectation",
+          "channel": "capacity_cost_inventory",
+          "directness": "third_order",
+          "mechanism": "unhedged fuel costs compress expected operating margins",
+          "affected_variable": "airline operating margin",
+          "expected_effect": "down",
+          "horizon_sessions": 3,
+          "confidence": 0.5,
+          "evidence_refs": ["primary-shipping-observation"]
+        }
+      ],
+      "counterevidence_refs": ["replacement-supply-claim"],
+      "blockers": ["airline hedge ratios are not available in the envelope"],
+      "invalidation_conditions": ["fuel hedges or replacement supply remove the cost shock"]
     },
     {
-      "layer": "market_overlay",
-      "from": "energy_attention",
-      "to": "a_share_energy_theme",
-      "mechanism": "short-horizon thematic capital rotation",
-      "expected_effect": "up",
-      "horizon_sessions": 1,
-      "confidence": 0.4
+      "path_id": "a-share-flow-path",
+      "target_ref": "theme:a_share_energy",
+      "steps": [
+        {
+          "step_id": "theme-supply-to-crude",
+          "from": "physical_supply",
+          "to": "crude_benchmark",
+          "channel": "capacity_cost_inventory",
+          "directness": "direct",
+          "mechanism": "lower physical availability raises the prompt benchmark",
+          "affected_variable": "prompt crude price",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.8,
+          "evidence_refs": ["official-outage-confirmation"]
+        },
+        {
+          "step_id": "crude-to-attention",
+          "from": "crude_benchmark",
+          "to": "energy_theme_attention",
+          "channel": "expectations_attention",
+          "directness": "second_order",
+          "mechanism": "international price response focuses attention on domestic energy exposure",
+          "affected_variable": "energy-theme attention",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.5,
+          "evidence_refs": ["primary-shipping-observation"]
+        },
+        {
+          "step_id": "attention-to-a-share-flow",
+          "from": "energy_theme_attention",
+          "to": "a_share_energy_theme",
+          "channel": "positioning_liquidity_mechanics",
+          "directness": "third_order",
+          "mechanism": "short-horizon thematic rotation creates mechanical buying pressure",
+          "affected_variable": "relative theme flow",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.35,
+          "evidence_refs": ["primary-shipping-observation"]
+        }
+      ],
+      "counterevidence_refs": ["replacement-supply-claim"],
+      "blockers": ["no point-in-time A-share flow observation is yet available"],
+      "invalidation_conditions": ["the energy theme fails to gain relative breadth or flow"]
     }
   ],
-  "invalidation_conditions": [
-    "outage is officially reversed",
-    "replacement supply fully offsets the outage"
-  ]
+  "blockers": ["outage duration and replacement volume remain uncertain"]
 }

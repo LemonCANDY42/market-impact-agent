@@ -19,7 +19,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dependencies = []
+dependencies = ["jsonschema>=4.25,<5"]
 
 [project.scripts]
 market-impact = "market_impact_agent.cli:main"
@@ -31,7 +31,6 @@ Issues = "https://github.com/LemonCANDY42/market-impact-agent/issues"
 
 [dependency-groups]
 dev = [
-  "jsonschema>=4.25,<5",
   "pyright>=1.1.400,<2",
   "pytest>=8.4,<10",
   "ruff>=0.12,<1",
@@ -39,6 +38,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/market_impact_agent"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schemas/event-transmission.schema.json" = "market_impact_agent/schemas/event-transmission.schema.json"
 
 [tool.pytest.ini_options]
 addopts = "-q"

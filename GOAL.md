@@ -23,10 +23,11 @@ Given a target market and `as_of` time, the system can:
 7. route a paper Order Intent through hard policy, approval, execution, and
    reconciliation without duplicate submission.
 
-NautilusTrader is the default quantitative engine and the first real Provider reference
-implementation. The harness contract remains engine-neutral so VeighNa, a direct IBKR
-adapter, LEAN, or another engine can pass the same conformance boundary without emulating
-NautilusTrader's complete object model.
+NautilusTrader is the default foundational trading and backtest engine and the behavioral
+reference for engine integration. The Harness contract remains engine-neutral and does not
+expose NautilusTrader types. Historical replay through a Harness-owned Nautilus backtest
+bridge comes first; IBKR and VeighNa Provider adapters are later, independently validated
+integrations.
 
 ## Success criteria
 

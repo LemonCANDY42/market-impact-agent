@@ -82,7 +82,6 @@
       "items": {
         "enum": [
           "market_data",
-          "backtest",
           "paper_execution",
           "live_execution",
           "account"

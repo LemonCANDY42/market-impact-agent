@@ -68,11 +68,29 @@ def test_validate_event_rejects_future_evidence(
 ) -> None:
     source = Path("examples/events/synthetic-energy-supply-shock.json")
     payload = json.loads(source.read_text(encoding="utf-8"))
-    payload["first_publication_time"] = "2026-08-24T02:06:00Z"
+    payload["envelope"]["evidence"][0]["visible_at"] = "2026-08-24T02:06:00Z"
+    payload["envelope"]["evidence"][0]["retrieved_at"] = "2026-08-24T02:07:00Z"
     target = tmp_path / "future-evidence.json"
     target.write_text(json.dumps(payload), encoding="utf-8")
 
     assert main(["event", "validate", str(target)]) == 1
     captured = capsys.readouterr()
     result = json.loads(captured.out)
-    assert result["errors"] == ["first_publication_time must not be after as_of"]
+    assert result["errors"] == ["envelope.evidence[0].visible_at must not be after envelope.as_of"]
+
+
+def test_validate_event_rejects_invalid_archetype_and_missing_required_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = Path("examples/events/synthetic-energy-supply-shock.json")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["event_archetype"] = "unsupported_archetype"
+    del payload["envelope"]["evidence"][0]["claim_hash"]
+    target = tmp_path / "invalid-event.json"
+    target.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert main(["event", "validate", str(target)]) == 1
+
+    result = json.loads(capsys.readouterr().out)
+    assert any(error.startswith("$.event_archetype:") for error in result["errors"])
+    assert any("'claim_hash' is a required property" in error for error in result["errors"])

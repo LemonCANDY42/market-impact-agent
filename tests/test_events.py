@@ -1,27 +1,96 @@
+import json
+from pathlib import Path
+from typing import Any, cast
+
 from market_impact_agent.events import event_transmission_chronology_errors
 
 
+def load_event(
+    fixture: str = "examples/events/synthetic-energy-supply-shock.json",
+) -> dict[str, Any]:
+    payload = cast(
+        object,
+        json.loads(Path(fixture).read_text(encoding="utf-8")),
+    )
+    if not isinstance(payload, dict):
+        raise TypeError("event fixture must be an object")
+    return cast(dict[str, Any], payload)
+
+
 def test_event_chronology_accepts_evidence_visible_by_as_of() -> None:
+    assert event_transmission_chronology_errors(load_event()) == ()
+
+
+def test_real_event_fixture_satisfies_point_in_time_rules() -> None:
     assert (
         event_transmission_chronology_errors(
-            {
-                "event_time": "2026-08-24T02:00:00Z",
-                "first_publication_time": "2026-08-24T02:03:00Z",
-                "as_of": "2026-08-24T02:05:00Z",
-            }
+            load_event("examples/events/real-abqaiq-geopolitical-supply-shock.json")
         )
         == ()
     )
 
 
-def test_event_chronology_rejects_future_event_and_evidence() -> None:
-    assert event_transmission_chronology_errors(
-        {
-            "event_time": "2026-08-24T02:06:00Z",
-            "first_publication_time": "2026-08-24T02:07:00Z",
-            "as_of": "2026-08-24T02:05:00Z",
-        }
-    ) == (
-        "event_time must not be after as_of",
-        "first_publication_time must not be after as_of",
+def test_event_chronology_accepts_a_future_scheduled_occurrence() -> None:
+    payload = load_event()
+    payload["envelope"]["evidence"][0]["occurred_at"] = "2026-08-25T02:00:00Z"
+
+    assert event_transmission_chronology_errors(payload) == ()
+
+
+def test_event_chronology_rejects_future_visible_evidence() -> None:
+    payload = load_event()
+    payload["envelope"]["evidence"][0]["visible_at"] = "2026-08-24T02:06:00Z"
+    payload["envelope"]["evidence"][0]["retrieved_at"] = "2026-08-24T02:07:00Z"
+
+    assert event_transmission_chronology_errors(payload) == (
+        "envelope.evidence[0].visible_at must not be after envelope.as_of",
     )
+
+
+def test_event_validation_rejects_unknown_path_evidence() -> None:
+    payload = load_event()
+    payload["transmission_paths"][0]["steps"][0]["evidence_refs"] = ["future-source"]
+
+    assert event_transmission_chronology_errors(payload) == (
+        "transmission_paths[0] has unknown evidence references: future-source",
+    )
+
+
+def test_event_validation_requires_adjacent_transmission_steps() -> None:
+    payload = load_event()
+    payload["transmission_paths"][1]["steps"][1]["from"] = "unrelated_input"
+
+    assert event_transmission_chronology_errors(payload) == (
+        "transmission_paths[1].steps[1].from must match the previous step.to",
+    )
+
+
+def test_event_validation_requires_directness_to_match_step_position() -> None:
+    payload = load_event()
+    payload["transmission_paths"][1]["steps"][1]["directness"] = "fourth_order"
+
+    assert event_transmission_chronology_errors(payload) == (
+        "transmission_paths[1].steps[1].directness must be second_order for its position",
+    )
+
+
+def test_event_validation_requires_values_for_known_expectation_delta() -> None:
+    payload = load_event()
+    payload["expectation_delta"]["expected"] = None
+
+    assert event_transmission_chronology_errors(payload) == (
+        "known expectation_delta requires non-null baseline_source_ref, expected, and observed",
+    )
+
+
+def test_event_validation_allows_unknown_expectation_delta() -> None:
+    payload = load_event()
+    payload["expectation_delta"] = {
+        "baseline_source_ref": None,
+        "expected": None,
+        "observed": None,
+        "direction": "unknown",
+        "confidence": 0,
+    }
+
+    assert event_transmission_chronology_errors(payload) == ()

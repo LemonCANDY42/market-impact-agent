@@ -1,0 +1,266 @@
+{
+  "schema_version": "market-impact.event-assessment.v2",
+  "event_id": "abqaiq-khurais-attack-2019",
+  "envelope": {
+    "schema_version": "market-impact.event-envelope.v1",
+    "envelope_id": "abqaiq-khurais-attack-2019@2019-09-18T23:59:59Z",
+    "event_id": "abqaiq-khurais-attack-2019",
+    "as_of": "2019-09-18T23:59:59Z",
+    "evidence": [
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "iea-september-baseline",
+        "claim_id": "pre-attack-operations-normal",
+        "source_ref": "https://www.iea.org/reports/oil-market-report-september-2019",
+        "source_tier": "official",
+        "occurred_at": "2019-09-11T00:00:00Z",
+        "published_at": "2019-09-11T23:59:59Z",
+        "visible_at": "2019-09-11T23:59:59Z",
+        "retrieved_at": "2026-08-25T08:00:00Z",
+        "claim": "Before the attack, IEA reported that Middle East Gulf tensions had eased and oil industry operations appeared normal.",
+        "claim_hash": "0cf5d261e5a9bb3be83ee96556f80c7b37e409e5278b14e3fe536cd172e8940e"
+      },
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "aramco-attack-confirmation",
+        "claim_id": "attack-suspended-production",
+        "source_ref": "https://www.aramco.com/en/news-media/news/2019/incidents-at-abqaiq-and-khurais",
+        "source_tier": "primary",
+        "occurred_at": "2019-09-14T00:00:00Z",
+        "published_at": "2019-09-14T23:59:59Z",
+        "visible_at": "2019-09-14T23:59:59Z",
+        "retrieved_at": "2026-08-25T08:00:00Z",
+        "claim": "Attacks on Abqaiq and Khurais directly suspended 5.7 million barrels per day of production.",
+        "claim_hash": "63a4f13106c9efebc2842f7fcc035404eb86ffe0451420ed3912369eab444cc8"
+      },
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "aramco-recovery-update",
+        "claim_id": "production-recovery-timeline",
+        "source_ref": "https://www.aramco.com/en/news-media/news/2019/saudi-aramco-swiftly-restores-production-capacity",
+        "source_tier": "primary",
+        "occurred_at": "2019-09-17T00:00:00Z",
+        "published_at": "2019-09-17T23:59:59Z",
+        "visible_at": "2019-09-17T23:59:59Z",
+        "retrieved_at": "2026-08-25T08:00:00Z",
+        "claim": "On September 17, Aramco said Abqaiq was producing 2 million barrels per day and expected full output capacity by month-end.",
+        "claim_hash": "7994c8d00d850baebd8a04002416611519cef84250a20a15920b4ed35a4bc958"
+      },
+      {
+        "schema_version": "market-impact.evidence-item.v1",
+        "evidence_id": "aramco-shipment-update",
+        "claim_id": "shipments-maintained",
+        "source_ref": "https://www.aramco.com/en/news-media/news/2019/saudi-aramco-swiftly-restores-production-capacity",
+        "source_tier": "primary",
+        "occurred_at": "2019-09-17T00:00:00Z",
+        "published_at": "2019-09-17T23:59:59Z",
+        "visible_at": "2019-09-17T23:59:59Z",
+        "retrieved_at": "2026-08-25T08:00:00Z",
+        "claim": "Aramco said it maintained international customer shipments using inventories and additional production from other fields.",
+        "claim_hash": "cd3a2dd936fc9ea01b15761ebe237bb90491aad8bbb7288341d69888bcd2d30d"
+      }
+    ]
+  },
+  "event_archetype": "geopolitical_security",
+  "revelation_mode": "unscheduled",
+  "stage": "quantified_or_realized",
+  "routing": {
+    "mode": "combined",
+    "max_depth": 4,
+    "max_branches": 6,
+    "reasons": [
+      "high-impact geopolitical event requires immediate output and deeper transmission analysis"
+    ]
+  },
+  "expectation_delta": {
+    "baseline_source_ref": "iea-september-baseline",
+    "expected": "normal oil industry operations",
+    "observed": "a 5.7 million barrel-per-day production suspension",
+    "direction": "negative",
+    "confidence": 0.95
+  },
+  "transmission_paths": [
+    {
+      "path_id": "geopolitics-to-crude-path",
+      "target_ref": "commodity:crude_benchmark",
+      "steps": [
+        {
+          "step_id": "attack-to-production-capacity",
+          "from": "geopolitical_attack",
+          "to": "saudi_production_capacity",
+          "channel": "capacity_cost_inventory",
+          "directness": "direct",
+          "mechanism": "physical damage suspends production at critical processing facilities",
+          "affected_variable": "available Saudi production capacity",
+          "expected_effect": "down",
+          "horizon_sessions": 1,
+          "confidence": 0.95,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "capacity-to-crude-benchmark",
+          "from": "saudi_production_capacity",
+          "to": "crude_benchmark",
+          "channel": "capacity_cost_inventory",
+          "directness": "second_order",
+          "mechanism": "lower immediately available production tightens expected prompt supply",
+          "affected_variable": "prompt crude availability and risk premium",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.8,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        }
+      ],
+      "counterevidence_refs": [
+        "aramco-recovery-update",
+        "aramco-shipment-update"
+      ],
+      "blockers": [
+        "the point-in-time envelope does not contain an independent benchmark price observation"
+      ],
+      "invalidation_conditions": [
+        "restored production and inventories fully remove the prompt supply shortfall"
+      ]
+    },
+    {
+      "path_id": "airline-margin-path",
+      "target_ref": "industry:airlines",
+      "steps": [
+        {
+          "step_id": "airline-attack-to-capacity",
+          "from": "geopolitical_attack",
+          "to": "saudi_production_capacity",
+          "channel": "capacity_cost_inventory",
+          "directness": "direct",
+          "mechanism": "physical damage suspends production at critical processing facilities",
+          "affected_variable": "available Saudi production capacity",
+          "expected_effect": "down",
+          "horizon_sessions": 1,
+          "confidence": 0.95,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "airline-capacity-to-crude",
+          "from": "saudi_production_capacity",
+          "to": "crude_benchmark",
+          "channel": "capacity_cost_inventory",
+          "directness": "second_order",
+          "mechanism": "lower immediately available production tightens expected prompt supply",
+          "affected_variable": "prompt crude availability and risk premium",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.8,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "crude-to-jet-fuel-cost",
+          "from": "crude_benchmark",
+          "to": "jet_fuel_cost",
+          "channel": "capacity_cost_inventory",
+          "directness": "third_order",
+          "mechanism": "higher feedstock prices raise unhedged refined-product costs",
+          "affected_variable": "jet fuel input cost",
+          "expected_effect": "up",
+          "horizon_sessions": 3,
+          "confidence": 0.55,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "jet-fuel-to-airline-margin",
+          "from": "jet_fuel_cost",
+          "to": "airline_margin_expectation",
+          "channel": "capacity_cost_inventory",
+          "directness": "fourth_order",
+          "mechanism": "unhedged fuel costs compress expected operating margins",
+          "affected_variable": "airline operating margin",
+          "expected_effect": "down",
+          "horizon_sessions": 3,
+          "confidence": 0.4,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        }
+      ],
+      "counterevidence_refs": [
+        "aramco-recovery-update",
+        "aramco-shipment-update"
+      ],
+      "blockers": [
+        "airline hedge ratios and observed jet-fuel prices are absent from the envelope"
+      ],
+      "invalidation_conditions": [
+        "hedges or restored supply remove the expected fuel-cost shock"
+      ]
+    },
+    {
+      "path_id": "a-share-energy-flow-path",
+      "target_ref": "theme:a_share_energy",
+      "steps": [
+        {
+          "step_id": "theme-attack-to-capacity",
+          "from": "geopolitical_attack",
+          "to": "saudi_production_capacity",
+          "channel": "capacity_cost_inventory",
+          "directness": "direct",
+          "mechanism": "physical damage suspends production at critical processing facilities",
+          "affected_variable": "available Saudi production capacity",
+          "expected_effect": "down",
+          "horizon_sessions": 1,
+          "confidence": 0.95,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "theme-capacity-to-crude",
+          "from": "saudi_production_capacity",
+          "to": "crude_benchmark",
+          "channel": "capacity_cost_inventory",
+          "directness": "second_order",
+          "mechanism": "lower immediately available production tightens expected prompt supply",
+          "affected_variable": "prompt crude availability and risk premium",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.8,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "crude-to-energy-attention",
+          "from": "crude_benchmark",
+          "to": "energy_theme_attention",
+          "channel": "expectations_attention",
+          "directness": "third_order",
+          "mechanism": "the expected global price response raises attention to domestic energy exposures",
+          "affected_variable": "energy-theme attention",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.4,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        },
+        {
+          "step_id": "attention-to-a-share-flow",
+          "from": "energy_theme_attention",
+          "to": "a_share_energy_theme",
+          "channel": "positioning_liquidity_mechanics",
+          "directness": "fourth_order",
+          "mechanism": "short-horizon thematic rotation may create mechanical buying pressure",
+          "affected_variable": "relative A-share energy-theme flow",
+          "expected_effect": "up",
+          "horizon_sessions": 1,
+          "confidence": 0.25,
+          "evidence_refs": ["aramco-attack-confirmation"]
+        }
+      ],
+      "counterevidence_refs": [
+        "aramco-recovery-update",
+        "aramco-shipment-update"
+      ],
+      "blockers": [
+        "no point-in-time A-share price, breadth, or flow observation is in the envelope"
+      ],
+      "invalidation_conditions": [
+        "the energy theme fails to gain relative breadth or flow"
+      ]
+    }
+  ],
+  "blockers": [
+    "date-only source publication metadata is conservatively recorded at end of day UTC",
+    "the envelope separates known supply facts from unobserved market outcomes"
+  ]
+}

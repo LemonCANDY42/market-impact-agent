@@ -28,8 +28,8 @@ def test_schema_is_valid(schema_name: str) -> None:
 @pytest.mark.parametrize(
     "example_path",
     [
+        "examples/events/real-abqaiq-geopolitical-supply-shock.json",
         "examples/events/synthetic-energy-supply-shock.json",
-        "examples/providers/nautilus-planned.json",
         "examples/providers/tushare-http-planned.json",
         "examples/providers/veighna-external-bridge.json",
     ],
@@ -67,6 +67,35 @@ def test_order_intent_schema_requires_explicit_expiry() -> None:
 
     with pytest.raises(ValidationError, match="'expires_at' is a required property"):
         cast(Validator, validator).validate(order)
+
+
+def test_event_schema_requires_values_for_known_expectation_delta() -> None:
+    event = load_json(ROOT / "examples/events/synthetic-energy-supply-shock.json")
+    event["expectation_delta"]["expected"] = None
+    validator = Draft202012Validator(
+        load_json(ROOT / "schemas" / "event-transmission.schema.json"),
+        format_checker=FormatChecker(),
+    )
+
+    with pytest.raises(ValidationError, match="None is not of type 'string'"):
+        cast(Validator, validator).validate(event)
+
+
+def test_event_schema_allows_unknown_expectation_delta() -> None:
+    event = load_json(ROOT / "examples/events/synthetic-energy-supply-shock.json")
+    event["expectation_delta"] = {
+        "baseline_source_ref": None,
+        "expected": None,
+        "observed": None,
+        "direction": "unknown",
+        "confidence": 0,
+    }
+    validator = Draft202012Validator(
+        load_json(ROOT / "schemas" / "event-transmission.schema.json"),
+        format_checker=FormatChecker(),
+    )
+
+    cast(Validator, validator).validate(event)
 
 
 def load_json(path: Path) -> dict[str, Any]:

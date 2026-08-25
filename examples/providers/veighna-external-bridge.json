@@ -3,10 +3,9 @@
   "provider_id": "veighna-external-bridge",
   "provider_version": "0.0.0",
   "transport": "grpc",
-  "environments": ["backtest", "paper", "live"],
+  "environments": ["paper", "live"],
   "declared_capabilities": [
     "market_data",
-    "backtest",
     "paper_execution",
     "live_execution",
     "account"

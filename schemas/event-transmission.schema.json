@@ -1,64 +1,122 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/event-transmission.schema.json",
-  "title": "Point-in-time Event Transmission Record",
+  "title": "Point-in-time Event Assessment",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "event_id",
-    "event_family",
-    "event_time",
-    "first_publication_time",
-    "as_of",
-    "source_refs",
-    "surprise",
-    "transmission_edges",
-    "invalidation_conditions"
+    "envelope",
+    "event_archetype",
+    "revelation_mode",
+    "stage",
+    "routing",
+    "expectation_delta",
+    "transmission_paths",
+    "blockers"
   ],
   "properties": {
     "schema_version": {
-      "const": "market-impact.event-transmission.v1"
+      "const": "market-impact.event-assessment.v2"
     },
     "event_id": {
       "type": "string",
       "minLength": 1
     },
-    "event_family": {
-      "type": "string",
-      "minLength": 1
+    "envelope": {
+      "$ref": "#/$defs/event_envelope"
     },
-    "event_time": {
-      "type": "string",
-      "format": "date-time"
+    "event_archetype": {
+      "enum": [
+        "issuer_corporate",
+        "macro_real_economy",
+        "policy_regulatory",
+        "geopolitical_security",
+        "physical_supply_logistics",
+        "climate_natural_hazard",
+        "technology_demand_adoption",
+        "financial_market_mechanics"
+      ]
     },
-    "first_publication_time": {
-      "type": "string",
-      "format": "date-time"
+    "revelation_mode": {
+      "enum": ["scheduled", "unscheduled", "continuous", "retrospective_revision"]
     },
-    "as_of": {
-      "type": "string",
-      "format": "date-time"
+    "stage": {
+      "enum": [
+        "pre_event",
+        "first_observed",
+        "corroborated",
+        "quantified_or_realized",
+        "diffusing",
+        "resolved",
+        "revised_or_invalidated"
+      ]
     },
-    "source_refs": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "surprise": {
+    "routing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expected", "observed", "direction", "confidence"],
+      "required": ["mode", "max_depth", "max_branches", "reasons"],
       "properties": {
+        "mode": {
+          "enum": ["fast", "deep", "combined"]
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_branches": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "fast"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "max_depth": {
+                "maximum": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "expectation_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_source_ref",
+        "expected",
+        "observed",
+        "direction",
+        "confidence"
+      ],
+      "properties": {
+        "baseline_source_ref": {
+          "type": ["string", "null"]
+        },
         "expected": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "observed": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "direction": {
           "enum": ["positive", "negative", "mixed", "unknown"]
@@ -68,60 +126,327 @@
           "minimum": 0,
           "maximum": 1
         }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "direction": {
+                "not": {
+                  "const": "unknown"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "baseline_source_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expected": {
+                "type": "string"
+              },
+              "observed": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transmission_paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/transmission_path"
       }
     },
-    "transmission_edges": {
+    "blockers": {
       "type": "array",
-      "minItems": 1,
+      "uniqueItems": true,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "layer",
-          "from",
-          "to",
-          "mechanism",
-          "expected_effect",
-          "horizon_sessions",
-          "confidence"
-        ],
-        "properties": {
-          "layer": {
-            "enum": ["direct", "second_order", "market_overlay", "empirical"]
-          },
-          "from": {
-            "type": "string",
-            "minLength": 1
-          },
-          "to": {
-            "type": "string",
-            "minLength": 1
-          },
-          "mechanism": {
-            "type": "string",
-            "minLength": 1
-          },
-          "expected_effect": {
-            "enum": ["up", "down", "mixed", "unknown"]
-          },
-          "horizon_sessions": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "confidence": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "properties": {
+        "transmission_paths": {
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "blockers": {
+          "minItems": 1
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "event_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "envelope_id", "event_id", "as_of", "evidence"],
+      "properties": {
+        "schema_version": {
+          "const": "market-impact.event-envelope.v1"
+        },
+        "envelope_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_item"
           }
         }
       }
     },
-    "invalidation_conditions": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "string",
-        "minLength": 1
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "evidence_id",
+        "claim_id",
+        "source_ref",
+        "source_tier",
+        "occurred_at",
+        "published_at",
+        "visible_at",
+        "retrieved_at",
+        "claim",
+        "claim_hash"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "market-impact.evidence-item.v1"
+        },
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_tier": {
+          "enum": [
+            "official",
+            "regulated",
+            "primary",
+            "established_news",
+            "specialist",
+            "community",
+            "unverified"
+          ]
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "visible_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retrieved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "supersedes_id": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "transmission_path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path_id",
+        "target_ref",
+        "steps",
+        "counterevidence_refs",
+        "blockers",
+        "invalidation_conditions"
+      ],
+      "properties": {
+        "path_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "properties": {
+                "directness": {
+                  "const": "direct"
+                }
+              }
+            },
+            {
+              "properties": {
+                "directness": {
+                  "const": "second_order"
+                }
+              }
+            },
+            {
+              "properties": {
+                "directness": {
+                  "const": "third_order"
+                }
+              }
+            },
+            {
+              "properties": {
+                "directness": {
+                  "const": "fourth_order"
+                }
+              }
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/transmission_step"
+          }
+        },
+        "counterevidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "invalidation_conditions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "transmission_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_id",
+        "from",
+        "to",
+        "channel",
+        "directness",
+        "mechanism",
+        "affected_variable",
+        "expected_effect",
+        "horizon_sessions",
+        "confidence",
+        "evidence_refs"
+      ],
+      "properties": {
+        "step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channel": {
+          "enum": [
+            "revenue_demand",
+            "capacity_cost_inventory",
+            "claims_capital_allocation",
+            "policy_access",
+            "funding_discount_fx",
+            "risk_uncertainty_insurance",
+            "expectations_attention",
+            "positioning_liquidity_mechanics"
+          ]
+        },
+        "directness": {
+          "enum": ["direct", "second_order", "third_order", "fourth_order"]
+        },
+        "mechanism": {
+          "type": "string",
+          "minLength": 1
+        },
+        "affected_variable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_effect": {
+          "enum": ["up", "down", "mixed", "unknown"]
+        },
+        "horizon_sessions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
   }
