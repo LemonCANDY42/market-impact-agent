@@ -97,18 +97,26 @@ fixtures, and licensed replay metrics must not be committed. Synthetic generated
 tests establish implementation behavior; the private command remains the separate local
 acceptance evidence for the named real bundle.
 
-The local acceptance completed on 2026-08-25 with `TUSHARE_TOKEN` explicitly removed from
-both replay processes. Two runs had distinct run IDs and execution times but identical
+The current local acceptance completed on 2026-08-25 with `TUSHARE_TOKEN` explicitly removed
+from both replay processes. Each run created a fresh Nautilus engine for the 1-, 3-, and
+10-session horizons. Two runs had distinct run IDs and execution times but identical
 request, named input, engine-configuration, metric, artifact, and result identities:
 
-- request hash: `df32253c97d031d544d3c7774c02bcef6524cf375363dfd3da9367dcdf8e6037`;
+- request hash: `0e108692ad42361bac28a20ac8155670f60ea68d290121bd4e4c604945357935`;
 - engine-configuration hash:
-  `189aefe0649113e7455f81219cd2c275f8ca6e666f9a99a052fe6f998a8639a3`;
-- result hash: `661063d99b4a596a66692ec6abe2e79803ca711cf54f1caf6c572a941ef10c61`.
+  `ddd6f3ba3fdaa93d7bf63a9aa0e7e39cef5191d57abf7a770f78e35f3e020bcc`;
+- result hash: `a974181a4e65ec91e6203876647c52211be00f234be5ec6e10df602e8a75a726`.
 
 The two normalized results remain private under the ignored `.market-impact/replays/`
 directory with a `0700` acceptance directory and `0600` files. No licensed metric is
 recorded here.
+
+The Phase 2 calibration gate then consumed those repeated Results as one
+`event_reasoning` test observation. It correctly rejected the evidence because it has no
+training cohort or four baseline variants, target selection is a manual integration fixture,
+single-event dominance cannot be cleared, and candidate mean net return is not positive
+under the frozen assumptions. The private evidence/report hashes are recorded in
+`docs/PHASE2_CALIBRATION.md`; metrics remain private.
 
 ## Explicit non-claims
 

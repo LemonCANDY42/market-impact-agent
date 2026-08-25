@@ -89,16 +89,19 @@ tests mechanics, not alpha or historical performance. Its daily bars are replaye
 chronological order; each session open is represented as a top-of-book event derived from
 that same frozen bar so Nautilus does not substitute the daily close for an opening fill.
 
-The long-only replay passed twice with bridge version `0.2.0`; a bound `SELL` Signal
+The long-only replay passed twice with bridge version `0.3.0`; a bound `SELL` Signal
 Intent fails closed instead of replaying the long strategy. The accepted `BUY` replay has:
 
 - request hash `9c633288a772b62e18116457237769622e2d1fc9f433a2a5bc1136bbb277b0da`;
 - engine-configuration hash
   `2c6839122f50ffc71bcb505d5055517f315fb32bc53198d5f79ab283e84a3f35`;
-- result hash `d18eddabac9e67e72c4ff0e6ffd07b621d9e4815b6e3e31da25812eb4e8edbf2`;
+- result hash `604d9aee20f97377b4d7327b0ffd876204a67f7de9789ef9e7ec9dd3c29a3e89`;
 - entry delayed two sessions by a suspension and an upper-limit opening lock;
 - entry `10.81`, exit `11.39`, three held sessions, `10.57 CNY` costs, and
   `47.43 CNY` normalized net PnL for the 100-share fixture trade.
+
+Bridge `0.3.0` also emits entry-notional-normalized `net_return` and runs each requested
+horizon in a fresh engine. Multi-horizon metrics are prefixed with `horizon_<sessions>.`.
 
 The acceptance is executable in `tests/test_nautilus_backtest.py`. It is not exchange-rule
 certification, real-data validation, a profitability claim, or permission to advance to

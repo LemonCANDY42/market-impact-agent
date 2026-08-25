@@ -100,6 +100,18 @@ The normalized completed or failed outcome of one Backtest Run Manifest, includi
 deterministic result identity, metrics, artifacts, or explicit failure reasons.
 _Avoid_: Broker receipt, live performance claim
 
+**Calibration Evidence**:
+A frozen set of independently repeated Backtest Results labeled by Event Cluster,
+chronological partition, and pre-registered candidate or baseline variant. It is input to a
+calibration gate, not permission to tune after observing the test partition.
+_Avoid_: Backtest leaderboard, selected wins
+
+**Calibration Gate Result**:
+A content-identified, engine-neutral acceptance or rejection report that applies one
+versioned cross-event protocol to Calibration Evidence. Rejection is evidence and blocks
+phase promotion; acceptance grants backtest calibration only.
+_Avoid_: Alpha claim, paper approval, live mandate
+
 ## Decisions
 
 **Event Assessment**:

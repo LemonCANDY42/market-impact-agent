@@ -44,7 +44,7 @@ from market_impact_agent.domain import Side, require_aware
 _ENGINE_NAME = "nautilus_trader"
 _ENGINE_VERSION = "1.231.0"
 _BRIDGE_NAME = "nautilus-backtest"
-_BRIDGE_VERSION = "0.2.0"
+_BRIDGE_VERSION = "0.3.0"
 _SUPPORTED_DATA_GRANULARITY = "daily_bar.v1"
 _SUPPORTED_BOOK_TYPE = "top_of_book"
 _SUPPORTED_FILL_MODEL = "next_executable_open_one_tick_slippage.v1"
@@ -328,11 +328,8 @@ class NautilusBacktestBridge:
         ):
             raise ValueError("request target_selection_ref does not match the integration fixture")
         _entry_order_side(request.signal.side, self._contract.venue_ruleset)
-        if len(request.horizons_sessions) != 1:
-            raise ValueError("the first replay supports exactly one holding horizon")
-
         bars = self._selected_bars(request)
-        required_sessions = request.horizons_sessions[0] + 1
+        required_sessions = max(request.horizons_sessions) + 1
         executable_buys = [
             bar
             for bar in bars
@@ -345,6 +342,29 @@ class NautilusBacktestBridge:
             raise ValueError("replay window does not cover the requested holding horizon")
 
     def _run_engine(self, request: BacktestRequest) -> tuple[BacktestMetric, ...]:
+        multiple_horizons = len(request.horizons_sessions) > 1
+        metrics: list[BacktestMetric] = []
+        for horizon_sessions in request.horizons_sessions:
+            horizon_metrics = self._run_horizon(request, horizon_sessions)
+            metrics.extend(
+                BacktestMetric(
+                    name=(
+                        f"horizon_{horizon_sessions}.{metric.name}"
+                        if multiple_horizons
+                        else metric.name
+                    ),
+                    value=metric.value,
+                    unit=metric.unit,
+                )
+                for metric in horizon_metrics
+            )
+        return tuple(metrics)
+
+    def _run_horizon(
+        self,
+        request: BacktestRequest,
+        horizon_sessions: int,
+    ) -> tuple[BacktestMetric, ...]:
         snapshot = self._snapshot
         bars = self._selected_bars(request)
         currency = Currency.from_str(snapshot.currency)
@@ -365,7 +385,7 @@ class NautilusBacktestBridge:
         strategy = _EventImpactHoldStrategy(
             instrument_id=instrument_id,
             trade_quantity=Decimal(snapshot.lot_size),
-            horizon_sessions=request.horizons_sessions[0],
+            horizon_sessions=horizon_sessions,
             entry_side=_entry_order_side(request.signal.side, self._contract.venue_ruleset),
         )
         engine = BacktestEngine(
@@ -610,15 +630,19 @@ def _metrics_from_strategy(
     commission = entry.commission.as_decimal() + exit_fill.commission.as_decimal()
     gross_pnl = (exit_price - entry_price) * quantity
     net_pnl = gross_pnl - commission
+    entry_notional = entry_price * quantity
     return (
         BacktestMetric("commission", commission, "CNY"),
         BacktestMetric("entry_delay_sessions", Decimal(strategy.entry_delay_sessions), "sessions"),
         BacktestMetric("entry_price", entry_price, "CNY/share"),
         BacktestMetric("exit_price", exit_price, "CNY/share"),
+        BacktestMetric("gross_pnl", gross_pnl, "CNY"),
         BacktestMetric("gross_return", (exit_price - entry_price) / entry_price, "ratio"),
         BacktestMetric("holding_sessions", Decimal(strategy.holding_sessions), "sessions"),
         BacktestMetric("net_pnl", net_pnl, "CNY"),
+        BacktestMetric("net_return", net_pnl / entry_notional, "ratio"),
         BacktestMetric("order_count", Decimal(2), "orders"),
+        BacktestMetric("quantity", quantity, "shares"),
     )
 
 

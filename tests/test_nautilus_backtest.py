@@ -48,6 +48,7 @@ def request(
     *,
     book_type: str = "top_of_book",
     bound_signal: SignalIntent | None = None,
+    horizons_sessions: tuple[int, ...] = (3,),
 ) -> BacktestRequest:
     return BacktestRequest(
         request_id="synthetic-xshg-replay-1",
@@ -60,7 +61,7 @@ def request(
         data_snapshot_id="synthetic-xshg-600028-20260825-v1",
         target_selection_ref="manual-integration-fixture:synthetic.v1",
         strategy_ref="event-impact-hold.v1",
-        horizons_sessions=(3,),
+        horizons_sessions=horizons_sessions,
         simulation=SimulationSpec(
             data_granularity="daily_bar.v1",
             book_type=book_type,
@@ -107,7 +108,19 @@ def test_nautilus_bridge_runs_the_first_a_share_replay() -> None:
     assert metrics["holding_sessions"].value == Decimal(3)
     assert metrics["commission"].value == Decimal("10.57")
     assert metrics["net_pnl"].value == Decimal("47.43")
+    assert metrics["net_return"].value == Decimal("47.43") / Decimal("1081")
     assert metrics["order_count"].value == Decimal(2)
+
+
+def test_nautilus_bridge_runs_each_horizon_in_an_independent_engine() -> None:
+    result = NautilusBacktestBridge(SNAPSHOT_PATH).run(request(horizons_sessions=(1, 3)))
+    metrics = _metrics_by_name(result.metrics)
+
+    assert result.status is BacktestRunStatus.COMPLETED
+    assert metrics["horizon_1.holding_sessions"].value == Decimal(1)
+    assert metrics["horizon_3.holding_sessions"].value == Decimal(3)
+    assert "net_return" not in metrics
+    assert metrics["horizon_1.net_return"].value != metrics["horizon_3.net_return"].value
 
 
 def test_signal_content_changes_request_and_result_identity() -> None:
@@ -153,7 +166,7 @@ def test_nautilus_bridge_replay_is_stable_when_warnings_are_errors() -> None:
         result = NautilusBacktestBridge(SNAPSHOT_PATH).run(request())
 
     assert result.status is BacktestRunStatus.COMPLETED
-    assert result.result_hash == "9ef80a5e9247e108a25af703fdd1356cc285214896351d0bd94921358d7091d8"
+    assert result.result_hash == "604d9aee20f97377b4d7327b0ffd876204a67f7de9789ef9e7ec9dd3c29a3e89"
 
 
 def test_repeated_frozen_replays_have_the_same_result_identity() -> None:
@@ -172,7 +185,7 @@ def test_repeated_frozen_replays_have_the_same_result_identity() -> None:
         "0761605fe3adf6bd300ced939338e57e4c5ebae003b52472c4e0a8aa42fc5a41"
     )
     assert first.result_hash == second.result_hash
-    assert first.result_hash == ("9ef80a5e9247e108a25af703fdd1356cc285214896351d0bd94921358d7091d8")
+    assert first.result_hash == ("604d9aee20f97377b4d7327b0ffd876204a67f7de9789ef9e7ec9dd3c29a3e89")
     assert first.metrics == second.metrics
     assert first.artifact_refs == second.artifact_refs
 

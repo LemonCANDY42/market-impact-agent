@@ -41,6 +41,9 @@ The bootstrap implements:
 - a narrowly versioned `600028.XSHG` modeled-open adapter and token-free backtest CLI that
   consume a validated private bundle in memory, with repeated-result local acceptance and
   no derived licensed fixture committed;
+- independent 1/3/10-session Nautilus runs from one Backtest Request, normalized cost-aware
+  `net_return`, and a fail-closed Phase 2 calibration gate over repeated event/baseline
+  Results;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -67,6 +70,11 @@ fillability, alpha, or paper/live readiness. The Tushare Provider therefore rema
 and unverified. The modeled-open replay implementation is a separate deterministic
 simulation gate, not a Provider or source-truth claim. See
 [docs/TUSHARE_DATA.md](docs/TUSHARE_DATA.md).
+
+The first real multi-horizon replay is deterministic, but the Phase 2 calibration gate
+correctly rejects the current single manual integration event. Phase 2 remains active: no
+baseline-superiority, alpha, Phase 3, paper, or live claim has passed. See
+[docs/PHASE2_CALIBRATION.md](docs/PHASE2_CALIBRATION.md).
 
 ## Architecture at a glance
 
@@ -98,6 +106,7 @@ uv sync --all-extras --python 3.13
 uv run market-impact status
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
+uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright

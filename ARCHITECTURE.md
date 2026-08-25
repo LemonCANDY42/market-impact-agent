@@ -13,7 +13,8 @@ Source adapters
     -> fast/deep router -> Event Assessment
     -> Signal Intent
          -> Backtest Request -> engine-neutral backtest port
-              -> Nautilus backtest bridge -> deterministic replay and results
+              -> Nautilus backtest bridge -> independent horizon replays and results
+              -> calibration gate -> baseline/out-of-sample accept or reject
          -> Order Intent -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
               -> Semantic Auto Approver (optional; cannot override hard policy)
               -> Approval Decision -> durable outbox
@@ -85,6 +86,13 @@ and strategy/command/event models. It does not make data arrival, fills, venue r
 recovery behavior identical. A-share T+1, price limits, fees, executable-price timing,
 and every paper/live recovery property require explicit Harness acceptance.
 
+For a multi-horizon Backtest Request, the bridge constructs a fresh low-level Nautilus
+BacktestEngine per horizon and merges only normalized, horizon-prefixed metrics into the
+engine-neutral Result. Phase 2 calibration remains a Harness authority: it verifies repeated
+result identity, Event Cluster walk-forward partitions, comparable candidate/baseline
+windows and runtime manifests, ratio-unit cost-aware return, baseline superiority, and
+single-event dominance. Nautilus does not decide whether research may be promoted.
+
 ## Approval model
 
 Hard policy has three outcomes:
@@ -121,11 +129,11 @@ First-party code supports Python `>=3.13,<3.15`.
   for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily
   window; the local credential worked for that account, target, and window. A separately
   versioned modeled-open adapter validated and consumed that exact private bundle twice
-  with identical replay identity for the narrow `600028.XSHG` Nautilus gate. This proves
-  neither general
-  quota/permissions, completeness, historical truth, full-universe prices, observed
-  liquidity/fillability, alpha, nor paper/live readiness. The
-  Tushare Provider remains disabled and unverified. A universe reconstructed from current
+  with identical 1/3/10-session replay identity for the narrow `600028.XSHG` Nautilus gate.
+  The separate Phase 2 calibration gate rejected this one-event manual fixture. These
+  acceptances prove neither general quota/permissions, completeness, historical truth,
+  full-universe prices, observed liquidity/fillability, alpha, nor paper/live readiness.
+  The Tushare Provider remains disabled and unverified. A universe reconstructed from current
   listing metadata stays bound to that retrieval snapshot and is not treated as proof
   against source revision or survivorship bias.
 - VeighNa is an external-process bridge. VeighNa 4.4 and current A-share vendor

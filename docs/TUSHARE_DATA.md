@@ -129,6 +129,8 @@ The separate `tushare-xshg-modeled-open.v1` replay gate validates a bounded
 `600028.SH`/SSE bundle, then consumes hash-bound daily/calendar Parquet bytes in memory
 without a token, network call, or derived licensed fixture. Its one-lot daily-open liquidity
 is explicitly modeled rather than observed. Generated-bundle tests cover that contract; two
-token-free runs of the named private bundle completed with identical replay identity on
-2026-08-25. Only non-reversible identity hashes are recorded in `A_SHARE_REPLAY.md`; licensed
-observations and metrics stay private.
+token-free 1/3/10-session runs of the named private bundle completed with identical replay
+identity on 2026-08-25. The Phase 2 calibration gate then rejected that single manual event
+as insufficient research evidence. Only non-reversible identity hashes are recorded in
+`A_SHARE_REPLAY.md` and `PHASE2_CALIBRATION.md`; licensed observations and metrics stay
+private.

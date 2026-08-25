@@ -125,3 +125,18 @@ def test_tushare_capture_requires_environment_token_before_creating_local_state(
         "error": "TUSHARE_TOKEN is not configured",
     }
     assert not (tmp_path / ".market-impact").exists()
+
+
+def test_phase2_gate_command_fails_closed_on_invalid_evidence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    evidence = tmp_path / "invalid-evidence.json"
+    evidence.write_text("{}", encoding="utf-8")
+
+    result = main(["backtest", "phase2-gate", "--evidence", str(evidence)])
+
+    assert result == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["accepted"] is False
+    assert "closed contract" in payload["error"]

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/phase2-calibration-gate-result.schema.json",
+  "title": "Market Impact Phase 2 Calibration Gate Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "gate_version", "accepted", "evidence_hash", "report_hash",
+    "train_event_clusters", "test_event_clusters", "beat_baselines",
+    "candidate_mean_net_return", "max_single_event_share", "reasons"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.phase2-calibration-gate-result.v1"},
+    "gate_version": {"const": "energy-supply-shock-calibration.v1"},
+    "accepted": {"type": "boolean"},
+    "evidence_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "report_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "train_event_clusters": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "test_event_clusters": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "beat_baselines": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": ["sentiment", "momentum", "fixed_mapping", "simple_hold"]}
+    },
+    "candidate_mean_net_return": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$"}
+      ]
+    },
+    "max_single_event_share": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^(?:0|[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"}
+      ]
+    },
+    "reasons": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"accepted": {"const": true}}},
+      "then": {
+        "properties": {
+          "train_event_clusters": {"minItems": 2},
+          "test_event_clusters": {"minItems": 3},
+          "beat_baselines": {"minItems": 1},
+          "candidate_mean_net_return": {"type": "string"},
+          "max_single_event_share": {"type": "string"},
+          "reasons": {"maxItems": 0}
+        }
+      },
+      "else": {"properties": {"reasons": {"minItems": 1}}}
+    }
+  ]
+}

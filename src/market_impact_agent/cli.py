@@ -18,6 +18,11 @@ from market_impact_agent.backtests import (
     backtest_request_from_dict,
     backtest_result_to_dict,
 )
+from market_impact_agent.calibration import (
+    assess_phase2_calibration,
+    load_phase2_calibration_evidence,
+    phase2_calibration_gate_result_to_dict,
+)
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
@@ -79,6 +84,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backtest_run_parser.add_argument("--request", required=True, type=Path)
     backtest_run_parser.add_argument("--data-snapshot", required=True, type=Path)
+    phase2_gate_parser = backtest_subparsers.add_parser(
+        "phase2-gate", help="Evaluate frozen repeated results against the Phase 2 exit gate"
+    )
+    phase2_gate_parser.add_argument("--evidence", required=True, type=Path)
     return parser
 
 
@@ -282,4 +291,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(backtest_result_to_dict(result), indent=2, sort_keys=True))
         return 0 if result.status is BacktestRunStatus.COMPLETED else 1
+    if args.command == "backtest" and args.backtest_command == "phase2-gate":
+        try:
+            evidence = load_phase2_calibration_evidence(args.evidence)
+            gate_result = assess_phase2_calibration(evidence)
+        except (
+            KeyError,
+            OSError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                phase2_calibration_gate_result_to_dict(gate_result),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0 if gate_result.accepted else 1
     raise AssertionError("unreachable command")

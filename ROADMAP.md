@@ -28,6 +28,9 @@ broker or backtest mutation is reachable from the research skill.
 
 ## Phase 2 — Historical replay and calibration
 
+Status: active; deterministic replay works, but the real calibration exit gate has not
+passed. Phase 3 and paper execution remain closed.
+
 - [x] Compare stable Nautilus `1.231.0` with `2.0.0rc3` on Python 3.13/3.14;
   select `1.231.0` as the first implementation candidate and keep the RC comparison-only.
 - [x] Define the narrow engine-neutral Backtest Request, Run Manifest, Result, and bridge
@@ -43,15 +46,20 @@ broker or backtest mutation is reachable from the research skill.
 - [x] Implement the strict validated-bundle to modeled-open Nautilus gate, request/result
   codecs, input identity binding, and generated-bundle acceptance without licensed fixtures.
 - [x] Record the local repeated-result acceptance for the named private Tushare bundle:
-  two token-free runs on 2026-08-25 produced result identity
-  `661063d99b4a596a66692ec6abe2e79803ca711cf54f1caf6c572a941ef10c61`;
+  two token-free 1/3/10-session runs on 2026-08-25 produced result identity
+  `a974181a4e65ec91e6203876647c52211be00f234be5ec6e10df602e8a75a726`;
   licensed observations and metrics remain private and ignored.
-- Record the data granularity, book type, fill model, fee model, venue rules, engine
+- [x] Record the data granularity, book type, fill model, fee model, venue rules, engine
   version, adapter version, and configuration in every replay manifest.
+- [x] Execute every horizon in a fresh Nautilus engine, normalize cost-aware `net_return`,
+  and implement the versioned Phase 2 gate with generated pass/fail cohorts.
+- [x] Apply the gate to the current real repeated evidence and record its expected rejection:
+  one manual event cannot clear cohort, baseline, positive-return, or dominance requirements.
 - Compare event reasoning with sentiment, momentum, fixed mapping, and simple
   hold-period baselines.
-- Evaluate next-day, 3-day, and 10-day horizons with T+1, limits, costs, and
-  event-cluster walk-forward splits; repeated frozen runs must be deterministic.
+- Pre-register at least two training and three later test energy-supply-shock Event Clusters;
+  run every candidate/baseline variant twice with T+1, limits, costs, and compatible data.
+- Pass the frozen real-data gate without a single event dominating the outcome.
 
 Exit gate: reproducible results beat at least one meaningful baseline without a
 single event dominating the outcome. This gate verifies backtesting only; it grants no

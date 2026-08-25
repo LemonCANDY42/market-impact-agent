@@ -26,7 +26,7 @@
   "data_snapshot_id": "tushare-600028-sh-20190919-20191010-5289178b9ba1a6bc",
   "target_selection_ref": "manual-integration-fixture:abqaiq-600028.v1",
   "strategy_ref": "event-impact-hold.v1",
-  "horizons_sessions": [3],
+  "horizons_sessions": [1, 3, 10],
   "simulation": {
     "data_granularity": "tushare_unadjusted_daily.v1",
     "book_type": "modeled_open_one_lot.v1",
