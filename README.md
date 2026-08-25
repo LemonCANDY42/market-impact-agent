@@ -34,16 +34,17 @@ The bootstrap implements:
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
   A-share replay covering a suspension, opening limit lock, lot size, fees, and slippage;
 - a language-neutral Tushare HTTPS adapter for bounded stock-listing, exchange-calendar, and
-  unadjusted daily-bar reads plus deterministic pre-event A-share universe construction,
-  with a disabled, unverified Provider manifest;
+  unadjusted daily-bar, adjustment-factor, and source daily-price-limit reads plus
+  deterministic pre-event A-share universe construction, with a disabled, unverified
+  Provider manifest;
 - a private, content-addressed local Tushare Data Snapshot bundle with Parquet tables,
   hash/permission validation, and a stable `data_snapshot_id` for later replay requests;
 - a narrowly versioned `600028.XSHG` modeled-open adapter and token-free backtest CLI that
   consume a validated private bundle in memory, with repeated-result local acceptance and
   no derived licensed fixture committed;
 - independent 1/3/10-session Nautilus runs from one Backtest Request, normalized cost-aware
-  `net_return`, and a fail-closed Phase 2 calibration gate over repeated event/baseline
-  Results;
+  `net_return`, and fail-closed v1/v2 Phase 2 calibration gates over pre-registered repeated
+  event/baseline Results and honest long-only abstentions;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -55,6 +56,9 @@ Planned integrations are documented but **not claimed as working**:
 - a separately validated Nautilus-to-IBKR paper Provider;
 - an external-process VeighNa bridge for future A-share gateways;
 - MCP, HTTP/gRPC, and native Python provider transports.
+- an Agent runtime with durable runs, automatic context compaction, on-demand Skills, MCP
+  lifecycle, permissions, recovery, and evaluation; MiniMax M3 on the China endpoint is the
+  first planned local model fixture, not an execution Provider.
 
 NautilusTrader is the selected default engine foundation and behavioral reference. The
 Harness uses it through an engine-neutral backtest bridge; later execution Providers still
@@ -71,10 +75,16 @@ and unverified. The modeled-open replay implementation is a separate determinist
 simulation gate, not a Provider or source-truth claim. See
 [docs/TUSHARE_DATA.md](docs/TUSHARE_DATA.md).
 
-The first real multi-horizon replay is deterministic, but the Phase 2 calibration gate
-correctly rejects the current single manual integration event. Phase 2 remains active: no
-baseline-superiority, alpha, Phase 3, paper, or live claim has passed. See
+The first pre-registered real cohort completed on 2026-08-26: two train and five later test
+Event Clusters, 35 registered variant decisions, and two deterministic runs for each of 25
+buys. The v2 gate rejected it with exactly `candidate_net_return_not_positive`. This is a
+valid negative research result; the opened cohort cannot be retuned and reused as unseen
+evidence. No baseline-superiority, alpha, Phase 3, paper, or live claim has passed. See
 [docs/PHASE2_CALIBRATION.md](docs/PHASE2_CALIBRATION.md).
+
+The future Agent runtime boundary is frozen separately in
+[docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). A successful MiniMax response will not by
+itself satisfy that gate or override the failed trading-calibration result.
 
 ## Architecture at a glance
 
@@ -106,6 +116,10 @@ uv sync --all-extras --python 3.13
 uv run market-impact status
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
+uv run market-impact backtest phase2-register --cohort COHORT.json \
+  --data-snapshot-root .market-impact/tushare --output PRIVATE_REGISTRATION.json
+uv run market-impact backtest phase2-run --registration PRIVATE_REGISTRATION.json \
+  --data-snapshot-root .market-impact/tushare --output-dir PRIVATE_OUTPUT_DIRECTORY
 uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
 uv run ruff check .
 uv run ruff format --check .

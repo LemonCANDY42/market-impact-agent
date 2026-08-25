@@ -6,7 +6,9 @@ or a data vendor the orchestration owner.
 
 Official contract references: [`stock_basic`](https://tushare.pro/document/1?doc_id=25),
 [`trade_cal`](https://tushare.pro/document/2?doc_id=26), and
-[`daily`](https://tushare.pro/document/2?doc_id=27).
+[`daily`](https://tushare.pro/document/2?doc_id=27). The hardened v2 bundle additionally
+uses [`adj_factor`](https://tushare.pro/document/2?doc_id=28) and
+[`stk_limit`](https://tushare.pro/document/2?doc_id=183).
 
 ## Accepted contract surface
 
@@ -19,7 +21,11 @@ contract. It requests only these bounded interfaces and fields:
 - `trade_cal`: `exchange`, `cal_date`, `is_open`, and `pretrade_date` for one bounded date
   range;
 - `daily`: one SH/SZ `ts_code`, one bounded date range, and unadjusted OHLC, prior close,
-  volume, and amount fields.
+  volume, and amount fields;
+- `adj_factor`: the same instrument/date window with `ts_code`, `trade_date`, and
+  `adj_factor`; and
+- `stk_limit`: the same instrument/date window with source `pre_close`, `up_limit`, and
+  `down_limit`.
 
 Responses must have the exact requested field set, scalar rectangular rows, valid dates,
 matching query identities, unique primary keys, coherent OHLC values, and fewer than the
@@ -61,6 +67,7 @@ requested with:
 uv run market-impact tushare capture \
   --instrument 600028.SH \
   --as-of-date 20190918 \
+  --data-start-date 20190912 \
   --start-date 20190919 \
   --end-date 20191010
 ```
@@ -81,6 +88,13 @@ mode `0700` and contains mode-`0600` files:
 - `trade_calendar.parquet`: the requested target-exchange calendar;
 - `daily.parquet`: the requested instrument's unadjusted daily data.
 
+A hardened v2 bundle also contains `adj_factors.parquet` and `stock_limits.parquet`. Its
+`data_start_date` may precede the evaluation start so a pre-cutoff momentum rule can observe
+adjusted closes. Adjustment-factor changes are allowed only in that observation segment.
+The evaluation segment must keep one factor, and the replay uses unadjusted daily prices plus
+source-provided limits from `evaluation_start_date` onward. Every hardened table must cover
+exactly the same open sessions and retain independent query provenance and hashes.
+
 `market-impact tushare validate <bundle-directory>` recomputes the manifest identity; checks
 every file hash, exact Parquet schema, normalized logical identity, and row count; reconstructs
 the Listing Snapshot and Pre-event Universe; and verifies the target, exchange, date window,
@@ -95,11 +109,11 @@ the validator also checks the pinned writer declaration and actual ZSTD column c
 The data extra pins the Parquet writer; the development group includes the same pin so the
 repository's standard test command exercises this boundary. No Tushare SDK is introduced.
 
-For the first acceptance window, every exchange-open session must have a daily row. A gap
+For every accepted window, every exchange-open session must have a daily row. A gap
 fails closed because `daily` alone cannot distinguish a genuine suspension from incomplete
-data. The pipeline does not synthesize order-book depth, suspension state, adjusted prices,
-or executable opening liquidity from OHLCV, so a captured bundle is not yet a Nautilus
-replay fixture.
+data. The pipeline does not synthesize order-book depth, suspension state, or executable
+opening liquidity from OHLCV. Adjustment factors are used only for registered pre-cutoff
+observation rules; they do not turn the source into observed executable prices.
 
 ## Acceptance status
 
@@ -134,3 +148,12 @@ identity on 2026-08-25. The Phase 2 calibration gate then rejected that single m
 as insufficient research evidence. Only non-reversible identity hashes are recorded in
 `A_SHARE_REPLAY.md` and `PHASE2_CALIBRATION.md`; licensed observations and metrics stay
 private.
+
+On 2026-08-26, the hardened v2 path captured and validated seven private windows for the
+pre-registered energy-supply-shock cohort. The account successfully read `adj_factor` and
+`stk_limit` for those exact instrument/windows. The adapter separated adjusted pre-cutoff
+observation history from the constant-factor unadjusted evaluation segment and bound source
+price limits into every replay. Twenty-five registered buys each completed two deterministic
+Nautilus runs. The v2 calibration gate rejected the cohort because candidate mean net return
+was not positive. This proves the bounded data/replay contract under those windows, not
+general Tushare permissions, Provider verification, alpha, or execution readiness.

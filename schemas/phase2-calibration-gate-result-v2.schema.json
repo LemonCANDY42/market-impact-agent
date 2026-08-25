@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/phase2-calibration-gate-result-v2.schema.json",
+  "title": "Market Impact Phase 2 Calibration Gate Result V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "gate_version", "accepted", "registration_hash", "evidence_hash",
+    "report_hash", "train_event_clusters", "test_event_clusters", "beat_baselines",
+    "candidate_mean_net_return", "max_single_event_share", "test_trade_counts", "reasons"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.phase2-calibration-gate-result.v2"},
+    "gate_version": {"const": "energy-supply-shock-calibration.v2"},
+    "accepted": {"type": "boolean"},
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "evidence_hash": {"$ref": "#/$defs/sha256"},
+    "report_hash": {"$ref": "#/$defs/sha256"},
+    "train_event_clusters": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}
+    },
+    "test_event_clusters": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}
+    },
+    "beat_baselines": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": ["sentiment", "momentum", "fixed_mapping", "simple_hold"]}
+    },
+    "candidate_mean_net_return": {"$ref": "#/$defs/optional_signed_decimal"},
+    "max_single_event_share": {"$ref": "#/$defs/optional_unsigned_decimal"},
+    "test_trade_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_reasoning", "sentiment", "momentum", "fixed_mapping", "simple_hold"],
+      "properties": {
+        "event_reasoning": {"type": "integer", "minimum": 0},
+        "sentiment": {"type": "integer", "minimum": 0},
+        "momentum": {"type": "integer", "minimum": 0},
+        "fixed_mapping": {"type": "integer", "minimum": 0},
+        "simple_hold": {"type": "integer", "minimum": 0}
+      }
+    },
+    "reasons": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"accepted": {"const": true}}},
+      "then": {
+        "properties": {
+          "train_event_clusters": {"minItems": 2},
+          "test_event_clusters": {"minItems": 3},
+          "beat_baselines": {"minItems": 1},
+          "candidate_mean_net_return": {
+            "type": "string",
+            "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"
+          },
+          "max_single_event_share": {
+            "type": "string",
+            "pattern": "^0\\.(?:[0-4](?:[0-9]*[1-9])?|5)$"
+          },
+          "test_trade_counts": {
+            "properties": {
+              "event_reasoning": {"minimum": 2},
+              "simple_hold": {"minimum": 3}
+            }
+          },
+          "reasons": {"maxItems": 0}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"beat_baselines": {"contains": {"const": "sentiment"}}}},
+            "then": {
+              "properties": {
+                "test_trade_counts": {"properties": {"sentiment": {"minimum": 1}}}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"beat_baselines": {"contains": {"const": "momentum"}}}},
+            "then": {
+              "properties": {
+                "test_trade_counts": {"properties": {"momentum": {"minimum": 1}}}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {"beat_baselines": {"contains": {"const": "fixed_mapping"}}}
+            },
+            "then": {
+              "properties": {
+                "test_trade_counts": {"properties": {"fixed_mapping": {"minimum": 1}}}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"beat_baselines": {"contains": {"const": "simple_hold"}}}},
+            "then": {
+              "properties": {
+                "test_trade_counts": {"properties": {"simple_hold": {"minimum": 1}}}
+              }
+            }
+          }
+        ]
+      },
+      "else": {"properties": {"reasons": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "optional_signed_decimal": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$"}
+      ]
+    },
+    "optional_unsigned_decimal": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^(?:0|[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"}
+      ]
+    }
+  }
+}

@@ -23,6 +23,9 @@ class Validator(Protocol):
         "backtest-result.schema.json",
         "phase2-calibration-gate-result.schema.json",
         "phase2-calibration-evidence.schema.json",
+        "phase2-calibration-registration-v2.schema.json",
+        "phase2-calibration-evidence-v2.schema.json",
+        "phase2-calibration-gate-result-v2.schema.json",
         "order-intent.schema.json",
         "provider-manifest.schema.json",
         "signal-intent.schema.json",
@@ -164,6 +167,21 @@ def test_backtest_result_schema_closes_manifest_and_embedded_request() -> None:
     request["unexpected"] = True
     with pytest.raises(ValidationError, match="Additional properties are not allowed"):
         cast(Validator, validator).validate(result)
+
+
+def test_phase2_registration_v2_embeds_the_owning_request_schema() -> None:
+    request_schema = load_json(ROOT / "schemas" / "backtest-request.schema.json")
+    registration_schema = load_json(
+        ROOT / "schemas" / "phase2-calibration-registration-v2.schema.json"
+    )
+    expected_request_definition = {
+        key: value
+        for key, value in request_schema.items()
+        if key not in {"$schema", "$id", "title"}
+    }
+
+    definitions = cast(dict[str, object], registration_schema["$defs"])
+    assert definitions["backtest_request"] == expected_request_definition
 
 
 @pytest.mark.parametrize(

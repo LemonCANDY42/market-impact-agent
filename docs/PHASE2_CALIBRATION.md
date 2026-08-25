@@ -2,16 +2,17 @@
 
 ## Status and purpose
 
-Phase 2 is active and has not passed its exit gate. The deterministic replay capability
-is accepted for a bounded integration slice; profitability, baseline superiority, and
-cross-event robustness are not.
+Phase 2 has completed its first pre-registered real-cohort gate and failed it. The
+deterministic replay capability is accepted for a bounded integration slice; profitability,
+baseline superiority, cross-event robustness, Phase 3 promotion, paper execution, and live
+execution are not. The failed v2 cohort must not be retuned or rerun as unseen evidence.
 
 The calibration gate exists to keep those claims separate. It consumes repeated,
 engine-neutral Backtest Results and produces a content-identified acceptance report. It
 does not select instruments, generate a Signal Intent, tune a strategy, or grant paper or
 live capability.
 
-## Frozen first-family protocol
+## Historical v1 protocol
 
 `energy-supply-shock-calibration.v1` requires:
 
@@ -46,6 +47,33 @@ artifact must freeze case membership, partitions, rules, and request identities 
 Results are opened. That temporal attestation is required research evidence; the generated
 passing cohort in tests proves gate mechanics only.
 
+## Frozen v2 long-or-abstain protocol
+
+`energy-supply-shock-calibration.v2` preserves the v1 walk-forward, repeatability,
+same-cell provenance, positive-return, baseline, and concentration gates while correcting
+one semantic error: a long-only rule may honestly abstain. It adds a content-identified
+execution registration created before any test replay:
+
+- every Calibration Cell binds one Event Cluster, visibility cutoff, chronological
+  partition, target mapping, evaluation window, Data Snapshot, horizons, and Simulation
+  Specification;
+- every Variant Decision binds `buy` or `abstain`, the frozen rule reference, and exact
+  decision-input hashes;
+- `buy` binds one exact Backtest Request and must produce two completed deterministic
+  Results after registration;
+- `abstain` has no Signal Intent, request, or Result and contributes zero exposure to the
+  fixed test denominator;
+- `simple_hold` must buy every cell and supplies the common runtime/input comparison anchor;
+- a beaten baseline must trade at least one test cell and differ from the candidate's
+  action pattern; and
+- extra Results for abstentions, missing Results for buys, request drift, non-determinism,
+  incomparable runtimes, or outcomes predating the registration fail closed.
+
+The public cohort was committed before test-data capture. The private execution
+registration then bound the captured Data Snapshots, adjusted pre-cutoff momentum inputs,
+and exact request identities before execution. JSON timestamps alone are not the temporal
+proof; the retained public commit and content hashes are part of the evidence chain.
+
 ## Independent horizon execution
 
 One Backtest Request may bind multiple horizons. The bridge creates and disposes a fresh
@@ -59,7 +87,7 @@ appropriate for non-catalog in-memory data and independent configurations should
 engines. The harness retains the low-level boundary because the current private Data
 Snapshot is not a Nautilus ParquetDataCatalog.
 
-## Current real evidence
+## Historical one-event v1 evidence
 
 The private Abqaiq/`600028.XSHG` bundle was replayed twice without `TUSHARE_TOKEN` for
 1/3/10 sessions. The runs had separate run IDs and execution times and identical request,
@@ -81,24 +109,49 @@ single-event dominance cannot be cleared, and its candidate mean net return is n
 under the frozen modeled-open assumptions. Licensed observations and metric values remain
 private.
 
+## First real-cohort v2 result
+
+The pre-registered cohort in `examples/calibration/energy-supply-shock-cohort-v1.json`
+contains two train and five later test Event Clusters. Seven private hardened Tushare
+bundles bind unadjusted daily data, source adjustment factors, source daily price limits,
+calendar data, listing retrieval, and universe reconstruction. The execution registration
+contains 35 decisions: 25 registered buys and 10 abstentions. All 25 buys were run twice;
+the gate validated the repeated Results and rejected the cohort with exactly one reason:
+`candidate_net_return_not_positive`.
+
+The retained non-reversible identities are:
+
+- public registration source SHA-256:
+  `cc7a6cd61d407f6c2b23b51efd9593a42a96a3a1815923d6ec0bccb63e974f9e`;
+- private execution registration:
+  `600f71726a95822445deb8a0245a711806f0547418b8ceb66abfc29440fa5805`;
+- evidence:
+  `09a6e62eac404e2be69176f771fedda79810a60d606b3e99af49cee1d8170265`;
+- gate report:
+  `6d2fef9285cc6b1abe0af9a32d98547eb44ecab291ea41f4e409ed9176cdb579`.
+
+Licensed observations and metric values remain private under `.market-impact/`. This is a
+valid negative research result, not an implementation failure and not permission to tune
+the same test cohort.
+
 ## Next admissible work
 
-Remain in Phase 2. Before another gate run:
+Remain in Phase 2 and stop capability expansion. The next workslice is a research reset,
+not another v2 run:
 
-1. pre-register a point-in-time energy supply-shock Event Cluster cohort and chronological
-   split;
-2. define one frozen, falsifiable signal rule for the candidate and each baseline without
-   inspecting test outcomes;
-3. harden the Data Snapshot with source-provided adjustment factors and daily price limits,
-   or reject any case that needs corporate-action or venue-rule inference;
-4. capture compatible private data, execute every variant twice, and retain failure Results;
-5. run the same gate without changing `energy-supply-shock-calibration.v1`.
+1. diagnose the rejected mechanism using the opened cohort only as training/research
+   material and record alternative explanations, especially proxy mapping, event timing,
+   persistence, market regime, and long-only exposure;
+2. independently research the broader event-mechanism taxonomy and candidate target maps;
+3. define a materially new, falsifiable v3 hypothesis and rules before selecting later,
+   previously unseen test Event Clusters;
+4. pre-register a new chronological holdout and only then capture/open its outcomes.
 
-Failure remains a valid result and stops expansion. Phase 3 event-family promotion and Phase
-4 paper execution do not begin until the gate accepts real out-of-sample evidence.
+The five opened v2 test clusters cannot be relabeled as unseen v3 evidence. Phase 3
+event-family promotion, Agent runtime mutation, IBKR/VeighNa integration, paper execution,
+and live execution do not begin until a new real out-of-sample gate accepts.
 
-The first real cohort and the pre-outcome correction for honest long-only abstention semantics
-are now frozen in `docs/PHASE2_REAL_COHORT.md` and
-`examples/calibration/energy-supply-shock-cohort-v1.json`. The existing v1 gate and its
-single-event rejection remain historical evidence; the registered cohort must use the
-versioned v2 semantics described there.
+The cohort, outcome boundary, and long-only abstention correction are frozen in
+`docs/PHASE2_REAL_COHORT.md` and
+`examples/calibration/energy-supply-shock-cohort-v1.json`. V1 and v2 remain reproducible
+historical protocols; neither may be silently weakened or overwritten.

@@ -70,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tushare_capture_parser.add_argument("--instrument", required=True)
     tushare_capture_parser.add_argument("--as-of-date", required=True, type=_compact_date)
+    tushare_capture_parser.add_argument("--data-start-date", type=_compact_date)
     tushare_capture_parser.add_argument("--start-date", required=True, type=_compact_date)
     tushare_capture_parser.add_argument("--end-date", required=True, type=_compact_date)
     tushare_validate_parser = tushare_subparsers.add_parser(
@@ -88,6 +89,18 @@ def build_parser() -> argparse.ArgumentParser:
         "phase2-gate", help="Evaluate frozen repeated results against the Phase 2 exit gate"
     )
     phase2_gate_parser.add_argument("--evidence", required=True, type=Path)
+    phase2_register_parser = backtest_subparsers.add_parser(
+        "phase2-register", help="Bind the frozen public cohort to exact private snapshots"
+    )
+    phase2_register_parser.add_argument("--cohort", required=True, type=Path)
+    phase2_register_parser.add_argument("--data-snapshot-root", required=True, type=Path)
+    phase2_register_parser.add_argument("--output", required=True, type=Path)
+    phase2_run_parser = backtest_subparsers.add_parser(
+        "phase2-run", help="Execute every registered long decision twice"
+    )
+    phase2_run_parser.add_argument("--registration", required=True, type=Path)
+    phase2_run_parser.add_argument("--data-snapshot-root", required=True, type=Path)
+    phase2_run_parser.add_argument("--output-dir", required=True, type=Path)
     return parser
 
 
@@ -140,13 +153,15 @@ def capture_tushare(
     as_of_date: date,
     start_date: date,
     end_date: date,
+    data_start_date: date | None = None,
     output_root: Path = Path(".market-impact/tushare"),
 ) -> ValidatedTushareDataBundle:
     request = TushareDataRequest(
         tushare_code=tushare_code,
         as_of_date=as_of_date,
-        start_date=start_date,
+        start_date=start_date if data_start_date is None else data_start_date,
         end_date=end_date,
+        evaluation_start_date=start_date if data_start_date is not None else None,
     )
     capture = capture_tushare_data_bundle(TushareHttpAdapter(token), request)
     path = write_tushare_data_bundle(capture, output_root)
@@ -221,6 +236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 as_of_date=args.as_of_date,
                 start_date=args.start_date,
                 end_date=args.end_date,
+                data_start_date=args.data_start_date,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
@@ -293,6 +309,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result.status is BacktestRunStatus.COMPLETED else 1
     if args.command == "backtest" and args.backtest_command == "phase2-gate":
         try:
+            evidence_payload = json.loads(args.evidence.read_text(encoding="utf-8"))
+            if (
+                isinstance(evidence_payload, dict)
+                and cast(dict[str, object], evidence_payload).get("schema_version")
+                == "market-impact.phase2-calibration-evidence.v2"
+            ):
+                from market_impact_agent.calibration_v2 import (
+                    assess_phase2_calibration_v2,
+                    load_phase2_calibration_evidence_v2,
+                    phase2_calibration_gate_result_v2_to_dict,
+                )
+
+                v2_result = assess_phase2_calibration_v2(
+                    load_phase2_calibration_evidence_v2(args.evidence)
+                )
+                print(
+                    json.dumps(
+                        phase2_calibration_gate_result_v2_to_dict(v2_result),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+                return 0 if v2_result.accepted else 1
             evidence = load_phase2_calibration_evidence(args.evidence)
             gate_result = assess_phase2_calibration(evidence)
         except (
@@ -315,4 +354,72 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 0 if gate_result.accepted else 1
+    if args.command == "backtest" and args.backtest_command == "phase2-register":
+        try:
+            from market_impact_agent.phase2_study import build_phase2_registration
+
+            registration = build_phase2_registration(
+                cohort_path=args.cohort,
+                data_snapshot_root=args.data_snapshot_root,
+                output_path=args.output,
+            )
+        except (
+            ImportError,
+            KeyError,
+            ModuleNotFoundError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"registered": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "registered": True,
+                    "registration_hash": registration.registration_hash,
+                    "path": args.output.as_posix(),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "backtest" and args.backtest_command == "phase2-run":
+        try:
+            from market_impact_agent.phase2_study import run_phase2_registration
+
+            evidence_path = run_phase2_registration(
+                registration_path=args.registration,
+                data_snapshot_root=args.data_snapshot_root,
+                output_dir=args.output_dir,
+            )
+        except (
+            ImportError,
+            KeyError,
+            ModuleNotFoundError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {"completed": True, "evidence": evidence_path.as_posix()},
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     raise AssertionError("unreachable command")

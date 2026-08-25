@@ -118,6 +118,30 @@ single-event dominance cannot be cleared, and candidate mean net return is not p
 under the frozen assumptions. The private evidence/report hashes are recorded in
 `docs/PHASE2_CALIBRATION.md`; metrics remain private.
 
+## Hardened cohort adapter v2
+
+`tushare-xshg-modeled-open` adapter version `2.0.0` preserves the one-lot modeled-open
+execution boundary and adds source-bound `adj_factor` and `stk_limit` tables. Its Simulation
+Specification names `tushare_unadjusted_daily_with_source_limits.v2` and
+`xshg_main_board_source_limit.v2`; target selection is the public registered mapping
+`registered-a-share-integrated-oil-proxy:600028.v1`, not the historical manual Abqaiq
+fixture.
+
+The v2 Data Snapshot may begin before the event cutoff. Those earlier sessions exist only
+for point-in-time observation rules. Momentum compares `close * adj_factor` using sessions
+whose close was visible by the cutoff. The Nautilus replay snapshot starts at the registered
+evaluation session, uses unadjusted OHLCV and source daily price limits, and requires a
+constant adjustment factor throughout that evaluation segment. A pre-evaluation corporate
+action can therefore inform an adjusted observation without introducing a discontinuity
+into the executable replay.
+
+The first public cohort was frozen before its five test windows were captured. Seven private
+snapshots produced one private execution registration with 35 Variant Decisions: 25 buys
+and 10 honest abstentions. Every buy completed twice, with a fresh Nautilus engine for each
+1/3/10-session horizon. The v2 gate verified the registered/repeated evidence and rejected
+the cohort only because candidate mean net return was not positive. Exact identities and
+the no-retuning boundary are in `docs/PHASE2_CALIBRATION.md`.
+
 ## Explicit non-claims
 
 The modeled-open integration replay is not source truth, historical listing truth, actual
@@ -125,3 +149,6 @@ liquidity or fillability, historical fee or venue-rule correctness, instrument-s
 validity, alpha, baseline superiority, Provider verification, or paper/live readiness. It
 does not cover other XSHG/XSHE boards, ST securities, IPO windows, corporate actions,
 auctions, partial fills, queues, observed suspensions, data revisions, or survivorship.
+V2 source adjustment factors and daily limits narrow two inference gaps; they do not make
+modeled opening liquidity observable or establish that the integrated-oil proxy is the right
+economic exposure.

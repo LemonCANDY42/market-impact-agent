@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/phase2-calibration-evidence-v2.schema.json",
+  "title": "Market Impact Phase 2 Calibration Evidence V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registration", "trades"],
+  "properties": {
+    "schema_version": {"const": "market-impact.phase2-calibration-evidence.v2"},
+    "registration": {"$ref": "#/$defs/private_relative_path"},
+    "trades": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_cluster_id", "variant", "first_result", "repeat_result"],
+        "properties": {
+          "event_cluster_id": {"type": "string", "minLength": 1},
+          "variant": {
+            "enum": ["event_reasoning", "sentiment", "momentum", "fixed_mapping", "simple_hold"]
+          },
+          "first_result": {"$ref": "#/$defs/private_relative_path"},
+          "repeat_result": {"$ref": "#/$defs/private_relative_path"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "private_relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "not": {"pattern": "^(?:/|.*(?:^|/)\\.\\.(?:/|$))"}
+    }
+  }
+}

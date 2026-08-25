@@ -56,3 +56,18 @@ rules: a legitimate baseline or candidate may abstain. The real cohort therefore
 
 The semantic correction is frozen before the new test outcomes. V1 remains the historical
 gate used for the earlier single-event rejection; it cannot accept this real cohort.
+
+## Recorded outcome
+
+The public registration was committed as `7b0e19f` before the five test windows were
+captured. Its source SHA-256 is
+`cc7a6cd61d407f6c2b23b51efd9593a42a96a3a1815923d6ec0bccb63e974f9e`.
+The private execution registration then bound seven hardened Data Snapshots and 35 Variant
+Decisions before any replay: 25 buys and 10 abstentions. Every buy completed two registered
+Nautilus replays.
+
+`energy-supply-shock-calibration.v2` rejected the cohort with exactly
+`candidate_net_return_not_positive`. Registration, evidence, and report identities are
+recorded in `PHASE2_CALIBRATION.md`; observations and metrics remain private. The cohort is
+now opened evidence. It may inform later training and mechanism diagnosis, but it cannot be
+retuned, rerun, or relabeled as a previously unseen holdout.

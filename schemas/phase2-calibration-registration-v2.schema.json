@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/phase2-calibration-registration-v2.schema.json",
+  "title": "Market Impact Phase 2 Calibration Registration V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "gate_version", "registration_id", "registered_at",
+    "source_registration_ref", "source_registration_sha256", "cells", "decisions",
+    "registration_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.phase2-calibration-registration.v2"},
+    "gate_version": {"const": "energy-supply-shock-calibration.v2"},
+    "registration_id": {"type": "string", "minLength": 1},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "source_registration_ref": {"type": "string", "minLength": 1},
+    "source_registration_sha256": {"$ref": "#/$defs/sha256"},
+    "cells": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/cell"}
+    },
+    "decisions": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/decision"}
+    },
+    "registration_hash": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "simulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "data_granularity", "book_type", "fill_model", "fee_model", "venue_ruleset",
+        "base_currency", "starting_cash", "random_seed"
+      ],
+      "properties": {
+        "data_granularity": {"type": "string", "minLength": 1},
+        "book_type": {"type": "string", "minLength": 1},
+        "fill_model": {"type": "string", "minLength": 1},
+        "fee_model": {"type": "string", "minLength": 1},
+        "venue_ruleset": {"type": "string", "minLength": 1},
+        "base_currency": {"type": "string", "minLength": 1},
+        "starting_cash": {"type": "string", "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"},
+        "random_seed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_cluster_id", "visible_at", "partition", "target_selection_ref", "as_of",
+        "start_at", "end_at", "market", "instrument_ids", "data_snapshot_id",
+        "horizons_sessions", "simulation"
+      ],
+      "properties": {
+        "event_cluster_id": {"$ref": "#/$defs/artifact_component"},
+        "visible_at": {"type": "string", "format": "date-time"},
+        "partition": {"enum": ["train", "test"]},
+        "target_selection_ref": {"type": "string", "minLength": 1},
+        "as_of": {"type": "string", "format": "date-time"},
+        "start_at": {"type": "string", "format": "date-time"},
+        "end_at": {"type": "string", "format": "date-time"},
+        "market": {"type": "string", "minLength": 1},
+        "instrument_ids": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "data_snapshot_id": {"type": "string", "minLength": 1},
+        "horizons_sessions": {"const": [1, 3, 10]},
+        "simulation": {"$ref": "#/$defs/simulation"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_cluster_id", "variant", "action", "rule_ref", "decision_input_hashes",
+        "request", "request_hash"
+      ],
+      "properties": {
+        "event_cluster_id": {"$ref": "#/$defs/artifact_component"},
+        "variant": {
+          "enum": ["event_reasoning", "sentiment", "momentum", "fixed_mapping", "simple_hold"]
+        },
+        "action": {"enum": ["buy", "abstain"]},
+        "rule_ref": {"type": "string", "minLength": 1},
+        "decision_input_hashes": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "request": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/backtest_request"}
+          ]
+        },
+        "request_hash": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"action": {"const": "buy"}}},
+          "then": {
+            "properties": {
+              "request": {
+                "allOf": [
+                  {"$ref": "#/$defs/backtest_request"},
+                  {
+                    "properties": {
+                      "signal": {
+                        "properties": {"side": {"const": "buy"}}
+                      }
+                    }
+                  }
+                ]
+              },
+              "request_hash": {"$ref": "#/$defs/sha256"}
+            }
+          },
+          "else": {
+            "properties": {
+              "request": {"type": "null"},
+              "request_hash": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "artifact_component": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "backtest_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "request_id", "signal", "as_of", "start_at", "end_at",
+        "market", "instrument_ids", "data_snapshot_id", "target_selection_ref",
+        "strategy_ref", "horizons_sessions", "simulation"
+      ],
+      "properties": {
+        "schema_version": {"const": "market-impact.backtest-request.v1"},
+        "request_id": {"type": "string", "minLength": 1},
+        "signal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version", "signal_id", "event_id", "instrument_id", "side",
+            "valid_from", "expires_at", "evidence_refs", "invalidation_conditions"
+          ],
+          "properties": {
+            "schema_version": {"const": "market-impact.signal-intent.v1"},
+            "signal_id": {"type": "string", "minLength": 1},
+            "event_id": {"type": "string", "minLength": 1},
+            "instrument_id": {"type": "string", "minLength": 1},
+            "side": {"enum": ["buy", "sell"]},
+            "valid_from": {"type": "string", "format": "date-time"},
+            "expires_at": {"type": "string", "format": "date-time"},
+            "evidence_refs": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "invalidation_conditions": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "as_of": {"type": "string", "format": "date-time"},
+        "start_at": {"type": "string", "format": "date-time"},
+        "end_at": {"type": "string", "format": "date-time"},
+        "market": {"type": "string", "minLength": 1},
+        "instrument_ids": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "data_snapshot_id": {"type": "string", "minLength": 1},
+        "target_selection_ref": {"type": "string", "minLength": 1},
+        "strategy_ref": {"type": "string", "minLength": 1},
+        "horizons_sessions": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "simulation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "data_granularity", "book_type", "fill_model", "fee_model", "venue_ruleset",
+            "base_currency", "starting_cash", "random_seed"
+          ],
+          "properties": {
+            "data_granularity": {"type": "string", "minLength": 1},
+            "book_type": {"type": "string", "minLength": 1},
+            "fill_model": {"type": "string", "minLength": 1},
+            "fee_model": {"type": "string", "minLength": 1},
+            "venue_ruleset": {"type": "string", "minLength": 1},
+            "base_currency": {"type": "string", "minLength": 1},
+            "starting_cash": {"type": "string", "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"},
+            "random_seed": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    }
+  }
+}

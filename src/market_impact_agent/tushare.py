@@ -46,6 +46,8 @@ _DAILY_FIELDS = (
     "vol",
     "amount",
 )
+_ADJ_FACTOR_FIELDS = ("ts_code", "trade_date", "adj_factor")
+_STK_LIMIT_FIELDS = ("ts_code", "trade_date", "pre_close", "up_limit", "down_limit")
 _LIST_STATUSES = ("L", "D", "P", "G")
 _EXCHANGE_SUFFIXES = {"SSE": "XSHG", "SZSE": "XSHE"}
 _ROW_LIMIT = 6000
@@ -213,6 +215,77 @@ class TushareHttpAdapter:
             tushare_code=tushare_code,
             start_date=_date(start_date, "start_date"),
             end_date=_date(end_date, "end_date"),
+        )
+        return table
+
+    def fetch_adj_factors(
+        self,
+        *,
+        tushare_code: str,
+        start_date: str,
+        end_date: str,
+    ) -> TushareTable:
+        return self._fetch_dated_instrument_table(
+            api_name="adj_factor",
+            tushare_code=tushare_code,
+            start_date=start_date,
+            end_date=end_date,
+            fields=_ADJ_FACTOR_FIELDS,
+            positive_fields=("adj_factor",),
+        )
+
+    def fetch_stock_limits(
+        self,
+        *,
+        tushare_code: str,
+        start_date: str,
+        end_date: str,
+    ) -> TushareTable:
+        table = self._fetch_dated_instrument_table(
+            api_name="stk_limit",
+            tushare_code=tushare_code,
+            start_date=start_date,
+            end_date=end_date,
+            fields=_STK_LIMIT_FIELDS,
+            positive_fields=("pre_close", "up_limit", "down_limit"),
+        )
+        indexes = {field: table.fields.index(field) for field in table.fields}
+        for row in table.rows:
+            pre_close = _number(row[indexes["pre_close"]], "pre_close", positive=True)
+            up_limit = _number(row[indexes["up_limit"]], "up_limit", positive=True)
+            down_limit = _number(row[indexes["down_limit"]], "down_limit", positive=True)
+            if not down_limit < pre_close < up_limit:
+                raise ValueError("stk_limit requires down_limit < pre_close < up_limit")
+        return table
+
+    def _fetch_dated_instrument_table(
+        self,
+        *,
+        api_name: str,
+        tushare_code: str,
+        start_date: str,
+        end_date: str,
+        fields: tuple[str, ...],
+        positive_fields: tuple[str, ...],
+    ) -> TushareTable:
+        _date_range(start_date, end_date)
+        canonical_instrument_id(tushare_code)
+        table = self._query(
+            api_name=api_name,
+            params={
+                "ts_code": tushare_code,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            fields=fields,
+        )
+        _require_unique_rows(table, key_fields=("ts_code", "trade_date"))
+        _validate_dated_instrument_table(
+            table,
+            tushare_code=tushare_code,
+            start_date=_date(start_date, "start_date"),
+            end_date=_date(end_date, "end_date"),
+            positive_fields=positive_fields,
         )
         return table
 
@@ -572,6 +645,8 @@ def tushare_table_content_hash(
         "stock_basic": _STOCK_FIELDS,
         "trade_cal": _CALENDAR_FIELDS,
         "daily": _DAILY_FIELDS,
+        "adj_factor": _ADJ_FACTOR_FIELDS,
+        "stk_limit": _STK_LIMIT_FIELDS,
     }.get(api_name)
     if expected_fields is None or fields != expected_fields:
         raise ValueError("unsupported Tushare table identity contract")
@@ -616,6 +691,15 @@ def _canonical_source_row(
             _date(_string(values["cal_date"], "cal_date"), "cal_date").isoformat(),
             is_open in (1, "1"),
             _canonical_optional_date(values["pretrade_date"], "pretrade_date"),
+        )
+    if api_name in {"adj_factor", "stk_limit"}:
+        return (
+            _string(values["ts_code"], "ts_code"),
+            _date(_string(values["trade_date"], "trade_date"), "trade_date").isoformat(),
+            *(
+                _canonical_six_place_decimal(values[field], field, positive=True)
+                for field in fields[2:]
+            ),
         )
     return (
         _string(values["ts_code"], "ts_code"),
@@ -715,6 +799,25 @@ def _validate_daily(
             raise ValueError("daily high is below another OHLC price")
         if prices["low"] > min(prices["open"], prices["high"], prices["close"]):
             raise ValueError("daily low is above another OHLC price")
+
+
+def _validate_dated_instrument_table(
+    table: TushareTable,
+    *,
+    tushare_code: str,
+    start_date: date,
+    end_date: date,
+    positive_fields: tuple[str, ...],
+) -> None:
+    indexes = {field: table.fields.index(field) for field in table.fields}
+    for row in table.rows:
+        if _string(row[indexes["ts_code"]], "ts_code") != tushare_code:
+            raise ValueError(f"{table.api_name} ts_code conflicts with the query")
+        trade_date = _date(_string(row[indexes["trade_date"]], "trade_date"), "trade_date")
+        if not start_date <= trade_date <= end_date:
+            raise ValueError(f"{table.api_name} trade_date is outside the query range")
+        for field in positive_fields:
+            _number(row[indexes[field]], field, positive=True)
 
 
 def _listing_payload(listing: StockListing) -> dict[str, object]:

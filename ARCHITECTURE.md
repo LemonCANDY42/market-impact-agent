@@ -89,9 +89,25 @@ and every paper/live recovery property require explicit Harness acceptance.
 For a multi-horizon Backtest Request, the bridge constructs a fresh low-level Nautilus
 BacktestEngine per horizon and merges only normalized, horizon-prefixed metrics into the
 engine-neutral Result. Phase 2 calibration remains a Harness authority: it verifies repeated
-result identity, Event Cluster walk-forward partitions, comparable candidate/baseline
-windows and runtime manifests, ratio-unit cost-aware return, baseline superiority, and
-single-event dominance. Nautilus does not decide whether research may be promoted.
+result identity, pre-registered Calibration Cells and Variant Decisions, Event Cluster
+walk-forward partitions, comparable candidate/baseline windows and runtime manifests,
+ratio-unit cost-aware return, honest long-only abstentions, baseline superiority, and
+single-event dominance. Nautilus does not decide whether research may be promoted. The
+first real v2 cohort failed because candidate mean net return was not positive; all later
+capability phases remain closed.
+
+## Agent runtime boundary
+
+The future Agent runtime is another Harness adapter, not a second orchestration authority.
+It normalizes model messages and tool calls while the Harness owns durable run state,
+context compaction, Skill selection, MCP lifecycle, permissions, budgets, audit, recovery,
+and human/policy gates. The first planned real-model fixture is MiniMax M3 through the China
+API origin. It receives research-only tools and no broker/account capability.
+
+Context summaries, Skill instructions, MCP output, and model responses are evidence-bearing
+artifacts with identities and provenance; none may silently become policy. Model success is
+separate from trading-research calibration and Provider execution conformance. The complete
+planned acceptance boundary is in `docs/AGENT_RUNTIME.md`.
 
 ## Approval model
 
@@ -130,7 +146,10 @@ First-party code supports Python `>=3.13,<3.15`.
   window; the local credential worked for that account, target, and window. A separately
   versioned modeled-open adapter validated and consumed that exact private bundle twice
   with identical 1/3/10-session replay identity for the narrow `600028.XSHG` Nautilus gate.
-  The separate Phase 2 calibration gate rejected this one-event manual fixture. These
+  A hardened v2 adapter additionally binds adjustment factors and source daily limits,
+  separates adjusted pre-cutoff observations from the unadjusted evaluation window, and
+  replayed seven pre-registered private snapshots. The v2 gate rejected the real cohort
+  because candidate mean net return was not positive. These
   acceptances prove neither general quota/permissions, completeness, historical truth,
   full-universe prices, observed liquidity/fillability, alpha, nor paper/live readiness.
   The Tushare Provider remains disabled and unverified. A universe reconstructed from current

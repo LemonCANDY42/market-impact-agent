@@ -183,6 +183,34 @@ def test_daily_uses_the_documented_unadjusted_contract() -> None:
     ]
 
 
+def test_adjustment_factor_and_stock_limit_use_source_bound_contracts() -> None:
+    adj_fields = ("ts_code", "trade_date", "adj_factor")
+    limit_fields = ("ts_code", "trade_date", "pre_close", "up_limit", "down_limit")
+    transport = FakeTransport(
+        [
+            response(adj_fields, [["600028.SH", "20260825", 6.75]]),
+            response(limit_fields, [["600028.SH", "20260825", 10.0, 11.0, 9.0]]),
+        ]
+    )
+    adapter = TushareHttpAdapter(TOKEN, transport=transport, clock=lambda: NOW)
+
+    adj = adapter.fetch_adj_factors(
+        tushare_code="600028.SH", start_date="20260825", end_date="20260825"
+    )
+    limits = adapter.fetch_stock_limits(
+        tushare_code="600028.SH", start_date="20260825", end_date="20260825"
+    )
+
+    assert adj.api_name == "adj_factor"
+    assert limits.api_name == "stk_limit"
+    assert [request["api_name"] for request in transport.requests] == [
+        "adj_factor",
+        "stk_limit",
+    ]
+    assert transport.requests[0]["fields"] == "ts_code,trade_date,adj_factor"
+    assert transport.requests[1]["fields"] == ("ts_code,trade_date,pre_close,up_limit,down_limit")
+
+
 def test_stock_snapshot_builds_a_fixed_pre_event_universe() -> None:
     fields = (
         "ts_code",

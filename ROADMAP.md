@@ -28,8 +28,9 @@ broker or backtest mutation is reachable from the research skill.
 
 ## Phase 2 — Historical replay and calibration
 
-Status: active; deterministic replay works, but the real calibration exit gate has not
-passed. Phase 3 and paper execution remain closed.
+Status: blocked by a valid negative result. Deterministic replay works, but the first
+pre-registered real calibration cohort failed its exit gate. Phase 3 and paper execution
+remain closed; the opened cohort cannot be retuned and relabeled as unseen evidence.
 
 - [x] Compare stable Nautilus `1.231.0` with `2.0.0rc3` on Python 3.13/3.14;
   select `1.231.0` as the first implementation candidate and keep the RC comparison-only.
@@ -55,10 +56,14 @@ passed. Phase 3 and paper execution remain closed.
   and implement the versioned Phase 2 gate with generated pass/fail cohorts.
 - [x] Apply the gate to the current real repeated evidence and record its expected rejection:
   one manual event cannot clear cohort, baseline, positive-return, or dominance requirements.
-- Compare event reasoning with sentiment, momentum, fixed mapping, and simple
-  hold-period baselines.
-- Pre-register at least two training and three later test energy-supply-shock Event Clusters;
-  run every candidate/baseline variant twice with T+1, limits, costs, and compatible data.
+- [x] Add v2 Calibration Cell and Variant Decision registration so long-only rules may
+  honestly buy or abstain without fabricated signals or Results.
+- [x] Compare event reasoning with sentiment, momentum, fixed mapping, and simple hold
+  baselines over two training and five later test Event Clusters.
+- [x] Capture seven source-hardened private snapshots and execute all 25 registered buys
+  twice with source adjustment factors, source price limits, T+1, and modeled costs.
+- [x] Apply the frozen v2 gate and record its single rejection reason:
+  `candidate_net_return_not_positive`.
 - Pass the frozen real-data gate without a single event dominating the outcome.
 
 Exit gate: reproducible results beat at least one meaningful baseline without a
@@ -66,6 +71,12 @@ single event dominating the outcome. This gate verifies backtesting only; it gra
 paper or live capability. Failure stops expansion.
 
 ## Phase 3 — Event-family discovery
+
+Blocked until a new Phase 2 hypothesis passes on a later unseen holdout. Before Agent-driven
+research is accepted, the engine-neutral runtime gate in `docs/AGENT_RUNTIME.md` must also
+pass with context compaction, Skill lifecycle, MCP lifecycle, permissions, recovery,
+observability, and injection/secret negative cases. MiniMax M3 on the China endpoint is the
+first planned local model fixture; it receives no broker or account capability.
 
 - Add market-state/style rotation and probabilistic climate/agriculture cases.
 - Research broader single-event and cumulative-narrative families, including

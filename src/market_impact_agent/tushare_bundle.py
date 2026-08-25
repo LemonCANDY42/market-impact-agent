@@ -7,7 +7,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from hashlib import sha256
 from importlib import import_module
 from pathlib import Path
@@ -30,6 +30,7 @@ from market_impact_agent.tushare import (
 )
 
 TUSHARE_DATA_BUNDLE_SCHEMA = "market-impact.tushare-data-bundle.v1"
+TUSHARE_HARDENED_DATA_BUNDLE_SCHEMA = "market-impact.tushare-data-bundle.v2"
 
 _TABLE_FILES = {
     "daily": "daily.parquet",
@@ -37,6 +38,11 @@ _TABLE_FILES = {
     "listings": "listings.parquet",
     "trade_calendar": "trade_calendar.parquet",
     "universe": "universe.parquet",
+}
+_HARDENED_TABLE_FILES = {
+    **_TABLE_FILES,
+    "adj_factors": "adj_factors.parquet",
+    "stock_limits": "stock_limits.parquet",
 }
 _STOCK_SOURCE_FIELDS = (
     "ts_code",
@@ -59,9 +65,35 @@ _DAILY_SOURCE_FIELDS = (
     "vol",
     "amount",
 )
+_ADJ_FACTOR_SOURCE_FIELDS = ("ts_code", "trade_date", "adj_factor")
+_STK_LIMIT_SOURCE_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "pre_close",
+    "up_limit",
+    "down_limit",
+)
 _LISTING_PARTITIONS = tuple(
     (exchange, status) for exchange in ("SSE", "SZSE") for status in ("L", "D", "P", "G")
 )
+
+
+def _table_files_for_schema(schema_version: str) -> dict[str, str]:
+    if schema_version == TUSHARE_DATA_BUNDLE_SCHEMA:
+        return _TABLE_FILES
+    if schema_version == TUSHARE_HARDENED_DATA_BUNDLE_SCHEMA:
+        return _HARDENED_TABLE_FILES
+    raise ValueError("unsupported Tushare bundle schema_version")
+
+
+def _table_files_for_capture(capture: TushareDataCapture) -> dict[str, str]:
+    if capture.request.hardened:
+        if capture.adj_factors is None or capture.stock_limits is None:
+            raise ValueError("hardened Tushare capture requires adjustment and limit tables")
+        return _HARDENED_TABLE_FILES
+    if capture.adj_factors is not None or capture.stock_limits is not None:
+        raise ValueError("legacy Tushare capture cannot include hardened tables")
+    return _TABLE_FILES
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,13 +102,24 @@ class TushareDataRequest:
     as_of_date: date
     start_date: date
     end_date: date
+    evaluation_start_date: date | None = None
 
     def __post_init__(self) -> None:
         canonical_instrument_id(self.tushare_code)
-        if self.start_date <= self.as_of_date:
-            raise ValueError("start_date must be after as_of_date")
+        if self.evaluation_start_date is None:
+            if self.start_date <= self.as_of_date:
+                raise ValueError("start_date must be after as_of_date")
+        else:
+            if self.start_date > self.as_of_date:
+                raise ValueError("hardened data start_date must not be after as_of_date")
+            if self.evaluation_start_date <= self.as_of_date:
+                raise ValueError("evaluation_start_date must be after as_of_date")
+            if self.evaluation_start_date < self.start_date:
+                raise ValueError("evaluation_start_date must not be before start_date")
         if self.end_date < self.start_date:
             raise ValueError("end_date must not be before start_date")
+        if self.evaluation_start_date is not None and self.end_date < self.evaluation_start_date:
+            raise ValueError("end_date must not be before evaluation_start_date")
 
     @property
     def instrument_id(self) -> str:
@@ -85,6 +128,14 @@ class TushareDataRequest:
     @property
     def exchange(self) -> str:
         return exchange_for_tushare_code(self.tushare_code)
+
+    @property
+    def replay_start_date(self) -> date:
+        return self.start_date if self.evaluation_start_date is None else self.evaluation_start_date
+
+    @property
+    def hardened(self) -> bool:
+        return self.evaluation_start_date is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +146,8 @@ class TushareDataCapture:
     universe: FixedAshareUniverse
     trade_calendar: TushareTable
     daily: TushareTable
+    adj_factors: TushareTable | None = None
+    stock_limits: TushareTable | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +190,21 @@ def capture_tushare_data_bundle(
         end_date=end_date,
     )
     _require_complete_daily_window(trade_calendar, daily)
+    adj_factors: TushareTable | None = None
+    stock_limits: TushareTable | None = None
+    if request.hardened:
+        adj_factors = adapter.fetch_adj_factors(
+            tushare_code=request.tushare_code,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        stock_limits = adapter.fetch_stock_limits(
+            tushare_code=request.tushare_code,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        _require_complete_daily_window(trade_calendar, adj_factors)
+        _require_complete_daily_window(trade_calendar, stock_limits)
     return TushareDataCapture(
         request=request,
         provider_manifest=manifest,
@@ -144,15 +212,24 @@ def capture_tushare_data_bundle(
         universe=universe,
         trade_calendar=trade_calendar,
         daily=daily,
+        adj_factors=adj_factors,
+        stock_limits=stock_limits,
     )
 
 
 def write_tushare_data_bundle(capture: TushareDataCapture, output_root: Path) -> Path:
     pa, pq = _pyarrow_modules()
+    table_files = _table_files_for_capture(capture)
     output_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporary_path = Path(tempfile.mkdtemp(prefix=".tmp-tushare-", dir=output_root))
     try:
-        tables = _write_parquet_tables(capture, temporary_path, pa=pa, pq=pq)
+        tables = _write_parquet_tables(
+            capture,
+            temporary_path,
+            table_files=table_files,
+            pa=pa,
+            pq=pq,
+        )
         core_manifest = _core_manifest(capture, tables=tables, pyarrow_version=pa.__version__)
         bundle_hash = _canonical_hash(core_manifest)
         data_snapshot_id = _data_snapshot_id(capture.request, bundle_hash)
@@ -195,9 +272,14 @@ def validate_tushare_data_bundle(bundle_path: Path) -> ValidatedTushareDataBundl
     manifest = cast(dict[str, object], payload)
     if _contains_forbidden_key(manifest):
         raise ValueError("Tushare bundle manifest contains a forbidden secret field")
-    if manifest.get("schema_version") != TUSHARE_DATA_BUNDLE_SCHEMA:
+    schema_version = manifest.get("schema_version")
+    if schema_version not in {
+        TUSHARE_DATA_BUNDLE_SCHEMA,
+        TUSHARE_HARDENED_DATA_BUNDLE_SCHEMA,
+    }:
         raise ValueError("unsupported Tushare bundle schema_version")
-    _validate_manifest_shape(manifest)
+    table_files = _table_files_for_schema(cast(str, schema_version))
+    _validate_manifest_shape(manifest, table_files=table_files)
 
     bundle_hash = _required_string(manifest, "bundle_hash")
     _require_sha256(bundle_hash, "bundle_hash")
@@ -216,6 +298,11 @@ def validate_tushare_data_bundle(bundle_path: Path) -> ValidatedTushareDataBundl
         as_of_date=date.fromisoformat(_required_string(request, "as_of_date")),
         start_date=date.fromisoformat(_required_string(request, "start_date")),
         end_date=date.fromisoformat(_required_string(request, "end_date")),
+        evaluation_start_date=(
+            date.fromisoformat(_required_string(request, "evaluation_start_date"))
+            if schema_version == TUSHARE_HARDENED_DATA_BUNDLE_SCHEMA
+            else None
+        ),
     )
     if _required_string(request, "instrument_id") != capture_request.instrument_id:
         raise ValueError("Tushare request instrument_id does not match tushare_code")
@@ -248,7 +335,7 @@ def validate_tushare_data_bundle(bundle_path: Path) -> ValidatedTushareDataBundl
         raise ValueError("Pre-event Universe does not bind the Listing Snapshot")
 
     tables = _required_mapping(manifest, "tables")
-    if set(tables) != set(_TABLE_FILES):
+    if set(tables) != set(table_files):
         raise ValueError("Tushare bundle tables do not match the required set")
     pa, pq = _pyarrow_modules()
     format_manifest = _required_mapping(manifest, "format")
@@ -256,7 +343,7 @@ def validate_tushare_data_bundle(bundle_path: Path) -> ValidatedTushareDataBundl
         raise ValueError("Tushare bundle parquet_writer does not match the pinned runtime")
     expected_schemas = _arrow_schemas(pa)
     arrow_tables: dict[str, Any] = {}
-    for table_name, expected_file in _TABLE_FILES.items():
+    for table_name, expected_file in table_files.items():
         metadata = _required_mapping(tables, table_name)
         file_name = _required_string(metadata, "file")
         if file_name != expected_file:
@@ -285,7 +372,7 @@ def validate_tushare_data_bundle(bundle_path: Path) -> ValidatedTushareDataBundl
             raise ValueError(f"{file_name} logical identity does not match")
         _required_timestamp(metadata, "retrieved_at")
         arrow_tables[table_name] = arrow_table
-    expected_entries = {"manifest.json", *_TABLE_FILES.values()}
+    expected_entries = {"manifest.json", *table_files.values()}
     if {path.name for path in bundle_path.iterdir()} != expected_entries:
         raise ValueError("Tushare bundle contains unexpected files")
     universe_id = _validate_bundle_semantics(
@@ -329,6 +416,7 @@ def _write_parquet_tables(
     capture: TushareDataCapture,
     directory: Path,
     *,
+    table_files: dict[str, str],
     pa: Any,
     pq: Any,
 ) -> dict[str, object]:
@@ -340,8 +428,12 @@ def _write_parquet_tables(
         "trade_calendar": capture.trade_calendar.retrieved_at,
         "universe": capture.universe.built_at,
     }
+    if capture.adj_factors is not None:
+        retrieved_at["adj_factors"] = capture.adj_factors.retrieved_at
+    if capture.stock_limits is not None:
+        retrieved_at["stock_limits"] = capture.stock_limits.retrieved_at
     metadata: dict[str, object] = {}
-    for name, file_name in _TABLE_FILES.items():
+    for name, file_name in table_files.items():
         table = arrow_tables[name]
         path = directory / file_name
         pq.write_table(
@@ -362,6 +454,14 @@ def _write_parquet_tables(
         }
         if name == "daily":
             cast(dict[str, object], metadata[name])["source"] = _query_provenance(capture.daily)
+        elif name == "adj_factors" and capture.adj_factors is not None:
+            cast(dict[str, object], metadata[name])["source"] = _query_provenance(
+                capture.adj_factors
+            )
+        elif name == "stock_limits" and capture.stock_limits is not None:
+            cast(dict[str, object], metadata[name])["source"] = _query_provenance(
+                capture.stock_limits
+            )
         elif name == "trade_calendar":
             cast(dict[str, object], metadata[name])["source"] = _query_provenance(
                 capture.trade_calendar
@@ -439,13 +539,40 @@ def _arrow_tables(capture: TushareDataCapture, *, pa: Any) -> dict[str, Any]:
         ],
         schema=_arrow_schemas(pa)["daily"],
     )
-    return {
+    tables = {
         "daily": daily,
         "listing_anomalies": listing_anomalies,
         "listings": listings,
         "trade_calendar": trade_calendar,
         "universe": universe,
     }
+    if capture.adj_factors is not None:
+        tables["adj_factors"] = pa.Table.from_pylist(
+            [
+                {
+                    "ts_code": _string_value(row["ts_code"], "ts_code"),
+                    "trade_date": _yyyymmdd_value(row["trade_date"], "trade_date"),
+                    "adj_factor": _decimal_value(row["adj_factor"], "adj_factor"),
+                }
+                for row in _rows_by_field(capture.adj_factors)
+            ],
+            schema=_arrow_schemas(pa)["adj_factors"],
+        )
+    if capture.stock_limits is not None:
+        tables["stock_limits"] = pa.Table.from_pylist(
+            [
+                {
+                    "ts_code": _string_value(row["ts_code"], "ts_code"),
+                    "trade_date": _yyyymmdd_value(row["trade_date"], "trade_date"),
+                    "pre_close": _decimal_value(row["pre_close"], "pre_close"),
+                    "up_limit": _decimal_value(row["up_limit"], "up_limit"),
+                    "down_limit": _decimal_value(row["down_limit"], "down_limit"),
+                }
+                for row in _rows_by_field(capture.stock_limits)
+            ],
+            schema=_arrow_schemas(pa)["stock_limits"],
+        )
+    return tables
 
 
 def _core_manifest(
@@ -455,7 +582,11 @@ def _core_manifest(
     pyarrow_version: str,
 ) -> dict[str, object]:
     return {
-        "schema_version": TUSHARE_DATA_BUNDLE_SCHEMA,
+        "schema_version": (
+            TUSHARE_HARDENED_DATA_BUNDLE_SCHEMA
+            if capture.request.hardened
+            else TUSHARE_DATA_BUNDLE_SCHEMA
+        ),
         "format": {
             "compression": "zstd",
             "parquet_writer": f"pyarrow-{pyarrow_version}",
@@ -468,6 +599,11 @@ def _core_manifest(
             "instrument_id": capture.request.instrument_id,
             "start_date": capture.request.start_date.isoformat(),
             "tushare_code": capture.request.tushare_code,
+            **(
+                {"evaluation_start_date": capture.request.replay_start_date.isoformat()}
+                if capture.request.hardened
+                else {}
+            ),
         },
         "listing_snapshot": {
             "anomaly_count": len(capture.listing_snapshot.anomalies),
@@ -537,6 +673,22 @@ def _arrow_schemas(pa: Any) -> dict[str, Any]:
                 ("amount", pa.decimal128(28, 6)),
             ]
         ),
+        "adj_factors": pa.schema(
+            [
+                ("ts_code", pa.string()),
+                ("trade_date", pa.date32()),
+                ("adj_factor", pa.decimal128(24, 6)),
+            ]
+        ),
+        "stock_limits": pa.schema(
+            [
+                ("ts_code", pa.string()),
+                ("trade_date", pa.date32()),
+                ("pre_close", pa.decimal128(24, 6)),
+                ("up_limit", pa.decimal128(24, 6)),
+                ("down_limit", pa.decimal128(24, 6)),
+            ]
+        ),
     }
 
 
@@ -551,7 +703,11 @@ def _query_provenance(table: TushareTable) -> dict[str, object]:
     }
 
 
-def _validate_manifest_shape(manifest: dict[str, object]) -> None:
+def _validate_manifest_shape(
+    manifest: dict[str, object],
+    *,
+    table_files: dict[str, str],
+) -> None:
     _require_exact_keys(
         manifest,
         {
@@ -578,18 +734,17 @@ def _validate_manifest_shape(manifest: dict[str, object]) -> None:
     _required_string(format_manifest, "parquet_writer")
 
     request = _required_mapping(manifest, "request")
-    _require_exact_keys(
-        request,
-        {
-            "as_of_date",
-            "end_date",
-            "exchange",
-            "instrument_id",
-            "start_date",
-            "tushare_code",
-        },
-        "Tushare bundle request",
-    )
+    request_keys = {
+        "as_of_date",
+        "end_date",
+        "exchange",
+        "instrument_id",
+        "start_date",
+        "tushare_code",
+    }
+    if manifest.get("schema_version") == TUSHARE_HARDENED_DATA_BUNDLE_SCHEMA:
+        request_keys.add("evaluation_start_date")
+    _require_exact_keys(request, request_keys, "Tushare bundle request")
     listing_snapshot = _required_mapping(manifest, "listing_snapshot")
     _require_exact_keys(
         listing_snapshot,
@@ -617,7 +772,7 @@ def _validate_manifest_shape(manifest: dict[str, object]) -> None:
         "Pre-event Universe manifest",
     )
     tables = _required_mapping(manifest, "tables")
-    _require_exact_keys(tables, set(_TABLE_FILES), "Tushare bundle tables")
+    _require_exact_keys(tables, set(table_files), "Tushare bundle tables")
     common_table_fields = {
         "file",
         "logical_identity",
@@ -625,9 +780,13 @@ def _validate_manifest_shape(manifest: dict[str, object]) -> None:
         "rows",
         "sha256",
     }
-    for table_name in _TABLE_FILES:
+    for table_name in table_files:
         metadata = _required_mapping(tables, table_name)
-        source_fields: set[str] = {"source"} if table_name in {"daily", "trade_calendar"} else set()
+        source_fields: set[str] = (
+            {"source"}
+            if table_name in {"adj_factors", "daily", "stock_limits", "trade_calendar"}
+            else set()
+        )
         expected_fields = common_table_fields | source_fields
         _require_exact_keys(metadata, expected_fields, f"{table_name} table manifest")
 
@@ -810,6 +969,27 @@ def _validate_bundle_semantics(
     ):
         raise ValueError("daily.parquet does not match its source content_hash")
     endpoints.add(daily_endpoint)
+
+    if request.hardened:
+        adj_time, adj_endpoint = _validate_hardened_table_provenance(
+            tables=tables,
+            table_name="adj_factors",
+            api_name="adj_factor",
+            params=daily_params,
+            fields=_ADJ_FACTOR_SOURCE_FIELDS,
+            rows=_adj_factor_source_rows(arrow_tables["adj_factors"]),
+        )
+        limit_time, limit_endpoint = _validate_hardened_table_provenance(
+            tables=tables,
+            table_name="stock_limits",
+            api_name="stk_limit",
+            params=daily_params,
+            fields=_STK_LIMIT_SOURCE_FIELDS,
+            rows=_stock_limit_source_rows(arrow_tables["stock_limits"]),
+        )
+        endpoints.update((adj_endpoint, limit_endpoint))
+        if adj_time < listing_retrieved_at or limit_time < listing_retrieved_at:
+            raise ValueError("hardened table retrieval cannot precede the Listing Snapshot")
     if len(endpoints) != 1:
         raise ValueError("Tushare bundle source queries must use one endpoint")
 
@@ -823,7 +1003,84 @@ def _validate_bundle_semantics(
     if unexpected:
         values = ", ".join(item.isoformat() for item in unexpected)
         raise ValueError(f"daily.parquet contains non-open dates: {values}")
+    if request.hardened:
+        _validate_hardened_market_tables(arrow_tables, request=request)
     return universe_id
+
+
+def _validate_hardened_table_provenance(
+    *,
+    tables: dict[str, object],
+    table_name: str,
+    api_name: str,
+    params: dict[str, str],
+    fields: tuple[str, ...],
+    rows: tuple[tuple[object, ...], ...],
+) -> tuple[datetime, str]:
+    manifest = _required_mapping(tables, table_name)
+    source = _required_mapping(manifest, "source")
+    retrieved_at, content_hash, endpoint = _validate_query_provenance(
+        source,
+        expected_api_name=api_name,
+        expected_params=params,
+        expected_fields=fields,
+    )
+    if _required_timestamp(manifest, "retrieved_at") != retrieved_at:
+        raise ValueError(f"{table_name}.parquet retrieval time does not match its source")
+    if content_hash != tushare_table_content_hash(
+        api_name=api_name,
+        params=params,
+        fields=fields,
+        rows=rows,
+    ):
+        raise ValueError(f"{table_name}.parquet does not match its source content_hash")
+    return retrieved_at, endpoint
+
+
+def _validate_hardened_market_tables(
+    arrow_tables: dict[str, Any],
+    *,
+    request: TushareDataRequest,
+) -> None:
+    daily_by_date = {
+        _required_date(row, "trade_date"): row for row in _arrow_rows(arrow_tables["daily"])
+    }
+    adj_by_date = {
+        _required_date(row, "trade_date"): row for row in _arrow_rows(arrow_tables["adj_factors"])
+    }
+    limits_by_date = {
+        _required_date(row, "trade_date"): row for row in _arrow_rows(arrow_tables["stock_limits"])
+    }
+    expected_dates = set(daily_by_date)
+    if set(adj_by_date) != expected_dates or set(limits_by_date) != expected_dates:
+        raise ValueError("hardened market tables must cover every daily session exactly")
+    factors = {
+        _required_decimal(row, "adj_factor", positive=True)
+        for trade_date, row in adj_by_date.items()
+        if trade_date >= request.replay_start_date
+    }
+    if len(factors) != 1:
+        raise ValueError("adjustment-factor change makes the evaluation window ambiguous")
+    tick = Decimal("0.01")
+    ratio = Decimal("0.10")
+    for trade_date, daily in daily_by_date.items():
+        limits = limits_by_date[trade_date]
+        if _required_string(daily, "ts_code") != _required_string(limits, "ts_code"):
+            raise ValueError("stock-limit instrument does not match daily data")
+        previous_close = _required_decimal(daily, "pre_close", positive=True)
+        if _required_decimal(limits, "pre_close", positive=True) != previous_close:
+            raise ValueError("stock-limit pre_close does not match daily data")
+        expected_down = _limit_price(previous_close * (Decimal(1) - ratio), tick)
+        expected_up = _limit_price(previous_close * (Decimal(1) + ratio), tick)
+        if (
+            _required_decimal(limits, "down_limit", positive=True) != expected_down
+            or _required_decimal(limits, "up_limit", positive=True) != expected_up
+        ):
+            raise ValueError("source price limits do not match the supported 10% main-board rule")
+
+
+def _limit_price(value: Decimal, tick: Decimal) -> Decimal:
+    return (value / tick).quantize(Decimal(1), rounding=ROUND_HALF_UP) * tick
 
 
 def _validate_query_provenance(
@@ -1003,6 +1260,30 @@ def _daily_source_rows(table: Any) -> tuple[tuple[object, ...], ...]:
             ),
             _required_decimal(row, "vol", positive=False),
             _required_decimal(row, "amount", positive=False),
+        )
+        for row in _arrow_rows(table)
+    )
+
+
+def _adj_factor_source_rows(table: Any) -> tuple[tuple[object, ...], ...]:
+    return tuple(
+        (
+            _required_string(row, "ts_code"),
+            _required_date(row, "trade_date").strftime("%Y%m%d"),
+            _required_decimal(row, "adj_factor", positive=True),
+        )
+        for row in _arrow_rows(table)
+    )
+
+
+def _stock_limit_source_rows(table: Any) -> tuple[tuple[object, ...], ...]:
+    return tuple(
+        (
+            _required_string(row, "ts_code"),
+            _required_date(row, "trade_date").strftime("%Y%m%d"),
+            _required_decimal(row, "pre_close", positive=True),
+            _required_decimal(row, "up_limit", positive=True),
+            _required_decimal(row, "down_limit", positive=True),
         )
         for row in _arrow_rows(table)
     )

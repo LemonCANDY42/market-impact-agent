@@ -29,6 +29,10 @@ TUSHARE_MODELED_OPEN_FILL_MODEL = "modeled_open_one_lot_no_slippage.v1"
 TUSHARE_MODELED_OPEN_FEE_MODEL = "xshg_2019_fee_assumption.v1"
 TUSHARE_MODELED_OPEN_VENUE_RULESET = "xshg_600028_main_board_10pct.v1"
 TUSHARE_TARGET_SELECTION_REF = "manual-integration-fixture:abqaiq-600028.v1"
+TUSHARE_HARDENED_MODELED_OPEN_ADAPTER_VERSION = "2.0.0"
+TUSHARE_HARDENED_DATA_GRANULARITY = "tushare_unadjusted_daily_with_source_limits.v2"
+TUSHARE_HARDENED_VENUE_RULESET = "xshg_main_board_source_limit.v2"
+TUSHARE_HARDENED_TARGET_SELECTION_REF = "registered-a-share-integrated-oil-proxy:600028.v1"
 
 _SUPPORTED_INSTRUMENT = "600028.XSHG"
 _SUPPORTED_TUSHARE_CODE = "600028.SH"
@@ -79,15 +83,62 @@ def load_validated_tushare_modeled_open(
     calendar_rows = cast(
         list[dict[str, object]], pq.read_table(pa.BufferReader(calendar_bytes)).to_pylist()
     )
+    hardened = manifest.get("schema_version") == "market-impact.tushare-data-bundle.v2"
+    stock_limit_rows: list[dict[str, object]] | None = None
+    adj_factor_rows: list[dict[str, object]] | None = None
+    if hardened:
+        adj_factor_manifest = _mapping(tables, "adj_factors")
+        stock_limit_manifest = _mapping(tables, "stock_limits")
+        adj_factor_bytes = _read_manifest_bound_file(
+            bundle.path / _string(adj_factor_manifest, "file"),
+            _string(adj_factor_manifest, "sha256"),
+        )
+        stock_limit_bytes = _read_manifest_bound_file(
+            bundle.path / _string(stock_limit_manifest, "file"),
+            _string(stock_limit_manifest, "sha256"),
+        )
+        adj_factor_rows = cast(
+            list[dict[str, object]],
+            pq.read_table(pa.BufferReader(adj_factor_bytes)).to_pylist(),
+        )
+        stock_limit_rows = cast(
+            list[dict[str, object]],
+            pq.read_table(pa.BufferReader(stock_limit_bytes)).to_pylist(),
+        )
     open_dates = {_date(row, "cal_date") for row in calendar_rows if _boolean(row, "is_open")}
     if {_date(row, "trade_date") for row in daily_rows} != open_dates:
         raise ValueError("validated calendar/daily open-session identities diverged during load")
 
-    bars = _modeled_bars(daily_rows)
-    input_hashes = (
-        BacktestInputHash("bundle", bundle.bundle_hash),
-        BacktestInputHash("daily.parquet", _string(daily_manifest, "sha256")),
-        BacktestInputHash("trade_calendar.parquet", _string(calendar_manifest, "sha256")),
+    as_of_date = date.fromisoformat(_string(request_fields, "as_of_date"))
+    replay_start_date = date.fromisoformat(
+        _string(request_fields, "evaluation_start_date")
+        if hardened
+        else _string(request_fields, "start_date")
+    )
+    bars = _modeled_bars(
+        daily_rows,
+        stock_limit_rows=stock_limit_rows,
+        adj_factor_rows=adj_factor_rows,
+        replay_start_date=replay_start_date if hardened else None,
+    )
+    if hardened:
+        bars = tuple(bar for bar in bars if bar.session_open_at.date() >= replay_start_date)
+    input_hash_values = {
+        "bundle": bundle.bundle_hash,
+        "daily.parquet": _string(daily_manifest, "sha256"),
+        "trade_calendar.parquet": _string(calendar_manifest, "sha256"),
+    }
+    if hardened:
+        for name in ("adj_factors", "stock_limits"):
+            metadata = _mapping(tables, name)
+            input_hash_values[f"{name}.parquet"] = _string(metadata, "sha256")
+    input_hashes = tuple(
+        BacktestInputHash(name, value) for name, value in sorted(input_hash_values.items())
+    )
+    adapter_version = (
+        TUSHARE_HARDENED_MODELED_OPEN_ADAPTER_VERSION
+        if hardened
+        else TUSHARE_MODELED_OPEN_ADAPTER_VERSION
     )
     snapshot = AShareDailyBarSnapshot(
         snapshot_id=bundle.data_snapshot_id,
@@ -102,32 +153,72 @@ def load_validated_tushare_modeled_open(
         sell_stamp_tax_rate=Decimal("0.001"),
         slippage_ticks=0,
         bars=bars,
-        content_hash=_adapter_output_hash(bundle.bundle_hash, bars),
+        content_hash=_adapter_output_hash(
+            bundle.bundle_hash,
+            bars,
+            adapter_version=adapter_version,
+        ),
     )
     validate_a_share_daily_bar_snapshot(snapshot)
-    as_of_date = date.fromisoformat(_string(request_fields, "as_of_date"))
+    replay_start_at = next(
+        (bar.session_open_at for bar in bars if bar.session_open_at.date() == replay_start_date),
+        None,
+    )
+    if replay_start_at is None:
+        raise ValueError("evaluation_start_date is not an exchange-open session")
     contract = NautilusReplayContract(
         data_adapter_name=TUSHARE_MODELED_OPEN_ADAPTER_NAME,
-        data_adapter_version=TUSHARE_MODELED_OPEN_ADAPTER_VERSION,
+        data_adapter_version=adapter_version,
         input_hashes=input_hashes,
-        data_granularity=TUSHARE_MODELED_OPEN_DATA_GRANULARITY,
+        data_granularity=(
+            TUSHARE_HARDENED_DATA_GRANULARITY if hardened else TUSHARE_MODELED_OPEN_DATA_GRANULARITY
+        ),
         book_type=TUSHARE_MODELED_OPEN_BOOK_TYPE,
         fill_model=TUSHARE_MODELED_OPEN_FILL_MODEL,
         fee_model=TUSHARE_MODELED_OPEN_FEE_MODEL,
-        venue_ruleset=TUSHARE_MODELED_OPEN_VENUE_RULESET,
+        venue_ruleset=(
+            TUSHARE_HARDENED_VENUE_RULESET if hardened else TUSHARE_MODELED_OPEN_VENUE_RULESET
+        ),
         exact_as_of=datetime.combine(as_of_date, time(23, 59, 59), tzinfo=UTC),
-        exact_start_at=bars[0].session_open_at,
+        exact_start_at=replay_start_at,
         exact_end_at=bars[-1].session_close_at,
-        target_selection_ref=TUSHARE_TARGET_SELECTION_REF,
+        target_selection_ref=(
+            TUSHARE_HARDENED_TARGET_SELECTION_REF if hardened else TUSHARE_TARGET_SELECTION_REF
+        ),
     )
     return snapshot, contract
 
 
-def _modeled_bars(rows: list[dict[str, object]]) -> tuple[AShareDailyBar, ...]:
+def _modeled_bars(
+    rows: list[dict[str, object]],
+    *,
+    stock_limit_rows: list[dict[str, object]] | None = None,
+    adj_factor_rows: list[dict[str, object]] | None = None,
+    replay_start_date: date | None = None,
+) -> tuple[AShareDailyBar, ...]:
     bars: list[AShareDailyBar] = []
+    limits_by_date = (
+        {_date(row, "trade_date"): row for row in stock_limit_rows}
+        if stock_limit_rows is not None
+        else None
+    )
+    factors_by_date = (
+        {
+            _date(row, "trade_date"): _decimal(row, "adj_factor", positive=True)
+            for row in adj_factor_rows
+        }
+        if adj_factor_rows is not None
+        else None
+    )
+    if (factors_by_date is None) != (replay_start_date is None):
+        raise ValueError("adjustment factors and replay start must be supplied together")
     prior_close: Decimal | None = None
+    prior_factor: Decimal | None = None
     for row in rows:
         trade_date = _date(row, "trade_date")
+        factor = factors_by_date.get(trade_date) if factors_by_date is not None else None
+        if factors_by_date is not None and factor is None:
+            raise ValueError("adjustment-factor table is missing a daily session")
         raw_prices = tuple(
             _decimal(row, field, positive=True)
             for field in ("pre_close", "open", "high", "low", "close")
@@ -140,13 +231,28 @@ def _modeled_bars(rows: list[dict[str, object]]) -> tuple[AShareDailyBar, ...]:
         volume_hands = _decimal(row, "vol", positive=False)
         _decimal(row, "amount", positive=False)
         if prior_close is not None and previous_close != prior_close:
-            raise ValueError(
-                "daily pre_close discontinuity is ambiguous with a corporate action or source gap"
+            factor_changed = (
+                factor is not None and prior_factor is not None and factor != prior_factor
             )
+            before_evaluation = replay_start_date is not None and trade_date < replay_start_date
+            if not (factor_changed and before_evaluation):
+                raise ValueError(
+                    "daily pre_close discontinuity is ambiguous with a corporate action "
+                    "or source gap"
+                )
         if high < max(open_price, close) or low > min(open_price, close):
             raise ValueError("daily OHLC values are inconsistent")
-        lower = _limit_price(previous_close * (Decimal(1) - _LIMIT_RATIO))
-        upper = _limit_price(previous_close * (Decimal(1) + _LIMIT_RATIO))
+        if limits_by_date is None:
+            lower = _limit_price(previous_close * (Decimal(1) - _LIMIT_RATIO))
+            upper = _limit_price(previous_close * (Decimal(1) + _LIMIT_RATIO))
+        else:
+            limit_row = limits_by_date.get(trade_date)
+            if limit_row is None:
+                raise ValueError("source stock-limit table is missing a daily session")
+            if _decimal(limit_row, "pre_close", positive=True) != previous_close:
+                raise ValueError("source stock-limit previous close does not match daily data")
+            lower = _decimal(limit_row, "down_limit", positive=True).quantize(_TICK)
+            upper = _decimal(limit_row, "up_limit", positive=True).quantize(_TICK)
         if low < lower or high > upper:
             raise ValueError("daily OHLC breaches the modeled XSHG 10% price band")
         shares = volume_hands * Decimal(100)
@@ -172,15 +278,62 @@ def _modeled_bars(rows: list[dict[str, object]]) -> tuple[AShareDailyBar, ...]:
             )
         )
         prior_close = close
+        prior_factor = factor
     if not bars:
         raise ValueError("modeled-open adapter requires at least one daily row")
     return tuple(bars)
 
 
-def _adapter_output_hash(bundle_hash: str, bars: tuple[AShareDailyBar, ...]) -> str:
+def load_validated_tushare_adjusted_closes(
+    bundle_path: Path,
+    *,
+    visible_at: datetime,
+) -> tuple[tuple[datetime, Decimal], ...]:
+    """Return source-bound adjusted closes visible by the registered cutoff."""
+    bundle = validate_tushare_data_bundle(bundle_path)
+    manifest = bundle.manifest
+    if manifest.get("schema_version") != "market-impact.tushare-data-bundle.v2":
+        raise ValueError("adjusted close history requires a hardened Tushare bundle")
+    tables = _mapping(manifest, "tables")
+    pa = cast(Any, import_module("pyarrow"))
+    pq = cast(Any, import_module("pyarrow.parquet"))
+
+    def rows_for(name: str) -> list[dict[str, object]]:
+        metadata = _mapping(tables, name)
+        content = _read_manifest_bound_file(
+            bundle.path / _string(metadata, "file"),
+            _string(metadata, "sha256"),
+        )
+        return cast(
+            list[dict[str, object]],
+            pq.read_table(pa.BufferReader(content)).to_pylist(),
+        )
+
+    daily_rows = rows_for("daily")
+    factor_rows = rows_for("adj_factors")
+    factors = {
+        _date(row, "trade_date"): _decimal(row, "adj_factor", positive=True) for row in factor_rows
+    }
+    if {_date(row, "trade_date") for row in daily_rows} != set(factors):
+        raise ValueError("adjustment-factor history does not match daily sessions")
+    adjusted: list[tuple[datetime, Decimal]] = []
+    for row in daily_rows:
+        trade_date = _date(row, "trade_date")
+        close_at = datetime.combine(trade_date, time(15), tzinfo=_SHANGHAI)
+        if close_at <= visible_at:
+            adjusted.append((close_at, _decimal(row, "close", positive=True) * factors[trade_date]))
+    return tuple(adjusted)
+
+
+def _adapter_output_hash(
+    bundle_hash: str,
+    bars: tuple[AShareDailyBar, ...],
+    *,
+    adapter_version: str,
+) -> str:
     payload = {
         "adapter_name": TUSHARE_MODELED_OPEN_ADAPTER_NAME,
-        "adapter_version": TUSHARE_MODELED_OPEN_ADAPTER_VERSION,
+        "adapter_version": adapter_version,
         "bundle_hash": bundle_hash,
         "bars": [
             {

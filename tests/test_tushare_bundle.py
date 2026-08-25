@@ -55,6 +55,8 @@ DAILY_FIELDS = (
     "vol",
     "amount",
 )
+ADJ_FACTOR_FIELDS = ("ts_code", "trade_date", "adj_factor")
+STK_LIMIT_FIELDS = ("ts_code", "trade_date", "pre_close", "up_limit", "down_limit")
 pa = cast(Any, import_module("pyarrow"))
 pq = cast(Any, import_module("pyarrow.parquet"))
 
@@ -147,11 +149,67 @@ def successful_responses(
     return [*listings, calendar, response(DAILY_FIELDS, daily_rows)]
 
 
+def hardened_responses(
+    *,
+    changed_factor: bool = False,
+    pre_event_factor_change: bool = False,
+) -> list[dict[str, object]]:
+    base = successful_responses()
+    calendar = response(
+        CALENDAR_FIELDS,
+        [
+            ["SSE", "20190918", 1, "20190917"],
+            ["SSE", "20190919", 1, "20190918"],
+            ["SSE", "20190920", 1, "20190919"],
+            ["SSE", "20190921", 0, "20190920"],
+            ["SSE", "20190922", 0, "20190920"],
+            ["SSE", "20190923", 1, "20190920"],
+        ],
+    )
+    daily_rows: list[list[object]] = [
+        ["600028.SH", "20190918", 4.95, 5.02, 4.92, 4.98, 4.95, 800.0, 3980.0],
+        ["600028.SH", "20190919", 5.00, 5.10, 4.95, 5.05, 4.98, 1000.0, 5000.0],
+        ["600028.SH", "20190920", 5.05, 5.20, 5.00, 5.15, 5.05, 1200.0, 6100.0],
+        ["600028.SH", "20190923", 5.15, 5.25, 5.10, 5.20, 5.15, 900.0, 4700.0],
+    ]
+    factors: list[list[object]] = []
+    for index, trade_date in enumerate(("20190918", "20190919", "20190920", "20190923")):
+        factor = 6.75
+        if changed_factor and index >= 2:
+            factor = 6.8
+        elif pre_event_factor_change and index == 0:
+            factor = 6.7
+        factors.append(["600028.SH", trade_date, factor])
+    limits: list[list[object]] = [
+        ["600028.SH", "20190918", 4.95, 5.45, 4.46],
+        ["600028.SH", "20190919", 4.98, 5.48, 4.48],
+        ["600028.SH", "20190920", 5.05, 5.56, 4.55],
+        ["600028.SH", "20190923", 5.15, 5.67, 4.64],
+    ]
+    return [
+        *base[:8],
+        calendar,
+        response(DAILY_FIELDS, daily_rows),
+        response(ADJ_FACTOR_FIELDS, factors),
+        response(STK_LIMIT_FIELDS, limits),
+    ]
+
+
 def request() -> TushareDataRequest:
     return TushareDataRequest(
         tushare_code="600028.SH",
         as_of_date=date(2019, 9, 18),
         start_date=date(2019, 9, 19),
+        end_date=date(2019, 9, 23),
+    )
+
+
+def hardened_request() -> TushareDataRequest:
+    return TushareDataRequest(
+        tushare_code="600028.SH",
+        as_of_date=date(2019, 9, 18),
+        start_date=date(2019, 9, 18),
+        evaluation_start_date=date(2019, 9, 19),
         end_date=date(2019, 9, 23),
     )
 
@@ -423,6 +481,105 @@ def test_bundle_writes_private_deterministic_parquet_and_validates(tmp_path: Pat
         },
         "retrieved_at": "2026-08-25T12:00:00Z",
     }
+
+
+def test_hardened_bundle_binds_adjustments_source_limits_and_replay_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = capture_tushare_data_bundle(
+        TushareHttpAdapter(
+            TOKEN,
+            transport=FakeTransport(hardened_responses()),
+            clock=lambda: NOW,
+        ),
+        hardened_request(),
+    )
+
+    validated = validate_tushare_data_bundle(write_tushare_data_bundle(capture, tmp_path))
+    manifest = validated.manifest
+    tables = cast(dict[str, object], manifest["tables"])
+
+    assert manifest["schema_version"] == "market-impact.tushare-data-bundle.v2"
+    assert cast(dict[str, object], manifest["request"])["evaluation_start_date"] == "2019-09-19"
+    assert set(tables) == {
+        "adj_factors",
+        "daily",
+        "listing_anomalies",
+        "listings",
+        "stock_limits",
+        "trade_calendar",
+        "universe",
+    }
+    hardened_replay = replay_request(
+        validated.data_snapshot_id,
+        target_selection_ref="registered-a-share-integrated-oil-proxy:600028.v1",
+        simulation=SimulationSpec(
+            data_granularity="tushare_unadjusted_daily_with_source_limits.v2",
+            book_type="modeled_open_one_lot.v1",
+            fill_model="modeled_open_one_lot_no_slippage.v1",
+            fee_model="xshg_2019_fee_assumption.v1",
+            venue_ruleset="xshg_main_board_source_limit.v2",
+            base_currency="CNY",
+            starting_cash=Decimal("1000000"),
+            random_seed=0,
+        ),
+    )
+
+    from market_impact_agent.tushare_replay import run_validated_tushare_replay
+
+    assert run_validated_tushare_replay(hardened_replay, validated.path).status is (
+        BacktestRunStatus.COMPLETED
+    )
+
+    from market_impact_agent import tushare_replay
+
+    snapshot, contract = tushare_replay.load_validated_tushare_modeled_open(validated.path)
+    assert contract.data_adapter_version == "2.0.0"
+    monkeypatch.setattr(
+        tushare_replay,
+        "TUSHARE_HARDENED_MODELED_OPEN_ADAPTER_VERSION",
+        "2.0.1",
+    )
+    changed_snapshot, _ = tushare_replay.load_validated_tushare_modeled_open(validated.path)
+    assert changed_snapshot.content_hash != snapshot.content_hash
+
+
+def test_hardened_bundle_rejects_adjustment_factor_change(tmp_path: Path) -> None:
+    capture = capture_tushare_data_bundle(
+        TushareHttpAdapter(
+            TOKEN,
+            transport=FakeTransport(hardened_responses(changed_factor=True)),
+            clock=lambda: NOW,
+        ),
+        hardened_request(),
+    )
+
+    with pytest.raises(ValueError, match="adjustment-factor change"):
+        validate_tushare_data_bundle(write_tushare_data_bundle(capture, tmp_path))
+
+
+def test_hardened_bundle_uses_adjusted_observation_history_before_replay(
+    tmp_path: Path,
+) -> None:
+    capture = capture_tushare_data_bundle(
+        TushareHttpAdapter(
+            TOKEN,
+            transport=FakeTransport(hardened_responses(pre_event_factor_change=True)),
+            clock=lambda: NOW,
+        ),
+        hardened_request(),
+    )
+    bundle_path = write_tushare_data_bundle(capture, tmp_path)
+
+    from market_impact_agent.tushare_replay import load_validated_tushare_adjusted_closes
+
+    closes = load_validated_tushare_adjusted_closes(
+        bundle_path,
+        visible_at=datetime(2019, 9, 18, 23, 59, 59, tzinfo=UTC),
+    )
+
+    assert closes == ((datetime(2019, 9, 18, 7, tzinfo=UTC), Decimal("4.98") * Decimal("6.7")),)
 
 
 def test_bundle_identity_binds_calendar_and_daily_retrieval_times(tmp_path: Path) -> None:

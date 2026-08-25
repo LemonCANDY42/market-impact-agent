@@ -51,6 +51,9 @@ packages = ["src/market_impact_agent"]
 "schemas/backtest-result.schema.json" = "market_impact_agent/schemas/backtest-result.schema.json"
 "schemas/phase2-calibration-gate-result.schema.json" = "market_impact_agent/schemas/phase2-calibration-gate-result.schema.json"
 "schemas/phase2-calibration-evidence.schema.json" = "market_impact_agent/schemas/phase2-calibration-evidence.schema.json"
+"schemas/phase2-calibration-registration-v2.schema.json" = "market_impact_agent/schemas/phase2-calibration-registration-v2.schema.json"
+"schemas/phase2-calibration-evidence-v2.schema.json" = "market_impact_agent/schemas/phase2-calibration-evidence-v2.schema.json"
+"schemas/phase2-calibration-gate-result-v2.schema.json" = "market_impact_agent/schemas/phase2-calibration-gate-result-v2.schema.json"
 
 [tool.pytest.ini_options]
 addopts = "-q"

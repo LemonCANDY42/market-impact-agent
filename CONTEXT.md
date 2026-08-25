@@ -106,6 +106,18 @@ chronological partition, and pre-registered candidate or baseline variant. It is
 calibration gate, not permission to tune after observing the test partition.
 _Avoid_: Backtest leaderboard, selected wins
 
+**Calibration Cell**:
+One pre-registered Event Cluster evaluation unit binding its visibility cutoff,
+chronological partition, target mapping, evaluation window, Data Snapshot, horizons, and
+Simulation Specification before outcomes are opened.
+_Avoid_: Backtest row, tunable sample
+
+**Variant Decision**:
+One pre-registered candidate or baseline action for a Calibration Cell. A long-only action
+is either `buy`, with an exact Backtest Request, or `abstain`, with no fabricated Signal
+Intent or Result and zero exposure in the fixed calibration denominator.
+_Avoid_: Failed trade, synthetic zero-PnL result
+
 **Calibration Gate Result**:
 A content-identified, engine-neutral acceptance or rejection report that applies one
 versioned cross-event protocol to Calibration Evidence. Rejection is evidence and blocks
