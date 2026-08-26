@@ -22,7 +22,7 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 - [ ] Add source-specific historical publication/vintage and revision adapters plus frozen
   latency models calibrated from prospective real-time receipts. Current snapshots alone are
   not historical point-in-time evidence.
-- Build immutable Evidence Item and Event Envelope materialization with occurrence,
+- [x] Build immutable Evidence Item and Event Envelope materialization with occurrence,
   publication, visibility, retrieval, revision, and duplicate-claim semantics.
 - Implement event-archetype, transmission-channel, directness, revelation-mode, and
   lifecycle contracts without a universal topic ontology.
@@ -86,6 +86,24 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   Model Provider Profile/Factory, success/failure Usage Ledger, hard per-run estimated-cost
   cap, and a four-arm same-input ablation runner. Treat synthetic comparison as process
   evidence only; do not use it to reopen an outcome-frozen cohort.
+- [x] Freeze a separate method-quality protocol with historical identity masking, strict Source
+  Version Receipt and evaluation artifact contracts, train-only outcome memory, eight development
+  and 24 holdout case targets, content-bound general/family Skill routes, deterministic directional
+  research-score and paired-estimator rules, repeated-run noise, cost proxies, and registered future
+  promotion gates. Validate the first
+  synthetic contract-only Historical Evidence Manifest and separate masked Agent input; do not
+  claim source-authenticated no-lookahead or that the corpus exists yet. Style attribution remains
+  deferred and is not a promotion metric.
+- [ ] Implement and accept an immutable provider/archive authority plus adapter and calibration
+  verification. Until then v1 admits no retrospective holdout, even if receipt fields and hashes
+  are internally consistent.
+- [ ] After that authority exists, build and validate the eight-case development corpus, freeze all
+  24 outcome-independent masked historical holdout cases with authenticated evidence and matching
+  market snapshots and seals, and implement the overall promotion evaluator. That future evaluator
+  must combine time, abstention, baselines, strata, concentration, drawdown, CVaR, and cost gates;
+  the future paired interval alone is not an overall promotion decision; paired computation remains
+  unavailable and fail-closed until content-identified case and pair bindings exist in the
+  pre-run seals/openings.
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
   deterministic admission/non-admission, revision lineage, first-eligible separation,
   cohort limits, idempotency, and tamper detection.

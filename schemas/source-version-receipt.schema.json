@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/source-version-receipt.schema.json",
+  "title": "Source Version Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "receipt_id", "source_ref", "provider_id", "archive_id",
+    "archive_version", "source_version_id", "raw_content_hash", "extracted_content_hash",
+    "published_at", "source_updated_at", "retrieved_at", "available_at",
+    "availability_basis", "latency_calibration", "trust_status"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.source-version-receipt.v1"},
+    "receipt_id": {"type": "string", "pattern": "^source-version-receipt-[0-9a-f]{64}$"},
+    "source_ref": {"type": "string", "minLength": 1},
+    "provider_id": {"type": "string", "minLength": 1},
+    "archive_id": {"type": "string", "minLength": 1},
+    "archive_version": {"type": "string", "minLength": 1},
+    "source_version_id": {"type": "string", "minLength": 1},
+    "raw_content_hash": {"$ref": "#/$defs/sha256"},
+    "extracted_content_hash": {"$ref": "#/$defs/sha256"},
+    "published_at": {"type": "string", "format": "date-time"},
+    "source_updated_at": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "available_at": {"type": "string", "format": "date-time"},
+    "availability_basis": {"enum": ["actual_receipt", "source_reported", "modeled_latency"]},
+    "latency_calibration": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://schemas.market-impact-agent.local/latency-calibration.schema.json"}
+      ]
+    },
+    "trust_status": {"enum": ["synthetic_contract_only", "contract_validated_untrusted"]}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

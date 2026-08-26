@@ -19,7 +19,11 @@ from market_impact_agent.accrual import (
     AccrualLedger,
     candidate_event_observation_from_dict,
 )
-from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_contracts import (
+    canonical_hash,
+    evidence_pack_from_dict,
+    pattern_pack_from_dict,
+)
 from market_impact_agent.agent_runtime import (
     ModelProvider,
     ProviderPricing,
@@ -46,6 +50,12 @@ from market_impact_agent.energy_monitor import EnergySourceMonitor
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.evidence_freeze import freeze_due_evidence_packs
 from market_impact_agent.frozen_research import FrozenResearchRepository
+from market_impact_agent.method_benchmark import (
+    load_historical_evidence_manifest,
+    load_masked_agent_input_manifest,
+    load_method_quality_benchmark,
+    load_method_quality_evaluation_specification,
+)
 from market_impact_agent.model_provider import (
     ModelProviderFactory,
     default_model_provider_profile_path,
@@ -67,6 +77,7 @@ from market_impact_agent.prediction_markets import (
 )
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
+from market_impact_agent.research_methods import load_research_method_catalog
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.source_coverage import (
     coverage_receipt_from_dict,
@@ -245,6 +256,35 @@ def build_parser() -> argparse.ArgumentParser:
         "--state-root",
         type=Path,
         default=Path(".market-impact/method-ablation-runs"),
+    )
+    method_benchmark_parser = agent_subparsers.add_parser(
+        "method-benchmark-validate",
+        help="Validate the frozen method-quality protocol and one point-in-time case",
+    )
+    method_benchmark_parser.add_argument("--registration", required=True, type=Path)
+    method_benchmark_parser.add_argument("--method-catalog", required=True, type=Path)
+    method_benchmark_parser.add_argument("--provider-profile", required=True, type=Path)
+    method_benchmark_parser.add_argument("--evaluation-specification", required=True, type=Path)
+    method_benchmark_parser.add_argument("--historical-manifest", required=True, type=Path)
+    method_benchmark_parser.add_argument("--evidence-pack", required=True, type=Path)
+    method_benchmark_parser.add_argument("--evidence-documents", required=True, type=Path)
+    method_benchmark_parser.add_argument("--masked-input-manifest", required=True, type=Path)
+    method_benchmark_parser.add_argument("--masked-evidence-pack", required=True, type=Path)
+    method_benchmark_parser.add_argument("--masked-evidence-documents", required=True, type=Path)
+    method_benchmark_parser.add_argument(
+        "--pattern-pack", required=True, action="append", type=Path, dest="pattern_packs"
+    )
+    method_benchmark_parser.add_argument(
+        "--masked-pattern-pack",
+        required=True,
+        action="append",
+        type=Path,
+        dest="masked_pattern_packs",
+    )
+    method_benchmark_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
     )
     agent_study_parser = agent_subparsers.add_parser(
         "study-validate",
@@ -454,6 +494,114 @@ def validate_agent_bundle(
         "pattern_pack_count": len(repository.evidence_pack.pattern_packs),
         "allowed_targets": list(repository.evidence_pack.allowed_targets),
         "synthetic_or_licensed_data_must_remain_local": True,
+    }
+
+
+def validate_method_quality_benchmark(
+    *,
+    registration_path: Path,
+    method_catalog_path: Path,
+    provider_profile_path: Path,
+    evaluation_specification_path: Path,
+    historical_manifest_path: Path,
+    evidence_pack_path: Path,
+    evidence_documents_path: Path,
+    masked_input_manifest_path: Path,
+    masked_evidence_pack_path: Path,
+    masked_evidence_documents_path: Path,
+    pattern_pack_paths: tuple[Path, ...],
+    masked_pattern_pack_paths: tuple[Path, ...],
+    skill_root: Path,
+) -> dict[str, object]:
+    schema_inputs = (
+        (
+            registration_path,
+            "method-quality-benchmark-registration.schema.json",
+        ),
+        (method_catalog_path, "research-method-catalog.schema.json"),
+        (provider_profile_path, "model-provider-profile.schema.json"),
+        (
+            evaluation_specification_path,
+            "method-quality-evaluation-specification.schema.json",
+        ),
+        (historical_manifest_path, "historical-evidence-manifest.schema.json"),
+        (evidence_pack_path, "evidence-pack.schema.json"),
+        (masked_input_manifest_path, "masked-agent-input-manifest.schema.json"),
+        (masked_evidence_pack_path, "evidence-pack.schema.json"),
+    )
+    errors: list[str] = []
+    payloads: dict[Path, object] = {}
+    for path, schema_name in schema_inputs:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payloads[path] = payload
+        errors.extend(f"{path}: {error}" for error in validate_agent_contract(payload, schema_name))
+    if errors:
+        return {"valid": False, "errors": errors}
+    registration = load_method_quality_benchmark(registration_path)
+    catalog = load_research_method_catalog(method_catalog_path)
+    profile = load_model_provider_profile(provider_profile_path)
+    evaluation_specification = load_method_quality_evaluation_specification(
+        evaluation_specification_path
+    )
+    registration.validate_against(
+        catalog=catalog,
+        provider_profile=profile,
+        skills=SkillRegistry(skill_root),
+        evaluation_specification=evaluation_specification,
+    )
+    historical_manifest = load_historical_evidence_manifest(historical_manifest_path)
+    evidence_pack = evidence_pack_from_dict(payloads[evidence_pack_path])
+    historical_manifest.validate_against(evidence_pack)
+    masked_manifest = load_masked_agent_input_manifest(masked_input_manifest_path)
+    if (
+        historical_manifest.masked_agent_input_manifest_id != masked_manifest.manifest_id
+        or historical_manifest.masked_agent_input_manifest_hash != masked_manifest.manifest_hash
+    ):
+        raise ValueError("historical manifest does not match masked Agent Input Manifest")
+    masked_pack = evidence_pack_from_dict(payloads[masked_evidence_pack_path])
+    original_documents = json.loads(evidence_documents_path.read_text(encoding="utf-8"))
+    masked_documents = json.loads(masked_evidence_documents_path.read_text(encoding="utf-8"))
+    if not isinstance(original_documents, dict) or not isinstance(masked_documents, dict):
+        raise TypeError("evidence document files must be objects")
+    original_pattern_packs = tuple(
+        pattern_pack_from_dict(json.loads(path.read_text(encoding="utf-8")))
+        for path in pattern_pack_paths
+    )
+    masked_pattern_packs = tuple(
+        pattern_pack_from_dict(json.loads(path.read_text(encoding="utf-8")))
+        for path in masked_pattern_pack_paths
+    )
+    masked_manifest.validate_against(
+        original_pack=evidence_pack,
+        original_documents=cast(dict[str, object], original_documents),
+        original_pattern_packs=original_pattern_packs,
+        masked_pack=masked_pack,
+        masked_documents=cast(dict[str, object], masked_documents),
+        masked_pattern_packs=masked_pattern_packs,
+    )
+    return {
+        "valid": True,
+        "errors": [],
+        "registration_id": registration.registration_id,
+        "registration_hash": registration.registration_hash,
+        "method_catalog_id": catalog.catalog_id,
+        "provider_profile_id": profile.profile_id,
+        "evaluation_specification_id": evaluation_specification.specification_id,
+        "development_case_count": registration.development_case_count,
+        "retrospective_holdout_case_count": (registration.retrospective_holdout_case_count),
+        "suite_ids": [item.suite_id for item in registration.suites],
+        "case_alias": historical_manifest.case_alias,
+        "case_split": historical_manifest.split.value,
+        "historical_manifest_id": historical_manifest.manifest_id,
+        "provenance_trust_status": historical_manifest.provenance_trust_status.value,
+        "source_authentication": "not_available_in_v1",
+        "retrospective_holdout_admission": "unavailable_in_v1",
+        "evidence_pack_id": evidence_pack.pack_id,
+        "masked_input_manifest_id": masked_manifest.manifest_id,
+        "masked_evidence_pack_id": masked_pack.pack_id,
+        "evidence_version_count": len(historical_manifest.evidence_versions),
+        "outcomes_opened": registration.outcomes_opened,
+        "execution_capability": registration.execution_capability,
     }
 
 
@@ -1244,6 +1392,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
+    if args.command == "agent" and args.agent_command == "method-benchmark-validate":
+        try:
+            result = validate_method_quality_benchmark(
+                registration_path=args.registration,
+                method_catalog_path=args.method_catalog,
+                provider_profile_path=args.provider_profile,
+                evaluation_specification_path=args.evaluation_specification,
+                historical_manifest_path=args.historical_manifest,
+                evidence_pack_path=args.evidence_pack,
+                evidence_documents_path=args.evidence_documents,
+                masked_input_manifest_path=args.masked_input_manifest,
+                masked_evidence_pack_path=args.masked_evidence_pack,
+                masked_evidence_documents_path=args.masked_evidence_documents,
+                pattern_pack_paths=tuple(args.pattern_packs),
+                masked_pattern_pack_paths=tuple(args.masked_pattern_packs),
+                skill_root=args.skill_root,
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["valid"] else 1
     if args.command == "agent" and args.agent_command == "study-validate":
         try:
             result = validate_agent_phase2_study(

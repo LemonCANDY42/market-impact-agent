@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/masked-agent-input-manifest.schema.json",
+  "title": "Masked Agent Input Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "original_evidence_pack_id",
+    "original_evidence_pack_hash",
+    "original_documents_hash",
+    "original_pattern_packs_hash",
+    "masked_evidence_pack_id",
+    "masked_evidence_pack_hash",
+    "masked_documents_hash",
+    "masked_pattern_packs_hash",
+    "alias_map",
+    "alias_map_hash",
+    "forbidden_tokens",
+    "forbidden_tokens_hash",
+    "agent_visible_fields"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.masked-agent-input-manifest.v1"},
+    "manifest_id": {"type": "string", "pattern": "^masked-agent-input-[0-9a-f]{64}$"},
+    "original_evidence_pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "original_evidence_pack_hash": {"$ref": "#/$defs/sha256"},
+    "original_documents_hash": {"$ref": "#/$defs/sha256"},
+    "original_pattern_packs_hash": {"$ref": "#/$defs/sha256"},
+    "masked_evidence_pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "masked_evidence_pack_hash": {"$ref": "#/$defs/sha256"},
+    "masked_documents_hash": {"$ref": "#/$defs/sha256"},
+    "masked_pattern_packs_hash": {"$ref": "#/$defs/sha256"},
+    "alias_map": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["original", "masked"],
+        "properties": {
+          "original": {"type": "string", "minLength": 1},
+          "masked": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "alias_map_hash": {"$ref": "#/$defs/sha256"},
+    "forbidden_tokens": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "forbidden_tokens_hash": {"$ref": "#/$defs/sha256"},
+    "agent_visible_fields": {"$ref": "#/$defs/nonempty_unique_strings"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

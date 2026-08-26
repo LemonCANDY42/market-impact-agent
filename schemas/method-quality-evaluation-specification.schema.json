@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/method-quality-evaluation-specification.schema.json",
+  "title": "Method Quality Evaluation Specification",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "specification_id", "contract_schemas", "horizons_sessions", "scoring", "case_value_aggregation", "attribution", "paired_estimator", "execution_capability"],
+  "properties": {
+    "schema_version": {"const": "market-impact.method-quality-evaluation-specification.v1"},
+    "specification_id": {"type": "string", "pattern": "^method-quality-evaluation-[0-9a-f]{64}$"},
+    "contract_schemas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["market_snapshot", "outcome_seal", "outcome_opening"],
+      "properties": {
+        "market_snapshot": {"const": "market-impact.method-quality-market-snapshot.v1"},
+        "outcome_seal": {"const": "market-impact.method-quality-outcome-seal.v1"},
+        "outcome_opening": {"const": "market-impact.method-quality-outcome-opening.v1"}
+      }
+    },
+    "horizons_sessions": {"const": [1, 3, 10]},
+    "scoring": {
+      "type": "object", "additionalProperties": false,
+      "required": ["procedure", "data_granularity", "notional_currency", "research_notional_budget", "random_seed", "entry_price", "entry_search_limit_sessions", "entry_failure_value", "quantity", "exit_price", "missing_exit_value", "direction_multiplier", "price_move_ratio", "directional_score", "cost_proxy", "benchmark_move_ratio", "benchmark_adjusted_directional_score", "cost_proxy_rounding", "venue_rule_selection"],
+      "properties": {
+        "procedure": {"const": "deterministic_directional_research_score"}, "data_granularity": {"const": "1_day_adjusted"}, "notional_currency": {"const": "CNY"}, "research_notional_budget": {"const": "1000000"}, "random_seed": {"const": 0},
+        "entry_price": {"const": "first_eligible_session_open"}, "entry_search_limit_sessions": {"const": 3}, "entry_failure_value": {"const": "zero_retained_in_all_event_denominator"}, "quantity": {"const": "largest_whole_effective_board_lot_affordable_after_entry_fees"}, "exit_price": {"const": "adjusted_close_exactly_horizon_sessions_after_entry"}, "missing_exit_value": {"const": "zero_retained_in_all_event_denominator"}, "direction_multiplier": {"const": "up=1;down=-1;mixed=0;unknown=0"}, "price_move_ratio": {"const": "(exit_reference_value-entry_reference_value)/entry_reference_value"}, "directional_score": {"const": "direction_multiplier*price_move_ratio"}, "cost_proxy": {"const": "sum(cost_component_amount)/entry_reference_value"}, "benchmark_move_ratio": {"const": "(benchmark_exit_close-benchmark_entry_open)/benchmark_entry_open"}, "benchmark_adjusted_directional_score": {"const": "directional_score-cost_proxy-direction_multiplier*benchmark_move_ratio"}, "cost_proxy_rounding": {"const": "max(rate*side_reference_value,minimum_amount)_quantized_half_up_per_component"}, "venue_rule_selection": {"const": "exactly_one_effective_row_or_fail_closed"}
+      }
+    },
+    "case_value_aggregation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidate_rows", "multiple_candidate_rule", "abstain_value", "mixed_value", "unknown_value", "no_fill_value", "missing_market_data_value", "denominator"],
+      "properties": {
+        "candidate_rows": {"const": "exact_artifact_candidate_target_and_declared_horizon_set"},
+        "multiple_candidate_rule": {"const": "arithmetic_mean_of_all_candidate_benchmark_adjusted_directional_scores_no_selection_or_reweighting"},
+        "abstain_value": {"const": "0"}, "mixed_value": {"const": "0"}, "unknown_value": {"const": "0"}, "no_fill_value": {"const": "0"}, "missing_market_data_value": {"const": "0"}, "denominator": {"const": "every_registered_case_replicate_arm_exactly_once"}
+      }
+    },
+    "attribution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "promotion_dependency", "promotion_metric", "reason"],
+      "properties": {"status": {"const": "deferred_diagnostic_only"}, "promotion_dependency": {"const": false}, "promotion_metric": {"type": "null"}, "reason": {"const": "style_universe_lag_breakpoints_weights_rebalance_missing_and_regression_inputs_not_frozen"}}
+    },
+    "paired_estimator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pairing_unit", "candidate_input", "comparator_input", "difference", "point_estimator", "sample_variance", "standard_error", "interval_lower", "confidence_level", "critical_value_source", "critical_values_by_suite", "missing_pair_action", "paired_gate_rule"],
+      "properties": {
+        "pairing_unit": {"const": "case_replicate"}, "candidate_input": {"const": "case_replicate_arm_value"}, "comparator_input": {"const": "same_case_replicate_neutral_evidence_value"}, "difference": {"const": "candidate_input-comparator_input"}, "point_estimator": {"const": "sum(difference)/n"}, "sample_variance": {"const": "sum((difference-point_estimator)^2)/(n-1)"}, "standard_error": {"const": "sqrt(sample_variance/n)"}, "interval_lower": {"const": "point_estimator-critical_value*standard_error"}, "confidence_level": {"const": "0.95"}, "critical_value_source": {"const": "NIST_SEMATECH_e_Handbook_1_3_6_7_2_two_sided_0.05_table"},
+        "critical_values_by_suite": {"const": [{"suite_id": "general_methods", "pair_count": 120, "degrees_of_freedom": 119, "critical_value": "1.980"}, {"suite_id": "family_increment", "pair_count": 40, "degrees_of_freedom": 39, "critical_value": "2.023"}]},
+        "missing_pair_action": {"const": "inconclusive_no_promotion_no_pair_deletion"}, "paired_gate_rule": {"const": "mean_candidate_directional_score>0_and_interval_lower>0_else_gate_not_passed"}
+      }
+    },
+    "execution_capability": {"const": "none"}
+  }
+}

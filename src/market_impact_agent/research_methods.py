@@ -22,6 +22,7 @@ METHOD_ABLATION_REGISTRATION_SCHEMA = "market-impact.method-ablation-registratio
 
 class MethodLayer(StrEnum):
     EVIDENCE = "evidence"
+    RESEARCH_DISCIPLINE = "research_discipline"
     EVENT_CONTEXT = "event_context"
     EQUITY_EXPOSURE = "equity_exposure"
     ADVERSARIAL_RISK = "adversarial_risk"
@@ -176,12 +177,14 @@ class ResearchMethodRouter:
             MethodArm.NEUTRAL_EVIDENCE: {MethodLayer.EVIDENCE},
             MethodArm.GENERAL_METHODS: {
                 MethodLayer.EVIDENCE,
+                MethodLayer.RESEARCH_DISCIPLINE,
                 MethodLayer.EVENT_CONTEXT,
                 MethodLayer.EQUITY_EXPOSURE,
                 MethodLayer.ADVERSARIAL_RISK,
             },
             MethodArm.GENERAL_PATTERN: {
                 MethodLayer.EVIDENCE,
+                MethodLayer.RESEARCH_DISCIPLINE,
                 MethodLayer.EVENT_CONTEXT,
                 MethodLayer.EQUITY_EXPOSURE,
                 MethodLayer.ADVERSARIAL_RISK,

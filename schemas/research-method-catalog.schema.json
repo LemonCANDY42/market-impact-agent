@@ -31,6 +31,7 @@
           "layer": {
             "enum": [
               "evidence",
+              "research_discipline",
               "event_context",
               "equity_exposure",
               "adversarial_risk",

@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": [],
+  "description": "Persona-free research-bias and historical-contamination discipline.",
+  "instructions_hash": "8edc8ca30198ea60e6d4637c19f8290ec0c97a2aac2532f2d5b215bbe464927d",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "80a1793e5aeae766e1495a22d4f510f817b805597f823cebde3c2a64e3248488",
+  "name": "research-discipline",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/research-discipline",
+  "version": "1.0.0"
+}

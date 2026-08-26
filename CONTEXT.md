@@ -38,6 +38,28 @@ An immutable, content-identified set of point-in-time Evidence Items, source art
 Pattern Pack references, and research scope made available to one Judgment Run.
 _Avoid_: Model context, live search results
 
+**Historical Evidence Manifest**:
+A content-identified provenance companion that binds one benchmark case's Evidence Pack to
+exact source versions, occurrence/publication/availability/retrieval times, latency basis,
+revision lineage, and Source Version Receipts. A synthetic or untrusted receipt proves only that
+the contract is internally chronological. v1 has no source-authentication authority and therefore
+cannot admit any retrospective holdout. It is not additional Agent evidence.
+_Avoid_: Historical data dump, outcome label, Evidence Pack
+
+**Source Version Receipt**:
+A content-identified binding from one Evidence Reference `source_ref` to a Provider/archive and
+immutable archive version, source version identity, raw and extracted hashes, source times,
+retrieval, availability basis, and trust status. Invented metadata may validate the contract but
+is not authenticated point-in-time proof; a receipt binds assertions but does not authenticate
+them.
+_Avoid_: Ordered timestamps, source URL, provenance claim
+
+**Latency Calibration**:
+A content-identified source-class calibration binding a sample, Provider/archive, version,
+observation count, calibrated time, and modeled availability offset. Modeled availability may use
+it only when both artifacts carry the required trust status.
+_Avoid_: Assumed delay, arbitrary backoff, receipt time
+
 **Pattern Pack**:
 A versioned pre-cutoff research asset containing reusable event mechanisms, transmission
 scales, analogues, applicability conditions, and counterexamples.
@@ -135,6 +157,38 @@ A content-identified pre-outcome comparison that holds evidence, model, action s
 evaluation constant while varying only named layers of research guidance. Each registered
 Method Arm remains in the all-event comparison even when it abstains or fails.
 _Avoid_: Prompt experiment, best-of prompt search
+
+**Method Quality Benchmark Registration**:
+A content-identified commitment that freezes historical contamination controls, case strata,
+method suites and exact Skill-route content, repeated-run protocol, and the content identity of a
+separate schema-validated Evaluation Specification before holdout outcomes are opened.
+_Avoid_: Prompt leaderboard, backtest report, Prospective Cohort Registration
+
+**Method Quality Market Snapshot**:
+A content-identified pre-run commitment to the exact evaluation calendar, source vintage, case
+`as_of` and cutoff, corporate actions, adjusted price rows, benchmark rows, non-empty fee schedule, and
+non-empty venue rules capable of revealing a benchmark outcome. It grants no execution capability.
+_Avoid_: Mutable price cache, post-run data pull, live market feed
+
+**Method Quality Outcome Seal**:
+A content-identified pre-run record binding one registered case, its Market Snapshot, evaluation
+specification, and the complete expected case-replicate-arm run matrix while containing no outcome
+payload.
+_Avoid_: Outcome file, unenforced promise, Agent run manifest
+
+**Method Quality Outcome Opening**:
+The append-only sequence-one artifact that repeats the seal bindings, binds every expected
+Judgment Artifact and deterministic result, and retains every registered judgment in the all-event
+denominator. Results are non-executable directional research scores and round-trip cost proxies,
+not cash-portfolio PnL, short positions, or investable returns. Validator enforcement is limited
+to the supplied artifact boundary; it is not a transactional store lock.
+_Avoid_: Mutable seal, partial result table, selected winner
+
+**Masked Agent Input Manifest**:
+A content-identified control artifact that binds original and masked Evidence Packs, evidence
+documents, and Pattern Pack tool documents through one alias map and a forbidden-token scan over
+the complete prompt and frozen-tool surfaces.
+_Avoid_: Renamed original Evidence Pack, prompt-only alias list, hidden outcome label
 
 **Method Arm**:
 One frozen guidance treatment in a Method Ablation Registration, such as neutral evidence,

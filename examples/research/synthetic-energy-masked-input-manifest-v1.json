@@ -1,0 +1,48 @@
+{
+  "schema_version": "market-impact.masked-agent-input-manifest.v1",
+  "original_evidence_pack_id": "evidence-pack-52e00dea0ca8124ed142dd33d8cf8ff0155c7432f833b9f43a4b8302c6b77aa3",
+  "original_evidence_pack_hash": "4c5d3f33ac65d1bb6412e8b2075ad0b435352de295cb4ac254060b2ba9b59e6a",
+  "original_documents_hash": "76baf4dea5d80581ad18a714737d5b421bae42ce4ceceb1af59abd80f2b268ab",
+  "original_pattern_packs_hash": "4a2d2539ddee774504170dcc749f6ec41c545f2901986ee87484c371b0240c0b",
+  "masked_evidence_pack_id": "evidence-pack-609b46f6236ed8fc1dbcbe4d5be5a717afdead3a632220ba6bf4a5a6655bd66c",
+  "masked_evidence_pack_hash": "ff98e5118b586c95ebd2e9ec0fd93b932a714b4eb3c5d3d9ffb026010af9d2de",
+  "masked_documents_hash": "e93bd4bd67ead4777ab900ed6761a3ee45e2ff313d185f91ce916552ef937832",
+  "masked_pattern_packs_hash": "4b6feb2267cf72852af6549bbc7a34b05c889cad0b34d54e7f0bc156e0392143",
+  "alias_map": [
+    {
+      "original": "Given the frozen physical supply shock evidence, which eligible A-share energy exposures have a defensible direction and horizon?",
+      "masked": "Given the frozen masked case evidence, which eligible aliased public-equity exposures have a defensible direction and horizon?"
+    },
+    {"original": "synthetic-energy-supply-2026-01-15", "masked": "case-physical-supply-001"},
+    {"original": "synthetic://energy-supply/official-outage", "masked": "masked://source/official-01"},
+    {"original": "synthetic://energy-supply/benchmark-response", "masked": "masked://source/regulated-01"},
+    {"original": "synthetic://energy-supply/offset-capacity", "masked": "masked://source/specialist-01"},
+    {"original": "synthetic://energy-supply/target-mapping", "masked": "masked://source/primary-01"},
+    {"original": "600938.XSHG", "masked": "TARGET.UPSTREAM.A"},
+    {"original": "600028.XSHG", "masked": "TARGET.INTEGRATED.B"},
+    {"original": "2026-01-15", "masked": "2001-01-15"},
+    {"original": "2026-01-05", "masked": "2001-01-05"},
+    {"original": "2025-12-31", "masked": "2000-12-31"}
+  ],
+  "alias_map_hash": "2135423a58f2e7e4affee377da3fda60f2ea370a085d7d3bbad4ad2c59893b70",
+  "forbidden_tokens": [
+    "Given the frozen physical supply shock evidence, which eligible A-share energy exposures have a defensible direction and horizon?",
+    "synthetic-energy-supply-2026-01-15",
+    "synthetic://energy-supply/official-outage",
+    "synthetic://energy-supply/benchmark-response",
+    "synthetic://energy-supply/offset-capacity",
+    "synthetic://energy-supply/target-mapping",
+    "600938.XSHG",
+    "600028.XSHG",
+    "2026-01-15",
+    "2026-01-05",
+    "2025-12-31"
+  ],
+  "forbidden_tokens_hash": "b84921659eff92b73821174c959d30bed5a753165868df96a1fb13baa0c278f6",
+  "agent_visible_fields": [
+    "evidence_pack.*",
+    "read_evidence.*",
+    "read_pattern_pack.*"
+  ],
+  "manifest_id": "masked-agent-input-5ff211fbb265863c710642f5973772752ae2ba506a277ca84ec51a78c43d939e"
+}

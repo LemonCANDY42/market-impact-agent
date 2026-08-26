@@ -133,6 +133,22 @@ costed, replayed, and can change the selected horizon. Because the single synthe
 contains one eligible long-only target and no market outcome, it establishes process behavior
 only—not a winning Skill, better forecast, backtest result, or alpha claim.
 
+The next method-quality protocol is now frozen separately. It adds a persona-free research-bias
+Skill, strict Historical Evidence Manifest and Source Version Receipt contracts, consistent
+historical identity aliases, train-only outcome memory, 8 development and 24 holdout case targets,
+cross-mechanism and family-specific suites, content-bound Skill instructions, machine-validated
+Market Snapshot/Outcome Seal/Outcome Opening contracts, deterministic directional-score and
+aggregation equations, cost/risk metrics, and registered future promotion gates. The method selector computes
+a non-executable directional research score and round-trip cost proxy, not cash-portfolio PnL,
+short exposure, or an investable return; Nautilus remains a later trading/backtest-engine boundary.
+Receipts bind assertions but do not authenticate them, so v1 cannot admit a retrospective holdout.
+The specification retains the frozen paired formula and critical values, but paired computation is
+unavailable and fails closed until a future content-identified development/holdout corpus and pair
+set are bound into the pre-run seals/openings. No self-asserted pair artifact is accepted. The
+overall promotion evaluator is future work and no promotion claim is made. Style attribution is
+deferred. The development and holdout corpora have not been built or run. See
+[docs/METHOD_QUALITY_BENCHMARK.md](docs/METHOD_QUALITY_BENCHMARK.md).
+
 The research reset is now frozen in
 [docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts
 after 2026-08-27T00:00:00Z and targets the first five qualifying future physical energy

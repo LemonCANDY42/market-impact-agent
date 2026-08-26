@@ -23,6 +23,15 @@ AGENT_SCHEMA_FILES = (
     "research-method-catalog.schema.json",
     "model-provider-profile.schema.json",
     "method-ablation-registration.schema.json",
+    "historical-evidence-manifest.schema.json",
+    "masked-agent-input-manifest.schema.json",
+    "method-quality-benchmark-registration.schema.json",
+    "method-quality-evaluation-specification.schema.json",
+    "latency-calibration.schema.json",
+    "source-version-receipt.schema.json",
+    "method-quality-market-snapshot.schema.json",
+    "method-quality-outcome-seal.schema.json",
+    "method-quality-outcome-opening.schema.json",
 )
 
 

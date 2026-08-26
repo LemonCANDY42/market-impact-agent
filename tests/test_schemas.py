@@ -5,8 +5,11 @@ from typing import Any, Protocol, cast
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+from referencing import Registry
+from referencing.jsonschema import DRAFT202012, Schema
 
 from market_impact_agent.backtests import backtest_request_from_dict
+from market_impact_agent.research import EventArchetype
 
 ROOT = Path(__file__).parents[1]
 
@@ -32,6 +35,15 @@ class Validator(Protocol):
         "research-method-catalog.schema.json",
         "model-provider-profile.schema.json",
         "method-ablation-registration.schema.json",
+        "historical-evidence-manifest.schema.json",
+        "masked-agent-input-manifest.schema.json",
+        "method-quality-benchmark-registration.schema.json",
+        "method-quality-evaluation-specification.schema.json",
+        "latency-calibration.schema.json",
+        "source-version-receipt.schema.json",
+        "method-quality-market-snapshot.schema.json",
+        "method-quality-outcome-seal.schema.json",
+        "method-quality-outcome-opening.schema.json",
     ],
 )
 def test_schema_is_valid(schema_name: str) -> None:
@@ -49,6 +61,11 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/research-method-catalog-v1.json",
         "examples/providers/minimax-m3-research-v1.json",
         "examples/calibration/agent-method-ablation-v1.json",
+        "examples/research/research-method-catalog-v2.json",
+        "examples/research/synthetic-energy-historical-evidence-v1.json",
+        "examples/research/synthetic-energy-masked-input-manifest-v1.json",
+        "examples/calibration/method-quality-benchmark-v1.json",
+        "examples/calibration/method-quality-evaluation-specification-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -57,16 +74,31 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "event-transmission.schema.json"
     elif example_path.startswith("examples/backtests/"):
         schema_name = "backtest-request.schema.json"
-    elif example_path.endswith("research-method-catalog-v1.json"):
+    elif "research-method-catalog-v" in example_path:
         schema_name = "research-method-catalog.schema.json"
     elif example_path.endswith("minimax-m3-research-v1.json"):
         schema_name = "model-provider-profile.schema.json"
     elif example_path.endswith("agent-method-ablation-v1.json"):
         schema_name = "method-ablation-registration.schema.json"
+    elif example_path.endswith("synthetic-energy-historical-evidence-v1.json"):
+        schema_name = "historical-evidence-manifest.schema.json"
+    elif example_path.endswith("synthetic-energy-masked-input-manifest-v1.json"):
+        schema_name = "masked-agent-input-manifest.schema.json"
+    elif example_path.endswith("method-quality-benchmark-v1.json"):
+        schema_name = "method-quality-benchmark-registration.schema.json"
+    elif example_path.endswith("method-quality-evaluation-specification-v1.json"):
+        schema_name = "method-quality-evaluation-specification.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
+    registry: Registry[Schema] = Registry()
+    for path in (ROOT / "schemas").glob("*.schema.json"):
+        schema = load_json(path)
+        schema_id = schema.get("$id")
+        if isinstance(schema_id, str):
+            registry = registry.with_resource(schema_id, DRAFT202012.create_resource(schema))
     validator = Draft202012Validator(
         load_json(ROOT / "schemas" / schema_name),
+        registry=registry,
         format_checker=FormatChecker(),
     )
     cast(Validator, validator).validate(instance)
@@ -121,6 +153,29 @@ def test_event_schema_allows_unknown_expectation_delta() -> None:
     )
 
     cast(Validator, validator).validate(event)
+
+
+def test_method_quality_outcome_seal_event_archetype_matches_runtime() -> None:
+    schema = load_json(ROOT / "schemas" / "method-quality-outcome-seal.schema.json")
+    properties = cast(dict[str, Any], schema["properties"])
+    event_archetype = cast(dict[str, Any], properties["event_archetype"])
+
+    assert event_archetype["enum"] == [item.value for item in EventArchetype]
+
+
+def test_method_quality_schema_accepts_runtime_decimal_upper_bound() -> None:
+    registration = load_json(ROOT / "examples/calibration/method-quality-benchmark-v1.json")
+    gate = cast(dict[str, object], registration["promotion_gate"])
+    gate["minimum_required_abstention_recall"] = "1"
+    gate["maximum_single_case_absolute_outcome_share"] = "1.0"
+    gate["maximum_drawdown_increase_vs_neutral"] = "1"
+    gate["maximum_cvar95_increase_vs_neutral"] = "1.00"
+    validator = Draft202012Validator(
+        load_json(ROOT / "schemas/method-quality-benchmark-registration.schema.json"),
+        format_checker=FormatChecker(),
+    )
+
+    cast(Validator, validator).validate(registration)
 
 
 def test_backtest_result_schema_closes_manifest_and_embedded_request() -> None:

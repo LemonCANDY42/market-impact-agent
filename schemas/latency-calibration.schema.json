@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/latency-calibration.schema.json",
+  "title": "Latency Calibration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "calibration_id", "source_class", "provider_id", "archive_id",
+    "calibration_version", "sample_hash", "sample_count", "calibrated_at",
+    "availability_offset_seconds", "trust_status"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.latency-calibration.v1"},
+    "calibration_id": {"type": "string", "pattern": "^latency-calibration-[0-9a-f]{64}$"},
+    "source_class": {"type": "string", "minLength": 1},
+    "provider_id": {"type": "string", "minLength": 1},
+    "archive_id": {"type": "string", "minLength": 1},
+    "calibration_version": {"type": "string", "minLength": 1},
+    "sample_hash": {"$ref": "#/$defs/sha256"},
+    "sample_count": {"type": "integer", "minimum": 1},
+    "calibrated_at": {"type": "string", "format": "date-time"},
+    "availability_offset_seconds": {"type": "integer", "minimum": 0},
+    "trust_status": {"enum": ["synthetic_contract_only", "contract_validated_untrusted"]}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

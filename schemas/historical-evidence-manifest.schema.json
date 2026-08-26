@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/historical-evidence-manifest.schema.json",
+  "title": "Historical Evidence Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "case_alias",
+    "split",
+    "evidence_pack_id",
+    "evidence_pack_hash",
+    "as_of",
+    "identity_masking",
+    "masked_agent_input_manifest_id",
+    "masked_agent_input_manifest_hash",
+    "provenance_trust_status",
+    "outcomes_opened",
+    "evidence_versions",
+    "external_tool_access",
+    "outcome_memory_policy",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.historical-evidence-manifest.v1"},
+    "manifest_id": {"type": "string", "pattern": "^historical-evidence-[0-9a-f]{64}$"},
+    "case_alias": {"$ref": "#/$defs/identifier"},
+    "split": {
+      "enum": ["development", "retrospective_holdout", "prospective_holdout"]
+    },
+    "evidence_pack_id": {"type": "string", "minLength": 1},
+    "evidence_pack_hash": {"$ref": "#/$defs/sha256"},
+    "as_of": {"type": "string", "format": "date-time"},
+    "identity_masking": {"enum": ["none", "consistent_aliases"]},
+    "masked_agent_input_manifest_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^masked-agent-input-[0-9a-f]{64}$"}
+      ]
+    },
+    "masked_agent_input_manifest_hash": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "provenance_trust_status": {"enum": ["synthetic_contract_only", "contract_validated_untrusted"]},
+    "outcomes_opened": {"type": "boolean"},
+    "evidence_versions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/evidence_version"}
+    },
+    "external_tool_access": {"const": false},
+    "outcome_memory_policy": {"const": "train_only_frozen_pattern_packs"},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "evidence_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "claim_id",
+        "source_version_id",
+        "occurred_at",
+        "published_at",
+        "source_updated_at",
+        "available_at",
+        "retrieved_at",
+        "availability_basis",
+        "source_version_receipt",
+        "supersedes_id",
+        "content_hash"
+      ],
+      "properties": {
+        "evidence_id": {"type": "string", "minLength": 1},
+        "claim_id": {"type": "string", "minLength": 1},
+        "source_version_id": {"type": "string", "minLength": 1},
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "published_at": {"type": "string", "format": "date-time"},
+        "source_updated_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "format": "date-time"}
+          ]
+        },
+        "available_at": {"type": "string", "format": "date-time"},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "availability_basis": {
+          "enum": ["actual_receipt", "source_reported", "modeled_latency"]
+        },
+        "source_version_receipt": {"$ref": "https://schemas.market-impact-agent.local/source-version-receipt.schema.json"},
+        "supersedes_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]
+        },
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

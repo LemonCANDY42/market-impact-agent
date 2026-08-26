@@ -1,0 +1,64 @@
+{
+  "allowed_targets": [
+    "TARGET.UPSTREAM.A"
+  ],
+  "as_of": "2001-01-15T08:30:00Z",
+  "data_gaps": [
+    "confirmed outage duration is unavailable at the cutoff",
+    "port loading confirmation is unavailable at the cutoff"
+  ],
+  "event_id": "case-physical-supply-001",
+  "evidence": [
+    {
+      "available_at": "2001-01-15T08:07:00Z",
+      "claim_id": "official-outage",
+      "content_hash": "13383c021f53fb4fe43556fead3e771b6988202bc14a6f45b54738f707d67689",
+      "evidence_id": "official-outage",
+      "source_ref": "masked://source/official-01",
+      "source_tier": "official",
+      "summary": "Operator reports an unplanned physical output halt.",
+      "untrusted_text": true
+    },
+    {
+      "available_at": "2001-01-15T08:13:00Z",
+      "claim_id": "benchmark-response",
+      "content_hash": "678bc1798b2948d880667a523eff8fec1b5f950813d80d8fee48bf6ecc60c382",
+      "evidence_id": "benchmark-response",
+      "source_ref": "masked://source/regulated-01",
+      "source_tier": "regulated",
+      "summary": "The regulated benchmark moved after publication.",
+      "untrusted_text": true
+    },
+    {
+      "available_at": "2001-01-15T08:21:00Z",
+      "claim_id": "offset-capacity",
+      "content_hash": "c50b0ff150edf220dea45252e976fabeb9c77935db44013ca257604d38b80851",
+      "evidence_id": "offset-capacity",
+      "source_ref": "masked://source/specialist-01",
+      "source_tier": "specialist",
+      "summary": "Replacement supply may offset part of the loss.",
+      "untrusted_text": true
+    },
+    {
+      "available_at": "2001-01-05T02:00:00Z",
+      "claim_id": "target-mapping",
+      "content_hash": "97d9b944e7a471f01d8fc694eb662071127d2e652c18f2de81fe487c2c1531fc",
+      "evidence_id": "target-mapping",
+      "source_ref": "masked://source/primary-01",
+      "source_tier": "primary",
+      "summary": "Pre-event A-share exposure mapping distinguishes upstream directness and offsets.",
+      "untrusted_text": true
+    }
+  ],
+  "pack_id": "evidence-pack-609b46f6236ed8fc1dbcbe4d5be5a717afdead3a632220ba6bf4a5a6655bd66c",
+  "pattern_packs": [
+    {
+      "available_at": "2000-12-31T00:00:00Z",
+      "content_hash": "3aa954c023bec712ab5b27a294cd0b70c369edf74d4322628e43bd03fcd51ae3",
+      "pack_id": "pattern-6d4db3528a853af791d14a7de0f8e610fc497aac9e7c4bee6fc8ff6439f93b02",
+      "version": "energy-physical-supply-v1"
+    }
+  ],
+  "research_question": "Given the frozen masked case evidence, which eligible aliased public-equity exposures have a defensible direction and horizon?",
+  "schema_version": "market-impact.evidence-pack.v1"
+}

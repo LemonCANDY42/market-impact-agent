@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/method-quality-benchmark-registration.schema.json",
+  "title": "Method Quality Benchmark Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "registered_at",
+    "provider_profile_id",
+    "provider_profile_hash",
+    "method_catalog_id",
+    "method_catalog_hash",
+    "immutable_prior_registration_ids",
+    "development_case_count",
+    "retrospective_holdout_case_count",
+    "replicate_count",
+    "run_order",
+    "strata",
+    "suites",
+    "treatment_bindings",
+    "contamination_control",
+    "evaluation_specification_id",
+    "evaluation_specification_hash",
+    "metrics",
+    "baselines",
+    "promotion_gate",
+    "all_event_denominator",
+    "outcomes_opened",
+    "claim_scope",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.method-quality-benchmark-registration.v1"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^method-quality-benchmark-[0-9a-f]{64}$"
+    },
+    "registered_at": {"type": "string", "format": "date-time"},
+    "provider_profile_id": {"type": "string", "minLength": 1},
+    "provider_profile_hash": {"$ref": "#/$defs/sha256"},
+    "method_catalog_id": {"type": "string", "minLength": 1},
+    "method_catalog_hash": {"$ref": "#/$defs/sha256"},
+    "immutable_prior_registration_ids": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "development_case_count": {"const": 8},
+    "retrospective_holdout_case_count": {"const": 24},
+    "replicate_count": {"const": 5},
+    "run_order": {"const": "interleaved_by_case_then_replicate_then_arm"},
+    "strata": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/stratum"}
+    },
+    "suites": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/suite"}
+    },
+    "treatment_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/treatment_binding"}
+    },
+    "contamination_control": {"$ref": "#/$defs/contamination_control"},
+    "evaluation_specification_id": {"type": "string", "pattern": "^method-quality-evaluation-[0-9a-f]{64}$"},
+    "evaluation_specification_hash": {"$ref": "#/$defs/sha256"},
+    "metrics": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "baselines": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "promotion_gate": {"$ref": "#/$defs/promotion_gate"},
+    "all_event_denominator": {"const": true},
+    "outcomes_opened": {"const": false},
+    "claim_scope": {"const": "method_quality_only_no_alpha_or_execution"},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "event_archetype": {
+      "enum": [
+        "issuer_corporate",
+        "macro_real_economy",
+        "policy_regulatory",
+        "geopolitical_security",
+        "physical_supply_logistics",
+        "climate_natural_hazard",
+        "technology_demand_adoption",
+        "financial_market_mechanics"
+      ]
+    },
+    "method_arm": {
+      "enum": [
+        "neutral_evidence",
+        "general_methods",
+        "general_pattern",
+        "family_guided"
+      ]
+    },
+    "stratum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_archetype",
+        "target_case_count",
+        "minimum_required_abstentions"
+      ],
+      "properties": {
+        "event_archetype": {"$ref": "#/$defs/event_archetype"},
+        "target_case_count": {"type": "integer", "minimum": 1},
+        "minimum_required_abstentions": {"type": "integer", "minimum": 0}
+      }
+    },
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite_id", "arms", "eligible_archetypes", "minimum_case_count", "claim"],
+      "properties": {
+        "suite_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "arms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/method_arm"}
+        },
+        "eligible_archetypes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/event_archetype"}
+        },
+        "minimum_case_count": {"type": "integer", "minimum": 1},
+        "claim": {"type": "string", "minLength": 1}
+      }
+    },
+    "treatment_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "arm",
+        "context",
+        "route_id",
+        "route_hash",
+        "requested_skills",
+        "loaded_skills",
+        "manifest_hashes",
+        "instruction_hashes",
+        "allowed_capabilities",
+        "allowed_tools",
+        "reasons"
+      ],
+      "properties": {
+        "suite_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "arm": {"$ref": "#/$defs/method_arm"},
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mechanism_family", "asset_class", "has_pattern_pack"],
+          "properties": {
+            "mechanism_family": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+            "asset_class": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+            "has_pattern_pack": {"type": "boolean"}
+          }
+        },
+        "route_id": {"type": "string", "pattern": "^skill-route-[0-9a-f]{64}$"},
+        "route_hash": {"$ref": "#/$defs/sha256"},
+        "requested_skills": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "loaded_skills": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "manifest_hashes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "instruction_hashes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "allowed_capabilities": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "allowed_tools": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "reasons": {"$ref": "#/$defs/nonempty_unique_strings"}
+      }
+    },
+    "contamination_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "historical_identity_policy",
+        "masked_fields",
+        "economic_roles_preserved",
+        "source_tiers_preserved",
+        "prompt_and_tool_aliases_identical",
+        "external_network_access",
+        "outcome_access_policy",
+        "outcome_memory_policy"
+      ],
+      "properties": {
+        "historical_identity_policy": {"const": "consistent_aliases"},
+        "masked_fields": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "economic_roles_preserved": {"const": true},
+        "source_tiers_preserved": {"const": true},
+        "prompt_and_tool_aliases_identical": {"const": true},
+        "external_network_access": {"const": false},
+        "outcome_access_policy": {"const": "sealed_until_all_judgments_are_content_bound"},
+        "outcome_memory_policy": {"const": "train_only_frozen_pattern_packs"}
+      }
+    },
+    "promotion_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_time_gate_violations",
+        "minimum_required_abstention_recall",
+        "require_positive_candidate_directional_score",
+        "paired_confidence_level",
+        "require_positive_paired_lower_bound_vs_neutral",
+        "minimum_registered_baselines_beaten",
+        "maximum_single_case_absolute_outcome_share",
+        "minimum_positive_strata",
+        "maximum_drawdown_increase_vs_neutral",
+        "maximum_cvar95_increase_vs_neutral",
+        "added_cost_requires_positive_increment"
+      ],
+      "properties": {
+        "allowed_time_gate_violations": {"const": 0},
+        "minimum_required_abstention_recall": {"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"},
+        "require_positive_candidate_directional_score": {"const": true},
+        "paired_confidence_level": {"const": "0.95"},
+        "require_positive_paired_lower_bound_vs_neutral": {"const": true},
+        "minimum_registered_baselines_beaten": {"type": "integer", "minimum": 2},
+        "maximum_single_case_absolute_outcome_share": {"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"},
+        "minimum_positive_strata": {"type": "integer", "minimum": 2},
+        "maximum_drawdown_increase_vs_neutral": {"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"},
+        "maximum_cvar95_increase_vs_neutral": {"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"},
+        "added_cost_requires_positive_increment": {"const": true}
+      }
+    }
+  }
+}

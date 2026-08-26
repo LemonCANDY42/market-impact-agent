@@ -298,6 +298,55 @@ def test_agent_validate_rejects_tampered_evidence(
     assert "content hash mismatch" in payload["error"]
 
 
+def test_method_benchmark_validate_accepts_frozen_protocol_and_case(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "agent",
+            "method-benchmark-validate",
+            "--registration",
+            "examples/calibration/method-quality-benchmark-v1.json",
+            "--method-catalog",
+            "examples/research/research-method-catalog-v2.json",
+            "--provider-profile",
+            "examples/providers/minimax-m3-research-v1.json",
+            "--evaluation-specification",
+            "examples/calibration/method-quality-evaluation-specification-v1.json",
+            "--historical-manifest",
+            "examples/research/synthetic-energy-historical-evidence-v1.json",
+            "--evidence-pack",
+            "examples/agent/energy_supply/evidence-pack.json",
+            "--evidence-documents",
+            "examples/agent/energy_supply/evidence-documents.json",
+            "--masked-input-manifest",
+            "examples/research/synthetic-energy-masked-input-manifest-v1.json",
+            "--masked-evidence-pack",
+            "examples/agent/energy_supply/masked-evidence-pack.json",
+            "--masked-evidence-documents",
+            "examples/agent/energy_supply/masked-evidence-documents.json",
+            "--pattern-pack",
+            "examples/agent/energy_supply/pattern-pack.json",
+            "--masked-pattern-pack",
+            "examples/agent/energy_supply/masked-pattern-pack.json",
+            "--skill-root",
+            "skills",
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is True
+    assert payload["retrospective_holdout_case_count"] == 24
+    assert payload["case_split"] == "development"
+    assert payload["provenance_trust_status"] == "synthetic_contract_only"
+    assert payload["source_authentication"] == "not_available_in_v1"
+    assert payload["retrospective_holdout_admission"] == "unavailable_in_v1"
+    assert payload["masked_evidence_pack_id"].startswith("evidence-pack-")
+    assert payload["outcomes_opened"] is False
+    assert payload["execution_capability"] == "none"
+
+
 def test_agent_study_validate_accepts_frozen_prospective_registration(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

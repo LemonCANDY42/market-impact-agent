@@ -1,0 +1,37 @@
+{
+  "documents": {
+    "benchmark-response": {
+      "event_time": "2001-01-15T08:12:00Z",
+      "evidence_id": "benchmark-response",
+      "fact": "Synthetic regulated-market snapshot: the relevant energy benchmark rose 3.2% from its pre-notice level.",
+      "published_at": "2001-01-15T08:13:00Z",
+      "source_type": "regulated_market",
+      "synthetic": true
+    },
+    "official-outage": {
+      "event_time": "2001-01-15T08:00:00Z",
+      "evidence_id": "official-outage",
+      "fact": "Synthetic operator notice: a major export facility halted 18% of normal output after equipment damage.",
+      "published_at": "2001-01-15T08:07:00Z",
+      "source_type": "official",
+      "synthetic": true
+    },
+    "offset-capacity": {
+      "event_time": "2001-01-15T08:18:00Z",
+      "evidence_id": "offset-capacity",
+      "fact": "Synthetic specialist bulletin: spare capacity could replace between 40% and 70% of the lost output within five sessions.",
+      "published_at": "2001-01-15T08:21:00Z",
+      "source_type": "specialist",
+      "synthetic": true
+    },
+    "target-mapping": {
+      "event_time": "2000-12-31T00:00:00Z",
+      "evidence_id": "target-mapping",
+      "fact": "Synthetic pre-event mapping: TARGET.UPSTREAM.A has more direct upstream price exposure than TARGET.INTEGRATED.B; both remain subject to domestic policy and downstream-margin offsets.",
+      "published_at": "2001-01-05T02:00:00Z",
+      "source_type": "primary",
+      "synthetic": true
+    }
+  },
+  "schema_version": "market-impact.synthetic-evidence-documents.v1"
+}
