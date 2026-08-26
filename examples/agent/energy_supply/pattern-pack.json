@@ -1,0 +1,49 @@
+{
+  "available_at": "2025-12-31T00:00:00Z",
+  "entries": [
+    {
+      "applicability_conditions": [
+        "lost output is material relative to normal flow",
+        "inventory and spare capacity do not immediately offset the loss"
+      ],
+      "counterexamples": [
+        "planned maintenance was already priced",
+        "spare capacity replaces the loss before the target market opens"
+      ],
+      "evidence_refs": [
+        "pattern-study-energy-supply-001"
+      ],
+      "mechanism": "A material unplanned physical output loss can tighten the commodity balance before substitution arrives.",
+      "pattern_id": "physical-output-loss",
+      "transmission_scales": [
+        "facility",
+        "commodity",
+        "producer-industry",
+        "listed-target"
+      ]
+    },
+    {
+      "applicability_conditions": [
+        "target exposure is mapped before the event",
+        "benchmark move persists beyond the initial headline"
+      ],
+      "counterexamples": [
+        "domestic price controls block pass-through",
+        "the target is structurally short the affected input"
+      ],
+      "evidence_refs": [
+        "pattern-study-energy-offsets-001"
+      ],
+      "mechanism": "Candidate direction depends on replacement supply, inventory, policy pass-through, and producer versus downstream margin exposure.",
+      "pattern_id": "offset-and-margin-check",
+      "transmission_scales": [
+        "commodity",
+        "industry",
+        "company"
+      ]
+    }
+  ],
+  "pack_id": "pattern-b1264d43c58170f794c9167946a11605ca716a062dfb02cb818a1c740215fd10",
+  "schema_version": "market-impact.pattern-pack.v1",
+  "version": "energy-physical-supply-v1"
+}

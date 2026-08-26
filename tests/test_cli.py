@@ -1,4 +1,7 @@
 import json
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 from typing import cast
 
@@ -10,6 +13,14 @@ from market_impact_agent.cli import main, status_payload
 def test_status_is_fail_closed() -> None:
     payload = status_payload()
     assert payload["live_trading"] == "disabled"
+    assert payload["agent_runtime"] == {
+        "status": "accepted_local_research_v2",
+        "provider": "minimax-openai-compatible",
+        "model": "MiniMax-M3",
+        "tool_authority": "read_only",
+        "broker_reachability": False,
+        "provider_portability": "not_established",
+    }
     providers = payload["providers"]
     assert isinstance(providers, list)
     assert providers[0]["provider_id"] == "mock-execution"
@@ -22,6 +33,46 @@ def test_status_is_fail_closed() -> None:
         "world-monitor-predictions",
     }
     assert all(manifest["enabled"] is False for manifest in observation_manifests)
+
+
+def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dependency() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    script = textwrap.dedent(
+        """
+        import importlib.abc
+        import sys
+
+        class BlockMcp(importlib.abc.MetaPathFinder):
+            def find_spec(self, fullname, path, target=None):
+                if fullname == "mcp" or fullname.startswith("mcp."):
+                    raise ModuleNotFoundError("No module named 'mcp'", name="mcp")
+                return None
+
+        sys.meta_path.insert(0, BlockMcp())
+        from market_impact_agent.cli import main
+
+        assert main(["status"]) == 0
+        root = "examples/agent/energy_supply"
+        result = main([
+            "agent", "run",
+            "--evidence-pack", f"{root}/evidence-pack.json",
+            "--evidence-documents", f"{root}/evidence-documents.json",
+            "--pattern-pack", f"{root}/pattern-pack.json",
+            "--run-id", "missing-agent-dependency",
+        ])
+        assert result == 1
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "install market-impact-agent[agent]" in result.stderr
 
 
 def test_validate_provider_command(tmp_path: Path) -> None:
@@ -177,3 +228,56 @@ def test_phase2_gate_command_fails_closed_on_invalid_evidence(
     payload = json.loads(capsys.readouterr().err)
     assert payload["accepted"] is False
     assert "closed contract" in payload["error"]
+
+
+def test_agent_validate_accepts_content_bound_synthetic_fixture(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = Path("examples/agent/energy_supply")
+
+    result = main(
+        [
+            "agent",
+            "validate",
+            "--evidence-pack",
+            str(root / "evidence-pack.json"),
+            "--evidence-documents",
+            str(root / "evidence-documents.json"),
+            "--pattern-pack",
+            str(root / "pattern-pack.json"),
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is True
+    assert payload["evidence_count"] == 4
+    assert payload["pattern_pack_count"] == 1
+
+
+def test_agent_validate_rejects_tampered_evidence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = Path("examples/agent/energy_supply")
+    documents = json.loads((root / "evidence-documents.json").read_text(encoding="utf-8"))
+    documents["documents"]["official-outage"]["fact"] = "tampered"
+    tampered = tmp_path / "tampered.json"
+    tampered.write_text(json.dumps(documents), encoding="utf-8")
+
+    result = main(
+        [
+            "agent",
+            "validate",
+            "--evidence-pack",
+            str(root / "evidence-pack.json"),
+            "--evidence-documents",
+            str(tampered),
+            "--pattern-pack",
+            str(root / "pattern-pack.json"),
+        ]
+    )
+
+    assert result == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert "content hash mismatch" in payload["error"]

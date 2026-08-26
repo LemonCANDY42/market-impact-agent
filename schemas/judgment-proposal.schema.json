@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/judgment-proposal.schema.json",
+  "title": "Market Impact Judgment Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "decision",
+    "summary",
+    "transmission_steps",
+    "candidates",
+    "blockers",
+    "unresolved_questions",
+    "stopped_reason"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "decision": {"enum": ["propose", "abstain"]},
+    "summary": {"type": "string", "minLength": 1},
+    "transmission_steps": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/transmission_step"}
+    },
+    "candidates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "blockers": {"$ref": "#/$defs/unique_strings"},
+    "unresolved_questions": {"$ref": "#/$defs/unique_strings"},
+    "stopped_reason": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "propose"}}},
+      "then": {"properties": {"candidates": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"decision": {"const": "abstain"}}},
+      "then": {
+        "properties": {
+          "candidates": {"maxItems": 0},
+          "blockers": {"minItems": 1}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "directness": {"enum": ["direct", "second_order", "third_order", "fourth_order"]},
+    "unique_strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "transmission_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_id",
+        "from_node",
+        "to_node",
+        "mechanism",
+        "directness",
+        "horizon_sessions",
+        "evidence_refs"
+      ],
+      "properties": {
+        "step_id": {"type": "string", "minLength": 1},
+        "from_node": {"type": "string", "minLength": 1},
+        "to_node": {"type": "string", "minLength": 1},
+        "mechanism": {"type": "string", "minLength": 1},
+        "directness": {"$ref": "#/$defs/directness"},
+        "horizon_sessions": {"type": "integer", "minimum": 1},
+        "evidence_refs": {"$ref": "#/$defs/nonempty_unique_strings"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "direction",
+        "horizon_sessions",
+        "directness",
+        "confidence",
+        "thesis",
+        "evidence_refs",
+        "counterevidence_refs",
+        "invalidation_conditions"
+      ],
+      "properties": {
+        "target_id": {"type": "string", "minLength": 1},
+        "direction": {"enum": ["up", "down", "mixed", "unknown"]},
+        "horizon_sessions": {"type": "integer", "minimum": 1},
+        "directness": {"$ref": "#/$defs/directness"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "thesis": {"type": "string", "minLength": 1},
+        "evidence_refs": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "counterevidence_refs": {"$ref": "#/$defs/unique_strings"},
+        "invalidation_conditions": {"$ref": "#/$defs/nonempty_unique_strings"}
+      }
+    }
+  }
+}

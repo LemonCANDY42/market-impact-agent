@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/judgment-artifact.schema.json",
+  "title": "Market Impact Judgment Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "run_id",
+    "evidence_pack_id",
+    "provider_id",
+    "model",
+    "runtime_config_hash",
+    "prompt_hash",
+    "skill_hashes",
+    "tool_manifest_hashes",
+    "tool_surface_hash",
+    "mcp_server_hashes",
+    "context_estimator_id",
+    "compactor_id",
+    "journal_hash",
+    "transcript_hash",
+    "raw_response_hash",
+    "started_at",
+    "finished_at",
+    "proposal"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.judgment-artifact.v2"},
+    "artifact_id": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "evidence_pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "model": {"type": "string", "minLength": 1},
+    "runtime_config_hash": {"$ref": "#/$defs/sha256"},
+    "prompt_hash": {"$ref": "#/$defs/sha256"},
+    "skill_hashes": {"$ref": "#/$defs/hashes"},
+    "tool_manifest_hashes": {"$ref": "#/$defs/hashes"},
+    "tool_surface_hash": {"$ref": "#/$defs/sha256"},
+    "mcp_server_hashes": {"$ref": "#/$defs/hashes"},
+    "context_estimator_id": {"type": "string", "minLength": 1},
+    "compactor_id": {"type": "string", "minLength": 1},
+    "journal_hash": {"$ref": "#/$defs/sha256"},
+    "transcript_hash": {"$ref": "#/$defs/sha256"},
+    "raw_response_hash": {"$ref": "#/$defs/sha256"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "proposal": {
+      "$ref": "https://schemas.market-impact-agent.local/judgment-proposal.schema.json"
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hashes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sha256"}
+    }
+  }
+}

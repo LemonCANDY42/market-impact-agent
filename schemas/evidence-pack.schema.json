@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/evidence-pack.schema.json",
+  "title": "Market Impact Evidence Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "event_id",
+    "as_of",
+    "research_question",
+    "evidence",
+    "pattern_packs",
+    "allowed_targets",
+    "data_gaps"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.evidence-pack.v1"},
+    "pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "event_id": {"type": "string", "minLength": 1},
+    "as_of": {"type": "string", "format": "date-time"},
+    "research_question": {"type": "string", "minLength": 1},
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/evidence_reference"}
+    },
+    "pattern_packs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/pattern_pack_reference"}
+    },
+    "allowed_targets": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "data_gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evidence_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "claim_id",
+        "source_ref",
+        "source_tier",
+        "available_at",
+        "content_hash",
+        "summary",
+        "untrusted_text"
+      ],
+      "properties": {
+        "evidence_id": {"type": "string", "minLength": 1},
+        "claim_id": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "source_tier": {
+          "enum": [
+            "official",
+            "regulated",
+            "primary",
+            "established_news",
+            "specialist",
+            "community",
+            "unverified"
+          ]
+        },
+        "available_at": {"type": "string", "format": "date-time"},
+        "content_hash": {"$ref": "#/$defs/sha256"},
+        "summary": {"type": "string", "minLength": 1},
+        "untrusted_text": {"type": "boolean"}
+      }
+    },
+    "pattern_pack_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack_id", "version", "available_at", "content_hash"],
+      "properties": {
+        "pack_id": {"type": "string", "pattern": "^pattern-[0-9a-f]{64}$"},
+        "version": {"type": "string", "minLength": 1},
+        "available_at": {"type": "string", "format": "date-time"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -129,9 +129,9 @@ replay client returns only the stored response; that is sufficient for fixture p
 not this Harness's point-in-time contract.
 
 No Digital Oracle code was copied in this slice, and its MIT license is compatible with the
-repository's existing AGPL-3.0-or-later license. Calling World Monitor's external API does
-not require changing the repository license. A license change would not grant rights to
-licensed news or market data, so no license change is warranted by this integration.
+repository's Apache-2.0 license. Calling World Monitor's external API does not grant rights
+to licensed news or market data; source retention and redistribution rights remain separate
+from the first-party code license.
 
 ## Next acceptance gate
 

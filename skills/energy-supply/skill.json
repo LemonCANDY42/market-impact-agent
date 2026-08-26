@@ -1,0 +1,21 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": [
+    "read_evidence",
+    "read_pattern_pack"
+  ],
+  "conflicts": [],
+  "dependencies": [],
+  "description": "Point-in-time physical energy supply-shock research.",
+  "instructions_hash": "fd53ba4403474597c42c6d49ee558cbadde9e4660801e10b21534d2bedf7e48a",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "1fa8946137878d92d8fe6123e06766d2c9a8cbda29e24be98ed00920ec25abb6",
+  "name": "energy-supply",
+  "required_capabilities": [
+    "evidence.read",
+    "pattern.read"
+  ],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/energy-supply",
+  "version": "1.0.0"
+}

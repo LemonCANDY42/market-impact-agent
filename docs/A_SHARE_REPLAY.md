@@ -152,3 +152,19 @@ auctions, partial fills, queues, observed suspensions, data revisions, or surviv
 V2 source adjustment factors and daily limits narrow two inference gaps; they do not make
 modeled opening liquidity observable or establish that the integrated-oil proxy is the right
 economic exposure.
+
+## Frozen Agent judgment integration
+
+The research runtime now has a separate deterministic registration step. It validates a
+sealed Judgment Artifact against its exact Evidence Pack, applies a fixed confidence and
+direction admission rule, creates the existing Signal Intent, and binds the resulting
+Backtest Request to `judgment-artifact:<artifact_id>`. The candidate's frozen horizon is the
+only replay horizon. Mixed, unknown, abstaining, out-of-scope, and below-threshold candidates
+fail before Nautilus starts.
+
+`tests/test_judgment_replay.py` drives a generated Agent judgment through that registration
+and the existing synthetic `600028.XSHG` Nautilus bridge twice with identical result
+identity. This establishes the architectural chain Agent judgment -> deterministic Signal
+Intent -> Backtest Request -> Nautilus. The model is never called from the replay. The test
+does not claim that the synthetic judgment is accurate, that the real MiniMax energy result
+is replayable against a matching market snapshot, or that Phase 2 calibration has passed.

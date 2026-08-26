@@ -11,8 +11,9 @@ capabilities and observed execution facts.
 Observation adapters (aggregated discovery + direct sources)
     -> immutable raw/normalized observation bundle
     -> availability and latency gate -> Evidence Items -> Event Envelope
-    -> fast/deep router -> Event Assessment
-    -> Signal Intent
+    -> Evidence Pack + pre-cutoff Pattern Pack
+    -> Agent Harness -> sealed Judgment Artifact
+    -> deterministic admission -> Event Assessment -> Signal Intent
          -> Backtest Request -> engine-neutral backtest port
               -> Nautilus backtest bridge -> independent horizon replays and results
               -> calibration gate -> baseline/out-of-sample accept or reject
@@ -117,16 +118,24 @@ capability phases remain closed.
 
 ## Agent runtime boundary
 
-The future Agent runtime is another Harness adapter, not a second orchestration authority.
+The Agent runtime is another Harness adapter, not a second orchestration authority.
 It normalizes model messages and tool calls while the Harness owns durable run state,
 context compaction, Skill selection, MCP lifecycle, permissions, budgets, audit, recovery,
-and human/policy gates. The first planned real-model fixture is MiniMax M3 through the China
-API origin. It receives research-only tools and no broker/account capability.
+and human/policy gates. The exact China origin is pinned; deterministic hardening tests and
+a fresh MiniMax M3 run pass the bounded local research-runtime gate. The runtime receives
+research-only tools and no broker/account capability. This is runtime evidence, not model
+quality, event-family calibration, alpha, or execution acceptance.
+
+Historical evaluation exposes only one immutable Evidence Pack and pre-cutoff Pattern Pack
+to a Judgment Run. Prospective tools must first capture and time-bind new source material
+before the Agent may cite it. The sealed Judgment Artifact records the exact Provider,
+model, prompt, Skill, MCP, tool, compaction, evidence, and output identities. Replaying a
+trade consumes that artifact; it never re-runs the model inside Nautilus.
 
 Context summaries, Skill instructions, MCP output, and model responses are evidence-bearing
 artifacts with identities and provenance; none may silently become policy. Model success is
 separate from trading-research calibration and Provider execution conformance. The complete
-planned acceptance boundary is in `docs/AGENT_RUNTIME.md`.
+accepted v1 boundary and remaining non-claims are in `docs/AGENT_RUNTIME.md`.
 
 ## Approval model
 
@@ -148,10 +157,11 @@ The initial state model is intentionally local:
 - Parquet for market and backtest series;
 - SQLite for run indexes, provider snapshots, intent outbox, and projected state.
 
-The first persistence slice is a private, content-addressed local Tushare Data Snapshot:
+The first market-data persistence slice is a private, content-addressed local Tushare Data Snapshot:
 normalized listing, universe, calendar, and daily tables in Parquet plus a JSON manifest.
-SQLite state remains deferred until run indexing or execution lifecycle work requires it.
-Current prediction-market snapshots use the same local-first principle: one private,
+The Agent runtime now uses private content-addressed artifacts plus a hash-chained append-only
+SQLite run index for recovery; it introduces no database service. Current prediction-market
+snapshots use the same local-first principle: one private,
 content-addressed JSON bundle contains the complete decoded JSON response, normalized
 observations, temporal provenance, and Provider manifest. No service or database was
 introduced.

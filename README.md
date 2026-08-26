@@ -49,6 +49,13 @@ The bootstrap implements:
 - independent 1/3/10-session Nautilus runs from one Backtest Request, normalized cost-aware
   `net_return`, and fail-closed v1/v2 Phase 2 calibration gates over pre-registered repeated
   event/baseline Results and honest long-only abstentions;
+- a bounded local Agent Harness with content-addressed Evidence/Pattern/Judgment contracts,
+  append-only crash-safe runs, automatic context compaction, on-demand hashed Skills, typed
+  permissioned tools, official MCP lifecycle handling, budgets, cancellation, redaction,
+  closed-output correction, and a pinned MiniMax M3 China-endpoint Provider;
+- a synthetic physical-energy supply-shock vertical slice whose frozen Agent judgment can be
+  deterministically admitted into the existing Signal Intent and Backtest Request and then
+  replayed by the unchanged Nautilus bridge without re-running the model;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -61,10 +68,9 @@ Planned integrations are documented but **not claimed as working**:
 
 - a separately validated Nautilus-to-IBKR paper Provider;
 - an external-process VeighNa bridge for future A-share gateways;
-- MCP, HTTP/gRPC, and native Python provider transports.
-- an Agent runtime with durable runs, automatic context compaction, on-demand Skills, MCP
-  lifecycle, permissions, recovery, and evaluation; MiniMax M3 on the China endpoint is the
-  first planned local model fixture, not an execution Provider.
+- HTTP/gRPC execution-provider transports.
+- a second model Provider adapter; the accepted MiniMax v4 evidence covers one Provider only
+  and does not establish runtime portability.
 
 NautilusTrader is the selected default engine foundation and behavioral reference. The
 Harness uses it through an engine-neutral backtest bridge; later execution Providers still
@@ -88,14 +94,18 @@ valid negative research result; the opened cohort cannot be retuned and reused a
 evidence. No baseline-superiority, alpha, Phase 3, paper, or live claim has passed. See
 [docs/PHASE2_CALIBRATION.md](docs/PHASE2_CALIBRATION.md).
 
-The future Agent runtime boundary is frozen separately in
-[docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). A successful MiniMax response will not by
-itself satisfy that gate or override the failed trading-calibration result.
+The bounded research-only Agent runtime and its exact non-claims are recorded in
+[docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). Deterministic hardening, base-wheel isolation,
+and the private MiniMax M3 v4 run pass the current local runtime gate. This proves one pinned
+Provider and the auditable Agent-to-frozen-judgment pipeline, not model quality, event-family
+calibration, alpha, Provider portability, or execution readiness. None of it overrides the
+failed trading-calibration result.
 
 ## Architecture at a glance
 
 ```text
-Evidence -> fast/deep event assessment -> SignalIntent
+Evidence Pack + pre-cutoff Pattern Pack -> Agent Harness -> sealed Judgment Artifact
+       -> deterministic admission -> SignalIntent
        -> backtest request -> Nautilus backtest bridge
        -> deterministic policy -> optional semantic approval
        -> durable OrderIntent -> sealed submission capability -> execution provider
@@ -124,6 +134,10 @@ uv run market-impact event validate examples/events/synthetic-energy-supply-shoc
 uv run market-impact prediction capture --provider polymarket --limit 20
 uv run market-impact prediction capture --provider kalshi --limit 20
 uv run market-impact prediction validate BUNDLE.json
+uv run market-impact agent validate \
+  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
+  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
 uv run market-impact backtest phase2-register --cohort COHORT.json \
   --data-snapshot-root .market-impact/tushare --output PRIVATE_REGISTRATION.json
@@ -156,7 +170,8 @@ not depend on GitHub-hosted compute.
 - Secrets, account identifiers, paid news, and licensed market data must never
   be committed.
 - Nothing in this project is financial advice or a promise of profitability.
-- The project is licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE).
+- First-party code is licensed under Apache-2.0. Third-party code and financial, news,
+  model, and API data remain subject to their own terms. See [LICENSE](LICENSE).
 
 Read [SECURITY.md](SECURITY.md) and [RISK_DISCLOSURE.md](RISK_DISCLOSURE.md)
 before testing any external provider.

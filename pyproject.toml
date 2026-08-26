@@ -8,12 +8,12 @@ version = "0.1.0a0"
 description = "An auditable event-driven trading agent harness with policy-gated execution."
 readme = "README.md"
 requires-python = ">=3.13,<3.15"
-license = "AGPL-3.0-or-later"
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Kenny Zhou" }]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
-  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
@@ -22,6 +22,7 @@ classifiers = [
 dependencies = ["jsonschema>=4.25,<5"]
 
 [project.optional-dependencies]
+agent = ["mcp>=2,<3"]
 data = ["pyarrow==25.0.1"]
 nautilus = ["nautilus-trader==1.231.0"]
 
@@ -35,6 +36,7 @@ Issues = "https://github.com/LemonCANDY42/market-impact-agent/issues"
 
 [dependency-groups]
 dev = [
+  "mcp>=2,<3",
   "pyarrow==25.0.1",
   "pyright>=1.1.400,<2",
   "pytest>=8.4,<10",
@@ -54,6 +56,12 @@ packages = ["src/market_impact_agent"]
 "schemas/phase2-calibration-registration-v2.schema.json" = "market_impact_agent/schemas/phase2-calibration-registration-v2.schema.json"
 "schemas/phase2-calibration-evidence-v2.schema.json" = "market_impact_agent/schemas/phase2-calibration-evidence-v2.schema.json"
 "schemas/phase2-calibration-gate-result-v2.schema.json" = "market_impact_agent/schemas/phase2-calibration-gate-result-v2.schema.json"
+"schemas/pattern-pack.schema.json" = "market_impact_agent/schemas/pattern-pack.schema.json"
+"schemas/evidence-pack.schema.json" = "market_impact_agent/schemas/evidence-pack.schema.json"
+"schemas/judgment-proposal.schema.json" = "market_impact_agent/schemas/judgment-proposal.schema.json"
+"schemas/judgment-artifact.schema.json" = "market_impact_agent/schemas/judgment-artifact.schema.json"
+"skills/energy-supply/SKILL.md" = "market_impact_agent/builtin_skills/energy-supply/SKILL.md"
+"skills/energy-supply/skill.json" = "market_impact_agent/builtin_skills/energy-supply/skill.json"
 
 [tool.pytest.ini_options]
 addopts = "-q"

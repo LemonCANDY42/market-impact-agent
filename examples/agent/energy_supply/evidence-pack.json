@@ -1,0 +1,65 @@
+{
+  "allowed_targets": [
+    "600938.XSHG",
+    "600028.XSHG"
+  ],
+  "as_of": "2026-01-15T08:30:00Z",
+  "data_gaps": [
+    "confirmed outage duration is unavailable at the cutoff",
+    "port loading confirmation is unavailable at the cutoff"
+  ],
+  "event_id": "synthetic-energy-supply-2026-01-15",
+  "evidence": [
+    {
+      "available_at": "2026-01-15T08:07:00Z",
+      "claim_id": "official-outage",
+      "content_hash": "ed64f01264bdbb85030b370a970c2de7d6d76d2a2e5be9a97eccbec297da4f4f",
+      "evidence_id": "official-outage",
+      "source_ref": "synthetic://energy-supply/official-outage",
+      "source_tier": "official",
+      "summary": "Operator reports an unplanned physical output halt.",
+      "untrusted_text": true
+    },
+    {
+      "available_at": "2026-01-15T08:13:00Z",
+      "claim_id": "benchmark-response",
+      "content_hash": "4fb547c8c467fcc39f337326662e66eacde639975454647a70fccb38889ef3a8",
+      "evidence_id": "benchmark-response",
+      "source_ref": "synthetic://energy-supply/benchmark-response",
+      "source_tier": "regulated",
+      "summary": "The regulated benchmark moved after publication.",
+      "untrusted_text": true
+    },
+    {
+      "available_at": "2026-01-15T08:21:00Z",
+      "claim_id": "offset-capacity",
+      "content_hash": "e0c69b8f210e37c33e5681d0f8affd45ce1774ec76be6421230fc7ee396c4696",
+      "evidence_id": "offset-capacity",
+      "source_ref": "synthetic://energy-supply/offset-capacity",
+      "source_tier": "specialist",
+      "summary": "Replacement supply may offset part of the loss.",
+      "untrusted_text": true
+    },
+    {
+      "available_at": "2026-01-05T02:00:00Z",
+      "claim_id": "target-mapping",
+      "content_hash": "0bd640b141237a53ddbd322e9f6fa30917d02b176a712dd2922a4fd059abf469",
+      "evidence_id": "target-mapping",
+      "source_ref": "synthetic://energy-supply/target-mapping",
+      "source_tier": "primary",
+      "summary": "Pre-event A-share exposure mapping distinguishes upstream directness and offsets.",
+      "untrusted_text": true
+    }
+  ],
+  "pack_id": "evidence-pack-adb0ff35d3f2bf5195d5fb416ec1bbee60b11cca9d276a5fc289ab53dfa577f7",
+  "pattern_packs": [
+    {
+      "available_at": "2025-12-31T00:00:00Z",
+      "content_hash": "7a5bb5b9bd50c093b7cea42b311e957804962e3c7ac25dfe4de13bffdefa380b",
+      "pack_id": "pattern-b1264d43c58170f794c9167946a11605ca716a062dfb02cb818a1c740215fd10",
+      "version": "energy-physical-supply-v1"
+    }
+  ],
+  "research_question": "Given the frozen physical supply shock evidence, which eligible A-share energy exposures have a defensible direction and horizon?",
+  "schema_version": "market-impact.evidence-pack.v1"
+}

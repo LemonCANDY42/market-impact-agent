@@ -81,13 +81,16 @@ paper or live capability. Failure stops expansion.
 
 ## Phase 3 — Event-family discovery
 
-Blocked until a new Phase 2 hypothesis passes on a later unseen holdout. Before Agent-driven
-research is accepted, the engine-neutral runtime gate in `docs/AGENT_RUNTIME.md` must also
-pass with context compaction, Skill lifecycle, MCP lifecycle, permissions, recovery,
-observability, and injection/secret negative cases. MiniMax M3 on the China endpoint is the
-first planned local model fixture; it receives no broker or account capability.
+Blocked until a new Phase 2 hypothesis passes on a later unseen holdout. The separate
+engine-neutral runtime prerequisite in `docs/AGENT_RUNTIME.md` has a deterministic hardened
+runtime covering compaction, on-demand Skills, MCP lifecycle, permissions, recovery,
+observability, and injection/secret negative cases while exposing no broker or account
+capability. A fresh MiniMax M3 China-endpoint run passed the same hardened surface. This work
+does not establish model quality or reopen the failed trading-calibration gate.
 
 - Add market-state/style rotation and probabilistic climate/agriculture cases.
+- Pre-register prospective frozen physical-energy supply-shock cases and Agent replicates;
+  the committed synthetic slice proves the pipeline only.
 - Research broader single-event and cumulative-narrative families, including
   CPO/AI infrastructure, policy themes, scheduled surprises, and uncertainty
   resolution.

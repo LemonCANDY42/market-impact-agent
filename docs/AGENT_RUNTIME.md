@@ -2,10 +2,13 @@
 
 ## Status
 
-The Agent runtime is planned and not implemented. The first local model acceptance may use
-MiniMax M3 through the China endpoint, but a working model response alone is not Harness
-acceptance. No model, Skill, MCP server, or tool receives broker credentials or a path around
-hard policy.
+The bounded research-only Agent runtime passed its current local runtime gate. It includes
+redirect denial for credential-bearing requests, same-connection MCP snapshot revalidation,
+terminal-artifact/run/journal binding, exact tool execution-limit identity,
+optional-dependency isolation, and explicit compactor identity. A fresh private MiniMax M3
+v4 run completed against that exact surface. This is not model-quality, event-family, alpha,
+Provider-portability, paper, or live acceptance. No model, Skill, MCP server, or tool receives
+broker credentials or a path around hard policy.
 
 The machine-local environment names are:
 
@@ -15,10 +18,12 @@ The machine-local environment names are:
 - `MINIMAX_MODEL=MiniMax-M3`: explicit model identity with no silent substitution.
 
 MiniMax's official [M3 model page](https://www.minimax.io/models/text/m3),
-[M3 launch note](https://www.minimax.io/blog/minimax-m3), and
-[China/international endpoint guide](https://platform.minimax.io/docs/token-plan/cursor)
-are the initial Provider references. The API key never enters prompts, run artifacts, model
-history, tool arguments, logs, or committed configuration.
+[OpenAI-compatible API guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
+[China/international endpoint guide](https://platform.minimax.io/docs/token-plan/cursor), and
+[pricing page](https://platform.minimax.io/subscribe/token-plan?tab=api-enterprise) are the
+Provider references. The API key never enters prompts, run artifacts, model history, tool
+arguments, logs, or committed configuration. The runtime records a versioned cost estimate;
+it is not an invoice and currently does not subtract automatic prompt-cache discounts.
 
 ## Smallest complete runtime
 
@@ -34,6 +39,8 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - normalized usage, latency, finish reason, error class, and request/response identities;
 - declared capability checks for tools, streaming, context size, and structured output;
 - no silent model or endpoint fallback; an unavailable configured model fails closed;
+- credential-bearing requests reject every HTTP redirect and recheck the exact pinned China
+  origin at the network boundary;
 - secret injection at process/request boundary only, plus redacted errors and traces.
 
 ### Run lifecycle and durable state
@@ -44,16 +51,22 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - explicit terminal states for completed, failed, cancelled, budget-exhausted, and
   human-input-required runs;
 - wall-time, token, cost, tool-call, and recursion budgets enforced by the Harness;
-- no duplicate side effect after restart or an ambiguous transport outcome.
+- read-only result replay after restart; mutating-tool duplicate-side-effect acceptance is
+  outside the current surface;
+- terminal replay revalidates the journal chain and binds the stored artifact to the exact run,
+  journal tail, terminal status, and run-row timestamps.
 
 ### Context and automatic compaction
 
 - an inspectable context ledger, not only one mutable prompt string;
 - deterministic inclusion priorities for system/policy, current mandate, task state, recent
   turns, unresolved tool calls, pinned evidence, and referenced artifacts;
-- token measurement against the selected Provider and reserved output/tool budget;
+- conservative complete-request estimation, identified in the run artifact, against the
+  Provider context bound and reserved output budget; no exact MiniMax tokenizer is claimed;
 - automatic compaction before overflow, with source-message ranges, compactor identity,
   summary hash, and retained facts/decisions/unknowns;
+- compactor identity participates in the run specification and Judgment Artifact even when no
+  compaction occurs;
 - large tool output stored as a hash-bound artifact and replaced by a bounded typed summary;
 - no silent loss of policy, approvals, invalidation conditions, open tool calls, or user
   corrections;
@@ -79,6 +92,9 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - versioned MCP configuration with server identity, transport, command/origin, environment
   mapping, working directory, enabled state, and per-server permission envelope;
 - initialization and capability negotiation before tool discovery;
+- every tool handler is constructed from an exact verified server snapshot and, on each fresh
+  connection, re-lists and rehashes identity, protocol, tool surface, and schemas immediately
+  before invoking the handler;
 - closed tool schemas, stable tool identities, argument/result size limits, timeouts,
   cancellation, bounded retry policy, and structured errors;
 - managed local-server process lifecycle and health, with no orphaned privileged process;
@@ -115,25 +131,83 @@ below; copying an entire coding-agent product is neither required nor sufficient
   is claimed; differences are explicit rather than hidden behind fallback;
 - model-quality evaluation and trading-research calibration are distinct gates.
 
-Codex, OpenCode, and Pi may be researched for reusable patterns and compatible licensed
-components. Before adoption, the exact current implementation, security model, dependency
-surface, and license must be reviewed. Their feature presence is prior art, not evidence that
-this Harness satisfies its own contracts.
+TradingAgents, FinceptTerminal, daily_stock_analysis, Vibe-Trading, QuantDinger,
+TradingAgents-CN, last30days-skill, Codex, OpenCode, and Pi were reviewed as prior art. No
+whole project became a runtime dependency or vendored core. The implementation cleanly uses
+only narrow patterns: typed tools and scopes, append-only recovery, capability manifests,
+secret redaction, explicit process cancellation, and content-identified compaction. The
+official MCP Python SDK is the only adopted Agent-protocol dependency.
 
 ## Acceptance gate
 
-The runtime is locally accepted only when:
+The runtime requires all of the following current-identity evidence:
 
-1. a no-secret deterministic fixture and a real MiniMax M3 tool-calling fixture both finish;
-2. forced compaction preserves policy, task state, citations, and unresolved tool continuity;
-3. a Skill is discovered, loaded only when selected, traced by hash, and denied an
+1. [x] The no-secret deterministic fixture and a fresh hardened MiniMax M3 run finish under
+   the current identity.
+2. [x] Forced compaction preserves policy, task state, citations, and unresolved tool
+   continuity and reaches the same proposal as its uncompacted control.
+3. [x] A Skill is discovered, loaded only when selected, traced by hash, and denied an
    undeclared capability;
-4. an MCP server completes negotiation, success, timeout, cancellation, crash, and restart
-   cases without duplicate side effects;
-5. checkpoint/resume reproduces the same terminal artifact identity for a no-side-effect run;
-6. injection and secret-exfiltration fixtures fail closed;
-7. token/cost/latency and every tool side effect are auditable; and
-8. no paper/live/account capability is reachable in the acceptance configuration.
+4. [x] An MCP server completes negotiation, schema-bound discovery, read-only success,
+   timeout, cancellation, crash, and restart cases;
+5. [x] Checkpoint/resume reproduces the same terminal artifact identity for a read-only run
+   and does not repeat its tool handler;
+6. [x] Injection, undeclared authority, malformed output, and secret-exfiltration fixtures
+   fail closed;
+7. [x] Token, estimated cost, latency, retries, contract corrections, and every tool call are
+   auditable; and
+8. [x] No paper/live/account capability is reachable in the acceptance configuration.
 
-This gate is a prerequisite for future Agent-driven event-family research. It does not
-override the failed Phase 2 trading-calibration gate and grants no paper or live capability.
+The accepted run `acceptance-minimax-m3-energy-v4-final` used exact model `MiniMax-M3`,
+loaded the content-identified `energy-supply@1.0.0` Skill, called one frozen Pattern Pack tool
+and all four frozen Evidence Pack items. Its sealed v2 Judgment Artifact identity was
+`judgment-219d0c9822e7e5794e51af4b65dd41e04cd9162ad6f561695f6705c7f79a53c4`.
+The run used 20,581 input tokens, 4,353 output tokens, four Provider calls, five read-only tool
+calls, and 35.44 seconds of recorded Provider latency. Its 12 journal events revalidated as a
+complete hash chain; the terminal journal hash matched the Judgment Artifact, the Artifact
+matched the run identity and start/finish timestamps, passed its JSON Schema and typed parser,
+a direct private-state scan found no API key, and no broker/order/paper/live event was present.
+Reopening the same terminal run returned the same artifact with 12 unchanged events and no
+replayed metrics or tool calls. The estimated cost was 11,400 micro-USD under the versioned
+price assumption. Private state remains under the ignored
+`.market-impact/agent-runs/` directory.
+
+The v2 and v3 runs remain historical evidence only. Neither substitutes for the v4 artifact
+identity or recovery rules.
+
+Validate the committed synthetic bundle without any model credential:
+
+```bash
+uv run market-impact agent validate \
+  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
+  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json
+```
+
+Run a new private real-model judgment only after the three documented MiniMax environment
+variables are present:
+
+```bash
+uv run market-impact agent run \
+  --run-id YOUR_UNIQUE_RUN_ID \
+  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
+  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json
+```
+
+Each `run_id` is immutable: use a new ID for a new model-quality replicate. Re-running a
+terminal ID returns its stored result rather than spending tokens or duplicating tool calls.
+
+The deterministic vertical integration also translates a validated candidate from a frozen
+Judgment Artifact into the existing Signal Intent and Backtest Request, then replays that
+request twice through the unchanged Nautilus bridge with identical result identity. Nautilus
+does not call the model.
+
+Current non-claims remain explicit: only the MiniMax adapter passed, so Provider portability
+is not established; the synthetic energy case is pipeline evidence, not event-family
+calibration; Skills are installed, updated, or removed only through explicit user-authorized
+repository/filesystem changes, never by the model; and the current research runtime exposes
+read-only tools only.
+
+The bounded local runtime gate is satisfied. It does not override the failed Phase 2
+trading-calibration gate and grants no paper or live capability.

@@ -33,6 +33,16 @@ The immutable point-in-time boundary containing an event and the Evidence Items
 available as of a stated instant.
 _Avoid_: Prompt, news dump
 
+**Evidence Pack**:
+An immutable, content-identified set of point-in-time Evidence Items, source artifacts,
+Pattern Pack references, and research scope made available to one Judgment Run.
+_Avoid_: Model context, live search results
+
+**Pattern Pack**:
+A versioned pre-cutoff research asset containing reusable event mechanisms, transmission
+scales, analogues, applicability conditions, and counterexamples.
+_Avoid_: Agent memory, learned truth
+
 **Event Cluster**:
 One market-relevant development represented by one or more related disclosures
 or catalysts rather than by individual headlines.
@@ -143,10 +153,26 @@ _Avoid_: Alpha claim, paper approval, live mandate
 
 ## Decisions
 
+**Judgment Run**:
+A bounded, auditable Agent evaluation of one Evidence Pack under exact model, Skill, tool,
+MCP, budget, and context configuration.
+_Avoid_: Backtest run, chat session
+
+**Judgment Artifact**:
+The immutable result of a Judgment Run, including cited evidence, transmission reasoning,
+candidate impacts, blockers, abstention state, and the complete configuration identity.
+It is a proposal awaiting deterministic admission, not a Signal Intent.
+_Avoid_: Model response, trade recommendation
+
+**Candidate Impact**:
+One Judgment Artifact's evidence-linked directional hypothesis for a target exposure at a
+stated horizon, directness, confidence, and invalidation boundary.
+_Avoid_: Order, portfolio weight
+
 **Event Assessment**:
 A versioned fast or deep judgment about an Event Cluster, its Transmission
 Paths, counterevidence, expected persistence, and invalidation conditions.
-_Avoid_: Agent opinion, prediction
+_Avoid_: Judgment Run, Agent opinion, prediction
 
 **Signal Intent**:
 A time-bounded, evidence-linked expression of directional interest in a

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import platform
@@ -13,6 +14,17 @@ from typing import Protocol, cast
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 from market_impact_agent import __version__
+from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_runtime import (
+    ProviderPricing,
+    RuntimeBudget,
+    RuntimeConfig,
+    SkillRegistry,
+    ToolAccessContext,
+    ToolRegistry,
+    ToolSideEffect,
+)
+from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.backtests import (
     BacktestRunStatus,
     backtest_request_from_dict,
@@ -24,6 +36,8 @@ from market_impact_agent.calibration import (
     phase2_calibration_gate_result_to_dict,
 )
 from market_impact_agent.events import event_transmission_chronology_errors
+from market_impact_agent.frozen_research import FrozenResearchRepository
+from market_impact_agent.minimax_provider import MiniMaxOpenAIProvider
 from market_impact_agent.observations import (
     ValidatedObservationBundle,
     validate_prediction_market_batch,
@@ -40,6 +54,7 @@ from market_impact_agent.prediction_markets import (
 )
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
+from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.tushare import TushareHttpAdapter
 from market_impact_agent.tushare_bundle import (
     TushareDataRequest,
@@ -142,6 +157,30 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_run_parser.add_argument("--registration", required=True, type=Path)
     phase2_run_parser.add_argument("--data-snapshot-root", required=True, type=Path)
     phase2_run_parser.add_argument("--output-dir", required=True, type=Path)
+
+    agent_parser = subparsers.add_parser(
+        "agent", help="Validate or run frozen Agent research without broker reachability"
+    )
+    agent_subparsers = agent_parser.add_subparsers(dest="agent_command", required=True)
+    agent_validate_parser = agent_subparsers.add_parser(
+        "validate", help="Validate one frozen Evidence Pack and its bound local content"
+    )
+    _add_agent_bundle_arguments(agent_validate_parser)
+    agent_run_parser = agent_subparsers.add_parser(
+        "run", help="Run one local MiniMax judgment against a frozen Evidence Pack"
+    )
+    _add_agent_bundle_arguments(agent_run_parser)
+    agent_run_parser.add_argument("--run-id", required=True)
+    agent_run_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    agent_run_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/agent-runs"),
+    )
     return parser
 
 
@@ -157,6 +196,14 @@ def status_payload() -> dict[str, object]:
         "version": __version__,
         "python": platform.python_version(),
         "live_trading": "disabled",
+        "agent_runtime": {
+            "status": "accepted_local_research_v2",
+            "provider": "minimax-openai-compatible",
+            "model": "MiniMax-M3",
+            "tool_authority": "read_only",
+            "broker_reachability": False,
+            "provider_portability": "not_established",
+        },
         "providers": [manifest.to_dict() for manifest in default_registry().manifests()],
         "observation_providers": [
             manifest.to_dict()
@@ -226,6 +273,158 @@ def capture_prediction_markets(
 ) -> ValidatedObservationBundle:
     batch = adapter.fetch_markets(limit=limit, query=query)
     return write_prediction_market_batch(batch, output_root)
+
+
+def validate_agent_bundle(
+    *,
+    evidence_pack_path: Path,
+    evidence_documents_path: Path,
+    pattern_pack_paths: tuple[Path, ...],
+) -> dict[str, object]:
+    evidence_payload = json.loads(evidence_pack_path.read_text(encoding="utf-8"))
+    evidence_errors = validate_agent_contract(
+        evidence_payload,
+        "evidence-pack.schema.json",
+    )
+    pattern_errors: list[str] = []
+    for path in pattern_pack_paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        pattern_errors.extend(
+            f"{path}: {error}"
+            for error in validate_agent_contract(payload, "pattern-pack.schema.json")
+        )
+    errors = tuple(evidence_errors) + tuple(pattern_errors)
+    if errors:
+        return {"valid": False, "errors": list(errors)}
+    repository = FrozenResearchRepository.from_files(
+        evidence_pack_path=evidence_pack_path,
+        evidence_documents_path=evidence_documents_path,
+        pattern_pack_paths=pattern_pack_paths,
+    )
+    return {
+        "valid": True,
+        "errors": [],
+        "event_id": repository.evidence_pack.event_id,
+        "evidence_pack_id": repository.evidence_pack.pack_id,
+        "evidence_count": len(repository.evidence_pack.evidence),
+        "pattern_pack_count": len(repository.evidence_pack.pattern_packs),
+        "allowed_targets": list(repository.evidence_pack.allowed_targets),
+        "synthetic_or_licensed_data_must_remain_local": True,
+    }
+
+
+async def run_agent_bundle(
+    *,
+    evidence_pack_path: Path,
+    evidence_documents_path: Path,
+    pattern_pack_paths: tuple[Path, ...],
+    run_id: str,
+    skill_root: Path,
+    state_root: Path,
+) -> dict[str, object]:
+    try:
+        from market_impact_agent.agent_engine import AgentEngine, AgentRunRequest
+    except ModuleNotFoundError as exc:
+        if exc.name == "mcp":
+            raise RuntimeError(
+                "Agent execution requires the optional dependency group; "
+                "install market-impact-agent[agent]"
+            ) from None
+        raise
+    repository = FrozenResearchRepository.from_files(
+        evidence_pack_path=evidence_pack_path,
+        evidence_documents_path=evidence_documents_path,
+        pattern_pack_paths=pattern_pack_paths,
+    )
+    provider = MiniMaxOpenAIProvider.from_environment()
+    await provider.assert_model_available(timeout_seconds=30)
+    state_directory = state_root / canonical_hash(run_id)
+    artifact_store = ArtifactStore(state_directory / "artifacts")
+    tool_registry = ToolRegistry(artifact_store)
+    for descriptor in repository.tool_descriptors():
+        tool_registry.register(descriptor)
+    config = RuntimeConfig(
+        provider_id=provider.provider_id,
+        model=provider.model,
+        context_window_tokens=131_072,
+        reserved_output_tokens=8_192,
+        temperature=1,
+        top_p=0.95,
+        budget=RuntimeBudget(
+            max_turns=8,
+            max_tool_calls=12,
+            max_input_tokens=500_000,
+            max_output_tokens=32_768,
+            max_wall_seconds=300,
+            max_result_bytes=256_000,
+        ),
+        pricing=ProviderPricing(
+            pricing_id="minimax-m3-paygo-2026-08-26-context-le-512k",
+            input_microusd_per_million_tokens=300_000,
+            output_microusd_per_million_tokens=1_200_000,
+        ),
+    )
+    api_key = os.environ.get("MINIMAX_API_KEY", "")
+    engine = AgentEngine(
+        provider=provider,
+        config=config,
+        artifact_store=artifact_store,
+        journal=RunJournal(state_directory / "run.sqlite3"),
+        tool_registry=tool_registry,
+        skill_registry=SkillRegistry(skill_root),
+        secret_values=(api_key,),
+    )
+    result = await engine.run(
+        AgentRunRequest(
+            run_id=run_id,
+            evidence_pack=repository.evidence_pack,
+            research_instruction=(
+                "Assess this physical energy supply shock. Before deciding, call "
+                "read_pattern_pack for every referenced Pattern Pack and call read_evidence "
+                "for every Evidence Pack item. Apply only patterns whose conditions are "
+                "supported, test offsets and counterevidence, and abstain if a critical link "
+                "is unresolved."
+            ),
+            selected_skills=("energy-supply",),
+            tool_access=ToolAccessContext(
+                allowed_capabilities=frozenset({"evidence.read", "pattern.read"}),
+                allowed_side_effects=frozenset({ToolSideEffect.READ_ONLY}),
+                allowed_tools=frozenset({"read_evidence", "read_pattern_pack"}),
+            ),
+        )
+    )
+    payload: dict[str, object] = {
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "terminal_store_hash": result.terminal_store_hash,
+        "state_directory": state_directory.as_posix(),
+        "broker_reachability": False,
+    }
+    if result.metrics is not None:
+        payload["metrics"] = result.metrics.to_dict()
+    if result.judgment is not None:
+        payload["judgment"] = result.judgment.to_dict()
+    return payload
+
+
+def _add_agent_bundle_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--evidence-pack", required=True, type=Path)
+    parser.add_argument("--evidence-documents", required=True, type=Path)
+    parser.add_argument(
+        "--pattern-pack",
+        required=True,
+        action="append",
+        type=Path,
+        dest="pattern_packs",
+    )
+
+
+def _default_agent_skill_root() -> Path:
+    package_root = Path(__file__).resolve().parent
+    installed = package_root / "builtin_skills"
+    if installed.is_dir():
+        return installed
+    return package_root.parents[1] / "skills"
 
 
 def _event_transmission_schema_errors(payload: object) -> tuple[str, ...]:
@@ -407,6 +606,48 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 0
+    if args.command == "agent" and args.agent_command == "validate":
+        try:
+            result = validate_agent_bundle(
+                evidence_pack_path=args.evidence_pack,
+                evidence_documents_path=args.evidence_documents,
+                pattern_pack_paths=tuple(args.pattern_packs),
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["valid"] else 1
+    if args.command == "agent" and args.agent_command == "run":
+        try:
+            result = asyncio.run(
+                run_agent_bundle(
+                    evidence_pack_path=args.evidence_pack,
+                    evidence_documents_path=args.evidence_documents,
+                    pattern_pack_paths=tuple(args.pattern_packs),
+                    run_id=args.run_id,
+                    skill_root=args.skill_root,
+                    state_root=args.state_root,
+                )
+            )
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["status"] == RunStatus.COMPLETED.value else 1
     if args.command == "backtest" and args.backtest_command == "run":
         try:
             request_payload = json.loads(args.request.read_text(encoding="utf-8"))
