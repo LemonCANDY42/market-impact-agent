@@ -75,6 +75,16 @@ Every input hash is frozen before replicate one. Invalid artifacts, fewer than t
 proposals, or no eligible target produce an abstention. The deterministic Ensemble Decision
 cannot invent or average a proposal that no qualifying replicate made.
 
+The implementation now freezes the runtime configuration, prompt, Skill, tool surface, MCP
+bindings, context estimator, and compactor into one content hash before starting any Provider
+call. It also rejects an Evidence Pack containing any target outside the selection-eligible
+Exposure Registry before Provider access or run-state creation. Each replicate has a separate
+journal and artifact store. An invalid replicate contributes no vote; exact agreement from three
+other valid replicates can still propose. A binding mismatch or reused Judgment Artifact forces
+the whole Ensemble Decision to abstain. The completed synthetic-bundle acceptance is
+implementation evidence only; prospective cohort evidence still requires future admitted events
+and their matching point-in-time market snapshots.
+
 ## Targets and baselines
 
 The official issuer material frozen in the Exposure Registry supports these roles:

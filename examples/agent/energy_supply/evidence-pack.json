@@ -1,7 +1,6 @@
 {
   "allowed_targets": [
-    "600938.XSHG",
-    "600028.XSHG"
+    "600938.XSHG"
   ],
   "as_of": "2026-01-15T08:30:00Z",
   "data_gaps": [
@@ -51,7 +50,7 @@
       "untrusted_text": true
     }
   ],
-  "pack_id": "evidence-pack-adb0ff35d3f2bf5195d5fb416ec1bbee60b11cca9d276a5fc289ab53dfa577f7",
+  "pack_id": "evidence-pack-52e00dea0ca8124ed142dd33d8cf8ff0155c7432f833b9f43a4b8302c6b77aa3",
   "pattern_packs": [
     {
       "available_at": "2025-12-31T00:00:00Z",

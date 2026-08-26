@@ -145,6 +145,36 @@ class AgentRunResult:
     metrics: RunMetrics | None
 
 
+@dataclass(frozen=True, slots=True)
+class AgentExecutionBinding:
+    runtime_ref: str
+    runtime_config_hash: str
+    prompt_hash: str
+    skill_hashes: tuple[str, ...]
+    tool_manifest_hashes: tuple[str, ...]
+    tool_surface_hash: str
+    mcp_server_hashes: tuple[str, ...]
+    context_estimator_id: str
+    compactor_id: str
+
+    @property
+    def binding_hash(self) -> str:
+        return canonical_hash(self.to_dict())
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "runtime_ref": self.runtime_ref,
+            "runtime_config_hash": self.runtime_config_hash,
+            "prompt_hash": self.prompt_hash,
+            "skill_hashes": list(self.skill_hashes),
+            "tool_manifest_hashes": list(self.tool_manifest_hashes),
+            "tool_surface_hash": self.tool_surface_hash,
+            "mcp_server_hashes": list(self.mcp_server_hashes),
+            "context_estimator_id": self.context_estimator_id,
+            "compactor_id": self.compactor_id,
+        }
+
+
 class CancellationToken:
     def __init__(self) -> None:
         self._event = asyncio.Event()
@@ -223,6 +253,39 @@ class AgentEngine:
             raise ValueError("MCP snapshots must have unique server_id values")
         self._mcp_snapshots = {item.server_id: item for item in mcp_snapshots}
         self._clock = clock or (lambda: datetime.now(UTC))
+
+    def execution_binding(
+        self,
+        request: AgentRunRequest,
+        *,
+        runtime_ref: str,
+    ) -> AgentExecutionBinding:
+        if not runtime_ref or runtime_ref != runtime_ref.strip():
+            raise ValueError("runtime_ref must be a non-empty trimmed string")
+        loaded_skills = self.skill_registry.load(
+            request.selected_skills,
+            allowed_capabilities=request.tool_access.allowed_capabilities,
+        )
+        self._validate_research_authority(request, loaded_skills)
+        surface = self._execution_surface(request)
+        prompt_entries = _build_prompt_entries(
+            request,
+            loaded_skills,
+            surface=surface,
+            estimator_id=self.token_counter.counter_id,
+            compactor_id=self.compactor.compactor_id,
+        )
+        return AgentExecutionBinding(
+            runtime_ref=runtime_ref,
+            runtime_config_hash=self.config.config_hash,
+            prompt_hash=canonical_hash([item.to_message() for item in prompt_entries]),
+            skill_hashes=tuple(item.manifest.manifest_hash for item in loaded_skills),
+            tool_manifest_hashes=surface.tool_manifest_hashes,
+            tool_surface_hash=surface.tool_surface_hash,
+            mcp_server_hashes=surface.mcp_binding_hashes,
+            context_estimator_id=self.token_counter.counter_id,
+            compactor_id=self.compactor.compactor_id,
+        )
 
     async def run(
         self,
@@ -958,7 +1021,10 @@ def _contract_correction_entry(
         "instruction": (
             "Your last answer failed the closed JudgmentProposal contract. Return a corrected "
             "JSON object only: no reasoning, think tags, Markdown, code fences, commentary, "
-            "renamed fields, or additional fields. Do not call more tools."
+            "renamed fields, or additional fields. The contract below is metadata, not an "
+            "output template: return exactly its required_fields and never copy metadata keys "
+            "such as output_type, required_fields, fields, or cross_field_rules. Every required "
+            "array field must be present even when it is empty. Do not call more tools."
         ),
         "validation_error": f"{type(error).__name__}: {error}",
         "contract": _judgment_proposal_contract(),
@@ -979,39 +1045,54 @@ def _contract_correction_entry(
 
 def _judgment_proposal_contract() -> dict[str, object]:
     return {
-        "event_id": "non-empty string",
-        "decision": "propose or abstain",
-        "summary": "non-empty string",
-        "transmission_steps": [
-            {
-                "step_id": "non-empty unique string",
-                "from_node": "non-empty string",
-                "to_node": "non-empty string",
-                "mechanism": "non-empty string",
-                "directness": "direct|second_order|third_order|fourth_order",
-                "horizon_sessions": "positive integer",
-                "evidence_refs": ["one or more allowed evidence_id strings"],
-            }
+        "output_type": "JudgmentProposal",
+        "required_fields": [
+            "event_id",
+            "decision",
+            "summary",
+            "transmission_steps",
+            "candidates",
+            "blockers",
+            "unresolved_questions",
+            "stopped_reason",
         ],
-        "candidates": [
-            {
-                "target_id": "one allowed target id",
-                "direction": "up|down|mixed|unknown",
-                "horizon_sessions": "positive integer",
-                "directness": "direct|second_order|third_order|fourth_order",
-                "confidence": "number from 0 through 1",
-                "thesis": "non-empty string",
-                "evidence_refs": ["one or more allowed evidence_id strings"],
-                "counterevidence_refs": ["zero or more allowed evidence_id strings"],
-                "invalidation_conditions": ["one or more observable conditions"],
-            }
-        ],
-        "blockers": ["unique strings; required non-empty when abstaining"],
-        "unresolved_questions": ["unique strings"],
-        "stopped_reason": "non-empty string",
+        "additional_fields_allowed": False,
+        "fields": {
+            "event_id": "non-empty string",
+            "decision": "propose or abstain",
+            "summary": "non-empty string",
+            "transmission_steps": [
+                {
+                    "step_id": "non-empty unique string",
+                    "from_node": "non-empty string",
+                    "to_node": "non-empty string",
+                    "mechanism": "non-empty string",
+                    "directness": "direct|second_order|third_order|fourth_order",
+                    "horizon_sessions": "positive integer",
+                    "evidence_refs": ["one or more allowed evidence_id strings"],
+                }
+            ],
+            "candidates": [
+                {
+                    "target_id": "one allowed target id",
+                    "direction": "up|down|mixed|unknown",
+                    "horizon_sessions": "positive integer",
+                    "directness": "direct|second_order|third_order|fourth_order",
+                    "confidence": "number from 0 through 1",
+                    "thesis": "non-empty string",
+                    "evidence_refs": ["one or more allowed evidence_id strings"],
+                    "counterevidence_refs": ["zero or more allowed evidence_id strings"],
+                    "invalidation_conditions": ["one or more observable conditions"],
+                }
+            ],
+            "blockers": ["unique strings; non-empty only when abstaining"],
+            "unresolved_questions": ["unique strings"],
+            "stopped_reason": "non-empty string",
+        },
         "cross_field_rules": [
             "propose requires at least one candidate",
             "abstain requires zero candidates and at least one blocker",
+            "candidate evidence_refs and counterevidence_refs must be disjoint",
         ],
     }
 

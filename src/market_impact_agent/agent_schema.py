@@ -19,6 +19,7 @@ AGENT_SCHEMA_FILES = (
     "candidate-event-observation.schema.json",
     "source-coverage-registration.schema.json",
     "coverage-receipt.schema.json",
+    "agent-ensemble-decision.schema.json",
 )
 
 

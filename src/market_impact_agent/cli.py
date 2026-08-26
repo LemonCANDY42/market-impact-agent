@@ -193,6 +193,29 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/agent-runs"),
     )
+    agent_ensemble_parser = agent_subparsers.add_parser(
+        "study-run-ensemble",
+        help="Run five independent frozen Agent replicates and aggregate three-of-five",
+    )
+    agent_ensemble_parser.add_argument("--registration", required=True, type=Path)
+    agent_ensemble_parser.add_argument("--exposure-registry", required=True, type=Path)
+    _add_agent_bundle_arguments(agent_ensemble_parser)
+    agent_ensemble_parser.add_argument("--ensemble-run-id", required=True)
+    agent_ensemble_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    agent_ensemble_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/agent-ensemble-runs"),
+    )
+    agent_ensemble_parser.add_argument(
+        "--ensemble-state-root",
+        type=Path,
+        default=Path(".market-impact/agent-ensemble-decisions"),
+    )
     agent_study_parser = agent_subparsers.add_parser(
         "study-validate",
         help="Validate the prospective Agent Phase 2 study and Exposure Registry",
@@ -1085,6 +1108,56 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
+    if args.command == "agent" and args.agent_command == "study-run-ensemble":
+        try:
+            from market_impact_agent.agent_ensemble_runner import (
+                run_agent_ensemble_bundle,
+            )
+
+            result = asyncio.run(
+                run_agent_ensemble_bundle(
+                    registration_path=args.registration,
+                    exposure_registry_path=args.exposure_registry,
+                    evidence_pack_path=args.evidence_pack,
+                    evidence_documents_path=args.evidence_documents,
+                    pattern_pack_paths=tuple(args.pattern_packs),
+                    ensemble_run_id=args.ensemble_run_id,
+                    skill_root=args.skill_root,
+                    state_root=args.state_root,
+                    ensemble_state_root=args.ensemble_state_root,
+                )
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name != "mcp":
+                raise
+            print(
+                json.dumps(
+                    {
+                        "completed": False,
+                        "error": (
+                            "Agent execution requires the optional dependency group; "
+                            "install market-impact-agent[agent]"
+                        ),
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "agent" and args.agent_command == "study-validate":
         try:
             result = validate_agent_phase2_study(

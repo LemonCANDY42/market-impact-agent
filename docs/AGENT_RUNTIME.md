@@ -172,8 +172,48 @@ replayed metrics or tool calls. The estimated cost was 11,400 micro-USD under th
 price assumption. Private state remains under the ignored
 `.market-impact/agent-runs/` directory.
 
-The v2 and v3 runs remain historical evidence only. Neither substitutes for the v4 artifact
-identity or recovery rules.
+The earlier single-run v2 and v3 runs remain historical evidence only. Neither substitutes
+for the v4 artifact identity or recovery rules.
+
+## Five-replicate ensemble acceptance
+
+The Harness now freezes one execution-binding artifact before replicate one. It covers the
+runtime configuration, initial prompt, selected Skill hashes, tool manifests and model tool
+surface, MCP bindings, context estimator, and compactor. Five independent runs then use
+separate journals and artifact stores with no shared model context. A content-identified
+Ensemble Decision counts only one uniquely eligible candidate per valid replicate and requires
+exact three-of-five agreement on target, direction, and horizon. Reused Artifacts or any
+execution-binding drift force whole-ensemble abstention.
+
+The first private real-model attempt,
+`synthetic-minimax-m3-ensemble-20260826-v1`, is retained as negative runtime evidence. Two
+replicates failed the closed output contract and the three valid votes split between one- and
+three-session horizons, so the maximum agreement was two and the Ensemble Decision correctly
+abstained. Inspection showed an ambiguous pseudo-contract: MiniMax copied a metadata rule as
+an output field, overlapped supporting and counterevidence references, or omitted required
+empty arrays. The output contract was changed to an explicit metadata wrapper with exact
+required fields and disjoint support/counterevidence rules; the previous run was not overwritten.
+
+The fresh normal run `synthetic-minimax-m3-ensemble-20260826-v2` then completed all five
+replicates under frozen binding
+`3ed71b35946fcbe170fa08683dee3da3a3e94aca9f8b70485305c62c0eb909c0`.
+All five selected `600938.XSHG/up`; three selected one session and two selected three sessions.
+The resulting exact three-of-five decision is
+`agent-ensemble-a4b4cbdc8a740ca6ad01a4a948e3dacc452355d2cbbc0f7fcc2d428fbce984dc`.
+It used 41,319 input tokens, 20,921 output tokens, 25 read-only tool calls, 11 Provider
+attempts, and an estimated 37,506 micro-USD. The content-addressed decision artifact hash is
+`26d8aee3af54e3702b8c223e37e68c4861d2fed2aa18a8e2dce67fec3331c5c4`.
+Private state remains under ignored `.market-impact/agent-ensemble-runs/` and
+`.market-impact/agent-ensemble-decisions/` directories.
+
+This passes the synthetic-bundle ensemble runtime gate only. The selected target has no
+matching frozen replay snapshot in this acceptance slice, and the event itself is synthetic;
+therefore no return is reported and no model-quality, calibration, alpha, paper, or live claim
+follows. That historical run used the earlier two-target synthetic Evidence Pack, which also
+listed the non-selection-eligible `600028.XSHG` control. The study runner now rejects any
+Evidence Pack target outside the frozen selection-eligible Exposure Registry before checking
+the Provider or creating run state, and the committed fixture is narrowed to `600938.XSHG`.
+The historical run remains runtime evidence; it is not relabeled as a prospective study event.
 
 Validate the committed synthetic bundle without any model credential:
 
@@ -198,10 +238,28 @@ uv run market-impact agent run \
 Each `run_id` is immutable: use a new ID for a new model-quality replicate. Re-running a
 terminal ID returns its stored result rather than spending tokens or duplicating tool calls.
 
-The deterministic vertical integration also translates a validated candidate from a frozen
-Judgment Artifact into the existing Signal Intent and Backtest Request, then replays that
-request twice through the unchanged Nautilus bridge with identical result identity. Nautilus
-does not call the model.
+Run the registered five-replicate synthetic acceptance with one new ensemble ID:
+
+```bash
+uv run market-impact agent study-run-ensemble \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
+  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json \
+  --ensemble-run-id YOUR_UNIQUE_ENSEMBLE_RUN_ID
+```
+
+A completed command may legitimately return an abstaining Ensemble Decision with exit status
+zero; operational completion is distinct from three-of-five proposal agreement. Each replicate
+status, private state directory, terminal hash, metric set, frozen binding, and decision
+artifact is reported without exposing a credential or broker capability.
+
+The deterministic vertical integration translates either a validated candidate from one
+frozen Judgment Artifact or an exact three-of-five Ensemble Decision into the existing Signal
+Intent and Backtest Request, then replays that request twice through the unchanged Nautilus
+bridge with identical result identity. The ensemble path revalidates all three agreeing
+Artifacts and their frozen binding. Nautilus does not call the model.
 
 Current non-claims remain explicit: only the MiniMax adapter passed, so Provider portability
 is not established; the synthetic energy case is pipeline evidence, not event-family

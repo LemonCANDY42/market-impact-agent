@@ -221,7 +221,9 @@ _Avoid_: Agent team, repeated chat
 **Ensemble Decision**:
 A deterministic candidate-or-abstain result derived from one Judgment Replicate Set by a
 pre-registered agreement rule. It cannot add targets, evidence, direction, or confidence
-that no qualifying Judgment Artifact proposed.
+that no qualifying Judgment Artifact proposed. It binds the exact runtime, prompt, Skill,
+tool, MCP, context-estimator, and compactor surface frozen before replicate one; a mismatch
+or reused Judgment Artifact forces abstention.
 _Avoid_: Model vote, committee recommendation
 
 **Candidate Impact**:

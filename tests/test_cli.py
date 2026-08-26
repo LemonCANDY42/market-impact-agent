@@ -53,8 +53,10 @@ def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dep
 
         sys.meta_path.insert(0, BlockMcp())
         from market_impact_agent.cli import main
+        from market_impact_agent.judgment_replay import JudgmentReplaySpec
 
         assert main(["status"]) == 0
+        assert JudgmentReplaySpec is not None
         root = "examples/agent/energy_supply"
         result = main([
             "agent", "run",
@@ -64,6 +66,16 @@ def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dep
             "--run-id", "missing-agent-dependency",
         ])
         assert result == 1
+        ensemble_result = main([
+            "agent", "study-run-ensemble",
+            "--registration", "examples/calibration/agent-physical-energy-prospective-v1.json",
+            "--exposure-registry", "examples/research/a-share-energy-exposure-registry-v1.json",
+            "--evidence-pack", f"{root}/evidence-pack.json",
+            "--evidence-documents", f"{root}/evidence-documents.json",
+            "--pattern-pack", f"{root}/pattern-pack.json",
+            "--ensemble-run-id", "missing-ensemble-dependency",
+        ])
+        assert ensemble_result == 1
         """
     )
     result = subprocess.run(

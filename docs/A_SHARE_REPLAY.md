@@ -168,3 +168,14 @@ identity. This establishes the architectural chain Agent judgment -> determinist
 Intent -> Backtest Request -> Nautilus. The model is never called from the replay. The test
 does not claim that the synthetic judgment is accurate, that the real MiniMax energy result
 is replayable against a matching market snapshot, or that Phase 2 calibration has passed.
+
+The same test module now also builds five isolated generated Judgment results, obtains exact
+three-of-five agreement on the selection-eligible `600938.XSHG/up/3 sessions`, validates
+every agreeing Artifact against the frozen execution binding and Exposure Registry, and
+replays the resulting Ensemble Decision twice. A registry control target is rejected before
+Nautilus starts. The generated 600938 snapshot reuses the synthetic bridge's price path, so
+the fixture remains deterministic at CNY 47.43 net PnL and
+`0.04387604070305272895467160037` net return. Those numbers belong only to the generated
+interface fixture and do not validate 600938 market behavior. The real MiniMax ensemble
+selected `600938.XSHG/up/1 session`, so it was not attached to this three-session snapshot
+and has no reported return.

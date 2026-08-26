@@ -76,6 +76,12 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
 - [x] Freeze a materially new prospective Agent study before future outcomes: first-eligible
   physical-shock accrual, pre-outcome upstream Exposure Registry, five independent Judgment
   replicates, five baselines, all-event missingness, and a 40% dominance bound.
+- [x] Implement the five-isolated-run orchestrator, pre-replicate execution binding,
+  content-identified three-of-five Ensemble Decision, invalid/reuse/mismatch abstention, and
+  deterministic Ensemble Decision-to-Nautilus request gate.
+- [x] Pass a real MiniMax M3 synthetic-bundle normal run: five of five completed under one
+  binding and three selected `600938.XSHG/up/1 session`. Retain the earlier failed/abstaining
+  run as negative evidence; do not claim a market replay because no matching snapshot exists.
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
   deterministic admission/non-admission, revision lineage, first-eligible separation,
   cohort limits, idempotency, and tamper detection.

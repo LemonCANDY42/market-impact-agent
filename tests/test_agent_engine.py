@@ -795,6 +795,18 @@ def test_invalid_final_contract_gets_one_audited_correction_turn(tmp_path: Path)
         "official-outage",
         "market-benchmark",
     ]
+    assert correction_payload["contract"]["required_fields"] == [
+        "event_id",
+        "decision",
+        "summary",
+        "transmission_steps",
+        "candidates",
+        "blockers",
+        "unresolved_questions",
+        "stopped_reason",
+    ]
+    assert "cross_field_rules" not in correction_payload["contract"]["fields"]
+    assert "contract below is metadata" in correction_payload["instruction"]
     events = RunJournal(root / "run.sqlite3").events("correction-run")
     assert any(event.event_type == "judgment.contract_correction" for event in events)
 

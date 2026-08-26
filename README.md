@@ -53,9 +53,13 @@ The bootstrap implements:
   append-only crash-safe runs, automatic context compaction, on-demand hashed Skills, typed
   permissioned tools, official MCP lifecycle handling, budgets, cancellation, redaction,
   closed-output correction, and a pinned MiniMax M3 China-endpoint Provider;
-- a synthetic physical-energy supply-shock vertical slice whose frozen Agent judgment can be
-  deterministically admitted into the existing Signal Intent and Backtest Request and then
-  replayed by the unchanged Nautilus bridge without re-running the model;
+- a synthetic physical-energy supply-shock vertical slice with both one generated Judgment
+  Artifact and a generated three-of-five Ensemble Decision deterministically admitted into
+  the existing Signal Intent and Backtest Request, then replayed by the unchanged Nautilus
+  bridge without re-running a model;
+- a real MiniMax M3 five-replicate synthetic-bundle acceptance in which all five runs
+  completed under one pre-frozen execution binding and exact three-of-five agreement selected
+  `600938.XSHG/up/1 session`; this is runtime evidence only and has no matching replay snapshot;
 - a content-identified prospective Agent Phase 2 registration that freezes first-eligible
   physical-shock accrual, an upstream A-share Exposure Registry, five independent Judgment
   replicates, five baselines, missingness handling, and a stricter all-event gate before any
@@ -111,10 +115,12 @@ evidence. No baseline-superiority, alpha, Phase 3, paper, or live claim has pass
 
 The bounded research-only Agent runtime and its exact non-claims are recorded in
 [docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). Deterministic hardening, base-wheel isolation,
-and the private MiniMax M3 v4 run pass the current local runtime gate. This proves one pinned
-Provider and the auditable Agent-to-frozen-judgment pipeline, not model quality, event-family
-calibration, alpha, Provider portability, or execution readiness. None of it overrides the
-failed trading-calibration result.
+the private MiniMax M3 v4 single run, and the private five-replicate v2 ensemble run pass the
+current local runtime gates. This proves one pinned Provider and the auditable
+Agent-to-frozen-decision pipeline, not model quality, event-family calibration, alpha,
+Provider portability, or execution readiness. The real ensemble selected `600938.XSHG`, while
+the committed deterministic replay fixture uses `600028.XSHG`; those results are deliberately
+not combined. None of this overrides the failed trading-calibration result.
 
 The research reset is now frozen in
 [docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts
@@ -128,8 +134,8 @@ exhaustiveness, and oil/non-European direct confirmation still needs additional 
 ## Architecture at a glance
 
 ```text
-Evidence Pack + pre-cutoff Pattern Pack -> Agent Harness -> sealed Judgment Artifact
-       -> deterministic admission -> SignalIntent
+Evidence Pack + pre-cutoff Pattern Pack -> 5 isolated Judgment Runs
+       -> pre-frozen binding + deterministic 3/5 Ensemble Decision -> SignalIntent
        -> backtest request -> Nautilus backtest bridge
        -> deterministic policy -> optional semantic approval
        -> durable OrderIntent -> sealed submission capability -> execution provider

@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/agent-ensemble-decision.schema.json",
+  "title": "Market Impact Agent Ensemble Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "ensemble_run_id",
+    "registration_id",
+    "registration_hash",
+    "evidence_pack_id",
+    "evidence_pack_hash",
+    "provider_id",
+    "model",
+    "runtime_ref",
+    "frozen_execution_binding_hash",
+    "replicate_count",
+    "minimum_agreement",
+    "assessments",
+    "disposition",
+    "reason",
+    "selected_vote",
+    "agreement_count",
+    "agreeing_judgment_artifact_ids",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.agent-ensemble-decision.v1"},
+    "decision_id": {"type": "string", "pattern": "^agent-ensemble-[0-9a-f]{64}$"},
+    "ensemble_run_id": {"type": "string", "minLength": 1},
+    "registration_id": {"type": "string", "pattern": "^agent-study-[0-9a-f]{64}$"},
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "evidence_pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "evidence_pack_hash": {"$ref": "#/$defs/sha256"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "model": {"type": "string", "minLength": 1},
+    "runtime_ref": {"type": "string", "minLength": 1},
+    "frozen_execution_binding_hash": {"$ref": "#/$defs/sha256"},
+    "replicate_count": {"const": 5},
+    "minimum_agreement": {"const": 3},
+    "assessments": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/assessment"}
+    },
+    "disposition": {"enum": ["propose", "abstain"]},
+    "reason": {
+      "enum": [
+        "three_of_five_agreement",
+        "no_three_of_five_agreement",
+        "execution_binding_mismatch",
+        "replicate_artifact_reused"
+      ]
+    },
+    "selected_vote": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/vote"}
+      ]
+    },
+    "agreement_count": {"type": "integer", "minimum": 0, "maximum": 5},
+    "agreeing_judgment_artifact_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/judgment_id"}
+    },
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "judgment_id": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"},
+    "vote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_id", "direction", "horizon_sessions"],
+      "properties": {
+        "target_id": {"type": "string", "minLength": 1},
+        "direction": {"enum": ["up", "down", "mixed", "unknown"]},
+        "horizon_sessions": {"type": "integer", "minimum": 1}
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicate_index",
+        "run_id",
+        "run_status",
+        "outcome",
+        "reason",
+        "terminal_artifact_hash",
+        "judgment_artifact_id",
+        "execution_binding_hash",
+        "vote"
+      ],
+      "properties": {
+        "replicate_index": {"type": "integer", "minimum": 1, "maximum": 5},
+        "run_id": {"type": "string", "minLength": 1},
+        "run_status": {
+          "enum": [
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "budget_exhausted",
+            "human_input_required"
+          ]
+        },
+        "outcome": {"enum": ["vote", "abstain", "invalid"]},
+        "reason": {"type": "string", "minLength": 1},
+        "terminal_artifact_hash": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "judgment_artifact_id": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/judgment_id"}]
+        },
+        "execution_binding_hash": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "vote": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/vote"}]
+        }
+      }
+    }
+  }
+}
