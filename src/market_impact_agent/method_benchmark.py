@@ -27,12 +27,19 @@ from market_impact_agent.research_methods import (
 
 HISTORICAL_EVIDENCE_MANIFEST_SCHEMA = "market-impact.historical-evidence-manifest.v1"
 METHOD_QUALITY_BENCHMARK_SCHEMA = "market-impact.method-quality-benchmark-registration.v1"
+METHOD_QUALITY_BENCHMARK_SCHEMA_V2 = "market-impact.method-quality-benchmark-registration.v2"
 MASKED_AGENT_INPUT_MANIFEST_SCHEMA = "market-impact.masked-agent-input-manifest.v1"
 METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA = (
     "market-impact.method-quality-evaluation-specification.v1"
 )
+METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA_V2 = (
+    "market-impact.method-quality-evaluation-specification.v2"
+)
 SOURCE_VERSION_RECEIPT_SCHEMA = "market-impact.source-version-receipt.v1"
 LATENCY_CALIBRATION_SCHEMA = "market-impact.latency-calibration.v1"
+RETIRED_METHOD_QUALITY_V1_REGISTRATION_ID = (
+    "method-quality-benchmark-fbebb357c40f091ff03214b517bdc8e75011126fc82d28ee49a57c641c0187de"
+)
 
 
 class BenchmarkSplit(StrEnum):
@@ -792,7 +799,51 @@ class PromotionGate:
 
 
 @dataclass(frozen=True, slots=True)
+class ClusteredPairedEstimatePolicy:
+    registration_id: str
+    registration_hash: str
+    evaluation_specification_id: str
+    evaluation_specification_hash: str
+    suite_id: str
+    candidate_arm: MethodArm
+    comparator_arm: MethodArm
+    replicate_count: int
+    independent_case_count: int
+    critical_value: Decimal
+    confidence_level: Decimal
+    contrast_role: str
+    promotion_eligible: bool
+
+    def __post_init__(self) -> None:
+        _sha256(self.registration_hash, "clustered estimate registration hash")
+        _sha256(
+            self.evaluation_specification_hash,
+            "clustered estimate evaluation specification hash",
+        )
+        if self.registration_id != f"method-quality-benchmark-{self.registration_hash}":
+            raise ValueError("clustered estimate registration identity is inconsistent")
+        if self.evaluation_specification_id != (
+            f"method-quality-evaluation-{self.evaluation_specification_hash}"
+        ):
+            raise ValueError("clustered estimate evaluation specification identity is inconsistent")
+        _identifier(self.suite_id, "clustered estimate suite_id")
+        if self.candidate_arm is self.comparator_arm:
+            raise ValueError("clustered estimate candidate and comparator arms must differ")
+        if self.replicate_count < 1 or self.independent_case_count < 2:
+            raise ValueError("clustered estimate registered counts are invalid")
+        if not self.critical_value.is_finite() or self.critical_value <= 0:
+            raise ValueError("clustered estimate registered critical value is invalid")
+        if self.confidence_level != Decimal("0.95"):
+            raise ValueError("clustered estimate confidence level must remain 0.95")
+        if self.contrast_role not in {"primary_promotion", "secondary_diagnostic"}:
+            raise ValueError("clustered estimate contrast role is invalid")
+        if self.promotion_eligible != (self.contrast_role == "primary_promotion"):
+            raise ValueError("clustered estimate promotion eligibility is inconsistent")
+
+
+@dataclass(frozen=True, slots=True)
 class MethodQualityBenchmarkRegistration:
+    schema_version: str
     registration_id: str
     registered_at: datetime
     provider_profile_id: str
@@ -819,6 +870,11 @@ class MethodQualityBenchmarkRegistration:
     execution_capability: str
 
     def __post_init__(self) -> None:
+        if self.schema_version not in {
+            METHOD_QUALITY_BENCHMARK_SCHEMA,
+            METHOD_QUALITY_BENCHMARK_SCHEMA_V2,
+        }:
+            raise ValueError("unsupported Method Quality Benchmark schema_version")
         require_aware(self.registered_at, "method quality registered_at")
         _sha256(self.provider_profile_hash, "method quality provider_profile_hash")
         _sha256(self.method_catalog_hash, "method quality method_catalog_hash")
@@ -834,6 +890,12 @@ class MethodQualityBenchmarkRegistration:
             self.immutable_prior_registration_ids,
             "method quality immutable prior registrations",
         )
+        if (
+            self.schema_version == METHOD_QUALITY_BENCHMARK_SCHEMA_V2
+            and RETIRED_METHOD_QUALITY_V1_REGISTRATION_ID
+            not in self.immutable_prior_registration_ids
+        ):
+            raise ValueError("method quality v2 must retain the retired v1 registration")
         if self.development_case_count != 8:
             raise ValueError("method quality development set must contain eight cases")
         if self.retrospective_holdout_case_count != 24:
@@ -915,7 +977,7 @@ class MethodQualityBenchmarkRegistration:
 
     def core_dict(self) -> dict[str, object]:
         return {
-            "schema_version": METHOD_QUALITY_BENCHMARK_SCHEMA,
+            "schema_version": self.schema_version,
             "registered_at": _timestamp(self.registered_at),
             "provider_profile_id": self.provider_profile_id,
             "provider_profile_hash": self.provider_profile_hash,
@@ -952,6 +1014,17 @@ class MethodQualityBenchmarkRegistration:
         skills: SkillRegistry,
         evaluation_specification: MethodQualityEvaluationSpecification,
     ) -> None:
+        evaluation_schema = _string(
+            evaluation_specification.core_dict(),
+            "schema_version",
+        )
+        expected_evaluation_schema = (
+            METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA_V2
+            if self.schema_version == METHOD_QUALITY_BENCHMARK_SCHEMA_V2
+            else METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA
+        )
+        if evaluation_schema != expected_evaluation_schema:
+            raise ValueError("method quality registration and evaluation versions do not match")
         if (
             self.method_catalog_id != catalog.catalog_id
             or self.method_catalog_hash != catalog.catalog_hash
@@ -989,6 +1062,106 @@ class MethodQualityBenchmarkRegistration:
                     "method quality treatment does not match catalog and Skill Registry: "
                     f"{binding.suite_id}/{binding.arm.value}"
                 )
+
+    def clustered_paired_estimate_policy(
+        self,
+        *,
+        specification: MethodQualityEvaluationSpecification,
+        suite_id: str,
+        candidate_arm: MethodArm,
+        comparator_arm: MethodArm,
+    ) -> ClusteredPairedEstimatePolicy:
+        if self.schema_version != METHOD_QUALITY_BENCHMARK_SCHEMA_V2:
+            raise ValueError("clustered estimates require the active v2 benchmark registration")
+        if (
+            self.evaluation_specification_id != specification.specification_id
+            or self.evaluation_specification_hash != specification.specification_hash
+        ):
+            raise ValueError("benchmark registration does not match evaluation specification")
+        specification_core = specification.core_dict()
+        if (
+            _string(specification_core, "schema_version")
+            != METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA_V2
+        ):
+            raise ValueError("clustered estimates require the active v2 evaluation specification")
+
+        matching_suites = tuple(item for item in self.suites if item.suite_id == suite_id)
+        if len(matching_suites) != 1:
+            raise ValueError("clustered estimate suite is not registered")
+        suite = matching_suites[0]
+        if candidate_arm not in suite.arms or comparator_arm not in suite.arms:
+            raise ValueError("clustered estimate arms are not registered for the suite")
+
+        contrast_policy = _object(
+            specification_core.get("contrast_policy"),
+            "evaluation contrast policy",
+        )
+        primary = _object(
+            contrast_policy.get("primary_promotion_contrast"),
+            "primary promotion contrast",
+        )
+        primary_contrast = (
+            _string(primary, "suite_id"),
+            MethodArm(_string(primary, "candidate_arm")),
+            MethodArm(_string(primary, "comparator_arm")),
+        )
+        secondary_contrasts = tuple(
+            (
+                _string(item, "suite_id"),
+                MethodArm(_string(item, "candidate_arm")),
+                MethodArm(_string(item, "comparator_arm")),
+            )
+            for item in _object_tuple(
+                contrast_policy,
+                "secondary_diagnostic_contrasts",
+            )
+        )
+        requested_contrast = (suite_id, candidate_arm, comparator_arm)
+        if requested_contrast == primary_contrast:
+            contrast_role = "primary_promotion"
+        elif requested_contrast in secondary_contrasts:
+            contrast_role = "secondary_diagnostic"
+        else:
+            raise ValueError("clustered estimate is not a registered contrast")
+
+        registered_case_count = sum(
+            item.target_case_count
+            for item in self.strata
+            if item.event_archetype in suite.eligible_archetypes
+        )
+        if suite.minimum_case_count != registered_case_count:
+            raise ValueError("clustered estimate suite case count is not fully registered")
+
+        clustered = _object(
+            specification_core.get("clustered_paired_estimator"),
+            "evaluation clustered paired estimator",
+        )
+        critical_values = tuple(
+            item
+            for item in _object_tuple(clustered, "critical_values_by_suite")
+            if _string(item, "suite_id") == suite_id
+        )
+        if len(critical_values) != 1:
+            raise ValueError("clustered estimate critical value is not registered")
+        critical_value = critical_values[0]
+        if _integer(critical_value, "independent_case_count") != registered_case_count:
+            raise ValueError("clustered estimate critical value does not match registered cases")
+
+        return ClusteredPairedEstimatePolicy(
+            registration_id=self.registration_id,
+            registration_hash=self.registration_hash,
+            evaluation_specification_id=specification.specification_id,
+            evaluation_specification_hash=specification.specification_hash,
+            suite_id=suite_id,
+            candidate_arm=candidate_arm,
+            comparator_arm=comparator_arm,
+            replicate_count=self.replicate_count,
+            independent_case_count=registered_case_count,
+            critical_value=_decimal(critical_value, "critical_value"),
+            confidence_level=_decimal(clustered, "confidence_level"),
+            contrast_role=contrast_role,
+            promotion_eligible=contrast_role == "primary_promotion",
+        )
 
 
 def load_historical_evidence_manifest(path: Path) -> HistoricalEvidenceManifest:
@@ -1118,6 +1291,13 @@ def load_method_quality_evaluation_specification(
         json.loads(path.read_text(encoding="utf-8")),
         "method quality evaluation specification",
     )
+    schema_version = _string(payload, "schema_version")
+    if schema_version == METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA:
+        estimator_fields = {"paired_estimator"}
+    elif schema_version == METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA_V2:
+        estimator_fields = {"clustered_paired_estimator", "contrast_policy"}
+    else:
+        raise ValueError("unsupported Method Quality Evaluation Specification schema_version")
     _closed(
         payload,
         {
@@ -1128,9 +1308,9 @@ def load_method_quality_evaluation_specification(
             "scoring",
             "case_value_aggregation",
             "attribution",
-            "paired_estimator",
             "execution_capability",
-        },
+        }
+        | estimator_fields,
         "method quality evaluation specification",
     )
     specification_id = _string(payload, "specification_id")
@@ -1183,7 +1363,11 @@ def load_method_quality_benchmark(path: Path) -> MethodQualityBenchmarkRegistrat
         },
         "method quality benchmark",
     )
-    if _string(payload, "schema_version") != METHOD_QUALITY_BENCHMARK_SCHEMA:
+    schema_version = _string(payload, "schema_version")
+    if schema_version not in {
+        METHOD_QUALITY_BENCHMARK_SCHEMA,
+        METHOD_QUALITY_BENCHMARK_SCHEMA_V2,
+    }:
         raise ValueError("unsupported Method Quality Benchmark schema_version")
     raw_strata = payload.get("strata")
     raw_suites = payload.get("suites")
@@ -1195,6 +1379,7 @@ def load_method_quality_benchmark(path: Path) -> MethodQualityBenchmarkRegistrat
     ):
         raise TypeError("method quality strata, suites, and treatment bindings must be arrays")
     result = MethodQualityBenchmarkRegistration(
+        schema_version=schema_version,
         registration_id=_string(payload, "registration_id"),
         registered_at=_datetime(payload, "registered_at"),
         provider_profile_id=_string(payload, "provider_profile_id"),
@@ -1528,6 +1713,15 @@ def _validate_revision_lineage(versions: tuple[HistoricalEvidenceVersion, ...]) 
 
 
 def _validate_evaluation_specification_core(core: dict[str, object]) -> None:
+    schema_version = _string(core, "schema_version")
+    if schema_version == METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA:
+        estimator_field = "paired_estimator"
+        extra_fields: set[str] = set()
+    elif schema_version == METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA_V2:
+        estimator_field = "clustered_paired_estimator"
+        extra_fields = {"contrast_policy"}
+    else:
+        raise ValueError("unsupported Method Quality Evaluation Specification schema_version")
     _closed(
         core,
         {
@@ -1537,13 +1731,12 @@ def _validate_evaluation_specification_core(core: dict[str, object]) -> None:
             "scoring",
             "case_value_aggregation",
             "attribution",
-            "paired_estimator",
+            estimator_field,
             "execution_capability",
-        },
+        }
+        | extra_fields,
         "evaluation specification core",
     )
-    if _string(core, "schema_version") != METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA:
-        raise ValueError("unsupported Method Quality Evaluation Specification schema_version")
     if _string(core, "execution_capability") != "none":
         raise ValueError("method quality evaluation grants no execution capability")
     if _integer_tuple(core, "horizons_sessions") != (1, 3, 10):
@@ -1658,6 +1851,10 @@ def _validate_evaluation_specification_core(core: dict[str, object]) -> None:
     ):
         raise ValueError("style attribution must remain deferred from promotion")
 
+    if schema_version == METHOD_QUALITY_EVALUATION_SPECIFICATION_SCHEMA_V2:
+        _validate_clustered_estimator(core)
+        return
+
     paired = _object(core.get("paired_estimator"), "evaluation paired estimator")
     _closed(
         paired,
@@ -1712,6 +1909,99 @@ def _validate_evaluation_specification_core(core: dict[str, object]) -> None:
     )
     if actual_critical_values != expected_critical_values:
         raise ValueError("evaluation paired critical values are invalid")
+
+
+def _validate_clustered_estimator(core: dict[str, object]) -> None:
+    clustered = _object(
+        core.get("clustered_paired_estimator"),
+        "evaluation clustered paired estimator",
+    )
+    expected_clustered = {
+        "independent_unit": "event_case",
+        "replicate_role": "within_case_stochastic_measurement_not_independent_observation",
+        "arm_case_value": "arithmetic_mean_of_all_five_case_replicate_arm_values",
+        "pairing_unit": "event_case",
+        "candidate_input": "candidate_arm_case_value",
+        "comparator_input": "comparator_arm_case_value",
+        "difference": "candidate_input-comparator_input",
+        "point_estimator": "sum(case_difference)/independent_case_count",
+        "sample_variance": ("sum((case_difference-point_estimator)^2)/(independent_case_count-1)"),
+        "standard_error": "sqrt(sample_variance/independent_case_count)",
+        "interval_lower": "point_estimator-critical_value*standard_error",
+        "confidence_level": "0.95",
+        "critical_value_source": ("NIST_SEMATECH_e_Handbook_1_3_6_7_2_two_sided_0.05_table"),
+        "missing_pair_action": "inconclusive_no_promotion_no_pair_deletion",
+        "cluster_gate_rule": (
+            "mean_candidate_directional_score>0_and_interval_lower>0_else_gate_not_passed"
+        ),
+    }
+    _closed(
+        clustered,
+        set(expected_clustered) | {"critical_values_by_suite"},
+        "evaluation clustered paired estimator",
+    )
+    if any(_string(clustered, name) != value for name, value in expected_clustered.items()):
+        raise ValueError("evaluation clustered paired estimator is invalid")
+    critical_values = _object_tuple(clustered, "critical_values_by_suite")
+    expected_critical_values = (
+        ("general_methods", 24, 23, Decimal("2.069")),
+        ("family_increment", 8, 7, Decimal("2.365")),
+    )
+    actual_critical_values = tuple(
+        (
+            _string(item, "suite_id"),
+            _integer(item, "independent_case_count"),
+            _integer(item, "degrees_of_freedom"),
+            _decimal(item, "critical_value"),
+        )
+        for item in critical_values
+    )
+    if actual_critical_values != expected_critical_values:
+        raise ValueError("evaluation clustered critical values are invalid")
+
+    contrast = _object(core.get("contrast_policy"), "evaluation contrast policy")
+    _closed(
+        contrast,
+        {
+            "primary_promotion_contrast",
+            "secondary_diagnostic_contrasts",
+            "selection_policy",
+            "secondary_claim_action",
+        },
+        "evaluation contrast policy",
+    )
+    primary = _object(
+        contrast.get("primary_promotion_contrast"),
+        "primary promotion contrast",
+    )
+    _closed(primary, {"suite_id", "candidate_arm", "comparator_arm"}, "primary contrast")
+    if (
+        _string(primary, "suite_id") != "general_methods"
+        or _string(primary, "candidate_arm") != "general_methods"
+        or _string(primary, "comparator_arm") != "neutral_evidence"
+    ):
+        raise ValueError("evaluation primary promotion contrast is invalid")
+    secondary = _object_tuple(contrast, "secondary_diagnostic_contrasts")
+    actual_secondary = tuple(
+        (
+            _string(item, "suite_id"),
+            _string(item, "candidate_arm"),
+            _string(item, "comparator_arm"),
+        )
+        for item in secondary
+    )
+    expected_secondary = (
+        ("general_methods", "general_pattern", "general_methods"),
+        ("family_increment", "family_guided", "general_pattern"),
+    )
+    if actual_secondary != expected_secondary:
+        raise ValueError("evaluation secondary diagnostic contrasts are invalid")
+    if (
+        _string(contrast, "selection_policy") != "no_best_observed_arm_selection"
+        or _string(contrast, "secondary_claim_action")
+        != "no_promotion_without_new_prospective_preregistration"
+    ):
+        raise ValueError("evaluation contrast claim policy is invalid")
 
 
 def _validate_document_bindings(

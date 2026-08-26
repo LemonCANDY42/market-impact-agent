@@ -94,16 +94,26 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   synthetic contract-only Historical Evidence Manifest and separate masked Agent input; do not
   claim source-authenticated no-lookahead or that the corpus exists yet. Style attribution remains
   deferred and is not a promotion metric.
-- [ ] Implement and accept an immutable provider/archive authority plus adapter and calibration
-  verification. Until then v1 admits no retrospective holdout, even if receipt fields and hashes
-  are internally consistent.
+- [x] Retire the first method-quality statistical specification before any outcome opening after
+  review identified case-replicate pseudoreplication. Freeze v2 with Event Case as the independent
+  unit, five runs as within-case noise measurements, one primary promotion contrast, diagnostic-only
+  secondary contrasts, and an executable clustered paired estimator. Preserve v1 as negative audit
+  evidence; it can never be used for a claim.
+- [x] Implement the first immutable archive-capture authority adapter. The Common Crawl path binds
+  collection, target, capture time, object path, byte range, status, and payload digest; it verifies
+  the exact gzip/WARC member, target/status, payload digest, optional block digest, and truncation.
+  A complete official record passes the live transport path and a truncated record is rejected for
+  archive-capture acceptance. This is archive authentication, not publisher-time authentication.
+- [ ] Implement and accept source-specific publication-time extraction plus a frozen latency
+  calibration and build the first complete historical case. Until then v2 admits no retrospective
+  holdout, even when the archive capture and internal receipt hashes are valid.
 - [ ] After that authority exists, build and validate the eight-case development corpus, freeze all
   24 outcome-independent masked historical holdout cases with authenticated evidence and matching
   market snapshots and seals, and implement the overall promotion evaluator. That future evaluator
   must combine time, abstention, baselines, strata, concentration, drawdown, CVaR, and cost gates;
-  the future paired interval alone is not an overall promotion decision; paired computation remains
-  unavailable and fail-closed until content-identified case and pair bindings exist in the
-  pre-run seals/openings.
+  the clustered paired interval alone is not an overall promotion decision; the implemented
+  estimator must remain unusable for a claim until content-identified case and pair bindings exist
+  in the pre-run seals/openings.
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
   deterministic admission/non-admission, revision lineage, first-eligible separation,
   cohort limits, idempotency, and tamper detection.

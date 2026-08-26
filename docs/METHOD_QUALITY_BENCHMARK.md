@@ -2,14 +2,18 @@
 
 ## Status and claim boundary
 
-The v1 method-quality protocol is frozen before a retrospective holdout corpus or its outcomes
-exist. It defines eight development cases, 24 identity-masked retrospective holdout cases, five
-replicates, two comparison suites, an all-event denominator, cost and risk metrics, and registered
-future promotion gates. The current implementation validates deterministic directional research
-scoring and its contract boundaries; paired interval computation is unavailable and fails closed.
-The committed synthetic case validates the Historical Evidence Manifest and a
-separate masked Agent input contract. It is not one of the 24 holdout cases and contains no market
-outcome.
+The v2 method-quality protocol supersedes v1 before a retrospective holdout corpus or any outcome
+opening. Review found that v1 incorrectly treated five stochastic Agent replicates of one Event
+Case as five independent market observations. That case-replicate pseudoreplication would have
+inflated the nominal sample from 24 to 120 and narrowed uncertainty without adding an event. v1 is
+retained as negative audit evidence and is ineligible for any claim.
+
+v2 keeps eight development cases, 24 identity-masked retrospective holdout cases, five replicates,
+two comparison suites, an all-event denominator, and the existing cost/risk gates. Its executable
+clustered estimator first averages the five registered runs within each case and arm, then performs
+paired inference across 24 independent cases (eight for the family diagnostic). The committed
+synthetic case validates provenance, masking, and contract behavior only; it is not a holdout case
+and contains no market outcome.
 
 This benchmark may establish whether one frozen research method adds repeatable value relative to
 another under the registered inputs. It cannot establish uncontaminated historical alpha by itself,
@@ -18,10 +22,12 @@ execution capability.
 
 Public artifacts:
 
-- `examples/calibration/method-quality-benchmark-v1.json`, registration hash
-  `fbebb357c40f091ff03214b517bdc8e75011126fc82d28ee49a57c641c0187de`;
-- `examples/calibration/method-quality-evaluation-specification-v1.json`, specification hash
-  `002de002252c43e707f1d9c135a75d4eca157334a8e6c3eb53008fb3101c5c50`;
+- `examples/calibration/method-quality-benchmark-v2.json`, active registration hash
+  `b7c83c9c67fb3604d9daa20a49f8ed9f080549afafacdf0d7817b2f8b7472ee3`;
+- `examples/calibration/method-quality-evaluation-specification-v2.json`, active specification
+  hash `8ab6d1a187a8e1e3ae72b138ff1cf3bf8e4a4e3bbdad4f64cfb25318d4c7ec1b`;
+- `examples/calibration/method-quality-benchmark-v1.json` and
+  `method-quality-evaluation-specification-v1.json`, retired pre-outcome audit artifacts;
 - `examples/research/research-method-catalog-v2.json`, catalog hash
   `2bea3e78b3d8af253a0d0baea5274a0b082501de551c6e7c7648bff1be6d31e0`;
 - `examples/research/synthetic-energy-historical-evidence-v1.json`, development provenance
@@ -43,6 +49,7 @@ third-party trading framework or copy its prompts.
 | [KTD-Fin](https://arxiv.org/abs/2605.28359) | Consistent identifier/date masking and return-source attribution | Prompt/tool aliases, preserved economic roles and source tiers, benchmark-adjusted return | Letting a model identify a memorized historical event from ticker and calendar clues; unfrozen style attribution |
 | [CLQT](https://arxiv.org/abs/2606.29771) | Hard time gate, cost-aware diagnosis, and recomputable decision records | Zero-tolerance time gate, Usage Ledger, content bindings, process and outcome scorecard | A new execution loop or role committee |
 | [Agent Market Arena](https://github.com/The-FinAI/Agent_Market_Arena) and its [paper](https://arxiv.org/abs/2510.11695) | Same-market comparison and prospective live evaluation | Existing prospective holdout remains final promotion evidence | Remote agent endpoints, paper accounts, or execution in this phase |
+| [Hurlbert on pseudoreplication](https://esajournals.onlinelibrary.wiley.com/doi/10.2307/1942661), [Harvey, Liu, and Zhu](https://academic.oup.com/rfs/article-abstract/29/1/5/1843824), and the [backtest-overfitting literature](https://academic.oup.com/jrssig/article/18/6/22/7038278) | Independent experimental units, preselection, higher evidence hurdles, and explicit control of repeated method search | Event Case as the statistical unit, one primary promotion contrast, no best-observed-arm selection, and prospective confirmation for secondary findings | Treating repeated Agent samples, a favorable retrospective arm, or a small family slice as independent discovery evidence |
 
 TradingAgents and StockBench are Apache-2.0; Vibe-Trading and FinMem are MIT. No third-party code
 was copied, so the repository's Apache-2.0 licensing and current attribution boundary do not change.
@@ -52,11 +59,11 @@ was copied, so the repository's Apache-2.0 licensing and current attribution bou
 1. **Development**: eight synthetic or already opened cases exercise success, contradiction,
    missingness, alias consistency, revision, abstention, and cost paths. Results may guide code and
    prompt repair but make no method-quality claim.
-2. **Retrospective holdout**: v1 cannot admit any case. Source Version Receipts and Latency
-   Calibrations bind submitted assertions but do not authenticate them. Admission remains
-   fail-closed until an accepted immutable provider/archive authority and verified source adapter
-   and calibration path exist. Recomputing receipt, calibration, or manifest hashes cannot cross
-   this boundary.
+2. **Retrospective holdout**: v2 still cannot admit any case. The Common Crawl adapter now
+   authenticates one immutable archive capture, but the generic WARC record does not authenticate
+   the publisher's original `published_at`. Admission remains fail-closed until a source-specific
+   publication-time extractor and frozen latency calibration are accepted. Recomputing receipt,
+   calibration, or manifest hashes cannot cross this boundary.
 3. **Prospective holdout**: future actual-receipt evidence remains the strongest gate. Historical
    findings may motivate a new preregistration but cannot retune the already frozen physical-energy
    study in `docs/PHASE2_AGENT_PREREGISTRATION.md`.
@@ -70,7 +77,8 @@ The runtime compares the Receipt to the Evidence Reference and rejects mismatche
 or time. `synthetic_contract_only` and `contract_validated_untrusted` prove only internal contract
 validity and ordered chronology; arbitrary ordered metadata is not authenticated no-lookahead
 proof. The current CLI reports the synthetic fixture as non-authenticated, and retrospective
-holdout construction always fails closed in v1.
+holdout construction remains fail-closed until source-specific publisher-time and latency gates
+pass on top of the archive-capture authority.
 
 The Agent receives the separate masked Evidence Pack, masked evidence documents, and masked
 Pattern Pack documents, not their originals, hidden outcome metadata, or an external search tool.
@@ -86,7 +94,7 @@ The 24 retrospective cases allocate eight physical-supply/logistics, four issuer
 three each macro-real-economy, policy-regulatory, geopolitical-security, and financial-market-
 mechanics cases. Every stratum includes at least one registered case where missing or offsetting
 evidence requires abstention. Climate and cumulative technology narratives require different
-rolling-state labels and are excluded from v1 rather than forced into a single-event score.
+rolling-state labels and are excluded from v2 rather than forced into a single-event score.
 
 The `general_methods` suite compares neutral evidence, general methods, and general methods plus a
 Pattern Pack on all 24 cases. The `family_increment` suite adds the physical-energy family method
@@ -115,7 +123,7 @@ ids, fee rows, and venue rules. The Seal contains no outcome payload and binds t
 specification, snapshot, case archetype, and the exact case-replicate-arm run and Evidence Pack
 matrix.
 
-The registration content-binds the schema-validated v1 Evaluation Specification rather than
+The active registration content-binds the schema-validated v2 Evaluation Specification rather than
 symbolic procedure names. The public Market Snapshot, Outcome Seal, and Outcome Opening schemas
 and strict loaders enforce exact types, cardinality, uniqueness, IDs/hashes, nullable fill states,
 and decimal strings. Opening repeats all seal bindings; binds every expected Judgment Artifact id,
@@ -135,14 +143,20 @@ replaceable engine boundary for later backtest and trading workflows after their
 
 One case-replicate-arm value is the arithmetic mean of every exact candidate target and declared
 horizon in its Judgment Artifact. Selecting a favorable target/horizon or reweighting rows is
-invalid. The Evaluation Specification freezes the future paired estimator: `difference = candidate
-- neutral`, mean is `sum(d)/n`, sample variance uses `n-1`, standard error is `sqrt(s2/n)`, and the
-lower bound subtracts the frozen two-sided 95% Student-t critical value. General methods require
-120 pairs (`df=119`, `t=1.980`); family increment requires 40 (`df=39`, `t=2.023`), sourced to the
-registered NIST/SEMATECH table. These are specification constants only. No paired interval is
-computed or returned in v1: computation remains unavailable and fail-closed until a future
-content-identified development/holdout corpus and pair set are bound into the pre-run
-Outcome Seals/Openings. No self-asserted pair artifact can satisfy that requirement.
+invalid. v2 then averages all five replicate values inside each case and arm. Only the resulting
+Event Case means enter inference: `difference = candidate case mean - comparator case mean`, sample
+variance uses `case_count - 1`, and the two-sided 95% lower bound uses the registered Student-t
+constant. General methods use 24 independent cases (`df=23`, `t=2.069`); the family diagnostic uses
+eight (`df=7`, `t=2.365`). The five replicates measure stochastic stability and never change degrees
+of freedom. Missing any case-replicate-arm cell makes the estimate inconclusive; pair deletion is
+forbidden.
+
+The only promotion-eligible contrast is frozen in advance as `general_methods - neutral_evidence`.
+`general_pattern - general_methods` and `family_guided - general_pattern` are diagnostics. A
+favorable secondary result may motivate a new prospective preregistration but cannot promote a
+method, and no best-observed-arm selection is allowed. The clustered estimator is implemented and
+schema validated, but it cannot produce benchmark evidence until the future content-identified
+case and run matrix is bound by Outcome Seals/Openings.
 
 Only the specification and synthetic masking/provenance fixtures exist. The strict evaluation
 schemas and validators have unit-level synthetic contract examples, not committed market outcome
@@ -159,31 +173,33 @@ with the future paired interval. No overall promotion claim is made; an unavaila
 paired computation does not permit selection by the most attractive point estimate.
 
 Style attribution is explicitly deferred diagnostic work and is neither a registered promotion
-metric nor a promotion dependency. The v1 contract does not claim a style-adjusted result because
+metric nor a promotion dependency. The v2 contract does not claim a style-adjusted result because
 the investable universe, lag convention, breakpoints, portfolio weights, rebalance timing,
 missingness, and regression inputs are not frozen. The benchmark-adjusted directional research
 score remains the registered machine-validated result and is not investable PnL.
 
 ## Next workslice
 
-1. extend the validated masked-input materialization from the committed synthetic fixture to each
+1. independently review the accepted Common Crawl capture adapter and add a source-specific
+   publisher-time extractor plus a frozen latency calibration; never substitute archive capture or
+   current local retrieval time for the publisher's historical publication time;
+2. extend the validated masked-input materialization from the committed synthetic fixture to each
    future development and holdout case, including its market snapshot;
-2. create the remaining seven development cases and pass all negative paths without opening a claim;
-3. define outcome-independent case admission queries and implement an accepted immutable
-   provider/archive authority plus verified source-specific receipt and latency-calibration adapters;
-4. only after that authority exists, freeze all 24 authenticated Historical Evidence Manifests,
+3. create the remaining seven development cases and pass all negative paths without opening a claim;
+4. define outcome-independent case admission queries and accept the source-specific receipt path;
+5. only after that authority exists, freeze all 24 authenticated Historical Evidence Manifests,
    Market Snapshots, and Outcome Seals before any method run;
-5. execute the registered suites, bind Judgment Artifacts, create sequence-one Outcome Openings,
+6. execute the registered suites, bind Judgment Artifacts, create sequence-one Outcome Openings,
    run the deterministic research evaluation, and publish one acceptance or rejection report.
 
 Validate the frozen protocol and the first development provenance contract with:
 
 ```bash
 uv run market-impact agent method-benchmark-validate \
-  --registration examples/calibration/method-quality-benchmark-v1.json \
+  --registration examples/calibration/method-quality-benchmark-v2.json \
   --method-catalog examples/research/research-method-catalog-v2.json \
   --provider-profile examples/providers/minimax-m3-research-v1.json \
-  --evaluation-specification examples/calibration/method-quality-evaluation-specification-v1.json \
+  --evaluation-specification examples/calibration/method-quality-evaluation-specification-v2.json \
   --historical-manifest examples/research/synthetic-energy-historical-evidence-v1.json \
   --evidence-pack examples/agent/energy_supply/evidence-pack.json \
   --evidence-documents examples/agent/energy_supply/evidence-documents.json \

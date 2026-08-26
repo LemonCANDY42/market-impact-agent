@@ -26,12 +26,16 @@ AGENT_SCHEMA_FILES = (
     "historical-evidence-manifest.schema.json",
     "masked-agent-input-manifest.schema.json",
     "method-quality-benchmark-registration.schema.json",
+    "method-quality-benchmark-registration-v2.schema.json",
     "method-quality-evaluation-specification.schema.json",
+    "method-quality-evaluation-specification-v2.schema.json",
     "latency-calibration.schema.json",
     "source-version-receipt.schema.json",
     "method-quality-market-snapshot.schema.json",
     "method-quality-outcome-seal.schema.json",
     "method-quality-outcome-opening.schema.json",
+    "method-quality-clustered-estimate.schema.json",
+    "common-crawl-locator.schema.json",
 )
 
 

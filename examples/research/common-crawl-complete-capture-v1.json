@@ -1,0 +1,12 @@
+{
+  "schema_version": "market-impact.common-crawl-locator.v1",
+  "collection": "CC-MAIN-2025-43",
+  "target_url": "https://commoncrawl.org/get-started",
+  "timestamp": "20251016192109",
+  "filename": "crawl-data/CC-MAIN-2025-43/segments/1759648664410.92/warc/CC-MAIN-20251016175923-20251016205923-00549.warc.gz",
+  "offset": 160581106,
+  "length": 12695,
+  "digest": "sha1:ZWUFCT57EAYE6Z2QRZ3UF4PQA5TG3BEP",
+  "http_status": 200,
+  "source_version_id": "common-crawl-record-4fc90a38c56ec3454d14989d3bd03893f3242cc931afe6c1efb6230ade36ad7b"
+}

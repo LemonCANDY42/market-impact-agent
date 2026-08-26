@@ -1,0 +1,82 @@
+{
+  "schema_version": "market-impact.method-quality-evaluation-specification.v2",
+  "contract_schemas": {
+    "market_snapshot": "market-impact.method-quality-market-snapshot.v1",
+    "outcome_seal": "market-impact.method-quality-outcome-seal.v1",
+    "outcome_opening": "market-impact.method-quality-outcome-opening.v1"
+  },
+  "horizons_sessions": [1, 3, 10],
+  "scoring": {
+    "procedure": "deterministic_directional_research_score",
+    "data_granularity": "1_day_adjusted",
+    "notional_currency": "CNY",
+    "research_notional_budget": "1000000",
+    "random_seed": 0,
+    "entry_price": "first_eligible_session_open",
+    "entry_search_limit_sessions": 3,
+    "entry_failure_value": "zero_retained_in_all_event_denominator",
+    "quantity": "largest_whole_effective_board_lot_affordable_after_entry_fees",
+    "exit_price": "adjusted_close_exactly_horizon_sessions_after_entry",
+    "missing_exit_value": "zero_retained_in_all_event_denominator",
+    "direction_multiplier": "up=1;down=-1;mixed=0;unknown=0",
+    "price_move_ratio": "(exit_reference_value-entry_reference_value)/entry_reference_value",
+    "directional_score": "direction_multiplier*price_move_ratio",
+    "cost_proxy": "sum(cost_component_amount)/entry_reference_value",
+    "benchmark_move_ratio": "(benchmark_exit_close-benchmark_entry_open)/benchmark_entry_open",
+    "benchmark_adjusted_directional_score": "directional_score-cost_proxy-direction_multiplier*benchmark_move_ratio",
+    "cost_proxy_rounding": "max(rate*side_reference_value,minimum_amount)_quantized_half_up_per_component",
+    "venue_rule_selection": "exactly_one_effective_row_or_fail_closed"
+  },
+  "case_value_aggregation": {
+    "candidate_rows": "exact_artifact_candidate_target_and_declared_horizon_set",
+    "multiple_candidate_rule": "arithmetic_mean_of_all_candidate_benchmark_adjusted_directional_scores_no_selection_or_reweighting",
+    "abstain_value": "0",
+    "mixed_value": "0",
+    "unknown_value": "0",
+    "no_fill_value": "0",
+    "missing_market_data_value": "0",
+    "denominator": "every_registered_case_replicate_arm_exactly_once"
+  },
+  "attribution": {
+    "status": "deferred_diagnostic_only",
+    "promotion_dependency": false,
+    "promotion_metric": null,
+    "reason": "style_universe_lag_breakpoints_weights_rebalance_missing_and_regression_inputs_not_frozen"
+  },
+  "clustered_paired_estimator": {
+    "independent_unit": "event_case",
+    "replicate_role": "within_case_stochastic_measurement_not_independent_observation",
+    "arm_case_value": "arithmetic_mean_of_all_five_case_replicate_arm_values",
+    "pairing_unit": "event_case",
+    "candidate_input": "candidate_arm_case_value",
+    "comparator_input": "comparator_arm_case_value",
+    "difference": "candidate_input-comparator_input",
+    "point_estimator": "sum(case_difference)/independent_case_count",
+    "sample_variance": "sum((case_difference-point_estimator)^2)/(independent_case_count-1)",
+    "standard_error": "sqrt(sample_variance/independent_case_count)",
+    "interval_lower": "point_estimator-critical_value*standard_error",
+    "confidence_level": "0.95",
+    "critical_value_source": "NIST_SEMATECH_e_Handbook_1_3_6_7_2_two_sided_0.05_table",
+    "critical_values_by_suite": [
+      {"suite_id": "general_methods", "independent_case_count": 24, "degrees_of_freedom": 23, "critical_value": "2.069"},
+      {"suite_id": "family_increment", "independent_case_count": 8, "degrees_of_freedom": 7, "critical_value": "2.365"}
+    ],
+    "missing_pair_action": "inconclusive_no_promotion_no_pair_deletion",
+    "cluster_gate_rule": "mean_candidate_directional_score>0_and_interval_lower>0_else_gate_not_passed"
+  },
+  "contrast_policy": {
+    "primary_promotion_contrast": {
+      "suite_id": "general_methods",
+      "candidate_arm": "general_methods",
+      "comparator_arm": "neutral_evidence"
+    },
+    "secondary_diagnostic_contrasts": [
+      {"suite_id": "general_methods", "candidate_arm": "general_pattern", "comparator_arm": "general_methods"},
+      {"suite_id": "family_increment", "candidate_arm": "family_guided", "comparator_arm": "general_pattern"}
+    ],
+    "selection_policy": "no_best_observed_arm_selection",
+    "secondary_claim_action": "no_promotion_without_new_prospective_preregistration"
+  },
+  "execution_capability": "none",
+  "specification_id": "method-quality-evaluation-8ab6d1a187a8e1e3ae72b138ff1cf3bf8e4a4e3bbdad4f64cfb25318d4c7ec1b"
+}

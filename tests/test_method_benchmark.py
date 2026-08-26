@@ -902,6 +902,68 @@ def test_method_quality_registration_is_canonical_and_bound() -> None:
     assert not registration.outcomes_opened
 
 
+def test_method_quality_v2_uses_event_cases_as_independent_units() -> None:
+    registration = load_method_quality_benchmark(
+        ROOT / "examples/calibration/method-quality-benchmark-v2.json"
+    )
+    catalog = load_research_method_catalog(
+        ROOT / "examples/research/research-method-catalog-v2.json"
+    )
+    profile = load_model_provider_profile(ROOT / "examples/providers/minimax-m3-research-v1.json")
+    evaluation = load_method_quality_evaluation_specification(
+        ROOT / "examples/calibration/method-quality-evaluation-specification-v2.json"
+    )
+
+    registration.validate_against(
+        catalog=catalog,
+        provider_profile=profile,
+        skills=SkillRegistry(ROOT / "skills"),
+        evaluation_specification=evaluation,
+    )
+
+    core = evaluation.core_dict()
+    clustered_value = core["clustered_paired_estimator"]
+    assert isinstance(clustered_value, dict)
+    clustered = cast(dict[str, object], clustered_value)
+    assert clustered["independent_unit"] == "event_case"
+    assert clustered["replicate_role"] == (
+        "within_case_stochastic_measurement_not_independent_observation"
+    )
+    critical_values = clustered["critical_values_by_suite"]
+    assert isinstance(critical_values, list)
+    typed_critical_values = cast(list[dict[str, object]], critical_values)
+    assert typed_critical_values[0]["independent_case_count"] == 24
+    assert typed_critical_values[0]["degrees_of_freedom"] == 23
+    contrast_value = core["contrast_policy"]
+    assert isinstance(contrast_value, dict)
+    contrast = cast(dict[str, object], contrast_value)
+    assert contrast["selection_policy"] == "no_best_observed_arm_selection"
+    assert registration.immutable_prior_registration_ids[-1].startswith(
+        "method-quality-benchmark-fbebb357"
+    )
+
+
+def test_method_quality_registration_cannot_cross_bind_v1_and_v2_evaluation() -> None:
+    registration = load_method_quality_benchmark(
+        ROOT / "examples/calibration/method-quality-benchmark-v2.json"
+    )
+    catalog = load_research_method_catalog(
+        ROOT / "examples/research/research-method-catalog-v2.json"
+    )
+    profile = load_model_provider_profile(ROOT / "examples/providers/minimax-m3-research-v1.json")
+    evaluation = load_method_quality_evaluation_specification(
+        ROOT / "examples/calibration/method-quality-evaluation-specification-v1.json"
+    )
+
+    with pytest.raises(ValueError, match="versions do not match"):
+        registration.validate_against(
+            catalog=catalog,
+            provider_profile=profile,
+            skills=SkillRegistry(ROOT / "skills"),
+            evaluation_specification=evaluation,
+        )
+
+
 def test_method_quality_registration_rejects_changed_skill_instructions(
     tmp_path: Path,
 ) -> None:

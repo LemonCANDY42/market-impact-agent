@@ -172,6 +172,36 @@ def test_validate_event_rejects_invalid_archetype_and_missing_required_field(
     assert any("'claim_hash' is a required property" in error for error in result["errors"])
 
 
+def test_archive_verify_rejects_unbound_locator_before_network(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    locator = tmp_path / "locator.json"
+    locator.write_text(
+        json.dumps(
+            {
+                "schema_version": "market-impact.common-crawl-locator.v1",
+                "collection": "CC-MAIN-2025-43",
+                "target_url": "https://commoncrawl.org/get-started",
+                "timestamp": "20251016192109",
+                "filename": ("crawl-data/CC-MAIN-2025-43/segments/fixed/warc/record.warc.gz"),
+                "offset": 1,
+                "length": 10,
+                "digest": "sha1:" + "A" * 32,
+                "http_status": 200,
+                "source_version_id": "common-crawl-record-" + "0" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["archive", "common-crawl-verify", "--locator", str(locator)]) == 1
+
+    result = json.loads(capsys.readouterr().err)
+    assert result["verified"] is False
+    assert "source_version_id does not match content" in result["error"]
+
+
 def test_tushare_capture_requires_environment_token_before_creating_local_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -298,7 +328,7 @@ def test_agent_validate_rejects_tampered_evidence(
     assert "content hash mismatch" in payload["error"]
 
 
-def test_method_benchmark_validate_accepts_frozen_protocol_and_case(
+def test_method_benchmark_validate_reports_retired_v1_as_audit_only(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     result = main(
@@ -334,15 +364,66 @@ def test_method_benchmark_validate_accepts_frozen_protocol_and_case(
         ]
     )
 
-    assert result == 0
+    assert result == 1
     payload = json.loads(capsys.readouterr().out)
-    assert payload["valid"] is True
+    assert payload["valid"] is False
+    assert payload["audit_valid"] is True
+    assert payload["claim_eligible"] is False
+    assert payload["validation_status"] == "retired_v1_audit_only"
     assert payload["retrospective_holdout_case_count"] == 24
     assert payload["case_split"] == "development"
     assert payload["provenance_trust_status"] == "synthetic_contract_only"
     assert payload["source_authentication"] == "not_available_in_v1"
     assert payload["retrospective_holdout_admission"] == "unavailable_in_v1"
     assert payload["masked_evidence_pack_id"].startswith("evidence-pack-")
+    assert payload["outcomes_opened"] is False
+    assert payload["execution_capability"] == "none"
+
+
+def test_method_benchmark_validate_accepts_cluster_corrected_v2_protocol(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "agent",
+            "method-benchmark-validate",
+            "--registration",
+            "examples/calibration/method-quality-benchmark-v2.json",
+            "--method-catalog",
+            "examples/research/research-method-catalog-v2.json",
+            "--provider-profile",
+            "examples/providers/minimax-m3-research-v1.json",
+            "--evaluation-specification",
+            "examples/calibration/method-quality-evaluation-specification-v2.json",
+            "--historical-manifest",
+            "examples/research/synthetic-energy-historical-evidence-v1.json",
+            "--evidence-pack",
+            "examples/agent/energy_supply/evidence-pack.json",
+            "--evidence-documents",
+            "examples/agent/energy_supply/evidence-documents.json",
+            "--masked-input-manifest",
+            "examples/research/synthetic-energy-masked-input-manifest-v1.json",
+            "--masked-evidence-pack",
+            "examples/agent/energy_supply/masked-evidence-pack.json",
+            "--masked-evidence-documents",
+            "examples/agent/energy_supply/masked-evidence-documents.json",
+            "--pattern-pack",
+            "examples/agent/energy_supply/pattern-pack.json",
+            "--masked-pattern-pack",
+            "examples/agent/energy_supply/masked-pattern-pack.json",
+            "--skill-root",
+            "skills",
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is True
+    assert payload["independent_statistical_unit"] == "event_case"
+    assert payload["source_authentication"] == "not_available_for_supplied_case"
+    assert payload["retrospective_holdout_admission"] == (
+        "unavailable_until_publisher_time_and_latency_acceptance"
+    )
     assert payload["outcomes_opened"] is False
     assert payload["execution_capability"] == "none"
 

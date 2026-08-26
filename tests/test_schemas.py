@@ -38,12 +38,16 @@ class Validator(Protocol):
         "historical-evidence-manifest.schema.json",
         "masked-agent-input-manifest.schema.json",
         "method-quality-benchmark-registration.schema.json",
+        "method-quality-benchmark-registration-v2.schema.json",
         "method-quality-evaluation-specification.schema.json",
+        "method-quality-evaluation-specification-v2.schema.json",
         "latency-calibration.schema.json",
         "source-version-receipt.schema.json",
         "method-quality-market-snapshot.schema.json",
         "method-quality-outcome-seal.schema.json",
         "method-quality-outcome-opening.schema.json",
+        "method-quality-clustered-estimate.schema.json",
+        "common-crawl-locator.schema.json",
     ],
 )
 def test_schema_is_valid(schema_name: str) -> None:
@@ -66,6 +70,9 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/synthetic-energy-masked-input-manifest-v1.json",
         "examples/calibration/method-quality-benchmark-v1.json",
         "examples/calibration/method-quality-evaluation-specification-v1.json",
+        "examples/calibration/method-quality-benchmark-v2.json",
+        "examples/calibration/method-quality-evaluation-specification-v2.json",
+        "examples/research/common-crawl-complete-capture-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -86,8 +93,14 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "masked-agent-input-manifest.schema.json"
     elif example_path.endswith("method-quality-benchmark-v1.json"):
         schema_name = "method-quality-benchmark-registration.schema.json"
+    elif example_path.endswith("method-quality-benchmark-v2.json"):
+        schema_name = "method-quality-benchmark-registration-v2.schema.json"
     elif example_path.endswith("method-quality-evaluation-specification-v1.json"):
         schema_name = "method-quality-evaluation-specification.schema.json"
+    elif example_path.endswith("method-quality-evaluation-specification-v2.json"):
+        schema_name = "method-quality-evaluation-specification-v2.schema.json"
+    elif example_path.endswith("common-crawl-complete-capture-v1.json"):
+        schema_name = "common-crawl-locator.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     registry: Registry[Schema] = Registry()

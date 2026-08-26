@@ -36,6 +36,10 @@ from market_impact_agent.agent_runtime import (
 )
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.agent_study import load_agent_phase2_preregistration
+from market_impact_agent.archive_authority import (
+    CommonCrawlArchiveAdapter,
+    load_common_crawl_locator,
+)
 from market_impact_agent.backtests import (
     BacktestRunStatus,
     backtest_request_from_dict,
@@ -121,6 +125,19 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Validate a point-in-time event assessment"
     )
     event_validate_parser.add_argument("path", type=Path)
+
+    archive_parser = subparsers.add_parser(
+        "archive", help="Verify immutable historical archive captures"
+    )
+    archive_subparsers = archive_parser.add_subparsers(
+        dest="archive_command",
+        required=True,
+    )
+    common_crawl_parser = archive_subparsers.add_parser(
+        "common-crawl-verify",
+        help="Range-fetch and verify one fixed Common Crawl WARC record",
+    )
+    common_crawl_parser.add_argument("--locator", required=True, type=Path)
 
     prediction_parser = subparsers.add_parser(
         "prediction", help="Capture or validate read-only prediction-market observations"
@@ -426,6 +443,20 @@ def validate_event(path: Path) -> dict[str, object]:
     }
 
 
+def verify_common_crawl_archive(
+    locator_path: Path,
+    *,
+    adapter: CommonCrawlArchiveAdapter | None = None,
+) -> dict[str, object]:
+    payload = json.loads(locator_path.read_text(encoding="utf-8"))
+    errors = validate_agent_contract(payload, "common-crawl-locator.schema.json")
+    if errors:
+        raise ValueError("; ".join(errors))
+    locator = load_common_crawl_locator(locator_path)
+    record = (CommonCrawlArchiveAdapter() if adapter is None else adapter).fetch(locator)
+    return record.to_dict()
+
+
 def capture_tushare(
     *,
     token: str,
@@ -513,16 +544,42 @@ def validate_method_quality_benchmark(
     masked_pattern_pack_paths: tuple[Path, ...],
     skill_root: Path,
 ) -> dict[str, object]:
+    registration_preview = json.loads(registration_path.read_text(encoding="utf-8"))
+    evaluation_preview = json.loads(evaluation_specification_path.read_text(encoding="utf-8"))
+    typed_registration_preview = (
+        cast(dict[str, object], registration_preview)
+        if isinstance(registration_preview, dict)
+        else None
+    )
+    typed_evaluation_preview = (
+        cast(dict[str, object], evaluation_preview)
+        if isinstance(evaluation_preview, dict)
+        else None
+    )
+    registration_schema = (
+        "method-quality-benchmark-registration-v2.schema.json"
+        if typed_registration_preview is not None
+        and typed_registration_preview.get("schema_version")
+        == "market-impact.method-quality-benchmark-registration.v2"
+        else "method-quality-benchmark-registration.schema.json"
+    )
+    evaluation_schema = (
+        "method-quality-evaluation-specification-v2.schema.json"
+        if typed_evaluation_preview is not None
+        and typed_evaluation_preview.get("schema_version")
+        == "market-impact.method-quality-evaluation-specification.v2"
+        else "method-quality-evaluation-specification.schema.json"
+    )
     schema_inputs = (
         (
             registration_path,
-            "method-quality-benchmark-registration.schema.json",
+            registration_schema,
         ),
         (method_catalog_path, "research-method-catalog.schema.json"),
         (provider_profile_path, "model-provider-profile.schema.json"),
         (
             evaluation_specification_path,
-            "method-quality-evaluation-specification.schema.json",
+            evaluation_schema,
         ),
         (historical_manifest_path, "historical-evidence-manifest.schema.json"),
         (evidence_pack_path, "evidence-pack.schema.json"),
@@ -579,8 +636,7 @@ def validate_method_quality_benchmark(
         masked_documents=cast(dict[str, object], masked_documents),
         masked_pattern_packs=masked_pattern_packs,
     )
-    return {
-        "valid": True,
+    result: dict[str, object] = {
         "errors": [],
         "registration_id": registration.registration_id,
         "registration_hash": registration.registration_hash,
@@ -594,8 +650,24 @@ def validate_method_quality_benchmark(
         "case_split": historical_manifest.split.value,
         "historical_manifest_id": historical_manifest.manifest_id,
         "provenance_trust_status": historical_manifest.provenance_trust_status.value,
-        "source_authentication": "not_available_in_v1",
-        "retrospective_holdout_admission": "unavailable_in_v1",
+        "source_authentication": (
+            "not_available_for_supplied_case"
+            if registration.schema_version
+            == "market-impact.method-quality-benchmark-registration.v2"
+            else "not_available_in_v1"
+        ),
+        "retrospective_holdout_admission": (
+            "unavailable_until_publisher_time_and_latency_acceptance"
+            if registration.schema_version
+            == "market-impact.method-quality-benchmark-registration.v2"
+            else "unavailable_in_v1"
+        ),
+        "independent_statistical_unit": (
+            "event_case"
+            if registration.schema_version
+            == "market-impact.method-quality-benchmark-registration.v2"
+            else "case_replicate_retired"
+        ),
         "evidence_pack_id": evidence_pack.pack_id,
         "masked_input_manifest_id": masked_manifest.manifest_id,
         "masked_evidence_pack_id": masked_pack.pack_id,
@@ -603,6 +675,15 @@ def validate_method_quality_benchmark(
         "outcomes_opened": registration.outcomes_opened,
         "execution_capability": registration.execution_capability,
     }
+    if registration.schema_version != "market-impact.method-quality-benchmark-registration.v2":
+        return {
+            **result,
+            "valid": False,
+            "audit_valid": True,
+            "claim_eligible": False,
+            "validation_status": "retired_v1_audit_only",
+        }
+    return {**result, "valid": True}
 
 
 def validate_agent_phase2_study(
@@ -1122,6 +1203,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "archive" and args.archive_command == "common-crawl-verify":
+        try:
+            result = verify_common_crawl_archive(args.locator)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"verified": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["archive_capture_accepted"] is True else 1
     if args.command == "prediction" and args.prediction_command == "capture":
         try:
             if args.provider == "polymarket":

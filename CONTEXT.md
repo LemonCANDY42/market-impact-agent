@@ -164,6 +164,32 @@ method suites and exact Skill-route content, repeated-run protocol, and the cont
 separate schema-validated Evaluation Specification before holdout outcomes are opened.
 _Avoid_: Prompt leaderboard, backtest report, Prospective Cohort Registration
 
+**Independent Evaluation Unit**:
+One Event Case, not one stochastic Agent replicate. Repeated Agent runs within the same case
+measure method instability and are averaged before cross-case inference; they do not create new
+market observations or additional degrees of freedom.
+_Avoid_: Case-replicate pair, model sample, repeated market event
+
+**Clustered Paired Estimate**:
+A comparison that first averages every registered replicate within each Method Arm and Event Case,
+then computes paired differences and uncertainty across independent Event Cases. Missing cells
+make the estimate inconclusive; no case or replicate may be deleted after outcomes are known.
+_Avoid_: Replicate-level t-test, best-run score, filtered pair set
+
+**Archive Capture Locator**:
+A content-bound pointer to one historical archive record: immutable collection, target URL, capture
+timestamp, object path, byte offset and length, upstream payload digest, and HTTP status. The
+locator identifies what must be fetched and verified; it does not assert the publisher's original
+publication time.
+_Avoid_: Current URL, search result, mutable archive query
+
+**Verified Archive Record**:
+An exact byte-range archive response whose compressed member, WARC framing, capture metadata,
+target, status, payload digest, and optional block digest have been checked. It proves that the
+specific payload was present no later than the archive capture time. Historical Evidence still
+requires source-specific publication-time extraction and a frozen availability-latency rule.
+_Avoid_: Source Version Receipt, publication timestamp, Evidence-ready news
+
 **Method Quality Market Snapshot**:
 A content-identified pre-run commitment to the exact evaluation calendar, source vintage, case
 `as_of` and cutoff, corporate actions, adjusted price rows, benchmark rows, non-empty fee schedule, and

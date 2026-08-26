@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/method-quality-clustered-estimate.schema.json",
+  "title": "Method Quality Clustered Paired Estimate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "estimate_id",
+    "registration_id",
+    "registration_hash",
+    "evaluation_specification_id",
+    "evaluation_specification_hash",
+    "suite_id",
+    "candidate_arm",
+    "comparator_arm",
+    "contrast_role",
+    "promotion_eligible",
+    "replicate_count",
+    "independent_case_count",
+    "case_differences",
+    "point_estimate",
+    "sample_variance",
+    "standard_error",
+    "critical_value",
+    "confidence_level",
+    "interval_lower",
+    "interval_upper",
+    "positive_case_count",
+    "zero_case_count",
+    "negative_case_count",
+    "lower_bound_positive",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.method-quality-clustered-estimate.v1"},
+    "estimate_id": {"type": "string", "pattern": "^method-quality-clustered-estimate-[0-9a-f]{64}$"},
+    "registration_id": {"type": "string", "pattern": "^method-quality-benchmark-[0-9a-f]{64}$"},
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "evaluation_specification_id": {"type": "string", "pattern": "^method-quality-evaluation-[0-9a-f]{64}$"},
+    "evaluation_specification_hash": {"$ref": "#/$defs/sha256"},
+    "suite_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "candidate_arm": {"$ref": "#/$defs/method_arm"},
+    "comparator_arm": {"$ref": "#/$defs/method_arm"},
+    "contrast_role": {"enum": ["primary_promotion", "secondary_diagnostic"]},
+    "promotion_eligible": {"type": "boolean"},
+    "replicate_count": {"const": 5},
+    "independent_case_count": {"type": "integer", "minimum": 2},
+    "case_differences": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_alias", "candidate_case_mean", "comparator_case_mean", "difference"],
+        "properties": {
+          "case_alias": {"type": "string", "minLength": 1},
+          "candidate_case_mean": {"$ref": "#/$defs/decimal"},
+          "comparator_case_mean": {"$ref": "#/$defs/decimal"},
+          "difference": {"$ref": "#/$defs/decimal"}
+        }
+      }
+    },
+    "point_estimate": {"$ref": "#/$defs/decimal"},
+    "sample_variance": {"$ref": "#/$defs/decimal"},
+    "standard_error": {"$ref": "#/$defs/decimal"},
+    "critical_value": {"$ref": "#/$defs/decimal"},
+    "confidence_level": {"const": "0.95"},
+    "interval_lower": {"$ref": "#/$defs/decimal"},
+    "interval_upper": {"$ref": "#/$defs/decimal"},
+    "positive_case_count": {"type": "integer", "minimum": 0},
+    "zero_case_count": {"type": "integer", "minimum": 0},
+    "negative_case_count": {"type": "integer", "minimum": 0},
+    "lower_bound_positive": {"type": "boolean"},
+    "execution_capability": {"const": "none"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"contrast_role": {"const": "primary_promotion"}}},
+      "then": {"properties": {"promotion_eligible": {"const": true}}},
+      "else": {"properties": {"promotion_eligible": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"},
+    "method_arm": {
+      "enum": ["neutral_evidence", "general_methods", "general_pattern", "family_guided"]
+    }
+  }
+}
