@@ -136,16 +136,21 @@ the same test cohort.
 
 ## Next admissible work
 
-Remain in Phase 2 and stop capability expansion. The next workslice is a research reset,
-not another v2 run:
+Remain in Phase 2 and stop capability expansion. The research reset has frozen a materially
+new hypothesis, prospective first-eligible accrual, upstream Exposure Registry, five-Agent
+replicate protocol, simple and single-Agent baselines, missingness policy, and stricter gate
+before any new outcome was opened. The public contract is documented in
+`docs/PHASE2_AGENT_PREREGISTRATION.md`.
 
-1. diagnose the rejected mechanism using the opened cohort only as training/research
-   material and record alternative explanations, especially proxy mapping, event timing,
-   persistence, market regime, and long-only exposure;
-2. independently research the broader event-mechanism taxonomy and candidate target maps;
-3. define a materially new, falsifiable v3 hypothesis and rules before selecting later,
-   previously unseen test Event Clusters;
-4. pre-register a new chronological holdout and only then capture/open its outcomes.
+The next workslice is operational evidence accrual, not another selected historical cohort:
+
+1. implement an append-only Accrued Event ledger bound to the registration identity;
+2. retain exact real-time source versions and strategy visibility for every qualifying and
+   explicitly rejected candidate event;
+3. admit the first five qualifying events without replacement and freeze each 60-minute
+   point-in-time Evidence Pack before any Agent replicate;
+4. keep missing later inputs as all-event abstentions and wait until the registered close or
+   complete cohort before applying the gate.
 
 The five opened v2 test clusters cannot be relabeled as unseen v3 evidence. Phase 3
 event-family promotion, Agent runtime mutation, IBKR/VeighNa integration, paper execution,

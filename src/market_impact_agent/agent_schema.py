@@ -14,6 +14,8 @@ AGENT_SCHEMA_FILES = (
     "evidence-pack.schema.json",
     "judgment-proposal.schema.json",
     "judgment-artifact.schema.json",
+    "exposure-registry.schema.json",
+    "agent-phase2-preregistration.schema.json",
 )
 
 

@@ -56,6 +56,10 @@ The bootstrap implements:
 - a synthetic physical-energy supply-shock vertical slice whose frozen Agent judgment can be
   deterministically admitted into the existing Signal Intent and Backtest Request and then
   replayed by the unchanged Nautilus bridge without re-running the model;
+- a content-identified prospective Agent Phase 2 registration that freezes first-eligible
+  physical-shock accrual, an upstream A-share Exposure Registry, five independent Judgment
+  replicates, five baselines, missingness handling, and a stricter all-event gate before any
+  holdout event or outcome is opened;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -101,6 +105,12 @@ Provider and the auditable Agent-to-frozen-judgment pipeline, not model quality,
 calibration, alpha, Provider portability, or execution readiness. None of it overrides the
 failed trading-calibration result.
 
+The research reset is now frozen in
+[docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts
+after 2026-08-27T00:00:00Z and targets the first five qualifying future physical energy
+supply shocks. No event has accrued and no holdout outcome has been opened, so this is a
+preregistration milestone only—not a successful backtest or permission to enter Phase 3.
+
 ## Architecture at a glance
 
 ```text
@@ -138,6 +148,9 @@ uv run market-impact agent validate \
   --evidence-pack examples/agent/energy_supply/evidence-pack.json \
   --evidence-documents examples/agent/energy_supply/evidence-documents.json \
   --pattern-pack examples/agent/energy_supply/pattern-pack.json
+uv run market-impact agent study-validate \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
 uv run market-impact backtest phase2-register --cohort COHORT.json \
   --data-snapshot-root .market-impact/tushare --output PRIVATE_REGISTRATION.json

@@ -1,0 +1,65 @@
+{
+  "schema_version": "market-impact.exposure-registry.v1",
+  "as_of": "2026-08-26T07:09:48Z",
+  "mechanism_family": "physical_energy_supply_shock",
+  "entries": [
+    {
+      "instrument_id": "600938.XSHG",
+      "provider_code": "600938.SH",
+      "target_role": "upstream_producer",
+      "directness": "direct",
+      "selection_eligible": true,
+      "eligible_from": "2026-08-26",
+      "source_refs": [
+        "https://ltd.cnooc.com.cn/english/investorrelations/reports/annualreport/"
+      ],
+      "applicability_conditions": [
+        "the shock tightens a crude-oil or natural-gas benchmark relevant to realized upstream prices",
+        "the same event does not materially impair the issuer's own production"
+      ],
+      "offsets": [
+        "own-field production losses can offset higher benchmark prices",
+        "foreign-exchange, hedging, tax, and state-policy effects can weaken pass-through"
+      ]
+    },
+    {
+      "instrument_id": "601857.XSHG",
+      "provider_code": "601857.SH",
+      "target_role": "integrated_upstream",
+      "directness": "second_order",
+      "selection_eligible": true,
+      "eligible_from": "2026-08-26",
+      "source_refs": [
+        "https://www.petrochina.com.cn/ptr/ndbg/202605/c734755cc9764eb5ba8628aac4e3230c/files/c7e4f2a5e9aa4c9eacafb02ff2367d78.pdf"
+      ],
+      "applicability_conditions": [
+        "the upstream earnings effect is expected to dominate refining, marketing, and policy offsets",
+        "the affected benchmark is relevant to the issuer's production mix"
+      ],
+      "offsets": [
+        "refining and marketing margins can move against the upstream benefit",
+        "domestic price controls and segment integration can delay or dilute pass-through"
+      ]
+    },
+    {
+      "instrument_id": "600028.XSHG",
+      "provider_code": "600028.SH",
+      "target_role": "integrated_downstream_control",
+      "directness": "third_order",
+      "selection_eligible": false,
+      "eligible_from": "2026-08-26",
+      "source_refs": [
+        "https://www.sinopec.com/listco/en/annualreport/index.shtml"
+      ],
+      "applicability_conditions": [
+        "use only as the integrated downstream comparison control",
+        "do not promote the control to an Agent-selectable target in this registration"
+      ],
+      "offsets": [
+        "higher feedstock costs can offset upstream gains",
+        "refining, chemical, and marketing exposures make the sign event-specific"
+      ]
+    }
+  ],
+  "registry_id": "exposure-registry-c864087a7f68b3732d7caf11ca915eca56c52f9cf25f5effac2a6aefc1a2326f"
+}

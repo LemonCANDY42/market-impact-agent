@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/exposure-registry.schema.json",
+  "title": "Market Impact Exposure Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_id", "as_of", "mechanism_family", "entries"],
+  "properties": {
+    "schema_version": {"const": "market-impact.exposure-registry.v1"},
+    "registry_id": {"type": "string", "pattern": "^exposure-registry-[0-9a-f]{64}$"},
+    "as_of": {"type": "string", "format": "date-time"},
+    "mechanism_family": {"const": "physical_energy_supply_shock"},
+    "entries": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instrument_id",
+        "provider_code",
+        "target_role",
+        "directness",
+        "selection_eligible",
+        "eligible_from",
+        "source_refs",
+        "applicability_conditions",
+        "offsets"
+      ],
+      "properties": {
+        "instrument_id": {"type": "string", "minLength": 1},
+        "provider_code": {"type": "string", "minLength": 1},
+        "target_role": {
+          "enum": [
+            "upstream_producer",
+            "integrated_upstream",
+            "integrated_downstream_control"
+          ]
+        },
+        "directness": {"enum": ["direct", "second_order", "third_order", "fourth_order"]},
+        "selection_eligible": {"type": "boolean"},
+        "eligible_from": {"type": "string", "format": "date"},
+        "source_refs": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "applicability_conditions": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "offsets": {"$ref": "#/$defs/nonempty_unique_strings"}
+      }
+    }
+  }
+}

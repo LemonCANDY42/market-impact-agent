@@ -73,6 +73,11 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   twice with source adjustment factors, source price limits, T+1, and modeled costs.
 - [x] Apply the frozen v2 gate and record its single rejection reason:
   `candidate_net_return_not_positive`.
+- [x] Freeze a materially new prospective Agent study before future outcomes: first-eligible
+  physical-shock accrual, pre-outcome upstream Exposure Registry, five independent Judgment
+  replicates, five baselines, all-event missingness, and a 40% dominance bound.
+- [ ] Implement the append-only Accrued Event/source-receipt ledger and admit the first five
+  qualifying future events without replacement or outcome-based selection.
 - Pass the frozen real-data gate without a single event dominating the outcome.
 
 Exit gate: reproducible results beat at least one meaningful baseline without a
@@ -89,8 +94,8 @@ capability. A fresh MiniMax M3 China-endpoint run passed the same hardened surfa
 does not establish model quality or reopen the failed trading-calibration gate.
 
 - Add market-state/style rotation and probabilistic climate/agriculture cases.
-- Pre-register prospective frozen physical-energy supply-shock cases and Agent replicates;
-  the committed synthetic slice proves the pipeline only.
+- Promote the prospective physical-energy family only if its frozen Agent Phase 2 holdout
+  passes; the registration and committed synthetic slice are not acceptance evidence.
 - Research broader single-event and cumulative-narrative families, including
   CPO/AI infrastructure, policy themes, scheduled surprises, and uncertainty
   resolution.

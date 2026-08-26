@@ -1,0 +1,129 @@
+{
+  "schema_version": "market-impact.agent-phase2-preregistration.v1",
+  "registered_at": "2026-08-26T07:09:48Z",
+  "hypothesis_id": "physical-energy-upstream-agent-v1",
+  "hypothesis_statement": "For the first five eligible future physical energy supply shocks, a three-of-five independent Agent ensemble selecting an unaffected upstream-exposed A-share target and a 1, 3, or 10-session horizon will produce positive mean net return after modeled costs and beat the registered fixed-upstream and single-Agent baselines on the all-event denominator.",
+  "material_changes_from_v2": [
+    "agent_replicate_judgment",
+    "event_specific_horizon",
+    "pre_outcome_exposure_registry",
+    "prospective_first_eligible_accrual",
+    "upstream_target_selection"
+  ],
+  "prior_opened_evidence_hashes": [
+    "09a6e62eac404e2be69176f771fedda79810a60d606b3e99af49cee1d8170265"
+  ],
+  "exposure_registry_id": "exposure-registry-c864087a7f68b3732d7caf11ca915eca56c52f9cf25f5effac2a6aefc1a2326f",
+  "exposure_registry_hash": "c864087a7f68b3732d7caf11ca915eca56c52f9cf25f5effac2a6aefc1a2326f",
+  "accrual": {
+    "opens_after": "2026-08-27T00:00:00Z",
+    "closes_at": "2027-12-31T23:59:59Z",
+    "target_event_count": 5,
+    "minimum_separation_days": 10,
+    "selection_mode": "first_eligible",
+    "replacement_policy": "never_replace",
+    "shortfall_policy": "inconclusive_no_promotion"
+  },
+  "event_eligibility": {
+    "mechanism_family": "physical_energy_supply_shock",
+    "accepted_occurrence_source_tiers": ["official", "primary"],
+    "required_fields": [
+      "affected_commodity",
+      "expected_duration",
+      "loss_magnitude",
+      "onset_time"
+    ],
+    "inclusion_rules": [
+      "an official operator, government, exchange, or directly involved primary source confirms an unplanned physical production, transport, or storage loss",
+      "the confirmed or best point-in-time estimate is at least 500000 barrels of oil equivalent per day or at least five percent of the affected regional supply using the latest official denominator visible before the event",
+      "the first verified assessment expects or observes a disruption lasting at least 24 hours",
+      "the first qualifying evidence becomes strategy-visible after accrual opens and no later than accrual close"
+    ],
+    "exclusions": [
+      "policy-only production targets or quota announcements without verified physical loss",
+      "demand-only benchmark moves without verified physical loss",
+      "planned maintenance disclosed before the accrual window",
+      "retrospective reports whose first qualifying evidence was not strategy-visible during the accrual window"
+    ],
+    "missing_critical_data_action": "retain_and_abstain"
+  },
+  "agent_protocol": {
+    "provider_id": "minimax-openai-compatible",
+    "model": "MiniMax-M3",
+    "runtime_ref": "market-impact.agent-runtime.local-research.v2",
+    "assessment_delay_minutes": 60,
+    "evidence_cutoff_policy": "first_qualifying_visibility_plus_delay",
+    "input_availability_policy": "available_at_or_before_evidence_cutoff",
+    "entry_policy": "first_executable_xshg_open_strictly_after_evidence_cutoff",
+    "replicate_count": 5,
+    "minimum_agreeing_replicates": 3,
+    "cross_replicate_memory": false,
+    "selected_skills": ["energy-supply"],
+    "allowed_tools": ["read_evidence", "read_pattern_pack"],
+    "allowed_directions": ["up"],
+    "eligible_horizons_sessions": [1, 3, 10],
+    "agreement_fields": ["target_id", "direction", "horizon_sessions"],
+    "minimum_candidate_confidence": "0.5",
+    "no_agreement_action": "abstain",
+    "invalid_replicate_action": "abstain",
+    "execution_binding_policy": "exact_hashes_before_first_replicate"
+  },
+  "baselines": [
+    {
+      "baseline_id": "commodity_confirmation_3_session",
+      "rule_ref": "Buy 600938.XSHG for three sessions only when the first benchmark settlement strategy-visible before the A-share entry cutoff is above the last unaffected settlement; otherwise abstain.",
+      "horizon_sessions": 3,
+      "action_space": "long_or_abstain"
+    },
+    {
+      "baseline_id": "fixed_upstream_3_session",
+      "rule_ref": "Buy 600938.XSHG for three sessions for every Accrued Event with an executable next-session open; otherwise retain the event and abstain.",
+      "horizon_sessions": 3,
+      "action_space": "long_or_abstain"
+    },
+    {
+      "baseline_id": "simple_hold_10_session",
+      "rule_ref": "Buy 600938.XSHG at the same modeled entry and hold for ten sessions for every Accrued Event with an executable next-session open; otherwise retain the event and abstain.",
+      "horizon_sessions": 10,
+      "action_space": "long_or_abstain"
+    },
+    {
+      "baseline_id": "single_agent_first_valid",
+      "rule_ref": "Use the first valid Judgment Artifact's proposed target and horizon when it proposes with confidence at least 0.5; otherwise abstain.",
+      "horizon_sessions": null,
+      "action_space": "long_or_abstain"
+    },
+    {
+      "baseline_id": "target_momentum_3_session",
+      "rule_ref": "Select the eligible target with the highest positive five-session adjusted-close return ending before the entry cutoff and buy for three sessions; abstain when neither target is positive.",
+      "horizon_sessions": 3,
+      "action_space": "long_or_abstain"
+    }
+  ],
+  "evaluation": {
+    "repeated_backtest_results": 2,
+    "all_event_denominator": true,
+    "missing_critical_data_action": "abstain_zero_return",
+    "minimum_candidate_coverage_events": 3,
+    "report_common_support_view": true,
+    "require_positive_mean_net_return": true,
+    "minimum_meaningful_baselines_beaten": 2,
+    "required_baselines_to_beat": [
+      "fixed_upstream_3_session",
+      "single_agent_first_valid"
+    ],
+    "max_single_event_absolute_share": "0.4",
+    "required_metrics": [
+      "calibration",
+      "coverage",
+      "drawdown",
+      "net_return",
+      "sharpe",
+      "tail_loss",
+      "turnover"
+    ]
+  },
+  "holdout_outcomes_opened": false,
+  "execution_capability": "none",
+  "registration_id": "agent-study-0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa"
+}

@@ -109,13 +109,16 @@ trading authority.
 
 Start with energy physical-supply shocks across crude, refined products, producers,
 refiners, shipping, airlines, coal, chemicals, fertilizer, power, and A-share mappings.
-Predict next-session, 3-session, and 10-session outcomes plus continuation and reversal
-risk. Benchmark against:
+The first historical long-or-abstain cohort failed positive net return and remains opened
+research evidence. Its successor is therefore prospective: freeze upstream target roles,
+admit the first five qualifying future disruptions, run five independent point-in-time Agent
+judgments, and require exact agreement on target and 1/3/10-session horizon. Benchmark the
+ensemble against commodity confirmation, fixed upstream exposure, a simple hold, the first
+valid single-Agent answer, and target momentum. Missing later inputs remain all-event
+abstentions rather than disappearing from the sample.
 
-- event-time price momentum;
-- simple news sentiment;
-- fixed industry exposure mapping;
-- buying an energy benchmark after the event and holding three sessions.
+The exact frozen rules and current non-claims live in
+`docs/PHASE2_AGENT_PREREGISTRATION.md`.
 
 Only after the slice passes out-of-sample acceptance should the project add the
 technology-to-dividend/low-volatility rotation and El Niño-to-agriculture slices.

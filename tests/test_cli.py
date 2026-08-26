@@ -281,3 +281,55 @@ def test_agent_validate_rejects_tampered_evidence(
     assert result == 1
     payload = json.loads(capsys.readouterr().err)
     assert "content hash mismatch" in payload["error"]
+
+
+def test_agent_study_validate_accepts_frozen_prospective_registration(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "agent",
+            "study-validate",
+            "--registration",
+            "examples/calibration/agent-physical-energy-prospective-v1.json",
+            "--exposure-registry",
+            "examples/research/a-share-energy-exposure-registry-v1.json",
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is True
+    assert payload["replicate_count"] == 5
+    assert payload["target_event_count"] == 5
+    assert payload["selection_eligible_target_count"] == 2
+    assert payload["all_event_denominator"] is True
+    assert payload["holdout_outcomes_opened"] is False
+    assert payload["execution_capability"] == "none"
+
+
+def test_agent_study_validate_rejects_event_deletion_policy(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = Path("examples/calibration/agent-physical-energy-prospective-v1.json")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["event_eligibility"]["missing_critical_data_action"] = "drop_event"
+    registration = tmp_path / "invalid-registration.json"
+    registration.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = main(
+        [
+            "agent",
+            "study-validate",
+            "--registration",
+            str(registration),
+            "--exposure-registry",
+            "examples/research/a-share-energy-exposure-registry-v1.json",
+        ]
+    )
+
+    assert result == 1
+    output = json.loads(capsys.readouterr().out)
+    assert output["valid"] is False
+    assert any("retain_and_abstain" in error for error in output["errors"])

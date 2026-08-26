@@ -106,6 +106,30 @@ bound to one Listing Snapshot. It is not proof against source revision,
 omission, or survivorship bias.
 _Avoid_: Current constituents, dynamic universe
 
+**Exposure Registry**:
+A versioned, pre-outcome mapping from eligible instruments to economically distinct target
+roles, supporting sources, and transmission directness. It constrains target selection but
+does not predict direction or authorize a trade.
+_Avoid_: Stock pick list, sector constituents
+
+**Prospective Cohort Registration**:
+A content-identified commitment that freezes an event-family hypothesis, future event
+accrual rule, Exposure Registry, Judgment replicate protocol, baselines, missingness policy,
+and acceptance gate before holdout outcomes exist.
+_Avoid_: Backtest plan, selected event list
+
+**Accrued Event**:
+The next Event Cluster admitted by a Prospective Cohort Registration's outcome-independent
+eligibility and separation rules. Missing later evidence or market data cannot remove or
+replace it.
+_Avoid_: Chosen example, usable event
+
+**Common-Support View**:
+A secondary comparison limited to Accrued Events on which the candidate and named baselines
+all had their pre-registered inputs. It supplements, and never replaces, the all-event
+denominator where missing inputs become explicit abstentions.
+_Avoid_: Clean sample, filtered cohort
+
 **Backtest Request**:
 An immutable, engine-neutral request embedding the exact Signal Intent content and binding
 it to a compatible point-in-time evaluation window, target-containing universe, data
@@ -163,6 +187,18 @@ The immutable result of a Judgment Run, including cited evidence, transmission r
 candidate impacts, blockers, abstention state, and the complete configuration identity.
 It is a proposal awaiting deterministic admission, not a Signal Intent.
 _Avoid_: Model response, trade recommendation
+
+**Judgment Replicate Set**:
+A pre-sized collection of independent Judgment Artifacts produced from the same Evidence
+Pack and runtime surface without cross-replicate memory. It measures decision stability; it
+is not a multi-Agent debate.
+_Avoid_: Agent team, repeated chat
+
+**Ensemble Decision**:
+A deterministic candidate-or-abstain result derived from one Judgment Replicate Set by a
+pre-registered agreement rule. It cannot add targets, evidence, direction, or confidence
+that no qualifying Judgment Artifact proposed.
+_Avoid_: Model vote, committee recommendation
 
 **Candidate Impact**:
 One Judgment Artifact's evidence-linked directional hypothesis for a target exposure at a

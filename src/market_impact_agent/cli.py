@@ -25,6 +25,7 @@ from market_impact_agent.agent_runtime import (
     ToolSideEffect,
 )
 from market_impact_agent.agent_schema import validate_agent_contract
+from market_impact_agent.agent_study import load_agent_phase2_preregistration
 from market_impact_agent.backtests import (
     BacktestRunStatus,
     backtest_request_from_dict,
@@ -181,6 +182,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/agent-runs"),
     )
+    agent_study_parser = agent_subparsers.add_parser(
+        "study-validate",
+        help="Validate the prospective Agent Phase 2 study and Exposure Registry",
+    )
+    agent_study_parser.add_argument("--registration", required=True, type=Path)
+    agent_study_parser.add_argument("--exposure-registry", required=True, type=Path)
     return parser
 
 
@@ -310,6 +317,50 @@ def validate_agent_bundle(
         "pattern_pack_count": len(repository.evidence_pack.pattern_packs),
         "allowed_targets": list(repository.evidence_pack.allowed_targets),
         "synthetic_or_licensed_data_must_remain_local": True,
+    }
+
+
+def validate_agent_phase2_study(
+    *,
+    registration_path: Path,
+    exposure_registry_path: Path,
+) -> dict[str, object]:
+    registration_payload = json.loads(registration_path.read_text(encoding="utf-8"))
+    registry_payload = json.loads(exposure_registry_path.read_text(encoding="utf-8"))
+    errors = tuple(
+        f"registration {error}"
+        for error in validate_agent_contract(
+            registration_payload,
+            "agent-phase2-preregistration.schema.json",
+        )
+    ) + tuple(
+        f"exposure_registry {error}"
+        for error in validate_agent_contract(
+            registry_payload,
+            "exposure-registry.schema.json",
+        )
+    )
+    if errors:
+        return {"valid": False, "errors": list(errors)}
+    registration, registry = load_agent_phase2_preregistration(
+        registration_path,
+        exposure_registry_path,
+    )
+    return {
+        "valid": True,
+        "errors": [],
+        "registration_id": registration.registration_id,
+        "registration_hash": registration.registration_hash,
+        "exposure_registry_id": registry.registry_id,
+        "exposure_registry_hash": registry.registry_hash,
+        "selection_eligible_target_count": sum(
+            item.selection_eligible for item in registry.entries
+        ),
+        "target_event_count": registration.accrual.target_event_count,
+        "replicate_count": registration.agent_protocol.replicate_count,
+        "all_event_denominator": registration.evaluation.all_event_denominator,
+        "holdout_outcomes_opened": registration.holdout_outcomes_opened,
+        "execution_capability": registration.execution_capability,
     }
 
 
@@ -648,6 +699,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
+    if args.command == "agent" and args.agent_command == "study-validate":
+        try:
+            result = validate_agent_phase2_study(
+                registration_path=args.registration,
+                exposure_registry_path=args.exposure_registry,
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["valid"] else 1
     if args.command == "backtest" and args.backtest_command == "run":
         try:
             request_payload = json.loads(args.request.read_text(encoding="utf-8"))

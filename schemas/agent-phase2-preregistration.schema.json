@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/agent-phase2-preregistration.schema.json",
+  "title": "Market Impact Agent Phase 2 Preregistration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "registered_at",
+    "hypothesis_id",
+    "hypothesis_statement",
+    "material_changes_from_v2",
+    "prior_opened_evidence_hashes",
+    "exposure_registry_id",
+    "exposure_registry_hash",
+    "accrual",
+    "event_eligibility",
+    "agent_protocol",
+    "baselines",
+    "evaluation",
+    "holdout_outcomes_opened",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.agent-phase2-preregistration.v1"},
+    "registration_id": {"type": "string", "pattern": "^agent-study-[0-9a-f]{64}$"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "hypothesis_id": {"type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"},
+    "hypothesis_statement": {"type": "string", "minLength": 1},
+    "material_changes_from_v2": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "prior_opened_evidence_hashes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sha256"}
+    },
+    "exposure_registry_id": {
+      "type": "string",
+      "pattern": "^exposure-registry-[0-9a-f]{64}$"
+    },
+    "exposure_registry_hash": {"$ref": "#/$defs/sha256"},
+    "accrual": {"$ref": "#/$defs/accrual"},
+    "event_eligibility": {"$ref": "#/$defs/event_eligibility"},
+    "agent_protocol": {"$ref": "#/$defs/agent_protocol"},
+    "baselines": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/baseline"}
+    },
+    "evaluation": {"$ref": "#/$defs/evaluation"},
+    "holdout_outcomes_opened": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "accrual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "opens_after",
+        "closes_at",
+        "target_event_count",
+        "minimum_separation_days",
+        "selection_mode",
+        "replacement_policy",
+        "shortfall_policy"
+      ],
+      "properties": {
+        "opens_after": {"type": "string", "format": "date-time"},
+        "closes_at": {"type": "string", "format": "date-time"},
+        "target_event_count": {"type": "integer", "minimum": 5},
+        "minimum_separation_days": {"type": "integer", "minimum": 10},
+        "selection_mode": {"const": "first_eligible"},
+        "replacement_policy": {"const": "never_replace"},
+        "shortfall_policy": {"const": "inconclusive_no_promotion"}
+      }
+    },
+    "event_eligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mechanism_family",
+        "accepted_occurrence_source_tiers",
+        "required_fields",
+        "inclusion_rules",
+        "exclusions",
+        "missing_critical_data_action"
+      ],
+      "properties": {
+        "mechanism_family": {"const": "physical_energy_supply_shock"},
+        "accepted_occurrence_source_tiers": {"const": ["official", "primary"]},
+        "required_fields": {
+          "const": [
+            "affected_commodity",
+            "expected_duration",
+            "loss_magnitude",
+            "onset_time"
+          ]
+        },
+        "inclusion_rules": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "exclusions": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "missing_critical_data_action": {"const": "retain_and_abstain"}
+      }
+    },
+    "agent_protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "model",
+        "runtime_ref",
+        "assessment_delay_minutes",
+        "evidence_cutoff_policy",
+        "input_availability_policy",
+        "entry_policy",
+        "replicate_count",
+        "minimum_agreeing_replicates",
+        "cross_replicate_memory",
+        "selected_skills",
+        "allowed_tools",
+        "allowed_directions",
+        "eligible_horizons_sessions",
+        "agreement_fields",
+        "minimum_candidate_confidence",
+        "no_agreement_action",
+        "invalid_replicate_action",
+        "execution_binding_policy"
+      ],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "runtime_ref": {"type": "string", "minLength": 1},
+        "assessment_delay_minutes": {"const": 60},
+        "evidence_cutoff_policy": {"const": "first_qualifying_visibility_plus_delay"},
+        "input_availability_policy": {"const": "available_at_or_before_evidence_cutoff"},
+        "entry_policy": {
+          "const": "first_executable_xshg_open_strictly_after_evidence_cutoff"
+        },
+        "replicate_count": {"const": 5},
+        "minimum_agreeing_replicates": {"const": 3},
+        "cross_replicate_memory": {"const": false},
+        "selected_skills": {"const": ["energy-supply"]},
+        "allowed_tools": {"const": ["read_evidence", "read_pattern_pack"]},
+        "allowed_directions": {"const": ["up"]},
+        "eligible_horizons_sessions": {"const": [1, 3, 10]},
+        "agreement_fields": {"const": ["target_id", "direction", "horizon_sessions"]},
+        "minimum_candidate_confidence": {"const": "0.5"},
+        "no_agreement_action": {"const": "abstain"},
+        "invalid_replicate_action": {"const": "abstain"},
+        "execution_binding_policy": {"const": "exact_hashes_before_first_replicate"}
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_id", "rule_ref", "horizon_sessions", "action_space"],
+      "properties": {
+        "baseline_id": {
+          "enum": [
+            "commodity_confirmation_3_session",
+            "fixed_upstream_3_session",
+            "simple_hold_10_session",
+            "single_agent_first_valid",
+            "target_momentum_3_session"
+          ]
+        },
+        "rule_ref": {"type": "string", "minLength": 1},
+        "horizon_sessions": {
+          "oneOf": [
+            {"enum": [1, 3, 10]},
+            {"type": "null"}
+          ]
+        },
+        "action_space": {"const": "long_or_abstain"}
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repeated_backtest_results",
+        "all_event_denominator",
+        "missing_critical_data_action",
+        "minimum_candidate_coverage_events",
+        "report_common_support_view",
+        "require_positive_mean_net_return",
+        "minimum_meaningful_baselines_beaten",
+        "required_baselines_to_beat",
+        "max_single_event_absolute_share",
+        "required_metrics"
+      ],
+      "properties": {
+        "repeated_backtest_results": {"const": 2},
+        "all_event_denominator": {"const": true},
+        "missing_critical_data_action": {"const": "abstain_zero_return"},
+        "minimum_candidate_coverage_events": {"type": "integer", "minimum": 3},
+        "report_common_support_view": {"const": true},
+        "require_positive_mean_net_return": {"const": true},
+        "minimum_meaningful_baselines_beaten": {"type": "integer", "minimum": 2},
+        "required_baselines_to_beat": {
+          "const": ["fixed_upstream_3_session", "single_agent_first_valid"]
+        },
+        "max_single_event_absolute_share": {
+          "type": "string",
+          "pattern": "^(?:0\\.[0-3][0-9]*|0\\.40*)$"
+        },
+        "required_metrics": {
+          "const": [
+            "calibration",
+            "coverage",
+            "drawdown",
+            "net_return",
+            "sharpe",
+            "tail_loss",
+            "turnover"
+          ]
+        }
+      }
+    }
+  }
+}
