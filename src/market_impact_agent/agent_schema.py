@@ -16,6 +16,7 @@ AGENT_SCHEMA_FILES = (
     "judgment-artifact.schema.json",
     "exposure-registry.schema.json",
     "agent-phase2-preregistration.schema.json",
+    "candidate-event-observation.schema.json",
 )
 
 

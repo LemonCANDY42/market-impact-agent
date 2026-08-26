@@ -7,13 +7,18 @@ import os
 import platform
 import sys
 from collections.abc import Iterable, Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Protocol, cast
 
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 from market_impact_agent import __version__
+from market_impact_agent.accrual import (
+    AccrualDisposition,
+    AccrualLedger,
+    candidate_event_observation_from_dict,
+)
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_runtime import (
     ProviderPricing,
@@ -188,6 +193,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent_study_parser.add_argument("--registration", required=True, type=Path)
     agent_study_parser.add_argument("--exposure-registry", required=True, type=Path)
+    agent_observe_parser = agent_subparsers.add_parser(
+        "study-observe",
+        help="Append one Candidate Event Observation to the prospective accrual ledger",
+    )
+    agent_observe_parser.add_argument("--registration", required=True, type=Path)
+    agent_observe_parser.add_argument("--exposure-registry", required=True, type=Path)
+    agent_observe_parser.add_argument("--observation", required=True, type=Path)
+    agent_observe_parser.add_argument("--raw-source", required=True, type=Path)
+    agent_observe_parser.add_argument("--regional-denominator-source", type=Path)
+    agent_observe_parser.add_argument("--ledger", type=Path)
+    agent_ledger_parser = agent_subparsers.add_parser(
+        "study-ledger-validate",
+        help="Validate and summarize an existing prospective accrual ledger",
+    )
+    agent_ledger_parser.add_argument("--registration", required=True, type=Path)
+    agent_ledger_parser.add_argument("--exposure-registry", required=True, type=Path)
+    agent_ledger_parser.add_argument("--ledger", required=True, type=Path)
     return parser
 
 
@@ -364,6 +386,126 @@ def validate_agent_phase2_study(
     }
 
 
+def observe_agent_phase2_study(
+    *,
+    registration_path: Path,
+    exposure_registry_path: Path,
+    observation_path: Path,
+    raw_source_path: Path,
+    regional_denominator_source_path: Path | None,
+    ledger_path: Path | None,
+    recorded_at: datetime,
+) -> dict[str, object]:
+    study_result = validate_agent_phase2_study(
+        registration_path=registration_path,
+        exposure_registry_path=exposure_registry_path,
+    )
+    if not study_result["valid"]:
+        errors = study_result.get("errors", [])
+        raise ValueError(f"prospective study contracts are invalid: {errors}")
+    observation_payload = json.loads(observation_path.read_text(encoding="utf-8"))
+    observation_errors = validate_agent_contract(
+        observation_payload,
+        "candidate-event-observation.schema.json",
+    )
+    if observation_errors:
+        raise ValueError(
+            "Candidate Event Observation schema validation failed: " + "; ".join(observation_errors)
+        )
+    observation = candidate_event_observation_from_dict(observation_payload)
+    raw_source = _read_source_artifact(raw_source_path, "raw source")
+    regional_denominator_source = (
+        None
+        if regional_denominator_source_path is None
+        else _read_source_artifact(
+            regional_denominator_source_path,
+            "regional denominator source",
+        )
+    )
+    registration, registry = load_agent_phase2_preregistration(
+        registration_path,
+        exposure_registry_path,
+    )
+    resolved_ledger_path = (
+        ledger_path
+        if ledger_path is not None
+        else Path(".market-impact/accrual") / registration.registration_hash / "ledger.sqlite3"
+    )
+    ledger = AccrualLedger(
+        resolved_ledger_path,
+        registration=registration,
+        registry=registry,
+        created_at=recorded_at,
+    )
+    decision = ledger.record(
+        observation,
+        recorded_at=recorded_at,
+        raw_source=raw_source,
+        regional_denominator_source=regional_denominator_source,
+    )
+    return {
+        "recorded": True,
+        "observation_id": observation.observation_id,
+        "event_id": observation.event_id,
+        "sequence": decision.sequence,
+        "disposition": decision.disposition.value,
+        "accrued": decision.disposition is AccrualDisposition.ACCRUED,
+        "reasons": [item.value for item in decision.reasons],
+        "qualifying_visible_at": (
+            None
+            if decision.qualifying_visible_at is None
+            else decision.qualifying_visible_at.isoformat().replace("+00:00", "Z")
+        ),
+        "evidence_cutoff_at": (
+            None
+            if decision.evidence_cutoff_at is None
+            else decision.evidence_cutoff_at.isoformat().replace("+00:00", "Z")
+        ),
+        "accrued_event_id": decision.accrued_event_id,
+        "decision_hash": decision.decision_hash,
+        "ledger_hash": ledger.ledger_hash,
+        "accrued_event_count": ledger.accrued_event_count,
+        "target_event_count": registration.accrual.target_event_count,
+        "ledger_path": ledger.path.as_posix(),
+        "source_artifact_root": ledger.source_artifacts.root.as_posix(),
+        "execution_capability": "none",
+    }
+
+
+def validate_agent_phase2_ledger(
+    *,
+    registration_path: Path,
+    exposure_registry_path: Path,
+    ledger_path: Path,
+    inspected_at: datetime,
+) -> dict[str, object]:
+    if not ledger_path.is_file():
+        raise FileNotFoundError(f"Accrual Ledger does not exist: {ledger_path}")
+    registration, registry = load_agent_phase2_preregistration(
+        registration_path,
+        exposure_registry_path,
+    )
+    ledger = AccrualLedger(
+        ledger_path,
+        registration=registration,
+        registry=registry,
+        created_at=inspected_at,
+    )
+    decisions = ledger.decisions()
+    return {
+        "valid": True,
+        "registration_id": registration.registration_id,
+        "ledger_path": ledger.path.as_posix(),
+        "ledger_hash": ledger.ledger_hash,
+        "decision_count": len(decisions),
+        "accrued_event_count": ledger.accrued_event_count,
+        "target_event_count": registration.accrual.target_event_count,
+        "cohort_complete": (ledger.accrued_event_count >= registration.accrual.target_event_count),
+        "last_decision_hash": None if not decisions else decisions[-1].decision_hash,
+        "execution_capability": "none",
+    }
+
+
 async def run_agent_bundle(
     *,
     evidence_pack_path: Path,
@@ -501,6 +643,15 @@ def _event_transmission_schema_path() -> Path:
 
 def _format_schema_error(error: ValidationError) -> str:
     return f"{error.json_path}: {error.message}"
+
+
+def _read_source_artifact(path: Path, name: str) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"{name} must be a regular file")
+    size_bytes = path.stat().st_size
+    if size_bytes < 1 or size_bytes > 20 * 1024 * 1024:
+        raise ValueError(f"{name} must contain between 1 byte and 20 MiB")
+    return path.read_bytes()
 
 
 def _compact_date(value: str) -> date:
@@ -713,6 +864,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "agent" and args.agent_command == "study-observe":
+        try:
+            result = observe_agent_phase2_study(
+                registration_path=args.registration,
+                exposure_registry_path=args.exposure_registry,
+                observation_path=args.observation,
+                raw_source_path=args.raw_source,
+                regional_denominator_source_path=args.regional_denominator_source,
+                ledger_path=args.ledger,
+                recorded_at=datetime.now(UTC),
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"recorded": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent" and args.agent_command == "study-ledger-validate":
+        try:
+            result = validate_agent_phase2_ledger(
+                registration_path=args.registration,
+                exposure_registry_path=args.exposure_registry,
+                ledger_path=args.ledger,
+                inspected_at=datetime.now(UTC),
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "backtest" and args.backtest_command == "run":
         try:
             request_payload = json.loads(args.request.read_text(encoding="utf-8"))

@@ -60,6 +60,10 @@ The bootstrap implements:
   physical-shock accrual, an upstream A-share Exposure Registry, five independent Judgment
   replicates, five baselines, missingness handling, and a stricter all-event gate before any
   holdout event or outcome is opened;
+- a private append-only Accrual Ledger that validates actual-receipt Candidate Event
+  Observations, replays deterministic admission against that registration, retains explicit
+  non-admission reasons, enforces revision/separation/cohort rules, and detects stored-row or
+  hash-chain tampering;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -109,7 +113,9 @@ The research reset is now frozen in
 [docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts
 after 2026-08-27T00:00:00Z and targets the first five qualifying future physical energy
 supply shocks. No event has accrued and no holdout outcome has been opened, so this is a
-preregistration milestone only—not a successful backtest or permission to enter Phase 3.
+preregistration and operational-ledger milestone only—not a successful backtest or
+permission to enter Phase 3. The ledger accepts source-capture output but does not yet fetch
+or monitor official disruption sources itself.
 
 ## Architecture at a glance
 
@@ -151,6 +157,16 @@ uv run market-impact agent validate \
 uv run market-impact agent study-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json
+uv run market-impact agent study-observe \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --observation CANDIDATE_OBSERVATION.json \
+  --raw-source RAW_SOURCE_FILE \
+  --ledger LEDGER.sqlite3
+uv run market-impact agent study-ledger-validate \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --ledger LEDGER.sqlite3
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
 uv run market-impact backtest phase2-register --cohort COHORT.json \
   --data-snapshot-root .market-impact/tushare --output PRIVATE_REGISTRATION.json

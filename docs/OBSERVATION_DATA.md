@@ -133,6 +133,32 @@ repository's Apache-2.0 license. Calling World Monitor's external API does not g
 to licensed news or market data; source retention and redistribution rights remain separate
 from the first-party code license.
 
+## Prospective accrual observations
+
+The first prospective physical-energy study adds a narrow Candidate Event Observation
+contract above the general Source Observation boundary. It preserves direct upstream and
+Provider identity, source tier, occurrence/publication/update times, measured actual receipt,
+raw-content hash, a non-verbatim claim summary, event nature, affected commodity, estimated
+loss, duration, and official denominator provenance when a regional fraction is used.
+
+Only `actual_receipt` availability is accepted for prospective accrual. Established news,
+specialist, community, and aggregator observations may be retained as discoveries but do not
+qualify the event. A later official or directly involved primary observation may supersede
+the discovery through a linear revision chain. The deterministic Accrual Decision then
+records admission or every applicable non-admission reason under the frozen registration.
+
+The private SQLite ledger is registration-bound, append-only through the application,
+hash-chained, idempotent by observation identity, mode `0600`, and fully replayed on reopen.
+Missing onset, commodity, magnitude, unit, or duration values remain explicit `null` fields
+and produce a retained `missing_critical_data` non-admission instead of disappearing before
+evaluation. A lineaged later source revision may fill a missing identity fact but cannot
+change a previously established occurrence time or commodity.
+It stores normalized observation content and raw-content hashes; the exact external body is
+verified against that hash and copied into a sibling private content-addressed artifact
+store. Neither body nor ledger enters the repository. Current tests prove the contract,
+artifact, and ledger mechanics with synthetic source content; no direct physical-disruption
+source adapter or real event acceptance is yet claimed.
+
 ## Next acceptance gate
 
 Before these observations can support another Phase 2 calibration hypothesis:

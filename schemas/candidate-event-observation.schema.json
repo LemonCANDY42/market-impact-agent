@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/candidate-event-observation.schema.json",
+  "title": "Market Impact Candidate Event Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observation_id",
+    "event_id",
+    "event_nature",
+    "affected_commodity",
+    "loss_amount",
+    "loss_unit",
+    "regional_denominator_source_ref",
+    "regional_denominator_source_tier",
+    "regional_denominator_available_at",
+    "regional_denominator_raw_content_hash",
+    "expected_duration_hours",
+    "source",
+    "supersedes_observation_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.candidate-event-observation.v1"},
+    "observation_id": {
+      "type": "string",
+      "pattern": "^candidate-observation-[0-9a-f]{64}$"
+    },
+    "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+    "event_nature": {
+      "enum": [
+        "physical_production_loss",
+        "physical_transport_loss",
+        "physical_storage_loss",
+        "policy_only",
+        "demand_only",
+        "planned_maintenance",
+        "retrospective_only"
+      ]
+    },
+    "affected_commodity": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1}
+      ]
+    },
+    "loss_amount": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/positive_decimal"}
+      ]
+    },
+    "loss_unit": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["boe_per_day", "regional_supply_fraction"]}
+      ]
+    },
+    "regional_denominator_source_ref": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1}
+      ]
+    },
+    "regional_denominator_source_tier": {
+      "oneOf": [
+        {"type": "null"},
+        {"const": "official"}
+      ]
+    },
+    "regional_denominator_available_at": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "format": "date-time"}
+      ]
+    },
+    "regional_denominator_raw_content_hash": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/sha256"}
+      ]
+    },
+    "expected_duration_hours": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/positive_decimal"}
+      ]
+    },
+    "source": {"$ref": "#/$defs/source_observation"},
+    "supersedes_observation_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^candidate-observation-[0-9a-f]{64}$"}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"loss_unit": {"const": "regional_supply_fraction"}},
+        "required": ["loss_unit"]
+      },
+      "then": {
+        "properties": {
+          "loss_amount": {"$ref": "#/$defs/positive_decimal"},
+          "regional_denominator_source_ref": {"type": "string", "minLength": 1},
+          "regional_denominator_source_tier": {"const": "official"},
+          "regional_denominator_available_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "regional_denominator_raw_content_hash": {"$ref": "#/$defs/sha256"}
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {"loss_unit": {"const": "boe_per_day"}},
+          "required": ["loss_unit"]
+        },
+        "then": {
+          "properties": {
+            "loss_amount": {"$ref": "#/$defs/positive_decimal"},
+            "regional_denominator_source_ref": {"type": "null"},
+            "regional_denominator_source_tier": {"type": "null"},
+            "regional_denominator_available_at": {"type": "null"},
+            "regional_denominator_raw_content_hash": {"type": "null"}
+          }
+        },
+        "else": {
+        "properties": {
+          "loss_amount": {"type": "null"},
+          "regional_denominator_source_ref": {"type": "null"},
+          "regional_denominator_source_tier": {"type": "null"},
+          "regional_denominator_available_at": {"type": "null"},
+          "regional_denominator_raw_content_hash": {"type": "null"}
+        }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "positive_decimal": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$"
+    },
+    "source_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "upstream_source",
+        "upstream_record_id",
+        "source_ref",
+        "source_tier",
+        "occurred_at",
+        "published_at",
+        "source_updated_at",
+        "available_at",
+        "retrieved_at",
+        "availability_basis",
+        "raw_content_hash",
+        "claim_summary",
+        "claim_hash"
+      ],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "upstream_source": {"type": "string", "minLength": 1},
+        "upstream_record_id": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "source_tier": {
+          "enum": [
+            "official",
+            "regulated",
+            "primary",
+            "established_news",
+            "specialist",
+            "community",
+            "unverified"
+          ]
+        },
+        "occurred_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "format": "date-time"}
+          ]
+        },
+        "published_at": {"type": "string", "format": "date-time"},
+        "source_updated_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "format": "date-time"}
+          ]
+        },
+        "available_at": {"type": "string", "format": "date-time"},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "availability_basis": {"const": "actual_receipt"},
+        "raw_content_hash": {"$ref": "#/$defs/sha256"},
+        "claim_summary": {"type": "string", "minLength": 1},
+        "claim_hash": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

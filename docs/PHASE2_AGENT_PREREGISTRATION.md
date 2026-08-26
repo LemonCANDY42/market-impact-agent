@@ -39,7 +39,7 @@ not presume that model reasoning is alpha.
 
 Accrual opens after `2026-08-27T00:00:00Z` and closes at
 `2027-12-31T23:59:59Z`. The first five independent qualifying Event Clusters are admitted,
-with at least ten calendar days between admitted events. Qualification requires an official
+with at least ten calendar days between event occurrence times. Qualification requires an official
 or directly involved primary source to confirm an unplanned physical production, transport,
 or storage loss of at least 500,000 barrels of oil equivalent per day or five percent of the
 affected regional supply using the latest official denominator visible before the event,
@@ -110,11 +110,30 @@ must include coverage, net return, drawdown, turnover, Sharpe, calibration, and 
 
 ## Next operational work
 
-Before the accrual window is operationally useful, implement the append-only Accrued Event
-ledger and source-receipt workflow that binds first qualifying visibility, the 60-minute
-cutoff, occurrence-source versions, deduplication/separation, and explicit non-qualification
-reasons. That workflow must validate against this immutable registration and must not expose
-broker, paper, order, or account capabilities.
+The private append-only Accrual Ledger is implemented. It binds every Candidate Event
+Observation to this registration, requires actual-receipt availability, preserves source
+publication/update/retrieval and raw-content hashes, replays revision lineage and admission,
+retains explicit non-admission reasons, computes the 60-minute cutoff only for admitted
+events, and rejects duplicate-content drift, receipt reordering, or stored-row/hash-chain
+tampering. It exposes no broker, paper, order, or account capability.
+
+The ledger does not fetch or interpret arbitrary URLs. Its input must be produced by a
+source capture/adapter and contains a claim summary plus the hash of privately retained raw
+content; licensed or mutable source bodies do not enter the repository. Aggregator or news
+observations may be recorded for discovery but cannot qualify until an official or directly
+involved primary-source revision supersedes them.
+
+Critical onset, commodity, magnitude, unit, or duration fields may be explicitly unknown.
+Such observations remain in the ledger with `missing_critical_data` and cannot accrue; a
+lineaged later revision may fill the missing fact. This implements the registered
+retain-and-abstain rule instead of silently improving the cohort by dropping incomplete
+candidates.
+
+Next, implement fixed direct-source capture/monitoring for the registered physical-energy
+family, retain its raw versions privately, and feed valid Candidate Event Observations into
+the ledger. When the first event is admitted, a scheduler must wait until the recorded
+cutoff and freeze the Evidence Pack before replicate one. No real event has yet been
+recorded or admitted.
 
 Validate the frozen public contracts with:
 
@@ -122,4 +141,20 @@ Validate the frozen public contracts with:
 uv run market-impact agent study-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json
+```
+
+Record one adapter-produced observation and validate the resulting private ledger with:
+
+```bash
+uv run market-impact agent study-observe \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --observation CANDIDATE_OBSERVATION.json \
+  --raw-source RAW_SOURCE_FILE \
+  --ledger LEDGER.sqlite3
+
+uv run market-impact agent study-ledger-validate \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --ledger LEDGER.sqlite3
 ```

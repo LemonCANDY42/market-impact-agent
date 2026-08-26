@@ -142,11 +142,17 @@ replicate protocol, simple and single-Agent baselines, missingness policy, and s
 before any new outcome was opened. The public contract is documented in
 `docs/PHASE2_AGENT_PREREGISTRATION.md`.
 
-The next workslice is operational evidence accrual, not another selected historical cohort:
+The private append-only Accrual Ledger now binds the registration, Exposure Registry,
+actual-receipt Candidate Event Observations, deterministic admission decisions, revision
+lineage, separation, cohort limits, and a tamper-evident history. It has passed synthetic
+normal and negative paths but has not received a real event.
 
-1. implement an append-only Accrued Event ledger bound to the registration identity;
-2. retain exact real-time source versions and strategy visibility for every qualifying and
-   explicitly rejected candidate event;
+The next workslice is live source intake, not another selected historical cohort:
+
+1. capture exact real-time versions from fixed direct official/operator sources and retain
+   their raw content privately;
+2. derive content-identified Candidate Event Observations with publication, update,
+   availability, retrieval, magnitude, duration, and denominator provenance;
 3. admit the first five qualifying events without replacement and freeze each 60-minute
    point-in-time Evidence Pack before any Agent replicate;
 4. keep missing later inputs as all-event abstentions and wait until the registered close or

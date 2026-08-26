@@ -118,6 +118,18 @@ accrual rule, Exposure Registry, Judgment replicate protocol, baselines, missing
 and acceptance gate before holdout outcomes exist.
 _Avoid_: Backtest plan, selected event list
 
+**Candidate Event Observation**:
+An immutable, point-in-time assertion that a possible Event Cluster may satisfy one
+Prospective Cohort Registration, including its occurrence facts and supporting Source
+Observation. It is not an Accrued Event or a trading judgment.
+_Avoid_: Event candidate, alert, qualifying event
+
+**Accrual Decision**:
+A deterministic, content-identified admission or non-admission result for one Candidate
+Event Observation under one Prospective Cohort Registration. It never predicts market
+direction and cannot remove an earlier Accrued Event.
+_Avoid_: Agent decision, event label, trade decision
+
 **Accrued Event**:
 The next Event Cluster admitted by a Prospective Cohort Registration's outcome-independent
 eligibility and separation rules. Missing later evidence or market data cannot remove or

@@ -76,8 +76,11 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
 - [x] Freeze a materially new prospective Agent study before future outcomes: first-eligible
   physical-shock accrual, pre-outcome upstream Exposure Registry, five independent Judgment
   replicates, five baselines, all-event missingness, and a 40% dominance bound.
-- [ ] Implement the append-only Accrued Event/source-receipt ledger and admit the first five
-  qualifying future events without replacement or outcome-based selection.
+- [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
+  deterministic admission/non-admission, revision lineage, first-eligible separation,
+  cohort limits, idempotency, and tamper detection.
+- [ ] Add verified direct-source capture/monitoring and admit the first five qualifying
+  future events without replacement or outcome-based selection.
 - Pass the frozen real-data gate without a single event dominating the outcome.
 
 Exit gate: reproducible results beat at least one meaningful baseline without a
