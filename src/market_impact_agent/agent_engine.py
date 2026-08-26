@@ -329,6 +329,7 @@ class AgentEngine:
         )
         if record.status.terminal:
             return self._terminal_result(record)
+        metrics = _MutableMetrics()
         try:
             return await self._run_with_control(
                 request=request,
@@ -338,13 +339,19 @@ class AgentEngine:
                 surface=surface,
                 record=record,
                 cancellation=token,
+                metrics=metrics,
             )
         except _RunCancelled as exc:
-            return self._finish_failure(request.run_id, RunStatus.CANCELLED, exc)
+            return self._finish_failure(request.run_id, RunStatus.CANCELLED, exc, metrics)
         except _BudgetExceeded as exc:
-            return self._finish_failure(request.run_id, RunStatus.BUDGET_EXHAUSTED, exc)
+            return self._finish_failure(
+                request.run_id,
+                RunStatus.BUDGET_EXHAUSTED,
+                exc,
+                metrics,
+            )
         except Exception as exc:
-            return self._finish_failure(request.run_id, RunStatus.FAILED, exc)
+            return self._finish_failure(request.run_id, RunStatus.FAILED, exc, metrics)
 
     async def _run_with_control(
         self,
@@ -356,6 +363,7 @@ class AgentEngine:
         surface: _ExecutionSurface,
         record: RunRecord,
         cancellation: CancellationToken,
+        metrics: _MutableMetrics,
     ) -> AgentRunResult:
         if cancellation.cancelled:
             raise _RunCancelled("run was cancelled before model execution")
@@ -368,6 +376,7 @@ class AgentEngine:
                 surface=surface,
                 record=record,
                 cancellation=cancellation,
+                metrics=metrics,
             )
         )
         cancellation_task = asyncio.create_task(cancellation.wait())
@@ -401,11 +410,11 @@ class AgentEngine:
         surface: _ExecutionSurface,
         record: RunRecord,
         cancellation: CancellationToken,
+        metrics: _MutableMetrics,
     ) -> AgentRunResult:
         ledger = ContextLedger()
         for entry in prompt_entries:
             ledger.append(entry)
-        metrics = _MutableMetrics()
         checkpoint_number = 1
         contract_corrections = 0
         last_raw_response_hash: str | None = None
@@ -444,6 +453,17 @@ class AgentEngine:
             remaining_output = self.config.budget.max_output_tokens - metrics.output_tokens
             if remaining_output < 1:
                 raise _BudgetExceeded("run exhausted its output-token budget")
+            maximum_output = min(self.config.reserved_output_tokens, remaining_output)
+            maximum_cost = self.config.budget.max_estimated_cost_microusd
+            if maximum_cost is not None:
+                remaining_cost = maximum_cost - metrics.estimated_cost_microusd
+                affordable_output = self.config.pricing.affordable_output_tokens(
+                    remaining_microusd=remaining_cost,
+                    estimated_input_tokens=estimated_input,
+                )
+                maximum_output = min(maximum_output, affordable_output)
+                if maximum_output < 1:
+                    raise _BudgetExceeded("run lacks estimated-cost budget for another model turn")
             event_id = f"{request.run_id}.turn.{turn_number}"
             existing = self.journal.event(event_id)
             if existing is None:
@@ -452,10 +472,7 @@ class AgentEngine:
                     tools=() if contract_corrections else model_tools,
                     temperature=self.config.temperature,
                     top_p=self.config.top_p,
-                    max_output_tokens=min(
-                        self.config.reserved_output_tokens,
-                        remaining_output,
-                    ),
+                    max_output_tokens=maximum_output,
                     timeout_seconds=self.config.budget.max_wall_seconds,
                 )
                 self._assert_no_secret(turn.raw_response)
@@ -464,7 +481,7 @@ class AgentEngine:
             else:
                 turn = self._load_turn(existing, surface=surface)
             self._record_turn_metrics(metrics, turn)
-            _enforce_token_budgets(metrics, self.config)
+            _enforce_run_budgets(metrics, self.config)
             last_raw_response_hash = canonical_hash(turn.raw_response)
             ledger.append(_assistant_entry(request.run_id, turn_number, turn))
             if turn.tool_calls:
@@ -685,6 +702,7 @@ class AgentEngine:
                 "arguments_hash": canonical_hash(call.arguments),
                 "result_artifact_hash": result.result_artifact.content_hash,
                 "result_media_type": result.result_artifact.media_type,
+                "result_size_bytes": result.result_artifact.size_bytes,
                 "model_content": result.model_content,
                 "untrusted": result.untrusted,
                 "redacted": result.redacted,
@@ -790,8 +808,24 @@ class AgentEngine:
         run_id: str,
         status: RunStatus,
         error: Exception,
+        metrics: _MutableMetrics,
     ) -> AgentRunResult:
         finished_at = self._now()
+        failed_attempts = getattr(error, "attempts", 0)
+        if (
+            isinstance(failed_attempts, int)
+            and not isinstance(failed_attempts, bool)
+            and failed_attempts > 0
+        ):
+            metrics.provider_attempts += failed_attempts
+            self.journal.append(
+                run_id=run_id,
+                event_id=f"{run_id}.model-failure.{metrics.turns + 1}",
+                event_type="model.turn.failed",
+                observed_at=finished_at,
+                payload={"attempts": failed_attempts},
+            )
+        frozen_metrics = metrics.freeze()
         payload = {
             "schema_version": "market-impact.agent-run-error.v1",
             "run_id": run_id,
@@ -800,6 +834,7 @@ class AgentEngine:
             "finished_at": finished_at.isoformat().replace("+00:00", "Z"),
             "error_class": type(error).__name__,
             "message": self._redacted_message(str(error)) or type(error).__name__,
+            "metrics": frozen_metrics.to_dict(),
         }
         artifact = self.artifact_store.put_json(payload)
         record = self.journal.finish(
@@ -813,7 +848,7 @@ class AgentEngine:
             status=record.status,
             judgment=None,
             terminal_store_hash=artifact.content_hash,
-            metrics=None,
+            metrics=frozen_metrics,
         )
 
     def _terminal_result(self, record: RunRecord) -> AgentRunResult:
@@ -821,6 +856,7 @@ class AgentEngine:
             raise ValueError("terminal run is missing its terminal artifact identity")
         journal_hash = self.journal.journal_hash(record.run_id)
         payload = self.artifact_store.read_json(record.terminal_artifact_id)
+        metrics = self._metrics_from_journal(record.run_id)
         if record.status is RunStatus.COMPLETED:
             judgment = judgment_artifact_from_dict(payload)
             if judgment.run_id != record.run_id:
@@ -836,16 +872,46 @@ class AgentEngine:
                 status=record.status,
                 judgment=judgment,
                 terminal_store_hash=record.terminal_artifact_id,
-                metrics=None,
+                metrics=metrics,
             )
-        self._validate_terminal_error(payload, record=record, journal_hash=journal_hash)
+        self._validate_terminal_error(
+            payload,
+            record=record,
+            journal_hash=journal_hash,
+            metrics=metrics,
+        )
         return AgentRunResult(
             run_id=record.run_id,
             status=record.status,
             judgment=None,
             terminal_store_hash=record.terminal_artifact_id,
-            metrics=None,
+            metrics=metrics,
         )
+
+    def _metrics_from_journal(self, run_id: str) -> RunMetrics:
+        metrics = _MutableMetrics()
+        for event in self.journal.events(run_id):
+            if event.event_type == "model.turn.completed":
+                usage = _payload_mapping(event.payload, "usage")
+                turn_usage = ProviderUsage(
+                    input_tokens=_payload_integer(usage, "input_tokens"),
+                    output_tokens=_payload_integer(usage, "output_tokens"),
+                )
+                metrics.turns += 1
+                metrics.input_tokens += turn_usage.input_tokens
+                metrics.output_tokens += turn_usage.output_tokens
+                metrics.latency_ms += _payload_number(event.payload, "latency_ms")
+                metrics.provider_attempts += _payload_integer(event.payload, "attempts")
+                metrics.estimated_cost_microusd += self.config.pricing.estimate_microusd(turn_usage)
+            elif event.event_type == "tool.call.completed":
+                metrics.tool_calls += 1
+                size = event.payload.get("result_size_bytes", 0)
+                if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+                    raise ValueError("stored tool result_size_bytes is invalid")
+                metrics.result_bytes += size
+            elif event.event_type == "model.turn.failed":
+                metrics.provider_attempts += _payload_integer(event.payload, "attempts")
+        return metrics.freeze()
 
     @staticmethod
     def _validate_terminal_error(
@@ -853,6 +919,7 @@ class AgentEngine:
         *,
         record: RunRecord,
         journal_hash: str,
+        metrics: RunMetrics,
     ) -> None:
         if not isinstance(value, dict):
             raise TypeError("terminal error artifact must be an object")
@@ -865,6 +932,7 @@ class AgentEngine:
             "finished_at",
             "error_class",
             "message",
+            "metrics",
         }
         if set(payload) != expected_keys:
             raise ValueError("terminal error artifact does not match its closed contract")
@@ -882,6 +950,8 @@ class AgentEngine:
             for name in ("error_class", "message")
         ):
             raise ValueError("terminal error artifact fields must be non-empty strings")
+        if payload.get("metrics") != metrics.to_dict():
+            raise ValueError("terminal error metrics do not match the run journal")
 
     def _check_cancel(self, cancellation: CancellationToken) -> None:
         if cancellation.cancelled:
@@ -1171,11 +1241,14 @@ def _tool_call_from_dict(value: object) -> ToolCall:
     )
 
 
-def _enforce_token_budgets(metrics: _MutableMetrics, config: RuntimeConfig) -> None:
+def _enforce_run_budgets(metrics: _MutableMetrics, config: RuntimeConfig) -> None:
     if metrics.input_tokens > config.budget.max_input_tokens:
         raise _BudgetExceeded("provider-reported input tokens exceeded the run budget")
     if metrics.output_tokens > config.budget.max_output_tokens:
         raise _BudgetExceeded("provider-reported output tokens exceeded the run budget")
+    maximum_cost = config.budget.max_estimated_cost_microusd
+    if maximum_cost is not None and metrics.estimated_cost_microusd > maximum_cost:
+        raise _BudgetExceeded("provider-reported usage exceeded the estimated-cost budget")
 
 
 def _payload_string(payload: Mapping[str, object], name: str) -> str:

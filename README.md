@@ -53,6 +53,11 @@ The bootstrap implements:
   append-only crash-safe runs, automatic context compaction, on-demand hashed Skills, typed
   permissioned tools, official MCP lifecycle handling, budgets, cancellation, redaction,
   closed-output correction, and a pinned MiniMax M3 China-endpoint Provider;
+- persona-free, automatically routed Research Method Skills adapted from stable event,
+  fundamental, market-context, and adversarial-risk workflows; a frozen four-arm ablation
+  holds evidence/model/action space constant while varying only those method layers;
+- a content-identified Model Provider Profile/Factory plus a hash-chained Usage Ledger for
+  successful and failed runs, including a per-run estimated-cost ceiling;
 - a synthetic physical-energy supply-shock vertical slice with both one generated Judgment
   Artifact and a generated three-of-five Ensemble Decision deterministically admitted into
   the existing Signal Intent and Backtest Request, then replayed by the unchanged Nautilus
@@ -122,6 +127,12 @@ Provider portability, or execution readiness. The real ensemble selected `600938
 the committed deterministic replay fixture uses `600028.XSHG`; those results are deliberately
 not combined. None of this overrides the failed trading-calibration result.
 
+The first real MiniMax four-arm method ablation also completed 20 of 20 runs. It showed that
+persona-free general and family-specific method layers can be deterministically routed,
+costed, replayed, and can change the selected horizon. Because the single synthetic bundle
+contains one eligible long-only target and no market outcome, it establishes process behavior
+only—not a winning Skill, better forecast, backtest result, or alpha claim.
+
 The research reset is now frozen in
 [docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts
 after 2026-08-27T00:00:00Z and targets the first five qualifying future physical energy
@@ -168,6 +179,16 @@ uv run market-impact agent validate \
   --evidence-pack examples/agent/energy_supply/evidence-pack.json \
   --evidence-documents examples/agent/energy_supply/evidence-documents.json \
   --pattern-pack examples/agent/energy_supply/pattern-pack.json
+uv run market-impact agent method-ablation-run \
+  --ablation-registration examples/calibration/agent-method-ablation-v1.json \
+  --parent-registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --method-catalog examples/research/research-method-catalog-v1.json \
+  --provider-profile examples/providers/minimax-m3-research-v1.json \
+  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
+  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json \
+  --experiment-id YOUR_UNIQUE_METHOD_ABLATION_ID
 uv run market-impact agent study-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \

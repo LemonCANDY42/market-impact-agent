@@ -21,6 +21,7 @@ from market_impact_agent.accrual import (
 )
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_runtime import (
+    ModelProvider,
     ProviderPricing,
     RuntimeBudget,
     RuntimeConfig,
@@ -45,7 +46,11 @@ from market_impact_agent.energy_monitor import EnergySourceMonitor
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.evidence_freeze import freeze_due_evidence_packs
 from market_impact_agent.frozen_research import FrozenResearchRepository
-from market_impact_agent.minimax_provider import MiniMaxOpenAIProvider
+from market_impact_agent.model_provider import (
+    ModelProviderFactory,
+    default_model_provider_profile_path,
+    load_model_provider_profile,
+)
 from market_impact_agent.observations import (
     ValidatedObservationBundle,
     validate_prediction_market_batch,
@@ -79,6 +84,10 @@ from market_impact_agent.tushare_bundle import (
 
 class EventTransmissionValidator(Protocol):
     def iter_errors(self, instance: object) -> Iterable[ValidationError]: ...
+
+
+class AvailableModelProvider(ModelProvider, Protocol):
+    async def assert_model_available(self, *, timeout_seconds: float) -> None: ...
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -215,6 +224,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--ensemble-state-root",
         type=Path,
         default=Path(".market-impact/agent-ensemble-decisions"),
+    )
+    method_ablation_parser = agent_subparsers.add_parser(
+        "method-ablation-run",
+        help="Run the frozen four-arm research-method ablation without broker reachability",
+    )
+    method_ablation_parser.add_argument("--ablation-registration", required=True, type=Path)
+    method_ablation_parser.add_argument("--parent-registration", required=True, type=Path)
+    method_ablation_parser.add_argument("--exposure-registry", required=True, type=Path)
+    method_ablation_parser.add_argument("--method-catalog", required=True, type=Path)
+    method_ablation_parser.add_argument("--provider-profile", required=True, type=Path)
+    _add_agent_bundle_arguments(method_ablation_parser)
+    method_ablation_parser.add_argument("--experiment-id", required=True)
+    method_ablation_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    method_ablation_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/method-ablation-runs"),
     )
     agent_study_parser = agent_subparsers.add_parser(
         "study-validate",
@@ -787,7 +817,11 @@ async def run_agent_bundle(
         evidence_documents_path=evidence_documents_path,
         pattern_pack_paths=pattern_pack_paths,
     )
-    provider = MiniMaxOpenAIProvider.from_environment()
+    profile = load_model_provider_profile(default_model_provider_profile_path())
+    provider = cast(
+        AvailableModelProvider,
+        ModelProviderFactory.with_builtin_adapters().create(profile),
+    )
     await provider.assert_model_available(timeout_seconds=30)
     state_directory = state_root / canonical_hash(run_id)
     artifact_store = ArtifactStore(state_directory / "artifacts")
@@ -1125,6 +1159,58 @@ def main(argv: Sequence[str] | None = None) -> int:
                     skill_root=args.skill_root,
                     state_root=args.state_root,
                     ensemble_state_root=args.ensemble_state_root,
+                )
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name != "mcp":
+                raise
+            print(
+                json.dumps(
+                    {
+                        "completed": False,
+                        "error": (
+                            "Agent execution requires the optional dependency group; "
+                            "install market-impact-agent[agent]"
+                        ),
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent" and args.agent_command == "method-ablation-run":
+        try:
+            from market_impact_agent.method_ablation_runner import (
+                run_method_ablation_bundle,
+            )
+
+            result = asyncio.run(
+                run_method_ablation_bundle(
+                    ablation_registration_path=args.ablation_registration,
+                    parent_registration_path=args.parent_registration,
+                    exposure_registry_path=args.exposure_registry,
+                    method_catalog_path=args.method_catalog,
+                    provider_profile_path=args.provider_profile,
+                    evidence_pack_path=args.evidence_pack,
+                    evidence_documents_path=args.evidence_documents,
+                    pattern_pack_paths=tuple(args.pattern_packs),
+                    experiment_id=args.experiment_id,
+                    skill_root=args.skill_root,
+                    state_root=args.state_root,
                 )
             )
         except ModuleNotFoundError as exc:

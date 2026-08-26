@@ -29,6 +29,9 @@ class Validator(Protocol):
         "order-intent.schema.json",
         "provider-manifest.schema.json",
         "signal-intent.schema.json",
+        "research-method-catalog.schema.json",
+        "model-provider-profile.schema.json",
+        "method-ablation-registration.schema.json",
     ],
 )
 def test_schema_is_valid(schema_name: str) -> None:
@@ -43,6 +46,9 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/events/synthetic-energy-supply-shock.json",
         "examples/providers/tushare-http-unverified.json",
         "examples/providers/veighna-external-bridge.json",
+        "examples/research/research-method-catalog-v1.json",
+        "examples/providers/minimax-m3-research-v1.json",
+        "examples/calibration/agent-method-ablation-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -51,6 +57,12 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "event-transmission.schema.json"
     elif example_path.startswith("examples/backtests/"):
         schema_name = "backtest-request.schema.json"
+    elif example_path.endswith("research-method-catalog-v1.json"):
+        schema_name = "research-method-catalog.schema.json"
+    elif example_path.endswith("minimax-m3-research-v1.json"):
+        schema_name = "model-provider-profile.schema.json"
+    elif example_path.endswith("agent-method-ablation-v1.json"):
+        schema_name = "method-ablation-registration.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     validator = Draft202012Validator(

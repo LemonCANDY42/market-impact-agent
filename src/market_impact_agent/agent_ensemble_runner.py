@@ -4,7 +4,7 @@ import asyncio
 import os
 from collections.abc import Awaitable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_engine import (
@@ -29,7 +29,11 @@ from market_impact_agent.agent_study import (
     load_agent_phase2_preregistration,
 )
 from market_impact_agent.frozen_research import FrozenResearchRepository
-from market_impact_agent.minimax_provider import MiniMaxOpenAIProvider
+from market_impact_agent.model_provider import (
+    ModelProviderFactory,
+    default_model_provider_profile_path,
+    load_model_provider_profile,
+)
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal
 
 AGENT_RUNTIME_REF = "market-impact.agent-runtime.local-research.v2"
@@ -85,7 +89,11 @@ async def run_agent_ensemble_bundle(
             "Evidence Pack contains targets outside the frozen selection-eligible "
             f"Exposure Registry: {', '.join(outside_registry)}"
         )
-    selected_provider = provider or MiniMaxOpenAIProvider.from_environment()
+    profile = load_model_provider_profile(default_model_provider_profile_path())
+    selected_provider = provider or cast(
+        AvailableModelProvider,
+        ModelProviderFactory.with_builtin_adapters().create(profile),
+    )
     protocol = registration.agent_protocol
     if (
         selected_provider.provider_id != protocol.provider_id

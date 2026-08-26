@@ -65,6 +65,24 @@ class ProviderPricing:
         )
         return math.ceil(numerator / 1_000_000)
 
+    def affordable_output_tokens(
+        self,
+        *,
+        remaining_microusd: int,
+        estimated_input_tokens: int,
+    ) -> int:
+        if remaining_microusd < 1 or estimated_input_tokens < 0:
+            return 0
+        available_numerator = (
+            remaining_microusd * 1_000_000
+            - estimated_input_tokens * self.input_microusd_per_million_tokens
+        )
+        if available_numerator <= 0:
+            return 0
+        if self.output_microusd_per_million_tokens == 0:
+            return 2**63 - 1
+        return available_numerator // self.output_microusd_per_million_tokens
+
     def to_dict(self) -> dict[str, object]:
         return {
             "pricing_id": self.pricing_id,
@@ -81,6 +99,7 @@ class RuntimeBudget:
     max_output_tokens: int
     max_wall_seconds: float
     max_result_bytes: int
+    max_estimated_cost_microusd: int | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -94,9 +113,11 @@ class RuntimeBudget:
                 raise ValueError(f"{name} must be positive")
         if not math.isfinite(self.max_wall_seconds) or self.max_wall_seconds <= 0:
             raise ValueError("max_wall_seconds must be finite and positive")
+        if self.max_estimated_cost_microusd is not None and self.max_estimated_cost_microusd < 1:
+            raise ValueError("max_estimated_cost_microusd must be positive when set")
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "max_turns": self.max_turns,
             "max_tool_calls": self.max_tool_calls,
             "max_input_tokens": self.max_input_tokens,
@@ -104,6 +125,9 @@ class RuntimeBudget:
             "max_wall_seconds": self.max_wall_seconds,
             "max_result_bytes": self.max_result_bytes,
         }
+        if self.max_estimated_cost_microusd is not None:
+            payload["max_estimated_cost_microusd"] = self.max_estimated_cost_microusd
+        return payload
 
 
 @dataclass(frozen=True, slots=True)

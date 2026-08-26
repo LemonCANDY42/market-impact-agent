@@ -1,0 +1,55 @@
+{
+  "schema_version": "market-impact.research-method-catalog.v1",
+  "version": "1.0.0",
+  "methods": [
+    {
+      "skill_name": "evidence-core",
+      "layer": "evidence",
+      "asset_classes": [],
+      "mechanism_families": [],
+      "requires_pattern_pack": false,
+      "priority": 10
+    },
+    {
+      "skill_name": "event-market-context",
+      "layer": "event_context",
+      "asset_classes": ["public_equity"],
+      "mechanism_families": [],
+      "requires_pattern_pack": false,
+      "priority": 20
+    },
+    {
+      "skill_name": "equity-exposure",
+      "layer": "equity_exposure",
+      "asset_classes": ["public_equity"],
+      "mechanism_families": [],
+      "requires_pattern_pack": false,
+      "priority": 30
+    },
+    {
+      "skill_name": "adversarial-risk",
+      "layer": "adversarial_risk",
+      "asset_classes": [],
+      "mechanism_families": [],
+      "requires_pattern_pack": false,
+      "priority": 40
+    },
+    {
+      "skill_name": "pattern-review",
+      "layer": "pattern",
+      "asset_classes": [],
+      "mechanism_families": [],
+      "requires_pattern_pack": true,
+      "priority": 50
+    },
+    {
+      "skill_name": "energy-supply",
+      "layer": "family",
+      "asset_classes": ["public_equity"],
+      "mechanism_families": ["physical_energy_supply_shock"],
+      "requires_pattern_pack": true,
+      "priority": 60
+    }
+  ],
+  "catalog_id": "research-method-catalog-bf3a8d96efeb38f3921aa80145653ca18708be3d2c66e2c8bdc6f7740cfe66df"
+}

@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": [],
+  "description": "Neutral point-in-time evidence discipline for every research judgment.",
+  "instructions_hash": "7f79ff844f45de189387e1c0de767f834020b227c6a0dbbd3055c0c50f74de35",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "4bf3db546401a6cd5578f18fff6c379d4d3c41e65de5594944e22efe0a135933",
+  "name": "evidence-core",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/evidence-core",
+  "version": "1.0.0"
+}

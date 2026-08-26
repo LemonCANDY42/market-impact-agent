@@ -1,0 +1,78 @@
+{
+  "schema_version": "market-impact.method-ablation-registration.v1",
+  "registered_at": "2026-08-26T12:00:00Z",
+  "parent_registration_id": "agent-study-0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa",
+  "parent_registration_hash": "0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa",
+  "provider_profile_id": "model-provider-a37f1abb9efbdfb3aefa4fc7f1e4803e4ac0a14512e07b7788f19959e3b610c0",
+  "provider_profile_hash": "a37f1abb9efbdfb3aefa4fc7f1e4803e4ac0a14512e07b7788f19959e3b610c0",
+  "method_catalog_id": "research-method-catalog-bf3a8d96efeb38f3921aa80145653ca18708be3d2c66e2c8bdc6f7740cfe66df",
+  "method_catalog_hash": "bf3a8d96efeb38f3921aa80145653ca18708be3d2c66e2c8bdc6f7740cfe66df",
+  "arms": [
+    {
+      "arm": "neutral_evidence",
+      "route_id": "skill-route-23c29f78c9d72a0d7ce5badfdabe9c0a4692be42bc1316da638bb43a9f4c3ce1",
+      "route_hash": "23c29f78c9d72a0d7ce5badfdabe9c0a4692be42bc1316da638bb43a9f4c3ce1",
+      "requested_skills": ["evidence-core"],
+      "allowed_capabilities": ["evidence.read"],
+      "allowed_tools": ["read_evidence"]
+    },
+    {
+      "arm": "general_methods",
+      "route_id": "skill-route-ee75fab39c93f745e14d1a099f5c44e45ea1c98c5a9525650d653ea08673dc5c",
+      "route_hash": "ee75fab39c93f745e14d1a099f5c44e45ea1c98c5a9525650d653ea08673dc5c",
+      "requested_skills": [
+        "evidence-core",
+        "event-market-context",
+        "equity-exposure",
+        "adversarial-risk"
+      ],
+      "allowed_capabilities": ["evidence.read"],
+      "allowed_tools": ["read_evidence"]
+    },
+    {
+      "arm": "general_pattern",
+      "route_id": "skill-route-b5bc6bbe76d07635c81df9d762364d3e11821ba7959d1c79cc550ffc3d35634a",
+      "route_hash": "b5bc6bbe76d07635c81df9d762364d3e11821ba7959d1c79cc550ffc3d35634a",
+      "requested_skills": [
+        "evidence-core",
+        "event-market-context",
+        "equity-exposure",
+        "adversarial-risk",
+        "pattern-review"
+      ],
+      "allowed_capabilities": ["evidence.read", "pattern.read"],
+      "allowed_tools": ["read_evidence", "read_pattern_pack"]
+    },
+    {
+      "arm": "family_guided",
+      "route_id": "skill-route-67144f6e6e83095abec42828e934b086ff1f1a0d35faf461b957e2773ca7df63",
+      "route_hash": "67144f6e6e83095abec42828e934b086ff1f1a0d35faf461b957e2773ca7df63",
+      "requested_skills": [
+        "evidence-core",
+        "event-market-context",
+        "equity-exposure",
+        "adversarial-risk",
+        "pattern-review",
+        "energy-supply"
+      ],
+      "allowed_capabilities": ["evidence.read", "pattern.read"],
+      "allowed_tools": ["read_evidence", "read_pattern_pack"]
+    }
+  ],
+  "replicate_count": 5,
+  "minimum_agreement": 3,
+  "run_order": "interleaved_by_replicate_then_arm",
+  "common_inputs": [
+    "action_space",
+    "evidence_cutoff",
+    "evidence_pack",
+    "model_provider_profile",
+    "output_contract",
+    "replicate_budget",
+    "target_universe"
+  ],
+  "all_event_denominator": true,
+  "outcomes_opened": false,
+  "execution_capability": "none",
+  "registration_id": "method-ablation-4a53646fb4698225414d0519387213d5ba679358baeb547ea4ba0e1f0c5454b9"
+}

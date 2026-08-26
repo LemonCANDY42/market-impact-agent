@@ -82,6 +82,10 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
 - [x] Pass a real MiniMax M3 synthetic-bundle normal run: five of five completed under one
   binding and three selected `600938.XSHG/up/1 session`. Retain the earlier failed/abstaining
   run as negative evidence; do not claim a market replay because no matching snapshot exists.
+- [x] Freeze persona-free general Research Method Skills, deterministic routing, one
+  Model Provider Profile/Factory, success/failure Usage Ledger, hard per-run estimated-cost
+  cap, and a four-arm same-input ablation runner. Treat synthetic comparison as process
+  evidence only; do not use it to reopen an outcome-frozen cohort.
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
   deterministic admission/non-admission, revision lineage, first-eligible separation,
   cohort limits, idempotency, and tamper detection.

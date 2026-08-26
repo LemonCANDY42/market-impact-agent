@@ -57,6 +57,10 @@ class SimulatedCrash(BaseException):
     pass
 
 
+class ProviderFailure(RuntimeError):
+    attempts = 2
+
+
 class FixtureProvider(ModelProvider):
     def __init__(self, responses: Sequence[ModelTurn | BaseException]) -> None:
         self.responses = list(responses)
@@ -423,6 +427,7 @@ def runtime_config(
     max_tool_calls: int = 4,
     context_window_tokens: int = 16_384,
     reserved_output_tokens: int = 256,
+    max_estimated_cost_microusd: int | None = None,
 ) -> RuntimeConfig:
     return RuntimeConfig(
         provider_id="fixture-provider",
@@ -438,6 +443,7 @@ def runtime_config(
             max_output_tokens=2_000,
             max_wall_seconds=5,
             max_result_bytes=20_000,
+            max_estimated_cost_microusd=max_estimated_cost_microusd,
         ),
         pricing=ProviderPricing(
             pricing_id="fixture-pricing-v1",
@@ -914,6 +920,40 @@ def test_budget_cancel_malformed_output_and_secret_exfiltration_fail_closed(
         "protected-secret" not in path.read_text(encoding="utf-8", errors="ignore")
         for path in (secret_root / "artifacts").iterdir()
     )
+
+
+def test_hard_cost_budget_and_failed_provider_attempts_are_audited(tmp_path: Path) -> None:
+    cost_provider = FixtureProvider([final_turn(proposal())])
+    cost_root = tmp_path / "cost-cap"
+    cost_engine = make_engine(
+        cost_root,
+        cost_provider,
+        handler_calls=[],
+        config=runtime_config(max_estimated_cost_microusd=1),
+    )
+
+    budgeted = asyncio.run(cost_engine.run(request("cost-cap-run")))
+
+    assert budgeted.status is RunStatus.BUDGET_EXHAUSTED
+    assert budgeted.metrics is not None
+    assert budgeted.metrics.estimated_cost_microusd == 0
+    assert cost_provider.requests == []
+    replayed_budget = asyncio.run(cost_engine.run(request("cost-cap-run")))
+    assert replayed_budget.metrics == budgeted.metrics
+
+    failure_root = tmp_path / "provider-failure"
+    failure_engine = make_engine(
+        failure_root,
+        FixtureProvider([ProviderFailure("upstream unavailable")]),
+        handler_calls=[],
+    )
+    failed = asyncio.run(failure_engine.run(request("provider-failure-run")))
+
+    assert failed.status is RunStatus.FAILED
+    assert failed.metrics is not None
+    assert failed.metrics.provider_attempts == 2
+    replayed_failure = asyncio.run(failure_engine.run(request("provider-failure-run")))
+    assert replayed_failure.metrics == failed.metrics
 
 
 def test_non_research_authority_is_rejected_before_run(tmp_path: Path) -> None:

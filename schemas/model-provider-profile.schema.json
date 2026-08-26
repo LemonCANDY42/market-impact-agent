@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/model-provider-profile.schema.json",
+  "title": "Market Impact Model Provider Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "adapter_kind",
+    "provider_id",
+    "origin",
+    "api_path",
+    "models_path",
+    "model",
+    "credential_env",
+    "context_window_tokens",
+    "reserved_output_tokens",
+    "temperature",
+    "top_p",
+    "budget",
+    "pricing",
+    "max_attempts",
+    "retry_backoff_seconds"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.model-provider-profile.v1"},
+    "profile_id": {"type": "string", "pattern": "^model-provider-[0-9a-f]{64}$"},
+    "adapter_kind": {"type": "string", "minLength": 1},
+    "provider_id": {"type": "string", "minLength": 1},
+    "origin": {"type": "string", "format": "uri"},
+    "api_path": {"type": "string", "pattern": "^/"},
+    "models_path": {"type": "string", "pattern": "^/"},
+    "model": {"type": "string", "minLength": 1},
+    "credential_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "context_window_tokens": {"type": "integer", "minimum": 128},
+    "reserved_output_tokens": {"type": "integer", "minimum": 1},
+    "temperature": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "top_p": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_turns",
+        "max_tool_calls",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_wall_seconds",
+        "max_result_bytes",
+        "max_estimated_cost_microusd"
+      ],
+      "properties": {
+        "max_turns": {"type": "integer", "minimum": 1},
+        "max_tool_calls": {"type": "integer", "minimum": 1},
+        "max_input_tokens": {"type": "integer", "minimum": 1},
+        "max_output_tokens": {"type": "integer", "minimum": 1},
+        "max_wall_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "max_result_bytes": {"type": "integer", "minimum": 1},
+        "max_estimated_cost_microusd": {"type": "integer", "minimum": 1}
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pricing_id",
+        "input_microusd_per_million_tokens",
+        "output_microusd_per_million_tokens"
+      ],
+      "properties": {
+        "pricing_id": {"type": "string", "minLength": 1},
+        "input_microusd_per_million_tokens": {"type": "integer", "minimum": 0},
+        "output_microusd_per_million_tokens": {"type": "integer", "minimum": 0}
+      }
+    },
+    "max_attempts": {"type": "integer", "minimum": 1, "maximum": 3},
+    "retry_backoff_seconds": {"type": "number", "minimum": 0, "maximum": 5}
+  }
+}

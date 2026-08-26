@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence", "read_pattern_pack"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "General applicability and counterexample review for frozen Pattern Packs.",
+  "instructions_hash": "78a7fca139693db52b1b5320cbca19e50bb227a8e27a36bee9133ed2694c0a74",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "9fd099d5f2596fe179ac6250ad4e6a6b19499c57c2d405646ba17674824c1c11",
+  "name": "pattern-review",
+  "required_capabilities": ["evidence.read", "pattern.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/pattern-review",
+  "version": "1.0.0"
+}

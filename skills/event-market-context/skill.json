@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "General expectation, revelation, market-reaction, and regime analysis.",
+  "instructions_hash": "0f02f42dadc2dff17bc6213cacf618b1fd96c88eb25efd3f4f91a942789bd03b",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "9dc4e6eae1d38cb6f8f5957fd13f58422c61c2ad6c5d20ccf47d73f0f7cfdbe3",
+  "name": "event-market-context",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/event-market-context",
+  "version": "1.0.0"
+}

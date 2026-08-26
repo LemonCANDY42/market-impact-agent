@@ -50,7 +50,7 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - crash-safe resume, cancellation, bounded retries, and idempotent tool-result replay;
 - explicit terminal states for completed, failed, cancelled, budget-exhausted, and
   human-input-required runs;
-- wall-time, token, cost, tool-call, and recursion budgets enforced by the Harness;
+- wall-time, token, estimated-cost, tool-call, and recursion budgets enforced by the Harness;
 - read-only result replay after restart; mutating-tool duplicate-side-effect acceptance is
   outside the current surface;
 - terminal replay revalidates the journal chain and binds the stored artifact to the exact run,
@@ -122,8 +122,9 @@ below; copying an entire coding-agent product is neither required nor sufficient
 
 - structured traces link every output claim to messages, evidence, tool calls, configuration,
   model identity, Skills, MCP servers, and compaction checkpoints;
-- local inspection reports tokens, cost, latency, retries, context pressure, and terminal
-  state without exposing secrets or licensed payloads;
+- local inspection and an append-only Usage Ledger report tokens, estimated cost, latency,
+  retries, context pressure, and terminal state for successful and failed runs without
+  exposing secrets or licensed payloads;
 - deterministic fixtures cover ordinary turns, multi-tool turns, tool errors, retry/resume,
   cancellation, compaction, Skill activation, MCP failure, malformed output, and injection;
 - one locked MiniMax M3 acceptance corpus is run without broker reachability;
@@ -168,7 +169,8 @@ complete hash chain; the terminal journal hash matched the Judgment Artifact, th
 matched the run identity and start/finish timestamps, passed its JSON Schema and typed parser,
 a direct private-state scan found no API key, and no broker/order/paper/live event was present.
 Reopening the same terminal run returned the same artifact with 12 unchanged events and no
-replayed metrics or tool calls. The estimated cost was 11,400 micro-USD under the versioned
+replayed tool calls. Current runtime code reconstructs the stored run metrics from those
+journal events rather than spending again. The estimated cost was 11,400 micro-USD under the versioned
 price assumption. Private state remains under the ignored
 `.market-impact/agent-runs/` directory.
 
@@ -214,6 +216,85 @@ listed the non-selection-eligible `600028.XSHG` control. The study runner now re
 Evidence Pack target outside the frozen selection-eligible Exposure Registry before checking
 the Provider or creating run state, and the committed fixture is narrowed to `600938.XSHG`.
 The historical run remains runtime evidence; it is not relabeled as a prospective study event.
+
+## Research Method Skills and four-arm ablation
+
+Stable work normally expressed as TradingAgents-style analyst, bull/bear, and risk roles or
+Vibe-Trading-style event teams is represented here as persona-free Research Method Skills.
+The committed catalog contains neutral point-in-time evidence discipline, event/market
+context, public-equity transmission, adversarial countercase, reusable-pattern review, and
+the existing physical-energy family method. A deterministic Skill Route selects only methods
+applicable to the frozen asset class, mechanism family, and available Pattern Pack; the route,
+reasons, manifests, tools, and capabilities are content identified before any model call.
+
+The frozen comparison has four arms: neutral evidence; general methods; general methods plus
+Pattern Pack review; and those layers plus the energy-family method. All arms share the same
+Evidence Pack, model profile, action space, target universe, output contract, budget, and five
+replicates. Runs are interleaved by replicate round. All four execution bindings are frozen
+before Provider availability is checked, every terminal run enters a hash-chained Usage
+Ledger, and the report explicitly makes no market-outcome or alpha inference.
+
+This is a narrow adaptation, not copied role prompts or a vendored multi-agent framework.
+Sources reviewed include TradingAgents' [market analyst](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/agents/analysts/market_analyst.py),
+[news analyst](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/agents/analysts/news_analyst.py),
+and [provider factory](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/llm_clients/factory.py),
+plus Vibe-Trading's pinned
+[event task force](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c28e856b20acae3d077ed9bd919ce/agent/src/swarm/presets/event_driven_task_force.yaml),
+[event-driven Skill](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c28e856b20acae3d077ed9bd919ce/agent/src/skills/event-driven/SKILL.md),
+and [Provider registry](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c28e856b20acae3d077ed9bd919ce/agent/src/providers/llm_providers.json).
+Their outputs are prior art only; this Harness retains its own evidence, policy, and execution
+authority boundaries.
+
+The Model Provider Profile is the single public model-entry contract. It binds adapter kind,
+exact origin and model, credential environment reference, context/output limits, sampling,
+retry policy, pricing, and a per-run 50,000 micro-USD estimated-cost ceiling. MiniMax remains
+the first concrete adapter. A factory-level fixture proves adapter substitution and identity
+checks, but Provider portability remains unaccepted until a second real adapter passes the
+same runtime corpus. The historical v2 single/ensemble commands now use the same Profile and
+Factory for Provider construction while retaining their already registered v2 runtime budget;
+new method-ablation runs use the full Profile, including the hard cost ceiling.
+
+The first real-model comparison,
+`synthetic-method-ablation-minimax-m3-20260826-v1`, completed all 20 runs and retained them
+under one Usage Ledger hash
+`88d40d90b556e5e1517f751405658461f652abb82af595f67ad5712da6e58487`. Every run read all
+four Evidence Items; both Pattern-enabled arms read the referenced Pattern Pack in all five
+replicates. All four arms produced exact three-of-five proposals for `600938.XSHG/up`, but
+the selected horizon differed: neutral evidence and family-guided selected one session,
+while general methods and general-plus-pattern selected three sessions. Every split was only
+three-to-two. One general-plus-pattern replicate repeated one Evidence read, and one
+family-guided candidate omitted an explicit counterevidence reference despite reading the
+counterevidence item. These are process differences, not a quality ranking.
+
+The comparison used 295,538 input tokens, 105,996 output tokens, 57 Provider attempts, 91
+read-only tool calls, and an estimated 215,880 micro-USD in total. No run exceeded 18,029
+micro-USD, so the per-run ceiling did not fire. Arm estimates were 42,168 micro-USD for
+neutral evidence, 52,416 for general methods, 66,181 for general-plus-pattern, and 55,115 for
+family-guided. The content-identified diagnostic report is
+`method-ablation-report-2b59cdabd953f7e8550cde6384e828836fcc74b666b2642d538294647d6b6840`.
+Reopening the same experiment regenerated diagnostics from the stored journals without any
+new model turn or Usage Ledger row.
+
+This one synthetic Evidence Pack has one eligible target and a long-only action space, so it
+cannot test target selection, direction, abstention quality, returns, or causal correctness.
+The next method-quality gate needs a frozen multi-case corpus containing supported positives,
+offset-dominant negatives, missing-critical-data abstentions, ambiguous targets, and several
+event families before the arms are used on future real-event outcomes.
+
+Run the frozen local comparison with a new immutable experiment identifier:
+
+```bash
+uv run market-impact agent method-ablation-run \
+  --ablation-registration examples/calibration/agent-method-ablation-v1.json \
+  --parent-registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --method-catalog examples/research/research-method-catalog-v1.json \
+  --provider-profile examples/providers/minimax-m3-research-v1.json \
+  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
+  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json \
+  --experiment-id YOUR_UNIQUE_METHOD_ABLATION_ID
+```
 
 Validate the committed synthetic bundle without any model credential:
 

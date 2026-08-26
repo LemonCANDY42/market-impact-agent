@@ -20,6 +20,9 @@ AGENT_SCHEMA_FILES = (
     "source-coverage-registration.schema.json",
     "coverage-receipt.schema.json",
     "agent-ensemble-decision.schema.json",
+    "research-method-catalog.schema.json",
+    "model-provider-profile.schema.json",
+    "method-ablation-registration.schema.json",
 )
 
 

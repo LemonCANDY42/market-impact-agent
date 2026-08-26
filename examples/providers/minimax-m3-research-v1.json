@@ -1,0 +1,31 @@
+{
+  "schema_version": "market-impact.model-provider-profile.v1",
+  "adapter_kind": "minimax-openai-compatible",
+  "provider_id": "minimax-openai-compatible",
+  "origin": "https://api.minimaxi.com",
+  "api_path": "/v1/chat/completions",
+  "models_path": "/v1/models",
+  "model": "MiniMax-M3",
+  "credential_env": "MINIMAX_API_KEY",
+  "context_window_tokens": 131072,
+  "reserved_output_tokens": 8192,
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "budget": {
+    "max_turns": 8,
+    "max_tool_calls": 12,
+    "max_input_tokens": 500000,
+    "max_output_tokens": 32768,
+    "max_wall_seconds": 300.0,
+    "max_result_bytes": 256000,
+    "max_estimated_cost_microusd": 50000
+  },
+  "pricing": {
+    "pricing_id": "minimax-m3-paygo-2026-08-26-context-le-512k",
+    "input_microusd_per_million_tokens": 300000,
+    "output_microusd_per_million_tokens": 1200000
+  },
+  "max_attempts": 2,
+  "retry_backoff_seconds": 0.25,
+  "profile_id": "model-provider-a37f1abb9efbdfb3aefa4fc7f1e4803e4ac0a14512e07b7788f19959e3b610c0"
+}

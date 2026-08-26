@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/method-ablation-registration.schema.json",
+  "title": "Market Impact Method Ablation Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "registered_at",
+    "parent_registration_id",
+    "parent_registration_hash",
+    "provider_profile_id",
+    "provider_profile_hash",
+    "method_catalog_id",
+    "method_catalog_hash",
+    "arms",
+    "replicate_count",
+    "minimum_agreement",
+    "run_order",
+    "common_inputs",
+    "all_event_denominator",
+    "outcomes_opened",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.method-ablation-registration.v1"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^method-ablation-[0-9a-f]{64}$"
+    },
+    "registered_at": {"type": "string", "format": "date-time"},
+    "parent_registration_id": {
+      "type": "string",
+      "pattern": "^agent-study-[0-9a-f]{64}$"
+    },
+    "parent_registration_hash": {"$ref": "#/$defs/sha256"},
+    "provider_profile_id": {
+      "type": "string",
+      "pattern": "^model-provider-[0-9a-f]{64}$"
+    },
+    "provider_profile_hash": {"$ref": "#/$defs/sha256"},
+    "method_catalog_id": {
+      "type": "string",
+      "pattern": "^research-method-catalog-[0-9a-f]{64}$"
+    },
+    "method_catalog_hash": {"$ref": "#/$defs/sha256"},
+    "arms": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/arm"}
+    },
+    "replicate_count": {"const": 5},
+    "minimum_agreement": {"const": 3},
+    "run_order": {"const": "interleaved_by_replicate_then_arm"},
+    "common_inputs": {
+      "const": [
+        "action_space",
+        "evidence_cutoff",
+        "evidence_pack",
+        "model_provider_profile",
+        "output_contract",
+        "replicate_budget",
+        "target_universe"
+      ]
+    },
+    "all_event_denominator": {"const": true},
+    "outcomes_opened": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm",
+        "route_id",
+        "route_hash",
+        "requested_skills",
+        "allowed_capabilities",
+        "allowed_tools"
+      ],
+      "properties": {
+        "arm": {
+          "enum": [
+            "neutral_evidence",
+            "general_methods",
+            "general_pattern",
+            "family_guided"
+          ]
+        },
+        "route_id": {"type": "string", "pattern": "^skill-route-[0-9a-f]{64}$"},
+        "route_hash": {"$ref": "#/$defs/sha256"},
+        "requested_skills": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "allowed_capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "allowed_tools": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    }
+  }
+}

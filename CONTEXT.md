@@ -43,6 +43,18 @@ A versioned pre-cutoff research asset containing reusable event mechanisms, tran
 scales, analogues, applicability conditions, and counterexamples.
 _Avoid_: Agent memory, learned truth
 
+**Research Method Skill**:
+A versioned research procedure that states when and how to examine evidence without adopting
+a persona, predicting an answer, or granting new authority. General methods and event-family
+methods remain distinct so their incremental value can be measured.
+_Avoid_: Agent role, expert opinion, prompt template
+
+**Skill Route**:
+A content-identified selection of applicable Research Method Skills from a frozen catalog and
+research context. It records why each Skill was included and never lets the model silently add
+its own method or capability.
+_Avoid_: Prompt routing, model-selected tools
+
 **Event Cluster**:
 One market-relevant development represented by one or more related disclosures
 or catalysts rather than by individual headlines.
@@ -117,6 +129,17 @@ A content-identified commitment that freezes an event-family hypothesis, future 
 accrual rule, Exposure Registry, Judgment replicate protocol, baselines, missingness policy,
 and acceptance gate before holdout outcomes exist.
 _Avoid_: Backtest plan, selected event list
+
+**Method Ablation Registration**:
+A content-identified pre-outcome comparison that holds evidence, model, action space, and
+evaluation constant while varying only named layers of research guidance. Each registered
+Method Arm remains in the all-event comparison even when it abstains or fails.
+_Avoid_: Prompt experiment, best-of prompt search
+
+**Method Arm**:
+One frozen guidance treatment in a Method Ablation Registration, such as neutral evidence,
+general equity methods, reusable patterns, or an event-family method.
+_Avoid_: Agent persona, model variant, strategy baseline
 
 **Source Coverage Registration**:
 A content-identified, pre-accrual commitment to the observable source universe, mandatory
@@ -273,6 +296,16 @@ _Avoid_: Evidence authority, execution Provider
 A point-in-time record of what a Provider declares and what the harness has
 independently verified it can do.
 _Avoid_: Integration config, feature list
+
+**Model Provider Profile**:
+A versioned declaration binding one model adapter to its exact Provider identity, endpoint,
+model, capabilities, context limits, credential reference, and pricing basis.
+_Avoid_: Environment variables, fallback chain, model alias
+
+**Usage Ledger**:
+An append-only account of model and tool consumption for completed and incomplete Judgment
+Runs, linked to their Provider Profile, experiment, Method Arm, and execution identity.
+_Avoid_: Billing invoice, transient metrics, usage dashboard
 
 **Execution Event**:
 A provider-observed state change for an order, fill, position, balance, or

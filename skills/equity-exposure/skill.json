@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "General public-equity fundamental and transmission exposure analysis.",
+  "instructions_hash": "77398abb5effddc46ee85dcd550433ea2c7af36a5318fdc704cc6d584b9ba549",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "959db7c689d0d80fed2211eca82b7af2496b8c533bcd70fdfc1f9b0e7f6fff26",
+  "name": "equity-exposure",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/equity-exposure",
+  "version": "1.0.0"
+}

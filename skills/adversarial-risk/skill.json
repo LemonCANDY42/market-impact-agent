@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Persona-free confirming case, countercase, and invalidation review.",
+  "instructions_hash": "c1e8c71d474ff0231e5c2e7c08124dc860495de9635f216e0b176f01a95aaf75",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "7fea7a4b376e52ae5ae9413f0c57c7ea7a147be1d141f886515acbbc691f744d",
+  "name": "adversarial-risk",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/adversarial-risk",
+  "version": "1.0.0"
+}

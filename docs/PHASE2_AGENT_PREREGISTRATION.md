@@ -85,6 +85,12 @@ the whole Ensemble Decision to abstain. The completed synthetic-bundle acceptanc
 implementation evidence only; prospective cohort evidence still requires future admitted events
 and their matching point-in-time market snapshots.
 
+The separate Method Ablation Registration does not rewrite this prospective protocol. It
+compares neutral evidence, general stock-analysis methods, Pattern Pack review, and the
+energy-family method on the same synthetic/process inputs so their behavioral and cost effects
+are identifiable. Its result may inform a future preregistration, but it cannot be used to
+retune this already frozen holdout after outcomes are opened.
+
 ## Targets and baselines
 
 The official issuer material frozen in the Exposure Registry supports these roles:

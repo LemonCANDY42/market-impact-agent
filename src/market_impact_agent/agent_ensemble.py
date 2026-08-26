@@ -12,10 +12,7 @@ from market_impact_agent.agent_contracts import (
     JudgmentDecision,
     canonical_hash,
 )
-from market_impact_agent.agent_study import (
-    AgentPhase2Preregistration,
-    ExposureRegistry,
-)
+from market_impact_agent.agent_study import ExposureRegistry
 from market_impact_agent.runtime_store import RunStatus
 
 AGENT_ENSEMBLE_DECISION_SCHEMA = "market-impact.agent-ensemble-decision.v1"
@@ -33,6 +30,45 @@ class AgentReplicateResult(Protocol):
 
     @property
     def terminal_store_hash(self) -> str | None: ...
+
+
+class AgentStudyProtocol(Protocol):
+    @property
+    def provider_id(self) -> str: ...
+
+    @property
+    def model(self) -> str: ...
+
+    @property
+    def runtime_ref(self) -> str: ...
+
+    @property
+    def replicate_count(self) -> int: ...
+
+    @property
+    def minimum_agreeing_replicates(self) -> int: ...
+
+    @property
+    def allowed_directions(self) -> tuple[str, ...]: ...
+
+    @property
+    def eligible_horizons_sessions(self) -> tuple[int, ...]: ...
+
+    @property
+    def minimum_candidate_confidence(self) -> Decimal: ...
+
+
+class AgentStudyRegistration(Protocol):
+    @property
+    def registration_id(self) -> str: ...
+
+    @property
+    def registration_hash(self) -> str: ...
+
+    @property
+    def agent_protocol(self) -> AgentStudyProtocol: ...
+
+    def validate_against(self, registry: ExposureRegistry) -> None: ...
 
 
 class ReplicateOutcome(StrEnum):
@@ -235,7 +271,7 @@ class AgentEnsembleDecision:
 
     def validate_against(
         self,
-        registration: AgentPhase2Preregistration,
+        registration: AgentStudyRegistration,
         evidence_pack: EvidencePack,
         registry: ExposureRegistry,
     ) -> None:
@@ -322,7 +358,7 @@ class AgentEnsembleDecision:
 def aggregate_agent_replicates(
     *,
     ensemble_run_id: str,
-    registration: AgentPhase2Preregistration,
+    registration: AgentStudyRegistration,
     evidence_pack: EvidencePack,
     results: tuple[AgentReplicateResult, ...],
     frozen_execution_binding_hash: str,
@@ -518,7 +554,7 @@ def _assess_replicate(
     replicate_index: int,
     result: AgentReplicateResult,
     evidence_pack: EvidencePack,
-    registration: AgentPhase2Preregistration,
+    registration: AgentStudyRegistration,
 ) -> ReplicateAssessment:
     artifact = result.judgment
     if result.status is not RunStatus.COMPLETED or artifact is None:
