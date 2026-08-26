@@ -1,0 +1,51 @@
+{
+  "schema_version": "market-impact.source-coverage-registration.v1",
+  "registered_at": "2026-08-26T08:15:00Z",
+  "prospective_registration_id": "agent-study-0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa",
+  "prospective_registration_hash": "0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa",
+  "observable_universe": "Physical crude-oil and natural-gas disruptions discoverable through the registered multilingual news query and confirmable through registered direct official or operator feeds.",
+  "polling_interval_minutes": 10,
+  "maximum_cycle_seconds": 90,
+  "failure_action": "retain_and_block_accrual",
+  "known_blind_spots": [
+    "Paid Bloomberg and Reuters wires are not licensed or monitored by this registration.",
+    "Unindexed operator notices, social-only disclosures, and jurisdictions outside the direct confirmation feeds may be discovered late or missed.",
+    "ENTSOG structured confirmation covers European gas infrastructure; oil and non-European events require a later registered direct-source adapter before they can accrue."
+  ],
+  "sources": [
+    {
+      "provider_id": "gdelt-energy-discovery",
+      "provider_version": "doc-2.0-v1",
+      "endpoint": "https://api.gdeltproject.org/api/v2/doc/doc",
+      "role": "global_discovery",
+      "required": true,
+      "occurrence_eligible": false,
+      "source_tier": "established_news",
+      "provides_revision_history": false,
+      "license_note": "GDELT discovery metadata only; article content and redistribution remain subject to each publisher."
+    },
+    {
+      "provider_id": "eia-today-in-energy",
+      "provider_version": "rss-v1",
+      "endpoint": "https://www.eia.gov/rss/todayinenergy.xml",
+      "role": "official_confirmation",
+      "required": false,
+      "occurrence_eligible": false,
+      "source_tier": "official",
+      "provides_revision_history": false,
+      "license_note": "Official EIA RSS metadata; not treated as direct occurrence confirmation."
+    },
+    {
+      "provider_id": "entsog-umm",
+      "provider_version": "api-v1-umm-v1",
+      "endpoint": "https://transparency.entsog.eu/api/v1/urgentMarketMessages",
+      "role": "official_confirmation",
+      "required": true,
+      "occurrence_eligible": true,
+      "source_tier": "primary",
+      "provides_revision_history": true,
+      "license_note": "Public ENTSOG Transparency Platform UMM metadata; raw captures remain private and source terms apply."
+    }
+  ],
+  "coverage_registration_id": "source-coverage-fb91801e59f12503af17e25427f304d38ff225ce347c2972af532ba8b77cf5f4"
+}

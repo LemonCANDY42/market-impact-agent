@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/coverage-receipt.schema.json",
+  "title": "Market Impact Coverage Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "coverage_registration_id",
+    "coverage_registration_hash",
+    "cycle_started_at",
+    "cycle_completed_at",
+    "attempts"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.coverage-receipt.v1"},
+    "receipt_id": {"type": "string", "pattern": "^coverage-receipt-[0-9a-f]{64}$"},
+    "coverage_registration_id": {
+      "type": "string",
+      "pattern": "^source-coverage-[0-9a-f]{64}$"
+    },
+    "coverage_registration_hash": {"$ref": "#/$defs/sha256"},
+    "cycle_started_at": {"type": "string", "format": "date-time"},
+    "cycle_completed_at": {"type": "string", "format": "date-time"},
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/attempt"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "requested_at",
+        "retrieved_at",
+        "succeeded",
+        "content_hash",
+        "record_count",
+        "error_class",
+        "error_summary"
+      ],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "requested_at": {"type": "string", "format": "date-time"},
+        "retrieved_at": {
+          "oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]
+        },
+        "succeeded": {"type": "boolean"},
+        "content_hash": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "record_count": {
+          "oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]
+        },
+        "error_class": {"oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]},
+        "error_summary": {"oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]}
+      }
+    }
+  }
+}

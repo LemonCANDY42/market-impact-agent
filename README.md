@@ -64,6 +64,13 @@ The bootstrap implements:
   Observations, replays deterministic admission against that registration, retains explicit
   non-admission reasons, enforces revision/separation/cohort rules, and detects stored-row or
   hash-chain tampering;
+- a frozen Source Coverage Registration and one-shot physical-energy monitor that privately
+  retains exact GDELT, EIA, and ENTSOG response bytes, records mandatory-source failures in
+  content-identified Coverage Receipts, derives revision-aware ENTSOG gas candidates, and
+  blocks accrual whenever the registered coverage cycle is incomplete;
+- an idempotent cutoff scheduler that freezes each admitted event's Evidence Pack, exact
+  Pattern Packs, Exposure Registry, source receipts, and provenance manifest only after the
+  registered 60-minute evidence cutoff;
 - a provider capability manifest and registry;
 - a deterministic hard-policy evaluator;
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
@@ -114,8 +121,9 @@ The research reset is now frozen in
 after 2026-08-27T00:00:00Z and targets the first five qualifying future physical energy
 supply shocks. No event has accrued and no holdout outcome has been opened, so this is a
 preregistration and operational-ledger milestone only—not a successful backtest or
-permission to enter Phase 3. The ledger accepts source-capture output but does not yet fetch
-or monitor official disruption sources itself.
+permission to enter Phase 3. The first monitor covers global news discovery plus direct
+European gas confirmation; its registered blind spots explicitly exclude a claim of global
+exhaustiveness, and oil/non-European direct confirmation still needs additional adapters.
 
 ## Architecture at a glance
 
@@ -156,17 +164,32 @@ uv run market-impact agent validate \
   --pattern-pack examples/agent/energy_supply/pattern-pack.json
 uv run market-impact agent study-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
-  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json
+uv run market-impact agent study-source-poll \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
+  --ledger LEDGER.sqlite3
 uv run market-impact agent study-observe \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
+  --coverage-receipt COVERAGE_RECEIPT.json \
   --observation CANDIDATE_OBSERVATION.json \
   --raw-source RAW_SOURCE_FILE \
   --ledger LEDGER.sqlite3
 uv run market-impact agent study-ledger-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
   --ledger LEDGER.sqlite3
+uv run market-impact agent study-freeze-due \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
+  --ledger LEDGER.sqlite3 \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
 uv run market-impact backtest phase2-register --cohort COHORT.json \
   --data-snapshot-root .market-impact/tushare --output PRIVATE_REGISTRATION.json

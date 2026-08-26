@@ -63,6 +63,8 @@ packages = ["src/market_impact_agent"]
 "schemas/exposure-registry.schema.json" = "market_impact_agent/schemas/exposure-registry.schema.json"
 "schemas/agent-phase2-preregistration.schema.json" = "market_impact_agent/schemas/agent-phase2-preregistration.schema.json"
 "schemas/candidate-event-observation.schema.json" = "market_impact_agent/schemas/candidate-event-observation.schema.json"
+"schemas/source-coverage-registration.schema.json" = "market_impact_agent/schemas/source-coverage-registration.schema.json"
+"schemas/coverage-receipt.schema.json" = "market_impact_agent/schemas/coverage-receipt.schema.json"
 "skills/energy-supply/SKILL.md" = "market_impact_agent/builtin_skills/energy-supply/SKILL.md"
 "skills/energy-supply/skill.json" = "market_impact_agent/builtin_skills/energy-supply/skill.json"
 

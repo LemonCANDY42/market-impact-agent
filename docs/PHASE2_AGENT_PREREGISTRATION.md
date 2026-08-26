@@ -12,7 +12,9 @@ The public artifacts are:
 - `examples/research/a-share-energy-exposure-registry-v1.json`, Exposure Registry hash
   `c864087a7f68b3732d7caf11ca915eca56c52f9cf25f5effac2a6aefc1a2326f`;
 - `examples/calibration/agent-physical-energy-prospective-v1.json`, registration hash
-  `0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa`.
+  `0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa`;
+- `examples/research/physical-energy-source-coverage-v1.json`, Source Coverage Registration
+  hash `fb91801e59f12503af17e25427f304d38ff225ce347c2972af532ba8b77cf5f4`.
 
 Both identifiers are derived from canonical content. Editing a rule, source, target,
 timestamp, baseline, or acceptance condition invalidates the identifier rather than silently
@@ -129,26 +131,57 @@ lineaged later revision may fill the missing fact. This implements the registere
 retain-and-abstain rule instead of silently improving the cohort by dropping incomplete
 candidates.
 
-Next, implement fixed direct-source capture/monitoring for the registered physical-energy
-family, retain its raw versions privately, and feed valid Candidate Event Observations into
-the ledger. When the first event is admitted, a scheduler must wait until the recorded
-cutoff and freeze the Evidence Pack before replicate one. No real event has yet been
-recorded or admitted.
+The first fixed monitor is now implemented. Each one-shot cycle polls the frozen GDELT
+discovery query, EIA Today in Energy RSS, and ENTSOG Urgent Market Messages; privately
+retains exact response bytes; records every success or failure in a content-identified
+Coverage Receipt; and derives only revision-aware ENTSOG gas confirmations into Candidate
+Event Observations. A failed mandatory source leaves any observed candidate in the ledger
+but blocks its accrual, including later attempts to wait out the blind interval.
+
+This coverage is deliberately not called global or complete. GDELT is discovery-only,
+EIA RSS is not occurrence confirmation, and direct structured confirmation currently covers
+European gas through ENTSOG. Paid Bloomberg/Reuters wires, unindexed or social-only operator
+notices, oil, and non-European direct confirmation remain registered blind spots. Those gaps
+must be addressed by a new pre-outcome coverage registration rather than silently expanding
+the current study.
+
+The one-shot freeze scheduler is also implemented. It never sleeps or freezes early: when
+an admitted event's exact 60-minute cutoff has passed, it atomically writes a content-bound
+Evidence Pack, Exposure Registry evidence, Coverage Receipts, exact Pattern Packs, and a
+tamper-checked provenance manifest. Repeated calls revalidate and reuse the same bundle.
+No real event has yet been admitted or frozen.
+
+The first live local poll on 2026-08-26 produced Coverage Receipt
+`coverage-receipt-f68dd3ffccc69803fba49a4288a132c4d02acbba5761b1cd12c8d46defc1ea26`.
+EIA returned 19 items and ENTSOG returned 403 UMM records, while the GDELT HTTPS request
+failed at the network layer. The command therefore returned incomplete coverage, admitted
+no event, and the subsequent real freeze command produced zero bundles. This verifies live
+partial-failure handling, not a healthy three-source cycle or comprehensive coverage.
 
 Validate the frozen public contracts with:
 
 ```bash
 uv run market-impact agent study-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
-  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json
 ```
 
-Record one adapter-produced observation and validate the resulting private ledger with:
+Poll the frozen sources once, or record one already captured observation, then validate the
+private ledger and freeze any due Evidence Packs with:
 
 ```bash
+uv run market-impact agent study-source-poll \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
+  --ledger LEDGER.sqlite3
+
 uv run market-impact agent study-observe \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
+  --coverage-receipt COVERAGE_RECEIPT.json \
   --observation CANDIDATE_OBSERVATION.json \
   --raw-source RAW_SOURCE_FILE \
   --ledger LEDGER.sqlite3
@@ -156,5 +189,13 @@ uv run market-impact agent study-observe \
 uv run market-impact agent study-ledger-validate \
   --registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
   --ledger LEDGER.sqlite3
+
+uv run market-impact agent study-freeze-due \
+  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
+  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
+  --source-coverage-registration examples/research/physical-energy-source-coverage-v1.json \
+  --ledger LEDGER.sqlite3 \
+  --pattern-pack examples/agent/energy_supply/pattern-pack.json
 ```

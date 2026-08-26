@@ -139,7 +139,8 @@ The first prospective physical-energy study adds a narrow Candidate Event Observ
 contract above the general Source Observation boundary. It preserves direct upstream and
 Provider identity, source tier, occurrence/publication/update times, measured actual receipt,
 raw-content hash, a non-verbatim claim summary, event nature, affected commodity, estimated
-loss, duration, and official denominator provenance when a regional fraction is used.
+loss, duration, official denominator provenance when a regional fraction is used, and the
+exact Source Coverage Registration and Coverage Receipt under which it was observed.
 
 Only `actual_receipt` availability is accepted for prospective accrual. Established news,
 specialist, community, and aggregator observations may be retained as discoveries but do not
@@ -155,20 +156,47 @@ evaluation. A lineaged later source revision may fill a missing identity fact bu
 change a previously established occurrence time or commodity.
 It stores normalized observation content and raw-content hashes; the exact external body is
 verified against that hash and copied into a sibling private content-addressed artifact
-store. Neither body nor ledger enters the repository. Current tests prove the contract,
-artifact, and ledger mechanics with synthetic source content; no direct physical-disruption
-source adapter or real event acceptance is yet claimed.
+store. Neither body nor ledger enters the repository.
+
+The frozen Source Coverage Registration adds three explicit providers: GDELT multilingual
+news metadata for mandatory global discovery, optional EIA Today in Energy RSS metadata,
+and mandatory ENTSOG Urgent Market Messages for direct European gas confirmation. Every
+polling cycle writes a Coverage Receipt in registered source order. A failed mandatory
+attempt is not converted into an empty result: it makes the receipt incomplete, retains any
+candidate found by another source, and adds `source_coverage_incomplete` to deterministic
+non-admission. Discovery and optional official metadata are never occurrence-eligible.
+
+The ENTSOG adapter retains the exact JSON batch privately, preserves publication and update
+times, uses actual Harness receipt as `available_at`, keeps the latest message revision per
+thread, and converts only reported `kWh/d` or `kWh/h` unavailable capacity under the frozen
+5.8 million Btu per BOE convention. Unsupported units remain missing rather than receiving
+an assumed gas heating value. Current deterministic tests cover complete, partial-failure,
+planned, duplicate-revision, impossible-time, accrual, and cutoff-freeze paths. No real event
+acceptance is yet claimed.
+
+The first live cycle on 2026-08-26 reached EIA and ENTSOG but not GDELT. Its immutable
+receipt marked the mandatory discovery attempt failed, so the CLI returned non-success and
+the valid empty ledger remained at zero decisions. This is evidence that degradation is
+preserved and blocks accrual; it is not evidence that the full registered source set is
+currently healthy.
+
+For an admitted event, the freeze scheduler uses the recorded cutoff—not scheduler run time—
+as the Evidence Pack `as_of`. It includes only same-event observations visible by that
+cutoff, plus the pre-outcome Exposure Registry and exact Pattern Packs. Its content-derived
+manifest binds the study, source coverage, registry, accrual decision, evidence documents,
+raw hashes, and Pattern Packs and is revalidated on every idempotent reopen.
 
 ## Next acceptance gate
 
-Before these observations can support another Phase 2 calibration hypothesis:
+Before this prospective study can complete its Phase 2 calibration:
 
-1. implement source-specific historical releases or vintages, including revision identity;
-2. record prospective real-time delivery-latency distributions for each source class;
-3. freeze a latency model before opening evaluation outcomes;
-4. compare aggregator discovery with direct source coverage over at least 20 settled events;
-5. verify market resolution and rules, not just the final price;
-6. admit only evidence whose `published_at` and `available_at` are defensible at the replay
+1. add pre-registered direct confirmation for oil and non-European infrastructure;
+2. implement source-specific historical releases or vintages, including revision identity;
+3. record prospective real-time delivery-latency distributions for each source class;
+4. freeze a latency model before opening evaluation outcomes;
+5. compare aggregator discovery with direct source coverage over at least 20 settled events;
+6. verify market resolution and rules, not just the final price;
+7. admit only evidence whose `published_at` and `available_at` are defensible at the replay
    cutoff.
 
 This work repairs the research evidence plane. It does not reopen the failed Phase 2 cohort

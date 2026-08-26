@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/source-coverage-registration.schema.json",
+  "title": "Market Impact Source Coverage Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "coverage_registration_id",
+    "registered_at",
+    "prospective_registration_id",
+    "prospective_registration_hash",
+    "observable_universe",
+    "polling_interval_minutes",
+    "maximum_cycle_seconds",
+    "failure_action",
+    "known_blind_spots",
+    "sources"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.source-coverage-registration.v1"},
+    "coverage_registration_id": {
+      "type": "string",
+      "pattern": "^source-coverage-[0-9a-f]{64}$"
+    },
+    "registered_at": {"type": "string", "format": "date-time"},
+    "prospective_registration_id": {"type": "string", "minLength": 1},
+    "prospective_registration_hash": {"$ref": "#/$defs/sha256"},
+    "observable_universe": {"type": "string", "minLength": 1},
+    "polling_interval_minutes": {"type": "integer", "minimum": 1, "maximum": 60},
+    "maximum_cycle_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+    "failure_action": {"const": "retain_and_block_accrual"},
+    "known_blind_spots": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "sources": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/source"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_version",
+        "endpoint",
+        "role",
+        "required",
+        "occurrence_eligible",
+        "source_tier",
+        "provides_revision_history",
+        "license_note"
+      ],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "endpoint": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "role": {"enum": ["global_discovery", "official_confirmation"]},
+        "required": {"type": "boolean"},
+        "occurrence_eligible": {"type": "boolean"},
+        "source_tier": {
+          "enum": [
+            "official",
+            "regulated",
+            "primary",
+            "established_news",
+            "specialist",
+            "community",
+            "unverified"
+          ]
+        },
+        "provides_revision_history": {"type": "boolean"},
+        "license_note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

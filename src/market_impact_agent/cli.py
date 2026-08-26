@@ -41,7 +41,9 @@ from market_impact_agent.calibration import (
     load_phase2_calibration_evidence,
     phase2_calibration_gate_result_to_dict,
 )
+from market_impact_agent.energy_monitor import EnergySourceMonitor
 from market_impact_agent.events import event_transmission_chronology_errors
+from market_impact_agent.evidence_freeze import freeze_due_evidence_packs
 from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.minimax_provider import MiniMaxOpenAIProvider
 from market_impact_agent.observations import (
@@ -61,6 +63,10 @@ from market_impact_agent.prediction_markets import (
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
+from market_impact_agent.source_coverage import (
+    coverage_receipt_from_dict,
+    load_source_coverage_registration,
+)
 from market_impact_agent.tushare import TushareHttpAdapter
 from market_impact_agent.tushare_bundle import (
     TushareDataRequest,
@@ -193,12 +199,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent_study_parser.add_argument("--registration", required=True, type=Path)
     agent_study_parser.add_argument("--exposure-registry", required=True, type=Path)
+    agent_study_parser.add_argument(
+        "--source-coverage-registration",
+        required=True,
+        type=Path,
+    )
     agent_observe_parser = agent_subparsers.add_parser(
         "study-observe",
         help="Append one Candidate Event Observation to the prospective accrual ledger",
     )
     agent_observe_parser.add_argument("--registration", required=True, type=Path)
     agent_observe_parser.add_argument("--exposure-registry", required=True, type=Path)
+    agent_observe_parser.add_argument(
+        "--source-coverage-registration",
+        required=True,
+        type=Path,
+    )
+    agent_observe_parser.add_argument("--coverage-receipt", required=True, type=Path)
     agent_observe_parser.add_argument("--observation", required=True, type=Path)
     agent_observe_parser.add_argument("--raw-source", required=True, type=Path)
     agent_observe_parser.add_argument("--regional-denominator-source", type=Path)
@@ -209,7 +226,52 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent_ledger_parser.add_argument("--registration", required=True, type=Path)
     agent_ledger_parser.add_argument("--exposure-registry", required=True, type=Path)
+    agent_ledger_parser.add_argument(
+        "--source-coverage-registration",
+        required=True,
+        type=Path,
+    )
     agent_ledger_parser.add_argument("--ledger", required=True, type=Path)
+    source_poll_parser = agent_subparsers.add_parser(
+        "study-source-poll",
+        help="Poll frozen energy sources, retain receipts, and record candidate observations",
+    )
+    source_poll_parser.add_argument("--registration", required=True, type=Path)
+    source_poll_parser.add_argument("--exposure-registry", required=True, type=Path)
+    source_poll_parser.add_argument(
+        "--source-coverage-registration",
+        required=True,
+        type=Path,
+    )
+    source_poll_parser.add_argument("--ledger", type=Path)
+    source_poll_parser.add_argument(
+        "--monitor-root",
+        type=Path,
+        default=Path(".market-impact/source-monitor"),
+    )
+    freeze_due_parser = agent_subparsers.add_parser(
+        "study-freeze-due",
+        help="Freeze point-in-time Evidence Packs whose registered cutoff has passed",
+    )
+    freeze_due_parser.add_argument("--registration", required=True, type=Path)
+    freeze_due_parser.add_argument("--exposure-registry", required=True, type=Path)
+    freeze_due_parser.add_argument(
+        "--source-coverage-registration",
+        required=True,
+        type=Path,
+    )
+    freeze_due_parser.add_argument("--ledger", required=True, type=Path)
+    freeze_due_parser.add_argument(
+        "--pattern-pack",
+        action="append",
+        required=True,
+        type=Path,
+    )
+    freeze_due_parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path(".market-impact/prospective-evidence"),
+    )
     return parser
 
 
@@ -346,20 +408,32 @@ def validate_agent_phase2_study(
     *,
     registration_path: Path,
     exposure_registry_path: Path,
+    source_coverage_registration_path: Path,
 ) -> dict[str, object]:
     registration_payload = json.loads(registration_path.read_text(encoding="utf-8"))
     registry_payload = json.loads(exposure_registry_path.read_text(encoding="utf-8"))
-    errors = tuple(
-        f"registration {error}"
-        for error in validate_agent_contract(
-            registration_payload,
-            "agent-phase2-preregistration.schema.json",
+    coverage_payload = json.loads(source_coverage_registration_path.read_text(encoding="utf-8"))
+    errors = (
+        tuple(
+            f"registration {error}"
+            for error in validate_agent_contract(
+                registration_payload,
+                "agent-phase2-preregistration.schema.json",
+            )
         )
-    ) + tuple(
-        f"exposure_registry {error}"
-        for error in validate_agent_contract(
-            registry_payload,
-            "exposure-registry.schema.json",
+        + tuple(
+            f"exposure_registry {error}"
+            for error in validate_agent_contract(
+                registry_payload,
+                "exposure-registry.schema.json",
+            )
+        )
+        + tuple(
+            f"source_coverage {error}"
+            for error in validate_agent_contract(
+                coverage_payload,
+                "source-coverage-registration.schema.json",
+            )
         )
     )
     if errors:
@@ -368,6 +442,14 @@ def validate_agent_phase2_study(
         registration_path,
         exposure_registry_path,
     )
+    coverage = load_source_coverage_registration(source_coverage_registration_path)
+    if (
+        coverage.prospective_registration_id != registration.registration_id
+        or coverage.prospective_registration_hash != registration.registration_hash
+    ):
+        raise ValueError("Source Coverage Registration does not match prospective study")
+    if coverage.registered_at >= registration.accrual.opens_after:
+        raise ValueError("Source Coverage Registration was not frozen before accrual")
     return {
         "valid": True,
         "errors": [],
@@ -375,6 +457,9 @@ def validate_agent_phase2_study(
         "registration_hash": registration.registration_hash,
         "exposure_registry_id": registry.registry_id,
         "exposure_registry_hash": registry.registry_hash,
+        "source_coverage_registration_id": coverage.coverage_registration_id,
+        "source_coverage_registration_hash": coverage.coverage_registration_hash,
+        "required_source_count": sum(item.required for item in coverage.sources),
         "selection_eligible_target_count": sum(
             item.selection_eligible for item in registry.entries
         ),
@@ -390,6 +475,8 @@ def observe_agent_phase2_study(
     *,
     registration_path: Path,
     exposure_registry_path: Path,
+    source_coverage_registration_path: Path,
+    coverage_receipt_path: Path,
     observation_path: Path,
     raw_source_path: Path,
     regional_denominator_source_path: Path | None,
@@ -399,6 +486,7 @@ def observe_agent_phase2_study(
     study_result = validate_agent_phase2_study(
         registration_path=registration_path,
         exposure_registry_path=exposure_registry_path,
+        source_coverage_registration_path=source_coverage_registration_path,
     )
     if not study_result["valid"]:
         errors = study_result.get("errors", [])
@@ -413,6 +501,14 @@ def observe_agent_phase2_study(
             "Candidate Event Observation schema validation failed: " + "; ".join(observation_errors)
         )
     observation = candidate_event_observation_from_dict(observation_payload)
+    receipt_payload = json.loads(coverage_receipt_path.read_text(encoding="utf-8"))
+    receipt_errors = validate_agent_contract(
+        receipt_payload,
+        "coverage-receipt.schema.json",
+    )
+    if receipt_errors:
+        raise ValueError("Coverage Receipt schema validation failed: " + "; ".join(receipt_errors))
+    coverage_receipt = coverage_receipt_from_dict(receipt_payload)
     raw_source = _read_source_artifact(raw_source_path, "raw source")
     regional_denominator_source = (
         None
@@ -426,6 +522,7 @@ def observe_agent_phase2_study(
         registration_path,
         exposure_registry_path,
     )
+    coverage_registration = load_source_coverage_registration(source_coverage_registration_path)
     resolved_ledger_path = (
         ledger_path
         if ledger_path is not None
@@ -435,12 +532,14 @@ def observe_agent_phase2_study(
         resolved_ledger_path,
         registration=registration,
         registry=registry,
+        coverage_registration=coverage_registration,
         created_at=recorded_at,
     )
     decision = ledger.record(
         observation,
         recorded_at=recorded_at,
         raw_source=raw_source,
+        coverage_receipt=coverage_receipt,
         regional_denominator_source=regional_denominator_source,
     )
     return {
@@ -476,6 +575,7 @@ def validate_agent_phase2_ledger(
     *,
     registration_path: Path,
     exposure_registry_path: Path,
+    source_coverage_registration_path: Path,
     ledger_path: Path,
     inspected_at: datetime,
 ) -> dict[str, object]:
@@ -485,10 +585,12 @@ def validate_agent_phase2_ledger(
         registration_path,
         exposure_registry_path,
     )
+    coverage_registration = load_source_coverage_registration(source_coverage_registration_path)
     ledger = AccrualLedger(
         ledger_path,
         registration=registration,
         registry=registry,
+        coverage_registration=coverage_registration,
         created_at=inspected_at,
     )
     decisions = ledger.decisions()
@@ -502,6 +604,139 @@ def validate_agent_phase2_ledger(
         "target_event_count": registration.accrual.target_event_count,
         "cohort_complete": (ledger.accrued_event_count >= registration.accrual.target_event_count),
         "last_decision_hash": None if not decisions else decisions[-1].decision_hash,
+        "execution_capability": "none",
+    }
+
+
+def poll_agent_phase2_sources(
+    *,
+    registration_path: Path,
+    exposure_registry_path: Path,
+    source_coverage_registration_path: Path,
+    ledger_path: Path | None,
+    monitor_root: Path,
+    started_at: datetime,
+) -> dict[str, object]:
+    study = validate_agent_phase2_study(
+        registration_path=registration_path,
+        exposure_registry_path=exposure_registry_path,
+        source_coverage_registration_path=source_coverage_registration_path,
+    )
+    if not study["valid"]:
+        raise ValueError(f"prospective study contracts are invalid: {study['errors']}")
+    registration, registry = load_agent_phase2_preregistration(
+        registration_path,
+        exposure_registry_path,
+    )
+    coverage = load_source_coverage_registration(source_coverage_registration_path)
+    resolved_ledger_path = (
+        ledger_path
+        if ledger_path is not None
+        else Path(".market-impact/accrual") / registration.registration_hash / "ledger.sqlite3"
+    )
+    ledger = AccrualLedger(
+        resolved_ledger_path,
+        registration=registration,
+        registry=registry,
+        coverage_registration=coverage,
+        created_at=started_at,
+    )
+    latest = {item.observation.event_id: item.observation for item in ledger.decisions()}
+    monitor = EnergySourceMonitor(
+        registration=coverage,
+        root=monitor_root / coverage.coverage_registration_hash,
+    )
+    cycle = monitor.poll(latest_observations=latest)
+    decisions = tuple(
+        ledger.record(
+            observation,
+            recorded_at=cycle.receipt.cycle_completed_at,
+            raw_source=cycle.raw_source_for(observation),
+            coverage_receipt=cycle.receipt,
+        )
+        for observation in cycle.candidates
+    )
+    return {
+        "polled": True,
+        "coverage_receipt_id": cycle.receipt.receipt_id,
+        "coverage_receipt_hash": cycle.receipt.receipt_hash,
+        "coverage_complete": cycle.receipt.is_complete(coverage),
+        "attempts": [
+            {
+                "provider_id": item.provider_id,
+                "succeeded": item.succeeded,
+                "record_count": item.record_count,
+                "error_class": item.error_class,
+            }
+            for item in cycle.receipt.attempts
+        ],
+        "candidate_count": len(cycle.candidates),
+        "decisions": [
+            {
+                "event_id": item.observation.event_id,
+                "observation_id": item.observation.observation_id,
+                "disposition": item.disposition.value,
+                "reasons": [reason.value for reason in item.reasons],
+                "accrued_event_id": item.accrued_event_id,
+                "evidence_cutoff_at": (
+                    None
+                    if item.evidence_cutoff_at is None
+                    else item.evidence_cutoff_at.isoformat().replace("+00:00", "Z")
+                ),
+            }
+            for item in decisions
+        ],
+        "ledger_path": ledger.path.as_posix(),
+        "receipt_path": cycle.receipt_path.as_posix(),
+        "source_artifact_root": cycle.artifact_root.as_posix(),
+        "execution_capability": "none",
+    }
+
+
+def freeze_agent_phase2_due(
+    *,
+    registration_path: Path,
+    exposure_registry_path: Path,
+    source_coverage_registration_path: Path,
+    ledger_path: Path,
+    pattern_pack_paths: tuple[Path, ...],
+    output_root: Path,
+    now: datetime,
+) -> dict[str, object]:
+    if not ledger_path.is_file():
+        raise FileNotFoundError(f"Accrual Ledger does not exist: {ledger_path}")
+    registration, registry = load_agent_phase2_preregistration(
+        registration_path,
+        exposure_registry_path,
+    )
+    coverage = load_source_coverage_registration(source_coverage_registration_path)
+    ledger = AccrualLedger(
+        ledger_path,
+        registration=registration,
+        registry=registry,
+        coverage_registration=coverage,
+        created_at=now,
+    )
+    batch = freeze_due_evidence_packs(
+        ledger=ledger,
+        registry=registry,
+        pattern_pack_paths=pattern_pack_paths,
+        output_root=output_root / registration.registration_hash,
+        now=now,
+    )
+    return {
+        "frozen_count": len(batch.frozen),
+        "frozen": [
+            {
+                "accrued_event_id": item.accrued_event_id,
+                "evidence_pack_id": item.evidence_pack.pack_id,
+                "evidence_cutoff_at": item.evidence_pack.as_of.isoformat().replace("+00:00", "Z"),
+                "root": item.root.as_posix(),
+                "already_existed": item.already_existed,
+            }
+            for item in batch.frozen
+        ],
+        "pending_event_ids": list(batch.pending_event_ids),
         "execution_capability": "none",
     }
 
@@ -855,6 +1090,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = validate_agent_phase2_study(
                 registration_path=args.registration,
                 exposure_registry_path=args.exposure_registry,
+                source_coverage_registration_path=args.source_coverage_registration,
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
@@ -869,6 +1105,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = observe_agent_phase2_study(
                 registration_path=args.registration,
                 exposure_registry_path=args.exposure_registry,
+                source_coverage_registration_path=args.source_coverage_registration,
+                coverage_receipt_path=args.coverage_receipt,
                 observation_path=args.observation,
                 raw_source_path=args.raw_source,
                 regional_denominator_source_path=args.regional_denominator_source,
@@ -888,12 +1126,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = validate_agent_phase2_ledger(
                 registration_path=args.registration,
                 exposure_registry_path=args.exposure_registry,
+                source_coverage_registration_path=args.source_coverage_registration,
                 ledger_path=args.ledger,
                 inspected_at=datetime.now(UTC),
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
                 json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent" and args.agent_command == "study-source-poll":
+        try:
+            result = poll_agent_phase2_sources(
+                registration_path=args.registration,
+                exposure_registry_path=args.exposure_registry,
+                source_coverage_registration_path=args.source_coverage_registration,
+                ledger_path=args.ledger,
+                monitor_root=args.monitor_root,
+                started_at=datetime.now(UTC),
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"polled": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["coverage_complete"] else 1
+    if args.command == "agent" and args.agent_command == "study-freeze-due":
+        try:
+            result = freeze_agent_phase2_due(
+                registration_path=args.registration,
+                exposure_registry_path=args.exposure_registry,
+                source_coverage_registration_path=args.source_coverage_registration,
+                ledger_path=args.ledger,
+                pattern_pack_paths=tuple(args.pattern_pack),
+                output_root=args.output_root,
+                now=datetime.now(UTC),
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"frozen": False, "error": f"{type(exc).__name__}: {exc}"}),
                 file=sys.stderr,
             )
             return 1

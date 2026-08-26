@@ -79,8 +79,12 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
   deterministic admission/non-admission, revision lineage, first-eligible separation,
   cohort limits, idempotency, and tamper detection.
-- [ ] Add verified direct-source capture/monitoring and admit the first five qualifying
-  future events without replacement or outcome-based selection.
+- [x] Freeze the first Source Coverage Registration; implement private exact-response
+  capture, mandatory-source failure receipts, direct ENTSOG gas revision normalization, and
+  idempotent T0+60 Evidence Pack freezing with no broker reachability.
+- [ ] Extend registered direct confirmation beyond European gas to oil and non-European
+  infrastructure, run prospective coverage/latency acceptance, and admit the first five
+  qualifying future events without replacement or outcome-based selection.
 - Pass the frozen real-data gate without a single event dominating the outcome.
 
 Exit gate: reproducible results beat at least one meaningful baseline without a

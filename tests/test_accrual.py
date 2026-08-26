@@ -25,9 +25,15 @@ from market_impact_agent.cli import (
     observe_agent_phase2_study,
     validate_agent_phase2_ledger,
 )
+from market_impact_agent.source_coverage import (
+    CoverageAttempt,
+    CoverageReceipt,
+    load_source_coverage_registration,
+)
 
 REGISTRATION_PATH = Path("examples/calibration/agent-physical-energy-prospective-v1.json")
 REGISTRY_PATH = Path("examples/research/a-share-energy-exposure-registry-v1.json")
+COVERAGE_PATH = Path("examples/research/physical-energy-source-coverage-v1.json")
 BASE_AVAILABLE_AT = datetime(2026, 8, 28, 1, tzinfo=UTC)
 
 
@@ -43,6 +49,53 @@ class ObservationOverrides(TypedDict, total=False):
     duration: str
     supersedes: str | None
     revision: str
+    coverage_complete: bool
+
+
+def _receipt_for(
+    *,
+    available_at: datetime,
+    provider_id: str,
+    raw_content_hash: str,
+    complete: bool = True,
+) -> CoverageReceipt:
+    coverage = load_source_coverage_registration(COVERAGE_PATH)
+    attempts: list[CoverageAttempt] = []
+    for source in coverage.sources:
+        succeeds = complete or source.provider_id != "gdelt-energy-discovery"
+        content_hash = (
+            raw_content_hash
+            if source.provider_id == provider_id
+            else sha256(f"raw-{source.provider_id}-{available_at.isoformat()}".encode()).hexdigest()
+        )
+        attempts.append(
+            CoverageAttempt(
+                provider_id=source.provider_id,
+                requested_at=available_at - timedelta(seconds=5),
+                retrieved_at=available_at if succeeds else None,
+                succeeded=succeeds,
+                content_hash=content_hash if succeeds else None,
+                record_count=1 if succeeds else None,
+                error_class=None if succeeds else "TimeoutError",
+                error_summary=None if succeeds else "synthetic timeout",
+            )
+        )
+    core = {
+        "schema_version": "market-impact.coverage-receipt.v1",
+        "coverage_registration_id": coverage.coverage_registration_id,
+        "coverage_registration_hash": coverage.coverage_registration_hash,
+        "cycle_started_at": _timestamp(available_at - timedelta(seconds=5)),
+        "cycle_completed_at": _timestamp(available_at + timedelta(seconds=1)),
+        "attempts": [item.to_dict() for item in attempts],
+    }
+    return CoverageReceipt(
+        receipt_id=f"coverage-receipt-{canonical_hash(core)}",
+        coverage_registration_id=coverage.coverage_registration_id,
+        coverage_registration_hash=coverage.coverage_registration_hash,
+        cycle_started_at=available_at - timedelta(seconds=5),
+        cycle_completed_at=available_at + timedelta(seconds=1),
+        attempts=tuple(attempts),
+    )
 
 
 def _observation_payload(
@@ -50,7 +103,7 @@ def _observation_payload(
     event_id: str = "event-1",
     available_at: datetime = BASE_AVAILABLE_AT,
     occurred_at: datetime | None = None,
-    source_tier: str = "official",
+    source_tier: str = "primary",
     event_nature: str = "physical_production_loss",
     commodity: str = "crude_oil",
     loss_amount: str = "600000",
@@ -58,13 +111,27 @@ def _observation_payload(
     duration: str = "48",
     supersedes: str | None = None,
     revision: str = "v1",
+    coverage_complete: bool = True,
 ) -> dict[str, object]:
     resolved_occurred_at = available_at - timedelta(hours=1) if occurred_at is None else occurred_at
     published_at = available_at - timedelta(minutes=55)
     claim_summary = f"{event_id} {revision} point-in-time physical loss estimate"
+    provider_id = "gdelt-energy-discovery" if source_tier == "established_news" else "entsog-umm"
+    raw_hash = sha256(f"raw-{event_id}-{revision}".encode()).hexdigest()
+    receipt = _receipt_for(
+        available_at=available_at,
+        provider_id=provider_id,
+        raw_content_hash=raw_hash,
+        complete=coverage_complete,
+    )
+    coverage = load_source_coverage_registration(COVERAGE_PATH)
     payload: dict[str, object] = {
         "schema_version": "market-impact.candidate-event-observation.v1",
         "event_id": event_id,
+        "source_coverage_registration_id": coverage.coverage_registration_id,
+        "source_coverage_registration_hash": coverage.coverage_registration_hash,
+        "coverage_receipt_id": receipt.receipt_id,
+        "coverage_receipt_hash": receipt.receipt_hash,
         "event_nature": event_nature,
         "affected_commodity": commodity,
         "loss_amount": loss_amount,
@@ -75,7 +142,7 @@ def _observation_payload(
         "regional_denominator_raw_content_hash": None,
         "expected_duration_hours": duration,
         "source": {
-            "provider_id": "synthetic-official-source",
+            "provider_id": provider_id,
             "upstream_source": "synthetic-operator",
             "upstream_record_id": f"{event_id}-{revision}",
             "source_ref": f"https://operator.example/{event_id}/{revision}",
@@ -86,7 +153,7 @@ def _observation_payload(
             "available_at": _timestamp(available_at),
             "retrieved_at": _timestamp(available_at),
             "availability_basis": "actual_receipt",
-            "raw_content_hash": sha256(f"raw-{event_id}-{revision}".encode()).hexdigest(),
+            "raw_content_hash": raw_hash,
             "claim_summary": claim_summary,
             "claim_hash": sha256(claim_summary.encode()).hexdigest(),
         },
@@ -105,10 +172,12 @@ def _ledger(tmp_path: Path) -> AccrualLedger:
         REGISTRATION_PATH,
         REGISTRY_PATH,
     )
+    coverage = load_source_coverage_registration(COVERAGE_PATH)
     return AccrualLedger(
         tmp_path / "accrual" / "ledger.sqlite3",
         registration=registration,
         registry=registry,
+        coverage_registration=coverage,
         created_at=datetime(2026, 8, 26, 8, tzinfo=UTC),
     )
 
@@ -119,10 +188,16 @@ def _record(
     *,
     recorded_at: datetime,
 ) -> AccrualDecision:
+    receipt = _receipt_for(
+        available_at=observation.source.retrieved_at,
+        provider_id=observation.source.provider_id,
+        raw_content_hash=observation.source.raw_content_hash,
+    )
     return ledger.record(
         observation,
         recorded_at=recorded_at,
         raw_source=f"raw-{observation.source.upstream_record_id}".encode(),
+        coverage_receipt=receipt,
     )
 
 
@@ -163,6 +238,40 @@ def test_qualifying_observation_accrues_with_private_hash_chained_ledger(
     assert raw_artifact.stat().st_mode & 0o777 == 0o600
 
 
+def test_mandatory_source_failure_blocks_accrual_and_cannot_be_waited_out(
+    tmp_path: Path,
+) -> None:
+    ledger = _ledger(tmp_path)
+    incomplete = _observation(coverage_complete=False)
+    incomplete_receipt = _receipt_for(
+        available_at=incomplete.source.retrieved_at,
+        provider_id=incomplete.source.provider_id,
+        raw_content_hash=incomplete.source.raw_content_hash,
+        complete=False,
+    )
+    first = ledger.record(
+        incomplete,
+        recorded_at=incomplete.source.retrieved_at + timedelta(minutes=1),
+        raw_source=b"raw-event-1-v1",
+        coverage_receipt=incomplete_receipt,
+    )
+    later = _observation(
+        available_at=BASE_AVAILABLE_AT + timedelta(hours=1),
+        occurred_at=incomplete.source.occurred_at,
+        supersedes=incomplete.observation_id,
+        revision="v2",
+    )
+    second = _record(
+        ledger,
+        later,
+        recorded_at=later.source.retrieved_at + timedelta(minutes=1),
+    )
+
+    assert first.reasons == (AccrualReason.SOURCE_COVERAGE_INCOMPLETE,)
+    assert second.reasons == (AccrualReason.SOURCE_COVERAGE_INCOMPLETE,)
+    assert ledger.accrued_event_count == 0
+
+
 def test_nonqualifying_news_can_be_superseded_by_later_official_confirmation(
     tmp_path: Path,
 ) -> None:
@@ -174,7 +283,7 @@ def test_nonqualifying_news_can_be_superseded_by_later_official_confirmation(
         recorded_at=discovery.source.retrieved_at + timedelta(minutes=1),
     )
     confirmation = _observation(
-        source_tier="official",
+        source_tier="primary",
         available_at=BASE_AVAILABLE_AT + timedelta(hours=1),
         occurred_at=discovery.source.occurred_at,
         supersedes=discovery.observation_id,
@@ -254,7 +363,7 @@ def test_loss_amount_and_unit_must_be_missing_together() -> None:
         ({"loss_amount": "499999"}, AccrualReason.LOSS_THRESHOLD_NOT_MET),
         ({"duration": "23.9"}, AccrualReason.DURATION_THRESHOLD_NOT_MET),
         ({"commodity": "coal"}, AccrualReason.UNSUPPORTED_COMMODITY),
-        ({"source_tier": "specialist"}, AccrualReason.SOURCE_TIER_NOT_QUALIFYING),
+        ({"source_tier": "established_news"}, AccrualReason.SOURCE_TIER_NOT_QUALIFYING),
         (
             {"available_at": datetime(2026, 8, 26, 23, tzinfo=UTC)},
             AccrualReason.OUTSIDE_ACCRUAL_WINDOW,
@@ -461,12 +570,18 @@ def test_ledger_detects_stored_decision_tampering(tmp_path: Path) -> None:
 def test_ledger_requires_and_revalidates_exact_raw_source_bytes(tmp_path: Path) -> None:
     ledger = _ledger(tmp_path)
     observation = _observation()
+    receipt = _receipt_for(
+        available_at=observation.source.retrieved_at,
+        provider_id=observation.source.provider_id,
+        raw_content_hash=observation.source.raw_content_hash,
+    )
 
     with pytest.raises(ValueError, match="bytes do not match"):
         ledger.record(
             observation,
             recorded_at=observation.source.retrieved_at + timedelta(minutes=1),
             raw_source=b"wrong",
+            coverage_receipt=receipt,
         )
     assert ledger.decisions() == ()
 
@@ -488,6 +603,7 @@ def test_ledger_rejects_symlink_substitution(tmp_path: Path) -> None:
         REGISTRATION_PATH,
         REGISTRY_PATH,
     )
+    coverage = load_source_coverage_registration(COVERAGE_PATH)
     outside = tmp_path / "outside.sqlite3"
     outside.touch()
     link = tmp_path / "ledger.sqlite3"
@@ -498,14 +614,27 @@ def test_ledger_rejects_symlink_substitution(tmp_path: Path) -> None:
             link,
             registration=registration,
             registry=registry,
+            coverage_registration=coverage,
             created_at=datetime(2026, 8, 26, 8, tzinfo=UTC),
         )
 
 
 def test_cli_service_records_and_validates_qualifying_observation(tmp_path: Path) -> None:
+    observation = _observation()
     observation_path = tmp_path / "observation.json"
     observation_path.write_text(
-        json.dumps(_observation_payload()),
+        json.dumps(observation.to_dict()),
+        encoding="utf-8",
+    )
+    coverage_receipt_path = tmp_path / "coverage-receipt.json"
+    coverage_receipt_path.write_text(
+        json.dumps(
+            _receipt_for(
+                available_at=observation.source.retrieved_at,
+                provider_id=observation.source.provider_id,
+                raw_content_hash=observation.source.raw_content_hash,
+            ).to_dict()
+        ),
         encoding="utf-8",
     )
     raw_source_path = tmp_path / "raw-source.bin"
@@ -515,6 +644,8 @@ def test_cli_service_records_and_validates_qualifying_observation(tmp_path: Path
     recorded = observe_agent_phase2_study(
         registration_path=REGISTRATION_PATH,
         exposure_registry_path=REGISTRY_PATH,
+        source_coverage_registration_path=COVERAGE_PATH,
+        coverage_receipt_path=coverage_receipt_path,
         observation_path=observation_path,
         raw_source_path=raw_source_path,
         regional_denominator_source_path=None,
@@ -524,6 +655,7 @@ def test_cli_service_records_and_validates_qualifying_observation(tmp_path: Path
     validated = validate_agent_phase2_ledger(
         registration_path=REGISTRATION_PATH,
         exposure_registry_path=REGISTRY_PATH,
+        source_coverage_registration_path=COVERAGE_PATH,
         ledger_path=ledger_path,
         inspected_at=BASE_AVAILABLE_AT + timedelta(minutes=2),
     )
@@ -547,6 +679,20 @@ def test_main_records_pre_window_observation_without_false_accrual(
         json.dumps(_observation_payload(available_at=available_at)),
         encoding="utf-8",
     )
+    observation = candidate_event_observation_from_dict(
+        json.loads(observation_path.read_text(encoding="utf-8"))
+    )
+    coverage_receipt_path = tmp_path / "coverage-receipt.json"
+    coverage_receipt_path.write_text(
+        json.dumps(
+            _receipt_for(
+                available_at=observation.source.retrieved_at,
+                provider_id=observation.source.provider_id,
+                raw_content_hash=observation.source.raw_content_hash,
+            ).to_dict()
+        ),
+        encoding="utf-8",
+    )
     raw_source_path = tmp_path / "raw-source.bin"
     raw_source_path.write_bytes(b"raw-event-1-v1")
     ledger_path = tmp_path / "ledger.sqlite3"
@@ -559,6 +705,10 @@ def test_main_records_pre_window_observation_without_false_accrual(
             str(REGISTRATION_PATH),
             "--exposure-registry",
             str(REGISTRY_PATH),
+            "--source-coverage-registration",
+            str(COVERAGE_PATH),
+            "--coverage-receipt",
+            str(coverage_receipt_path),
             "--observation",
             str(observation_path),
             "--raw-source",

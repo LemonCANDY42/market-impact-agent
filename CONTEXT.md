@@ -118,6 +118,18 @@ accrual rule, Exposure Registry, Judgment replicate protocol, baselines, missing
 and acceptance gate before holdout outcomes exist.
 _Avoid_: Backtest plan, selected event list
 
+**Source Coverage Registration**:
+A content-identified, pre-accrual commitment to the observable source universe, mandatory
+discovery and confirmation Providers, polling cadence, freshness limits, and failure action.
+It bounds a first-eligible claim but does not prove exhaustive world coverage.
+_Avoid_: Feed list, scraper config, complete news universe
+
+**Coverage Receipt**:
+An immutable record of which required Observation Providers succeeded or failed during one
+polling interval under a Source Coverage Registration. It may block accrual, but it cannot
+establish occurrence facts or make an event eligible.
+_Avoid_: Health check, source truth, Accrual Decision
+
 **Candidate Event Observation**:
 An immutable, point-in-time assertion that a possible Event Cluster may satisfy one
 Prospective Cohort Registration, including its occurrence facts and supporting Source

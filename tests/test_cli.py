@@ -2,12 +2,15 @@ import json
 import subprocess
 import sys
 import textwrap
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
 import pytest
 
 from market_impact_agent.cli import main, status_payload
+from market_impact_agent.energy_monitor import EnergyMonitorCycle, EnergySourceMonitor
+from tests.test_energy_monitor import build_monitor
 
 
 def test_status_is_fail_closed() -> None:
@@ -294,6 +297,8 @@ def test_agent_study_validate_accepts_frozen_prospective_registration(
             "examples/calibration/agent-physical-energy-prospective-v1.json",
             "--exposure-registry",
             "examples/research/a-share-energy-exposure-registry-v1.json",
+            "--source-coverage-registration",
+            "examples/research/physical-energy-source-coverage-v1.json",
         ]
     )
 
@@ -326,6 +331,8 @@ def test_agent_study_validate_rejects_event_deletion_policy(
             str(registration),
             "--exposure-registry",
             "examples/research/a-share-energy-exposure-registry-v1.json",
+            "--source-coverage-registration",
+            "examples/research/physical-energy-source-coverage-v1.json",
         ]
     )
 
@@ -333,3 +340,115 @@ def test_agent_study_validate_rejects_event_deletion_policy(
     output = json.loads(capsys.readouterr().out)
     assert output["valid"] is False
     assert any("retain_and_abstain" in error for error in output["errors"])
+
+
+def test_source_poll_and_due_freeze_commands_complete_the_research_path(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cycle = build_monitor(tmp_path / "fixture").poll()
+
+    def fixed_poll(
+        self: EnergySourceMonitor,
+        *,
+        latest_observations: object = None,
+    ) -> EnergyMonitorCycle:
+        del self, latest_observations
+        return cycle
+
+    class FixedClock:
+        @staticmethod
+        def now(timezone: object) -> datetime:
+            del timezone
+            return datetime(2026, 8, 28, 2, 0, 6, tzinfo=UTC)
+
+    monkeypatch.setattr(EnergySourceMonitor, "poll", fixed_poll)
+    monkeypatch.setattr("market_impact_agent.cli.datetime", FixedClock)
+    ledger = tmp_path / "ledger.sqlite3"
+    common = [
+        "--registration",
+        "examples/calibration/agent-physical-energy-prospective-v1.json",
+        "--exposure-registry",
+        "examples/research/a-share-energy-exposure-registry-v1.json",
+        "--source-coverage-registration",
+        "examples/research/physical-energy-source-coverage-v1.json",
+    ]
+
+    poll_result = main(
+        [
+            "agent",
+            "study-source-poll",
+            *common,
+            "--ledger",
+            str(ledger),
+            "--monitor-root",
+            str(tmp_path / "monitor"),
+        ]
+    )
+    poll_payload = json.loads(capsys.readouterr().out)
+    freeze_result = main(
+        [
+            "agent",
+            "study-freeze-due",
+            *common,
+            "--ledger",
+            str(ledger),
+            "--pattern-pack",
+            "examples/agent/energy_supply/pattern-pack.json",
+            "--output-root",
+            str(tmp_path / "evidence"),
+        ]
+    )
+    freeze_payload = json.loads(capsys.readouterr().out)
+
+    assert poll_result == 0
+    assert poll_payload["coverage_complete"] is True
+    assert poll_payload["candidate_count"] == 1
+    assert poll_payload["decisions"][0]["disposition"] == "accrued"
+    assert freeze_result == 0
+    assert freeze_payload["frozen_count"] == 1
+    assert freeze_payload["execution_capability"] == "none"
+
+
+def test_source_poll_command_returns_failure_and_retains_candidate_on_coverage_gap(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cycle = build_monitor(
+        tmp_path / "fixture",
+        fail_provider="gdelt-energy-discovery",
+    ).poll()
+
+    def fixed_poll(
+        self: EnergySourceMonitor,
+        *,
+        latest_observations: object = None,
+    ) -> EnergyMonitorCycle:
+        del self, latest_observations
+        return cycle
+
+    monkeypatch.setattr(EnergySourceMonitor, "poll", fixed_poll)
+    result = main(
+        [
+            "agent",
+            "study-source-poll",
+            "--registration",
+            "examples/calibration/agent-physical-energy-prospective-v1.json",
+            "--exposure-registry",
+            "examples/research/a-share-energy-exposure-registry-v1.json",
+            "--source-coverage-registration",
+            "examples/research/physical-energy-source-coverage-v1.json",
+            "--ledger",
+            str(tmp_path / "ledger.sqlite3"),
+            "--monitor-root",
+            str(tmp_path / "monitor"),
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert result == 1
+    assert payload["coverage_complete"] is False
+    assert payload["candidate_count"] == 1
+    assert payload["decisions"][0]["reasons"] == ["source_coverage_incomplete"]

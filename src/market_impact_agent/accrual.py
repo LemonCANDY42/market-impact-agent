@@ -18,6 +18,11 @@ from market_impact_agent.domain import require_aware
 from market_impact_agent.observations import AvailabilityBasis
 from market_impact_agent.research import EvidenceTier
 from market_impact_agent.runtime_store import ArtifactStore
+from market_impact_agent.source_coverage import (
+    CoverageReceipt,
+    SourceCoverageRegistration,
+    coverage_receipt_from_dict,
+)
 
 CANDIDATE_EVENT_OBSERVATION_SCHEMA = "market-impact.candidate-event-observation.v1"
 PHYSICAL_ENERGY_COMMODITIES = frozenset({"crude_oil", "natural_gas"})
@@ -33,6 +38,7 @@ class EventNature(StrEnum):
     DEMAND_ONLY = "demand_only"
     PLANNED_MAINTENANCE = "planned_maintenance"
     RETROSPECTIVE_ONLY = "retrospective_only"
+    UNCLASSIFIED = "unclassified"
 
     @property
     def qualifying(self) -> bool:
@@ -63,6 +69,7 @@ class AccrualReason(StrEnum):
     OUTSIDE_ACCRUAL_WINDOW = "outside_accrual_window"
     SEPARATION_WINDOW_NOT_MET = "separation_window_not_met"
     SOURCE_TIER_NOT_QUALIFYING = "source_tier_not_qualifying"
+    SOURCE_COVERAGE_INCOMPLETE = "source_coverage_incomplete"
     UNSUPPORTED_COMMODITY = "unsupported_commodity"
 
 
@@ -138,6 +145,10 @@ class OccurrenceSourceObservation:
 class CandidateEventObservation:
     observation_id: str
     event_id: str
+    source_coverage_registration_id: str
+    source_coverage_registration_hash: str
+    coverage_receipt_id: str
+    coverage_receipt_hash: str
     event_nature: EventNature
     affected_commodity: str | None
     loss_amount: Decimal | None
@@ -152,6 +163,16 @@ class CandidateEventObservation:
 
     def __post_init__(self) -> None:
         _identifier(self.event_id, "event_id")
+        _nonempty(
+            self.source_coverage_registration_id,
+            "source_coverage_registration_id",
+        )
+        _sha256(
+            self.source_coverage_registration_hash,
+            "source_coverage_registration_hash",
+        )
+        _nonempty(self.coverage_receipt_id, "coverage_receipt_id")
+        _sha256(self.coverage_receipt_hash, "coverage_receipt_hash")
         if self.affected_commodity is not None:
             _nonempty(self.affected_commodity, "affected_commodity")
         if self.loss_amount is not None and (
@@ -223,6 +244,10 @@ class CandidateEventObservation:
         return {
             "schema_version": CANDIDATE_EVENT_OBSERVATION_SCHEMA,
             "event_id": self.event_id,
+            "source_coverage_registration_id": self.source_coverage_registration_id,
+            "source_coverage_registration_hash": self.source_coverage_registration_hash,
+            "coverage_receipt_id": self.coverage_receipt_id,
+            "coverage_receipt_hash": self.coverage_receipt_hash,
             "event_nature": self.event_nature.value,
             "affected_commodity": self.affected_commodity,
             "loss_amount": None if self.loss_amount is None else str(self.loss_amount),
@@ -253,6 +278,7 @@ class AccrualDecision:
     sequence: int
     registration_id: str
     observation: CandidateEventObservation
+    coverage_receipt: CoverageReceipt
     disposition: AccrualDisposition
     reasons: tuple[AccrualReason, ...]
     qualifying_visible_at: datetime | None
@@ -266,6 +292,11 @@ class AccrualDecision:
         if self.sequence < 1:
             raise ValueError("Accrual Decision sequence must be positive")
         _nonempty(self.registration_id, "registration_id")
+        if (
+            self.observation.coverage_receipt_id != self.coverage_receipt.receipt_id
+            or self.observation.coverage_receipt_hash != self.coverage_receipt.receipt_hash
+        ):
+            raise ValueError("Accrual Decision coverage receipt does not match observation")
         require_aware(self.recorded_at, "recorded_at")
         if self.previous_hash is not None:
             _sha256(self.previous_hash, "previous_hash")
@@ -292,6 +323,7 @@ class AccrualDecision:
             "sequence": self.sequence,
             "registration_id": self.registration_id,
             "observation_hash": self.observation.observation_hash,
+            "coverage_receipt_hash": self.coverage_receipt.receipt_hash,
             "disposition": self.disposition.value,
             "reasons": [item.value for item in self.reasons],
             "qualifying_visible_at": _optional_timestamp(self.qualifying_visible_at),
@@ -309,9 +341,17 @@ class AccrualLedger:
         *,
         registration: AgentPhase2Preregistration,
         registry: ExposureRegistry,
+        coverage_registration: SourceCoverageRegistration,
         created_at: datetime,
     ) -> None:
         registration.validate_against(registry)
+        if (
+            coverage_registration.prospective_registration_id != registration.registration_id
+            or coverage_registration.prospective_registration_hash != registration.registration_hash
+        ):
+            raise ValueError("Source Coverage Registration does not match prospective study")
+        if coverage_registration.registered_at >= registration.accrual.opens_after:
+            raise ValueError("Source Coverage Registration must be frozen before accrual opens")
         require_aware(created_at, "ledger created_at")
         if created_at < registration.registered_at:
             raise ValueError("Accrual Ledger cannot be created before study registration")
@@ -322,6 +362,7 @@ class AccrualLedger:
         self.path = path.resolve()
         self.registration = registration
         self.registry = registry
+        self.coverage_registration = coverage_registration
         self.source_artifacts = ArtifactStore(self.path.parent / "source-artifacts")
         self._initialize(created_at)
         os.chmod(self.path, 0o600)
@@ -344,6 +385,8 @@ class AccrualLedger:
                     registration_hash TEXT NOT NULL,
                     registry_id TEXT NOT NULL,
                     registry_hash TEXT NOT NULL,
+                    coverage_registration_id TEXT NOT NULL,
+                    coverage_registration_hash TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS accrual_decisions (
@@ -352,6 +395,8 @@ class AccrualLedger:
                     event_id TEXT NOT NULL,
                     observation_json TEXT NOT NULL,
                     observation_hash TEXT NOT NULL,
+                    coverage_receipt_json TEXT NOT NULL,
+                    coverage_receipt_hash TEXT NOT NULL,
                     disposition TEXT NOT NULL,
                     reasons_json TEXT NOT NULL,
                     qualifying_visible_at TEXT,
@@ -373,14 +418,18 @@ class AccrualLedger:
                     """
                     INSERT INTO ledger_metadata(
                         singleton, registration_id, registration_hash,
-                        registry_id, registry_hash, created_at
-                    ) VALUES (1, ?, ?, ?, ?, ?)
+                        registry_id, registry_hash,
+                        coverage_registration_id, coverage_registration_hash,
+                        created_at
+                    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         self.registration.registration_id,
                         self.registration.registration_hash,
                         self.registry.registry_id,
                         self.registry.registry_hash,
+                        self.coverage_registration.coverage_registration_id,
+                        self.coverage_registration.coverage_registration_hash,
                         _timestamp(created_at),
                     ),
                 )
@@ -393,6 +442,8 @@ class AccrualLedger:
             "registration_hash": self.registration.registration_hash,
             "registry_id": self.registry.registry_id,
             "registry_hash": self.registry.registry_hash,
+            "coverage_registration_id": (self.coverage_registration.coverage_registration_id),
+            "coverage_registration_hash": (self.coverage_registration.coverage_registration_hash),
         }
         for name, value in expected.items():
             if cast(str, row[name]) != value:
@@ -405,14 +456,17 @@ class AccrualLedger:
         *,
         recorded_at: datetime,
         raw_source: bytes,
+        coverage_receipt: CoverageReceipt,
         regional_denominator_source: bytes | None = None,
     ) -> AccrualDecision:
         require_aware(recorded_at, "recorded_at")
         if recorded_at < observation.source.retrieved_at:
             raise ValueError("recorded_at must not precede source retrieval")
+        self._validate_coverage(observation, coverage_receipt)
         self._retain_source_artifacts(
             observation,
             raw_source=raw_source,
+            coverage_receipt=coverage_receipt,
             regional_denominator_source=regional_denominator_source,
         )
         with self._connect() as connection:
@@ -437,7 +491,9 @@ class AccrualLedger:
             previous_hash = None if not decisions else decisions[-1].decision_hash
             disposition, reasons = _evaluate_observation(
                 self.registration,
+                self.coverage_registration,
                 observation,
+                coverage_receipt,
                 decisions,
             )
             qualifying_visible_at: datetime | None = None
@@ -459,6 +515,7 @@ class AccrualLedger:
                 "sequence": sequence,
                 "registration_id": self.registration.registration_id,
                 "observation_hash": observation.observation_hash,
+                "coverage_receipt_hash": coverage_receipt.receipt_hash,
                 "disposition": disposition.value,
                 "reasons": [item.value for item in reasons],
                 "qualifying_visible_at": _optional_timestamp(qualifying_visible_at),
@@ -472,10 +529,11 @@ class AccrualLedger:
                 """
                 INSERT INTO accrual_decisions(
                     sequence, observation_id, event_id, observation_json,
-                    observation_hash, disposition, reasons_json,
+                    observation_hash, coverage_receipt_json, coverage_receipt_hash,
+                    disposition, reasons_json,
                     qualifying_visible_at, evidence_cutoff_at, accrued_event_id,
                     recorded_at, previous_hash, decision_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     sequence,
@@ -483,6 +541,8 @@ class AccrualLedger:
                     observation.event_id,
                     canonical_json_bytes(observation.to_dict()).decode(),
                     observation.observation_hash,
+                    canonical_json_bytes(coverage_receipt.to_dict()).decode(),
+                    coverage_receipt.receipt_hash,
                     disposition.value,
                     canonical_json_bytes([item.value for item in reasons]).decode(),
                     _optional_timestamp(qualifying_visible_at),
@@ -506,6 +566,7 @@ class AccrualLedger:
         observation: CandidateEventObservation,
         *,
         raw_source: bytes,
+        coverage_receipt: CoverageReceipt,
         regional_denominator_source: bytes | None,
     ) -> None:
         _retain_exact_artifact(
@@ -514,6 +575,9 @@ class AccrualLedger:
             observation.source.raw_content_hash,
             "raw source",
         )
+        stored_receipt = self.source_artifacts.put_json(coverage_receipt.core_dict())
+        if stored_receipt.content_hash != coverage_receipt.receipt_hash:
+            raise ValueError("Coverage Receipt artifact hash does not match receipt")
         denominator_hash = observation.regional_denominator_raw_content_hash
         if denominator_hash is None:
             if regional_denominator_source is not None:
@@ -534,6 +598,10 @@ class AccrualLedger:
         self.source_artifacts.get(
             observation.source.raw_content_hash,
             media_type="application/octet-stream",
+        )
+        self.source_artifacts.get(
+            observation.coverage_receipt_hash,
+            media_type="application/json",
         )
         denominator_hash = observation.regional_denominator_raw_content_hash
         if denominator_hash is not None:
@@ -573,6 +641,32 @@ class AccrualLedger:
         ):
             raise ValueError("event revisions must preserve affected commodity")
 
+    def _validate_coverage(
+        self,
+        observation: CandidateEventObservation,
+        receipt: CoverageReceipt,
+    ) -> None:
+        receipt.validate_against(self.coverage_registration)
+        if (
+            observation.source_coverage_registration_id
+            != self.coverage_registration.coverage_registration_id
+            or observation.source_coverage_registration_hash
+            != self.coverage_registration.coverage_registration_hash
+            or observation.coverage_receipt_id != receipt.receipt_id
+            or observation.coverage_receipt_hash != receipt.receipt_hash
+        ):
+            raise ValueError("Candidate Event Observation coverage identity is invalid")
+        source = self.coverage_registration.source(observation.source.provider_id)
+        if observation.source.source_tier is not source.source_tier:
+            raise ValueError("Candidate Event Observation source tier is not registered")
+        attempt = receipt.attempt(source.provider_id)
+        if (
+            not attempt.succeeded
+            or attempt.retrieved_at != observation.source.retrieved_at
+            or attempt.content_hash != observation.source.raw_content_hash
+        ):
+            raise ValueError("Candidate Event Observation is not bound to its source attempt")
+
     def decisions(self) -> tuple[AccrualDecision, ...]:
         with self._connect() as connection:
             metadata = connection.execute(
@@ -594,7 +688,11 @@ class AccrualLedger:
             if decision.previous_hash != previous_hash:
                 raise ValueError("Accrual Ledger hash chain is invalid")
             previous_hash = decision.decision_hash
-        _validate_recorded_history(self.registration, decisions)
+        _validate_recorded_history(
+            self.registration,
+            self.coverage_registration,
+            decisions,
+        )
         return decisions
 
     def _verified_decision(self, row: sqlite3.Row) -> AccrualDecision:
@@ -613,6 +711,17 @@ class AccrualLedger:
             raise ValueError("Accrual Ledger observation_id is invalid")
         if cast(str, row["event_id"]) != observation.event_id:
             raise ValueError("Accrual Ledger event_id is invalid")
+        receipt_json = cast(str, row["coverage_receipt_json"])
+        try:
+            receipt_payload: object = json.loads(receipt_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Accrual Ledger coverage_receipt_json is invalid") from exc
+        coverage_receipt = coverage_receipt_from_dict(receipt_payload)
+        if receipt_json != canonical_json_bytes(coverage_receipt.to_dict()).decode():
+            raise ValueError("Accrual Ledger coverage_receipt_json is not canonical")
+        if cast(str, row["coverage_receipt_hash"]) != coverage_receipt.receipt_hash:
+            raise ValueError("Accrual Ledger coverage_receipt_hash is invalid")
+        self._validate_coverage(observation, coverage_receipt)
         reasons_json = cast(str, row["reasons_json"])
         try:
             reasons_value: object = json.loads(reasons_json)
@@ -630,6 +739,7 @@ class AccrualLedger:
             sequence=cast(int, row["sequence"]),
             registration_id=self.registration.registration_id,
             observation=observation,
+            coverage_receipt=coverage_receipt,
             disposition=AccrualDisposition(cast(str, row["disposition"])),
             reasons=reasons,
             qualifying_visible_at=_optional_parse_timestamp(
@@ -665,6 +775,10 @@ def candidate_event_observation_from_dict(value: object) -> CandidateEventObserv
             "schema_version",
             "observation_id",
             "event_id",
+            "source_coverage_registration_id",
+            "source_coverage_registration_hash",
+            "coverage_receipt_id",
+            "coverage_receipt_hash",
             "event_nature",
             "affected_commodity",
             "loss_amount",
@@ -705,6 +819,16 @@ def candidate_event_observation_from_dict(value: object) -> CandidateEventObserv
     return CandidateEventObservation(
         observation_id=_string(payload, "observation_id"),
         event_id=_string(payload, "event_id"),
+        source_coverage_registration_id=_string(
+            payload,
+            "source_coverage_registration_id",
+        ),
+        source_coverage_registration_hash=_string(
+            payload,
+            "source_coverage_registration_hash",
+        ),
+        coverage_receipt_id=_string(payload, "coverage_receipt_id"),
+        coverage_receipt_hash=_string(payload, "coverage_receipt_hash"),
         event_nature=EventNature(_string(payload, "event_nature")),
         affected_commodity=_nullable_string(payload, "affected_commodity"),
         loss_amount=_nullable_decimal(payload, "loss_amount"),
@@ -751,12 +875,20 @@ def candidate_event_observation_from_dict(value: object) -> CandidateEventObserv
 
 def _evaluate_observation(
     registration: AgentPhase2Preregistration,
+    coverage_registration: SourceCoverageRegistration,
     observation: CandidateEventObservation,
+    coverage_receipt: CoverageReceipt,
     decisions: tuple[AccrualDecision, ...],
 ) -> tuple[AccrualDisposition, tuple[AccrualReason, ...]]:
     reasons: set[AccrualReason] = set()
     available_at = observation.source.available_at
     accrued = tuple(item for item in decisions if item.disposition is AccrualDisposition.ACCRUED)
+    if not coverage_receipt.is_complete(coverage_registration) or any(
+        item.observation.event_id == observation.event_id
+        and item.reasons == (AccrualReason.SOURCE_COVERAGE_INCOMPLETE,)
+        for item in decisions
+    ):
+        reasons.add(AccrualReason.SOURCE_COVERAGE_INCOMPLETE)
     if not (registration.accrual.opens_after < available_at <= registration.accrual.closes_at):
         reasons.add(AccrualReason.OUTSIDE_ACCRUAL_WINDOW)
     if len(accrued) >= registration.accrual.target_event_count:
@@ -779,6 +911,8 @@ def _evaluate_observation(
     if observation.source.source_tier not in (
         registration.event_eligibility.accepted_occurrence_source_tiers
     ):
+        reasons.add(AccrualReason.SOURCE_TIER_NOT_QUALIFYING)
+    if not coverage_registration.source(observation.source.provider_id).occurrence_eligible:
         reasons.add(AccrualReason.SOURCE_TIER_NOT_QUALIFYING)
     if not observation.event_nature.qualifying:
         reasons.add(AccrualReason.EVENT_NATURE_EXCLUDED)
@@ -814,6 +948,7 @@ def _evaluate_observation(
 
 def _validate_recorded_history(
     registration: AgentPhase2Preregistration,
+    coverage_registration: SourceCoverageRegistration,
     decisions: tuple[AccrualDecision, ...],
 ) -> None:
     prior_available_at: datetime | None = None
@@ -847,7 +982,9 @@ def _validate_recorded_history(
             raise ValueError("Accrual Ledger revision changed stable event identity")
         expected_disposition, expected_reasons = _evaluate_observation(
             registration,
+            coverage_registration,
             observation,
+            decision.coverage_receipt,
             tuple(replayed),
         )
         if decision.disposition is not expected_disposition or decision.reasons != expected_reasons:

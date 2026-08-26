@@ -17,6 +17,8 @@ AGENT_SCHEMA_FILES = (
     "exposure-registry.schema.json",
     "agent-phase2-preregistration.schema.json",
     "candidate-event-observation.schema.json",
+    "source-coverage-registration.schema.json",
+    "coverage-receipt.schema.json",
 )
 
 

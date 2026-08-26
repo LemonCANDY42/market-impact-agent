@@ -8,6 +8,10 @@
     "schema_version",
     "observation_id",
     "event_id",
+    "source_coverage_registration_id",
+    "source_coverage_registration_hash",
+    "coverage_receipt_id",
+    "coverage_receipt_hash",
     "event_nature",
     "affected_commodity",
     "loss_amount",
@@ -27,6 +31,16 @@
       "pattern": "^candidate-observation-[0-9a-f]{64}$"
     },
     "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+    "source_coverage_registration_id": {
+      "type": "string",
+      "pattern": "^source-coverage-[0-9a-f]{64}$"
+    },
+    "source_coverage_registration_hash": {"$ref": "#/$defs/sha256"},
+    "coverage_receipt_id": {
+      "type": "string",
+      "pattern": "^coverage-receipt-[0-9a-f]{64}$"
+    },
+    "coverage_receipt_hash": {"$ref": "#/$defs/sha256"},
     "event_nature": {
       "enum": [
         "physical_production_loss",
@@ -35,7 +49,8 @@
         "policy_only",
         "demand_only",
         "planned_maintenance",
-        "retrospective_only"
+        "retrospective_only",
+        "unclassified"
       ]
     },
     "affected_commodity": {
