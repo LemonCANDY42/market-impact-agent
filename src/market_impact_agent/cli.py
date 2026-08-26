@@ -24,6 +24,20 @@ from market_impact_agent.calibration import (
     phase2_calibration_gate_result_to_dict,
 )
 from market_impact_agent.events import event_transmission_chronology_errors
+from market_impact_agent.observations import (
+    ValidatedObservationBundle,
+    validate_prediction_market_batch,
+    write_prediction_market_batch,
+)
+from market_impact_agent.prediction_markets import (
+    KalshiPublicAdapter,
+    PolymarketPublicAdapter,
+    PredictionMarketAdapter,
+    WorldMonitorPredictionAdapter,
+    kalshi_provider_manifest,
+    polymarket_provider_manifest,
+    world_monitor_provider_manifest,
+)
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.registry import ProviderRegistry
 from market_impact_agent.tushare import TushareHttpAdapter
@@ -60,6 +74,33 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Validate a point-in-time event assessment"
     )
     event_validate_parser.add_argument("path", type=Path)
+
+    prediction_parser = subparsers.add_parser(
+        "prediction", help="Capture or validate read-only prediction-market observations"
+    )
+    prediction_subparsers = prediction_parser.add_subparsers(
+        dest="prediction_command",
+        required=True,
+    )
+    prediction_capture_parser = prediction_subparsers.add_parser(
+        "capture", help="Capture one current public or aggregated market snapshot"
+    )
+    prediction_capture_parser.add_argument(
+        "--provider",
+        required=True,
+        choices=("polymarket", "kalshi", "world-monitor"),
+    )
+    prediction_capture_parser.add_argument("--limit", type=int, default=20)
+    prediction_capture_parser.add_argument("--query")
+    prediction_capture_parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path(".market-impact/observations"),
+    )
+    prediction_validate_parser = prediction_subparsers.add_parser(
+        "validate", help="Validate one local prediction-market observation bundle"
+    )
+    prediction_validate_parser.add_argument("path", type=Path)
 
     tushare_parser = subparsers.add_parser(
         "tushare", help="Capture or validate local Tushare data bundles"
@@ -117,6 +158,14 @@ def status_payload() -> dict[str, object]:
         "python": platform.python_version(),
         "live_trading": "disabled",
         "providers": [manifest.to_dict() for manifest in default_registry().manifests()],
+        "observation_providers": [
+            manifest.to_dict()
+            for manifest in (
+                polymarket_provider_manifest(),
+                kalshi_provider_manifest(),
+                world_monitor_provider_manifest(),
+            )
+        ],
     }
 
 
@@ -166,6 +215,17 @@ def capture_tushare(
     capture = capture_tushare_data_bundle(TushareHttpAdapter(token), request)
     path = write_tushare_data_bundle(capture, output_root)
     return validate_tushare_data_bundle(path)
+
+
+def capture_prediction_markets(
+    adapter: PredictionMarketAdapter,
+    *,
+    limit: int,
+    query: str | None,
+    output_root: Path,
+) -> ValidatedObservationBundle:
+    batch = adapter.fetch_markets(limit=limit, query=query)
+    return write_prediction_market_batch(batch, output_root)
 
 
 def _event_transmission_schema_errors(payload: object) -> tuple[str, ...]:
@@ -221,6 +281,70 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "prediction" and args.prediction_command == "capture":
+        try:
+            if args.provider == "polymarket":
+                adapter: PredictionMarketAdapter = PolymarketPublicAdapter()
+            elif args.provider == "kalshi":
+                adapter = KalshiPublicAdapter()
+            else:
+                world_monitor_key = os.environ.get("WORLD_MONITOR_API_KEY", "")
+                if not world_monitor_key:
+                    raise ValueError("WORLD_MONITOR_API_KEY is not configured")
+                adapter = WorldMonitorPredictionAdapter(world_monitor_key)
+            bundle = capture_prediction_markets(
+                adapter,
+                limit=args.limit,
+                query=args.query,
+                output_root=args.output_root,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"captured": False, "error": str(exc)}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "batch_id": bundle.batch_id,
+                    "bundle_hash": bundle.bundle_hash,
+                    "captured": True,
+                    "data_available": bundle.data_available,
+                    "evidence_ready_count": bundle.evidence_ready_count,
+                    "observation_count": bundle.observation_count,
+                    "path": bundle.path.as_posix(),
+                    "provider_id": bundle.provider_id,
+                    "provider_verified": False,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "prediction" and args.prediction_command == "validate":
+        try:
+            bundle = validate_prediction_market_batch(args.path)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "batch_id": bundle.batch_id,
+                    "bundle_hash": bundle.bundle_hash,
+                    "data_available": bundle.data_available,
+                    "evidence_ready_count": bundle.evidence_ready_count,
+                    "observation_count": bundle.observation_count,
+                    "path": bundle.path.as_posix(),
+                    "provider_id": bundle.provider_id,
+                    "valid": True,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     if args.command == "tushare" and args.tushare_command == "capture":
         token = os.environ.get("TUSHARE_TOKEN", "")
         if not token:

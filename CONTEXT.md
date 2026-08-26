@@ -11,6 +11,23 @@ A source-backed observation with separate occurrence, publication, visibility,
 and retrieval times.
 _Avoid_: News blob, context
 
+**Source Observation**:
+An immutable raw and normalized Provider record captured before it is eligible to become
+Evidence. It retains original upstream identity, aggregator identity when present, source
+publication/update times, strategy availability, local retrieval, and completeness gaps.
+_Avoid_: API response, trusted fact
+
+**Availability Time**:
+The earliest instant a strategy may use one exact source version, measured from a real-time
+receipt or derived from source publication plus a frozen, source-specific latency model.
+It is not the time a later historical backfill happened to run.
+_Avoid_: Event time, retrieval time
+
+**Retrieval Time**:
+When the Harness fetched and stored its local copy. It supports audit, identity, and
+diagnostics but does not reconstruct historical source availability.
+_Avoid_: Publication time, visibility time
+
 **Event Envelope**:
 The immutable point-in-time boundary containing an event and the Evidence Items
 available as of a stated instant.
@@ -157,6 +174,12 @@ _Avoid_: Confirmation, model confidence
 An external or in-process capability owner for market data, backtesting,
 account state, paper execution, or live execution.
 _Avoid_: Tool, broker
+
+**Observation Provider**:
+A read-only Provider that discovers or acquires source records under an Observation
+manifest. It cannot own Evidence promotion, research, approval, or execution. Aggregated
+and direct sources retain distinct identities.
+_Avoid_: Evidence authority, execution Provider
 
 **Capability Snapshot**:
 A point-in-time record of what a Provider declares and what the harness has

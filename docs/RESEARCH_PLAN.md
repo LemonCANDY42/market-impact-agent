@@ -15,6 +15,12 @@ become independent evidence. A scheduled future occurrence is valid when its ann
 was visible by `as_of`; the system must not reject it merely because the occurrence lies in
 the future.
 
+Market visibility is the source's historical availability or publication plus a frozen,
+source-specific delivery-latency model. Local retrieval records when this Harness stored a
+copy; a later backfill retrieval neither proves nor replaces historical visibility. If a
+source does not expose publication, vintage, or revision availability, keep that gap explicit
+and exclude the observation from strict point-in-time replay.
+
 The model uses orthogonal axes instead of one growing topic list:
 
 1. **Event Archetype** records the root cause of the new information.
@@ -116,7 +122,8 @@ technology-to-dividend/low-volatility rotation and El Niño-to-agriculture slice
 
 ## Validation rules
 
-- Use source availability time, not article edit time or database ingestion hindsight.
+- Use source availability time, not article edit time or database ingestion hindsight;
+  freeze the latency model before evaluation and calibrate it from prospective live receipts.
 - Model A-share trading constraints: next executable price, T+1, price limits, suspensions,
   lot sizes, fees, slippage, and overnight gaps.
 - Split by event families and time, not random news rows.

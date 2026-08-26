@@ -29,6 +29,10 @@ The bootstrap implements:
 - canonical domain contracts for signals, order intents, mandates, and approval;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
+- a separate read-only Observation Provider contract plus current public Polymarket and
+  Kalshi snapshot adapters, an authenticated World Monitor discovery adapter, and private
+  content-addressed raw/normalized JSON bundles with explicit occurrence, publication,
+  update, availability, aggregator-fetch, and retrieval semantics;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
@@ -50,6 +54,8 @@ The bootstrap implements:
 - a hard-policy-gated paper execution gateway and idempotent mock provider;
 - JSON Schemas for event, signal, order, and provider artifacts;
 - machine-readable status, provider-manifest validation, and event-chronology commands.
+- prediction-market capture and offline bundle-validation commands; all three Observation
+  Providers remain disabled and unverified.
 
 Planned integrations are documented but **not claimed as working**:
 
@@ -115,6 +121,9 @@ Requirements:
 uv sync --all-extras --python 3.13
 uv run market-impact status
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
+uv run market-impact prediction capture --provider polymarket --limit 20
+uv run market-impact prediction capture --provider kalshi --limit 20
+uv run market-impact prediction validate BUNDLE.json
 uv run market-impact backtest run --request REQUEST.json --data-snapshot BUNDLE_DIRECTORY
 uv run market-impact backtest phase2-register --cohort COHORT.json \
   --data-snapshot-root .market-impact/tushare --output PRIVATE_REGISTRATION.json
@@ -130,6 +139,12 @@ uv run pytest
 Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment and
 writes licensed observations under the ignored `.market-impact/tushare/` directory. See the
 data-boundary document for the exact command and non-claims.
+
+World Monitor capture reads `WORLD_MONITOR_API_KEY` only from the process environment.
+Prediction-market responses are stored under the ignored `.market-impact/observations/`
+directory by default. Direct public capture needs no credential. See
+[docs/OBSERVATION_DATA.md](docs/OBSERVATION_DATA.md) for time semantics, licensing, and
+non-claims.
 
 GitHub Actions, when enabled, only repeats these commands on standard public
 runners. Local commands remain the source of truth; development and releases do

@@ -8,8 +8,9 @@ approval operates only inside the hard envelope; providers own external
 capabilities and observed execution facts.
 
 ```text
-Source adapters
-    -> Evidence Items -> Event Envelope
+Observation adapters (aggregated discovery + direct sources)
+    -> immutable raw/normalized observation bundle
+    -> availability and latency gate -> Evidence Items -> Event Envelope
     -> fast/deep router -> Event Assessment
     -> Signal Intent
          -> Backtest Request -> engine-neutral backtest port
@@ -42,6 +43,24 @@ Live execution is invisible to agents until conformance proves:
 
 MCP is the preferred agent-facing control surface, not the execution ledger.
 One-shot tool success never means broker acceptance or fill.
+
+Observation Providers use a separate, read-only manifest from execution Providers. The
+execution registry requires environments, order types, streaming, and reconciliation;
+forcing news, macro, or prediction-market sources into it would mix acquisition with order
+lifecycle authority. Observation manifests instead declare upstream sources, temporal
+fields, history/revision support, authentication, licensing notes, and verified data
+capabilities. They remain disabled until their exact source and capability pass acceptance.
+
+Aggregators are discovery accelerators, not canonical authorities. The Harness retains both
+the aggregator identity and original upstream identity, then uses direct adapters where
+rules, revision history, market identifiers, or historical series matter. Copies of one
+upstream record share a claim identity and do not become independent corroboration.
+
+An Observation records occurrence, source publication/update, optional aggregator fetch,
+strategy availability, and local retrieval separately. Historical replay uses source
+availability or a frozen delivery-latency model; local backfill retrieval time is audit
+metadata and never substitutes for historical visibility. See
+[`docs/OBSERVATION_DATA.md`](docs/OBSERVATION_DATA.md).
 
 The bootstrap exposes one composed `PaperExecutionGateway`. It re-evaluates hard
 policy and provider capability before issuing the sealed input accepted by an
@@ -132,6 +151,10 @@ The initial state model is intentionally local:
 The first persistence slice is a private, content-addressed local Tushare Data Snapshot:
 normalized listing, universe, calendar, and daily tables in Parquet plus a JSON manifest.
 SQLite state remains deferred until run indexing or execution lifecycle work requires it.
+Current prediction-market snapshots use the same local-first principle: one private,
+content-addressed JSON bundle contains the complete decoded JSON response, normalized
+observations, temporal provenance, and Provider manifest. No service or database was
+introduced.
 
 ## Runtime boundary
 

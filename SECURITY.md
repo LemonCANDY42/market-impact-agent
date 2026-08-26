@@ -22,6 +22,8 @@ tokens, account identifiers, or paid data in the report.
   CI configuration.
 - Providers must obtain credentials from an external secret store or process
   environment at runtime.
+- Observation Providers follow the same rule; `WORLD_MONITOR_API_KEY` is read only from the
+  process environment and must never be written into an observation bundle.
 - Examples use placeholders and synthetic accounts only.
 - Any suspected exposure requires revocation before investigation continues.
 

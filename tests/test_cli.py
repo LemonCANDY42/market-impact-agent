@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -12,6 +13,15 @@ def test_status_is_fail_closed() -> None:
     providers = payload["providers"]
     assert isinstance(providers, list)
     assert providers[0]["provider_id"] == "mock-execution"
+    observation_providers = payload["observation_providers"]
+    assert isinstance(observation_providers, list)
+    observation_manifests = cast(list[dict[str, object]], observation_providers)
+    assert {manifest["provider_id"] for manifest in observation_manifests} == {
+        "kalshi-public",
+        "polymarket-public",
+        "world-monitor-predictions",
+    }
+    assert all(manifest["enabled"] is False for manifest in observation_manifests)
 
 
 def test_validate_provider_command(tmp_path: Path) -> None:
@@ -123,6 +133,33 @@ def test_tushare_capture_requires_environment_token_before_creating_local_state(
     assert json.loads(capsys.readouterr().err) == {
         "captured": False,
         "error": "TUSHARE_TOKEN is not configured",
+    }
+    assert not (tmp_path / ".market-impact").exists()
+
+
+def test_world_monitor_capture_requires_environment_key_before_creating_local_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("WORLD_MONITOR_API_KEY", raising=False)
+
+    result = main(
+        [
+            "prediction",
+            "capture",
+            "--provider",
+            "world-monitor",
+            "--limit",
+            "1",
+        ]
+    )
+
+    assert result == 1
+    assert json.loads(capsys.readouterr().err) == {
+        "captured": False,
+        "error": "WORLD_MONITOR_API_KEY is not configured",
     }
     assert not (tmp_path / ".market-impact").exists()
 

@@ -13,6 +13,15 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 ## Phase 1 — Event research vertical slice
 
+- [x] Define a separate read-only Observation Provider contract with source occurrence,
+  publication/update, aggregator fetch, strategy availability, retrieval, upstream identity,
+  degradation, and content-addressed raw-capture semantics.
+- [x] Capture and validate current public Polymarket and Kalshi snapshots through real
+  endpoints; add a disabled World Monitor discovery adapter with explicit unavailable-cache
+  behavior and no false empty-data claim.
+- [ ] Add source-specific historical publication/vintage and revision adapters plus frozen
+  latency models calibrated from prospective real-time receipts. Current snapshots alone are
+  not historical point-in-time evidence.
 - Build immutable Evidence Item and Event Envelope materialization with occurrence,
   publication, visibility, retrieval, revision, and duplicate-claim semantics.
 - Implement event-archetype, transmission-channel, directness, revelation-mode, and
