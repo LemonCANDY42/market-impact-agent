@@ -247,6 +247,16 @@ and [Provider registry](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c2
 Their outputs are prior art only; this Harness retains its own evidence, policy, and execution
 authority boundaries.
 
+A later isolated deployment of pinned TradingAgents `0.3.1` used the same two strongly masked
+opened-development information states and MiniMax M3. Both native runs returned `Hold`, but the
+multi-role transcript introduced facts and quantitative assumptions absent from the frozen input,
+and one state exercised structured-output-to-free-text degradation. It therefore remains a private
+external behavior/cost diagnostic rather than a runtime dependency or valid method arm. The
+first-run memory paths were empty, but review found an upstream pending-decision resolver that
+could fetch Yahoo returns on reuse; the private runner now disables that lifecycle path and rejects
+experiment-id reuse. The deployment and news-source/post-processing findings are recorded in
+`docs/TRADINGAGENTS_EXTERNAL_BASELINE.md`.
+
 The Model Provider Profile is the single public model-entry contract. It binds adapter kind,
 exact origin and model, credential environment reference, context/output limits, sampling,
 retry policy, pricing, and a per-run 50,000 micro-USD estimated-cost ceiling. MiniMax remains

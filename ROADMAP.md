@@ -113,6 +113,16 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   completed, every ensemble abstained, and both one-session replays were deterministic. The
   fixed-long control was net negative in both states. This accepts the implementation diagnostic,
   not a method ranking or alpha claim; artifacts from earlier case identities remain invalid.
+- [x] Deploy pinned TradingAgents `0.3.1` outside the Harness and run one native multi-agent smoke
+  decision per strongly masked state with role data tools frozen. Both returned `Hold`, but role
+  outputs injected historical identity, external analogues, and unsupported quantities. Review
+  also found a latent pending-decision Yahoo-return resolver on reuse; the private runner now
+  disables it and rejects existing experiment ids. Retain this as a negative input-isolation/cost
+  diagnostic, not a benchmark arm or permission to integrate a multi-agent authority.
+- [ ] Before any formal external five-replicate comparison, build a separately identified
+  evidence-locked adapter that preserves Evidence Item lineage, blocks unsupported identity and
+  number injection between roles, disables live/history-memory inputs, records structured-output
+  degradation, and passes a zero-contamination smoke under a frozen budget.
 - [ ] Implement and accept source-specific publication-time extraction plus a frozen latency
   calibration and build the first complete historical case. Until then v2 admits no retrospective
   holdout, even when the archive capture and internal receipt hashes are valid.

@@ -166,6 +166,14 @@ non-inferential diagnostic; the remaining seven development cases and all holdou
 unbuilt. See
 [docs/METHOD_QUALITY_BENCHMARK.md](docs/METHOD_QUALITY_BENCHMARK.md).
 
+Pinned TradingAgents `0.3.1` was also deployed privately as an external same-input smoke baseline.
+Both opened-case states produced `Hold`, but native role outputs supplied historical identities and
+quantities absent from the frozen evidence, so the run is a negative input-isolation/cost
+diagnostic rather than a method comparison. Review also found a latent live-return resolver on
+memory reuse and host-time-dependent admission of undated news; neither behavior is accepted by
+the Harness. Its news collection/post-processing review and the gate for a future evidence-locked arm are in
+[docs/TRADINGAGENTS_EXTERNAL_BASELINE.md](docs/TRADINGAGENTS_EXTERNAL_BASELINE.md).
+
 The first archive-capture adapter is now reproducible through `market-impact archive
 common-crawl-verify`. It verifies a fixed Common Crawl byte range, one complete gzip/WARC member,
 capture metadata, target/status, and payload/block digests; redirects, widened origins, changed

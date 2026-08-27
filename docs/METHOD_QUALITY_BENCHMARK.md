@@ -59,6 +59,14 @@ third-party trading framework or copy its prompts.
 TradingAgents and StockBench are Apache-2.0; Vibe-Trading and FinMem are MIT. No third-party code
 was copied, so the repository's Apache-2.0 licensing and current attribution boundary do not change.
 
+The pinned TradingAgents `0.3.1` external baseline was subsequently deployed outside the Harness
+and run once against each strongly masked Abqaiq information state. Both native decisions were
+`Hold`, but the role graph introduced historical identities, named analogues, market quantities,
+and decision assumptions absent from the frozen input. The observations are retained as a negative
+input-isolation and cost diagnostic, not a benchmark arm or method-quality result. See
+`docs/TRADINGAGENTS_EXTERNAL_BASELINE.md` for the deployment, news-pipeline review, and gate for a
+future evidence-locked comparison.
+
 ## Evidence ladder
 
 1. **Development**: eight synthetic or already opened cases exercise success, contradiction,
