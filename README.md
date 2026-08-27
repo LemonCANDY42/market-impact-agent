@@ -43,9 +43,9 @@ The bootstrap implements:
   Provider manifest;
 - a private, content-addressed local Tushare Data Snapshot bundle with Parquet tables,
   hash/permission validation, and a stable `data_snapshot_id` for later replay requests;
-- a narrowly versioned `600028.XSHG` modeled-open adapter and token-free backtest CLI that
-  consume a validated private bundle in memory, with repeated-result local acceptance and
-  no derived licensed fixture committed;
+- narrowly versioned modeled-open adapters and a token-free backtest CLI that consume validated
+  private `600028.XSHG` integration/cohort and `601857.XSHG` opened-development bundles in memory,
+  with repeated-result local acceptance and no derived licensed fixture committed;
 - independent 1/3/10-session Nautilus runs from one Backtest Request, normalized cost-aware
   `net_return`, and fail-closed v1/v2 Phase 2 calibration gates over pre-registered repeated
   event/baseline Results and honest long-only abstentions;
@@ -133,6 +133,18 @@ costed, replayed, and can change the selected horizon. Because the single synthe
 contains one eligible long-only target and no market outcome, it establishes process behavior
 only—not a winning Skill, better forecast, backtest result, or alpha claim.
 
+The first real outcome-opened development case uses the 2019 Abqaiq–Khurais attack and recovery as
+two information states of one Event Case. Agent-visible inputs now replace event-specific magnitude,
+facility, restoration, shipment, and calendar-date fingerprints with coarse mechanism categories
+and shifted dates. The relative evidence sequence and lag are preserved, so residual narrative
+linkage and memorization risk remain and this is not an authenticated holdout. The replacement case
+completed all 40 required Agent runs and passed joint report/request preflight before four
+deterministic Nautilus replays. Every ensemble abstained; the registered fixed-long control was net
+negative in both states. The one-case result supports implementation and evidence-update diagnosis
+only: it does not rank the four methods or support alpha, prospective, or execution claims. All
+artifacts from earlier case identities remain invalid. See
+[docs/ABQAIQ_DEVELOPMENT_BENCHMARK.md](docs/ABQAIQ_DEVELOPMENT_BENCHMARK.md).
+
 The method-quality protocol is now frozen separately. It adds a persona-free research-bias
 Skill, strict Historical Evidence Manifest and Source Version Receipt contracts, consistent
 historical identity aliases, train-only outcome memory, 8 development and 24 holdout case targets,
@@ -149,7 +161,9 @@ family/Pattern-Pack contrasts as diagnostics requiring new prospective confirmat
 estimator is executable, but cannot support a claim until a future content-identified case/run
 matrix is bound into the pre-run seals/openings. No self-asserted pair artifact is accepted. The
 overall promotion evaluator is future work and no promotion claim is made. Style attribution is
-deferred. The development and holdout corpora have not been built or run. See
+deferred. One of eight development cases has been built and run as an explicitly opened,
+non-inferential diagnostic; the remaining seven development cases and all holdout cases remain
+unbuilt. See
 [docs/METHOD_QUALITY_BENCHMARK.md](docs/METHOD_QUALITY_BENCHMARK.md).
 
 The first archive-capture adapter is now reproducible through `market-impact archive

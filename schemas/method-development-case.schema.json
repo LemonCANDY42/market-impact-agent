@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/method-development-case.schema.json",
+  "title": "Opened Method Development Case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "registered_at",
+    "benchmark_registration_id",
+    "benchmark_registration_hash",
+    "evaluation_specification_id",
+    "evaluation_specification_hash",
+    "method_catalog_id",
+    "method_catalog_hash",
+    "provider_profile_id",
+    "provider_profile_hash",
+    "provider_id",
+    "model",
+    "case_alias",
+    "actual_event_id",
+    "suite_id",
+    "event_archetype",
+    "runtime_ref",
+    "replicate_count",
+    "minimum_agreement",
+    "allowed_directions",
+    "eligible_horizons_sessions",
+    "arm_bindings",
+    "states",
+    "outcomes_known_to_builder",
+    "posthoc_patterns_allowed",
+    "identity_masked",
+    "independent_unit",
+    "inference_eligible",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": { "const": "market-impact.method-development-case.v1" },
+    "case_id": {
+      "type": "string",
+      "pattern": "^method-development-case-[0-9a-f]{64}$"
+    },
+    "registered_at": { "type": "string", "format": "date-time" },
+    "benchmark_registration_id": { "$ref": "#/$defs/nonempty" },
+    "benchmark_registration_hash": { "$ref": "#/$defs/sha256" },
+    "evaluation_specification_id": { "$ref": "#/$defs/nonempty" },
+    "evaluation_specification_hash": { "$ref": "#/$defs/sha256" },
+    "method_catalog_id": { "$ref": "#/$defs/nonempty" },
+    "method_catalog_hash": { "$ref": "#/$defs/sha256" },
+    "provider_profile_id": { "$ref": "#/$defs/nonempty" },
+    "provider_profile_hash": { "$ref": "#/$defs/sha256" },
+    "provider_id": { "$ref": "#/$defs/nonempty" },
+    "model": { "$ref": "#/$defs/nonempty" },
+    "case_alias": { "$ref": "#/$defs/nonempty" },
+    "actual_event_id": { "$ref": "#/$defs/nonempty" },
+    "suite_id": { "const": "family_increment" },
+    "event_archetype": { "const": "physical_supply_logistics" },
+    "runtime_ref": { "$ref": "#/$defs/nonempty" },
+    "replicate_count": { "const": 5 },
+    "minimum_agreement": { "const": 3 },
+    "allowed_directions": {
+      "type": "array",
+      "prefixItems": [{ "const": "up" }],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "eligible_horizons_sessions": {
+      "type": "array",
+      "prefixItems": [{ "const": 1 }],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "arm_bindings": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/arm_binding" },
+            { "properties": { "arm": { "const": "neutral_evidence" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/arm_binding" },
+            { "properties": { "arm": { "const": "general_methods" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/arm_binding" },
+            { "properties": { "arm": { "const": "general_pattern" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/arm_binding" },
+            { "properties": { "arm": { "const": "family_guided" } } }
+          ]
+        }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "states": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/state" },
+            { "properties": { "state_id": { "const": "attack" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/state" },
+            { "properties": { "state_id": { "const": "recovery" } } }
+          ]
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "outcomes_known_to_builder": { "const": true },
+    "posthoc_patterns_allowed": { "const": true },
+    "identity_masked": { "const": true },
+    "independent_unit": { "const": "one_event_case_not_two_independent_states" },
+    "inference_eligible": { "const": false },
+    "execution_capability": { "const": "none" }
+  },
+  "$defs": {
+    "nonempty": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "unique_nonempty_strings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonempty" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "arm_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "arm",
+        "route_id",
+        "requested_skills",
+        "manifest_hashes",
+        "allowed_capabilities",
+        "allowed_tools"
+      ],
+      "properties": {
+        "suite_id": { "const": "family_increment" },
+        "arm": {
+          "enum": [
+            "neutral_evidence",
+            "general_methods",
+            "general_pattern",
+            "family_guided"
+          ]
+        },
+        "route_id": {
+          "type": "string",
+          "pattern": "^skill-route-[0-9a-f]{64}$"
+        },
+        "requested_skills": { "$ref": "#/$defs/unique_nonempty_strings" },
+        "manifest_hashes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sha256" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_capabilities": { "$ref": "#/$defs/unique_nonempty_strings" },
+        "allowed_tools": { "$ref": "#/$defs/unique_nonempty_strings" }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_id",
+        "evidence_pack_id",
+        "evidence_pack_hash",
+        "evidence_documents_hash",
+        "pattern_pack_ids",
+        "pattern_pack_hashes",
+        "actual_cutoff",
+        "masked_as_of",
+        "target_alias",
+        "actual_target_id",
+        "backtest_request_id",
+        "backtest_request_hash",
+        "data_snapshot_id"
+      ],
+      "properties": {
+        "state_id": { "$ref": "#/$defs/nonempty" },
+        "evidence_pack_id": { "$ref": "#/$defs/nonempty" },
+        "evidence_pack_hash": { "$ref": "#/$defs/sha256" },
+        "evidence_documents_hash": { "$ref": "#/$defs/sha256" },
+        "pattern_pack_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonempty" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "pattern_pack_hashes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sha256" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "actual_cutoff": { "type": "string", "format": "date-time" },
+        "masked_as_of": { "type": "string", "format": "date-time" },
+        "target_alias": { "$ref": "#/$defs/nonempty" },
+        "actual_target_id": { "$ref": "#/$defs/nonempty" },
+        "backtest_request_id": { "$ref": "#/$defs/nonempty" },
+        "backtest_request_hash": { "$ref": "#/$defs/sha256" },
+        "data_snapshot_id": { "$ref": "#/$defs/nonempty" }
+      }
+    }
+  }
+}

@@ -104,11 +104,21 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   the exact gzip/WARC member, target/status, payload digest, optional block digest, and truncation.
   A complete official record passes the live transport path and a truncated record is rejected for
   archive-capture acceptance. This is archive authentication, not publisher-time authentication.
+- [x] Build the first real outcome-opened method-development case. The 2019 Abqaiq–Khurais attack
+  and recovery are two strongly masked information states of one Event Case. Exact event
+  fingerprints were replaced with coarse mechanism categories; residual memorization/linkage risk
+  remains, so this is not an authenticated holdout.
+- [x] Rerun all four arms times five MiniMax M3 replicates for both strongly masked states and open
+  outcomes only after both reports and both Backtest Requests pass joint preflight. All 40 runs
+  completed, every ensemble abstained, and both one-session replays were deterministic. The
+  fixed-long control was net negative in both states. This accepts the implementation diagnostic,
+  not a method ranking or alpha claim; artifacts from earlier case identities remain invalid.
 - [ ] Implement and accept source-specific publication-time extraction plus a frozen latency
   calibration and build the first complete historical case. Until then v2 admits no retrospective
   holdout, even when the archive capture and internal receipt hashes are valid.
-- [ ] After that authority exists, build and validate the eight-case development corpus, freeze all
-  24 outcome-independent masked historical holdout cases with authenticated evidence and matching
+- [ ] Build the remaining seven opened development cases across positive, offsetting, missing,
+  ambiguous, revision, and cross-mechanism paths. Separately, after publisher-time authority exists,
+  freeze all 24 outcome-independent masked historical holdout cases with authenticated evidence and matching
   market snapshots and seals, and implement the overall promotion evaluator. That future evaluator
   must combine time, abstention, baselines, strata, concentration, drawdown, CVaR, and cost gates;
   the clustered paired interval alone is not an overall promotion decision; the implemented

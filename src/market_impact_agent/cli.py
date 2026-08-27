@@ -274,6 +274,54 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/method-ablation-runs"),
     )
+    method_development_parser = agent_subparsers.add_parser(
+        "method-development-run",
+        help="Run one identity-masked opened development state without inferential claims",
+    )
+    method_development_parser.add_argument("--case", required=True, type=Path)
+    method_development_parser.add_argument("--benchmark-registration", required=True, type=Path)
+    method_development_parser.add_argument("--evaluation-specification", required=True, type=Path)
+    method_development_parser.add_argument("--method-catalog", required=True, type=Path)
+    method_development_parser.add_argument("--provider-profile", required=True, type=Path)
+    method_development_parser.add_argument("--state", required=True, choices=("attack", "recovery"))
+    _add_agent_bundle_arguments(method_development_parser)
+    method_development_parser.add_argument("--backtest-request", required=True, type=Path)
+    method_development_parser.add_argument("--experiment-id", required=True)
+    method_development_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    method_development_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/method-development-runs"),
+    )
+    method_development_evaluate_parser = agent_subparsers.add_parser(
+        "method-development-evaluate",
+        help="Open deterministic outcomes for one completed opened development case",
+    )
+    method_development_evaluate_parser.add_argument("--case", required=True, type=Path)
+    method_development_evaluate_parser.add_argument("--attack-report", required=True, type=Path)
+    method_development_evaluate_parser.add_argument("--recovery-report", required=True, type=Path)
+    method_development_evaluate_parser.add_argument(
+        "--attack-backtest-request", required=True, type=Path
+    )
+    method_development_evaluate_parser.add_argument(
+        "--recovery-backtest-request", required=True, type=Path
+    )
+    method_development_evaluate_parser.add_argument(
+        "--attack-data-snapshot", required=True, type=Path
+    )
+    method_development_evaluate_parser.add_argument(
+        "--recovery-data-snapshot", required=True, type=Path
+    )
+    method_development_evaluate_parser.add_argument("--evaluation-id", required=True)
+    method_development_evaluate_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/method-development-evaluations"),
+    )
     method_benchmark_parser = agent_subparsers.add_parser(
         "method-benchmark-validate",
         help="Validate the frozen method-quality protocol and one point-in-time case",
@@ -1509,6 +1557,92 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "agent" and args.agent_command == "method-development-run":
+        try:
+            from market_impact_agent.method_development_runner import (
+                run_method_development_state,
+            )
+
+            result = asyncio.run(
+                run_method_development_state(
+                    case_path=args.case,
+                    benchmark_registration_path=args.benchmark_registration,
+                    evaluation_specification_path=args.evaluation_specification,
+                    method_catalog_path=args.method_catalog,
+                    provider_profile_path=args.provider_profile,
+                    state_id=args.state,
+                    evidence_pack_path=args.evidence_pack,
+                    evidence_documents_path=args.evidence_documents,
+                    pattern_pack_paths=tuple(args.pattern_packs),
+                    backtest_request_path=args.backtest_request,
+                    experiment_id=args.experiment_id,
+                    skill_root=args.skill_root,
+                    state_root=args.state_root,
+                )
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name != "mcp":
+                raise
+            print(
+                json.dumps(
+                    {
+                        "completed": False,
+                        "error": (
+                            "Agent execution requires the optional dependency group; "
+                            "install market-impact-agent[agent]"
+                        ),
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent" and args.agent_command == "method-development-evaluate":
+        try:
+            from market_impact_agent.method_development_evaluation import (
+                evaluate_method_development_case,
+            )
+
+            result = evaluate_method_development_case(
+                case_path=args.case,
+                attack_report_path=args.attack_report,
+                recovery_report_path=args.recovery_report,
+                attack_backtest_request_path=args.attack_backtest_request,
+                recovery_backtest_request_path=args.recovery_backtest_request,
+                attack_data_snapshot_path=args.attack_data_snapshot,
+                recovery_data_snapshot_path=args.recovery_data_snapshot,
+                evaluation_id=args.evaluation_id,
+                state_root=args.state_root,
+            )
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "agent" and args.agent_command == "study-validate":
         try:
             result = validate_agent_phase2_study(

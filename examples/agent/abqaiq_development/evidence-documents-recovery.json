@@ -1,0 +1,50 @@
+{
+  "documents": {
+    "pre-event-balance": {
+      "evidence_id": "pre-event-balance",
+      "event_time": "2031-05-03T00:00:00Z",
+      "published_at": "2031-05-03T23:59:59Z",
+      "source_type": "official",
+      "fact": "A pre-event official balance described regional operating conditions and supply activity as broadly normal.",
+      "identity_masked": true,
+      "development_only": true
+    },
+    "physical-loss": {
+      "evidence_id": "physical-loss",
+      "event_time": "2031-05-06T00:00:00Z",
+      "published_at": "2031-05-06T23:59:59Z",
+      "source_type": "primary",
+      "fact": "The directly affected operator confirmed an abrupt production suspension that was large relative to global daily supply.",
+      "identity_masked": true,
+      "development_only": true
+    },
+    "restoration-update": {
+      "evidence_id": "restoration-update",
+      "event_time": "2031-05-09T00:00:00Z",
+      "published_at": "2031-05-09T23:59:59Z",
+      "source_type": "primary",
+      "fact": "The operator subsequently reported substantial physical recovery and guided to restoration over a short operational horizon.",
+      "identity_masked": true,
+      "development_only": true
+    },
+    "shipment-mitigation": {
+      "evidence_id": "shipment-mitigation",
+      "event_time": "2031-05-09T00:00:00Z",
+      "published_at": "2031-05-09T23:59:59Z",
+      "source_type": "primary",
+      "fact": "The operator reported that inventories and substitute production were mitigating near-term delivery disruption.",
+      "identity_masked": true,
+      "development_only": true
+    },
+    "target-mapping": {
+      "evidence_id": "target-mapping",
+      "event_time": "2030-08-22T00:00:00Z",
+      "published_at": "2030-11-20T00:00:00Z",
+      "source_type": "primary",
+      "fact": "The pre-event issuer filing describes integrated exploration and production, refining, marketing, and natural-gas operations. Higher crude benchmarks can support upstream earnings, while refining, marketing, domestic pricing, tax, and policy effects can offset or delay pass-through.",
+      "identity_masked": true,
+      "development_only": true
+    }
+  },
+  "schema_version": "market-impact.masked-development-evidence-documents.v1"
+}

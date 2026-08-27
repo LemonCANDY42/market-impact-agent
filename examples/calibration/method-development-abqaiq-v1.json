@@ -1,0 +1,121 @@
+{
+  "schema_version": "market-impact.method-development-case.v1",
+  "registered_at": "2026-08-27T01:55:00Z",
+  "benchmark_registration_id": "method-quality-benchmark-b7c83c9c67fb3604d9daa20a49f8ed9f080549afafacdf0d7817b2f8b7472ee3",
+  "benchmark_registration_hash": "b7c83c9c67fb3604d9daa20a49f8ed9f080549afafacdf0d7817b2f8b7472ee3",
+  "evaluation_specification_id": "method-quality-evaluation-8ab6d1a187a8e1e3ae72b138ff1cf3bf8e4a4e3bbdad4f64cfb25318d4c7ec1b",
+  "evaluation_specification_hash": "8ab6d1a187a8e1e3ae72b138ff1cf3bf8e4a4e3bbdad4f64cfb25318d4c7ec1b",
+  "method_catalog_id": "research-method-catalog-2bea3e78b3d8af253a0d0baea5274a0b082501de551c6e7c7648bff1be6d31e0",
+  "method_catalog_hash": "2bea3e78b3d8af253a0d0baea5274a0b082501de551c6e7c7648bff1be6d31e0",
+  "provider_profile_id": "model-provider-a37f1abb9efbdfb3aefa4fc7f1e4803e4ac0a14512e07b7788f19959e3b610c0",
+  "provider_profile_hash": "a37f1abb9efbdfb3aefa4fc7f1e4803e4ac0a14512e07b7788f19959e3b610c0",
+  "provider_id": "minimax-openai-compatible",
+  "model": "MiniMax-M3",
+  "case_alias": "opened-energy-development-a",
+  "actual_event_id": "abqaiq-khurais-attack-2019",
+  "suite_id": "family_increment",
+  "event_archetype": "physical_supply_logistics",
+  "runtime_ref": "market-impact.agent-runtime.local-research.v2",
+  "replicate_count": 5,
+  "minimum_agreement": 3,
+  "allowed_directions": ["up"],
+  "eligible_horizons_sessions": [1],
+  "arm_bindings": [
+    {
+      "suite_id": "family_increment",
+      "arm": "neutral_evidence",
+      "route_id": "skill-route-23c29f78c9d72a0d7ce5badfdabe9c0a4692be42bc1316da638bb43a9f4c3ce1",
+      "requested_skills": ["evidence-core"],
+      "manifest_hashes": ["4bf3db546401a6cd5578f18fff6c379d4d3c41e65de5594944e22efe0a135933"],
+      "allowed_capabilities": ["evidence.read"],
+      "allowed_tools": ["read_evidence"]
+    },
+    {
+      "suite_id": "family_increment",
+      "arm": "general_methods",
+      "route_id": "skill-route-0da98cb9bd36553d356098fa7f8e619e7003442f4c8cfcf090671e6ac9ab3e4d",
+      "requested_skills": ["evidence-core", "research-discipline", "event-market-context", "equity-exposure", "adversarial-risk"],
+      "manifest_hashes": [
+        "4bf3db546401a6cd5578f18fff6c379d4d3c41e65de5594944e22efe0a135933",
+        "80a1793e5aeae766e1495a22d4f510f817b805597f823cebde3c2a64e3248488",
+        "9dc4e6eae1d38cb6f8f5957fd13f58422c61c2ad6c5d20ccf47d73f0f7cfdbe3",
+        "959db7c689d0d80fed2211eca82b7af2496b8c533bcd70fdfc1f9b0e7f6fff26",
+        "7fea7a4b376e52ae5ae9413f0c57c7ea7a147be1d141f886515acbbc691f744d"
+      ],
+      "allowed_capabilities": ["evidence.read"],
+      "allowed_tools": ["read_evidence"]
+    },
+    {
+      "suite_id": "family_increment",
+      "arm": "general_pattern",
+      "route_id": "skill-route-63a163d0a69f63f234c6a6c4f40a917c1da2de776c2fae1ab6e1325d5f60b4f7",
+      "requested_skills": ["evidence-core", "research-discipline", "event-market-context", "equity-exposure", "adversarial-risk", "pattern-review"],
+      "manifest_hashes": [
+        "4bf3db546401a6cd5578f18fff6c379d4d3c41e65de5594944e22efe0a135933",
+        "80a1793e5aeae766e1495a22d4f510f817b805597f823cebde3c2a64e3248488",
+        "9dc4e6eae1d38cb6f8f5957fd13f58422c61c2ad6c5d20ccf47d73f0f7cfdbe3",
+        "959db7c689d0d80fed2211eca82b7af2496b8c533bcd70fdfc1f9b0e7f6fff26",
+        "7fea7a4b376e52ae5ae9413f0c57c7ea7a147be1d141f886515acbbc691f744d",
+        "9fd099d5f2596fe179ac6250ad4e6a6b19499c57c2d405646ba17674824c1c11"
+      ],
+      "allowed_capabilities": ["evidence.read", "pattern.read"],
+      "allowed_tools": ["read_evidence", "read_pattern_pack"]
+    },
+    {
+      "suite_id": "family_increment",
+      "arm": "family_guided",
+      "route_id": "skill-route-d7ad6db01bb03ed59124973ae6ef5e15bb936a2bc92176100b980d0046c0a08e",
+      "requested_skills": ["evidence-core", "research-discipline", "event-market-context", "equity-exposure", "adversarial-risk", "pattern-review", "energy-supply"],
+      "manifest_hashes": [
+        "4bf3db546401a6cd5578f18fff6c379d4d3c41e65de5594944e22efe0a135933",
+        "80a1793e5aeae766e1495a22d4f510f817b805597f823cebde3c2a64e3248488",
+        "9dc4e6eae1d38cb6f8f5957fd13f58422c61c2ad6c5d20ccf47d73f0f7cfdbe3",
+        "959db7c689d0d80fed2211eca82b7af2496b8c533bcd70fdfc1f9b0e7f6fff26",
+        "7fea7a4b376e52ae5ae9413f0c57c7ea7a147be1d141f886515acbbc691f744d",
+        "9fd099d5f2596fe179ac6250ad4e6a6b19499c57c2d405646ba17674824c1c11",
+        "1fa8946137878d92d8fe6123e06766d2c9a8cbda29e24be98ed00920ec25abb6"
+      ],
+      "allowed_capabilities": ["evidence.read", "pattern.read"],
+      "allowed_tools": ["read_evidence", "read_pattern_pack"]
+    }
+  ],
+  "states": [
+    {
+      "state_id": "attack",
+      "evidence_pack_id": "evidence-pack-3a7e7200da6e48c6967ac9204bfb1270d1d5cdcd56ac7e8c1270c0fc55c69399",
+      "evidence_pack_hash": "626e409df4b505cadc9839ea2703d86ef07b67f16129b4b52ce805f6dc0f3741",
+      "evidence_documents_hash": "7f32c4845c8b2374527d613c91aefebd6f1586e6a2e89db2bc0036609e29d78a",
+      "pattern_pack_ids": ["pattern-0cafee00e9e035db87be8867dff9798478730b701a2869e31ea9dd886d09083c"],
+      "pattern_pack_hashes": ["813fda6c745a96199dc37af040f4c203b5d6f161fdb62e9f78c976e6b00e3413"],
+      "actual_cutoff": "2019-09-15T23:59:59Z",
+      "masked_as_of": "2031-05-07T23:59:59Z",
+      "target_alias": "integrated-upstream-a",
+      "actual_target_id": "601857.XSHG",
+      "backtest_request_id": "abqaiq-601857-attack-state-one-session-v1",
+      "backtest_request_hash": "286e377878dcc7098f8ca4688c2e16d481a36c8bb27cc0f0e202008cd7920f11",
+      "data_snapshot_id": "tushare-601857-sh-20190909-20190917-cb4d96fea626bf71"
+    },
+    {
+      "state_id": "recovery",
+      "evidence_pack_id": "evidence-pack-8237a6b8f8b58884df56922dc81ceebfbabdbb0b953c48c1de46ec14cabbe615",
+      "evidence_pack_hash": "6addcbf698de6af661b942e81c083b334fef4196dc751ac5943e442ec7f5d24b",
+      "evidence_documents_hash": "01061330d92ea165017dab87ebff1f80b40584b6f29c5abec230d9d1f2a0ad42",
+      "pattern_pack_ids": ["pattern-0cafee00e9e035db87be8867dff9798478730b701a2869e31ea9dd886d09083c"],
+      "pattern_pack_hashes": ["813fda6c745a96199dc37af040f4c203b5d6f161fdb62e9f78c976e6b00e3413"],
+      "actual_cutoff": "2019-09-18T23:59:59Z",
+      "masked_as_of": "2031-05-10T23:59:59Z",
+      "target_alias": "integrated-upstream-a",
+      "actual_target_id": "601857.XSHG",
+      "backtest_request_id": "abqaiq-601857-recovery-state-one-session-v1",
+      "backtest_request_hash": "16ce70387e73b45842912b63152acf35aafea33d7485cddcebbe52d40a3ebc56",
+      "data_snapshot_id": "tushare-601857-sh-20190912-20190920-e2126de844d3c24d"
+    }
+  ],
+  "outcomes_known_to_builder": true,
+  "posthoc_patterns_allowed": true,
+  "identity_masked": true,
+  "independent_unit": "one_event_case_not_two_independent_states",
+  "inference_eligible": false,
+  "execution_capability": "none",
+  "case_id": "method-development-case-63fef0a73fee4d204ae4037aa93d810f212a0eaf55eeb56e1cf7db8f93e838e1"
+}

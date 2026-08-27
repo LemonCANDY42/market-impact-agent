@@ -228,11 +228,13 @@ applicable to the frozen asset class, mechanism family, and available Pattern Pa
 reasons, manifests, tools, and capabilities are content identified before any model call.
 
 The frozen comparison has four arms: neutral evidence; general methods; general methods plus
-Pattern Pack review; and those layers plus the energy-family method. All arms share the same
-Evidence Pack, model profile, action space, target universe, output contract, budget, and five
-replicates. Runs are interleaved by replicate round. All four execution bindings are frozen
-before Provider availability is checked, every terminal run enters a hash-chained Usage
-Ledger, and the report explicitly makes no market-outcome or alpha inference.
+Pattern Pack review; and those layers plus the energy-family method. The Pattern-enabled arms
+differ in both instructions and access: they receive `pattern.read`, `read_pattern_pack`, and the
+frozen Pattern Pack content, while the other arms do not. All arms share the same base Evidence
+Pack, model profile, action space, target universe, output contract, budget, and five replicates.
+Runs are interleaved by replicate round. All four execution bindings are frozen before Provider
+availability is checked, every terminal run enters a hash-chained Usage Ledger, and the report
+explicitly makes no market-outcome or alpha inference.
 
 This is a narrow adaptation, not copied role prompts or a vendored multi-agent framework.
 Sources reviewed include TradingAgents' [market analyst](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/agents/analysts/market_analyst.py),
@@ -274,6 +276,65 @@ family-guided. The content-identified diagnostic report is
 `method-ablation-report-2b59cdabd953f7e8550cde6384e828836fcc74b666b2642d538294647d6b6840`.
 Reopening the same experiment regenerated diagnostics from the stored journals without any
 new model turn or Usage Ledger row.
+
+## Opened real-event development run
+
+The first real outcome-opened development case uses the 2019 Abqaiq–Khurais attack and recovery.
+`examples/calibration/method-development-abqaiq-v1.json` content-binds the active v2
+benchmark/specification, Provider/model, catalog, strongly masked evidence, posthoc Pattern Pack,
+one target alias, and two one-session `601857.XSHG` Backtest Requests. Its schema and strict loader
+make `outcomes_known_to_builder=true`, `inference_eligible=false`, one Event Case, and no execution
+capability mandatory.
+
+Agent-visible evidence now coarsens quantities, facility and issuer names, restoration and shipment
+details, and shifts calendar dates away from the historical fingerprint. It preserves only the
+decision-relevant relative sequence and lag. This reduces easy linkage but does not authenticate a
+holdout; residual narrative linkage, model memorization, and target-role inference remain risks.
+
+The date-shifted replacement completed all 40 required runs. Attack-state proposal counts across
+`neutral_evidence`, `general_methods`, `general_pattern`, and `family_guided` were 1/5, 0/5, 1/5,
+and 0/5; all recovery-state counts were 0/5. Every three-of-five ensemble abstained. Both frozen
+Backtest Requests passed joint preflight before either outcome opened, and both one-session
+Nautilus replays repeated with identical result hashes. The fixed-long control was net negative in
+both states. Total Provider cost was 397,066 micro-USD. All earlier private reports, costs, replay
+results, and evaluations remain invalid.
+
+This accepts runtime binding, fail-closed completeness, deterministic replay, and one
+evidence-update diagnostic. One opened Event Case with no ensemble-level arm difference cannot
+rank methods or establish alpha, prospective validity, Provider portability, or execution
+readiness.
+
+A state can produce a
+method report only after all four interleaved arms have five completed runs with valid judgments;
+failed or budget-exhausted attempts are still recorded in the append-only Usage Ledger. The
+evaluator jointly preflights both normalized reports and both Backtest Requests, including exact
+arm route, execution binding, ensemble, replicate, and totals identities, before opening either
+outcome. Full design and non-claims are in
+`docs/ABQAIQ_DEVELOPMENT_BENCHMARK.md`.
+
+Run one state with a fresh experiment id:
+
+```bash
+uv run market-impact agent method-development-run \
+  --case examples/calibration/method-development-abqaiq-v1.json \
+  --benchmark-registration examples/calibration/method-quality-benchmark-v2.json \
+  --evaluation-specification examples/calibration/method-quality-evaluation-specification-v2.json \
+  --method-catalog examples/research/research-method-catalog-v2.json \
+  --provider-profile examples/providers/minimax-m3-research-v1.json \
+  --state attack \
+  --evidence-pack examples/agent/abqaiq_development/evidence-pack-attack.json \
+  --evidence-documents examples/agent/abqaiq_development/evidence-documents-attack.json \
+  --pattern-pack examples/agent/abqaiq_development/pattern-pack.json \
+  --backtest-request examples/backtests/real-abqaiq-601857-attack-state-request-v1.json \
+  --experiment-id YOUR_UNIQUE_OPENED_DEVELOPMENT_ID
+```
+
+Save each successful command's complete JSON output as the corresponding private method-report
+input. The evaluator accepts the exact runner-added `report_artifact_hash` and `state_directory`
+fields only when the artifact hash matches the canonical stored report; arbitrary additional keys
+or tampering fail closed. Outcome evaluation is a separate command and also requires two ignored
+Tushare snapshot paths. It rejects incomplete runs or mismatched case/report/request/decision
+bindings and reruns each replay twice before writing the private evaluation artifact.
 
 This one synthetic Evidence Pack has one eligible target and a long-only action space, so it
 cannot test target selection, direction, abstention quality, returns, or causal correctness.

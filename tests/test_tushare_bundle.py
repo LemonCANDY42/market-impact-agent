@@ -545,6 +545,50 @@ def test_hardened_bundle_binds_adjustments_source_limits_and_replay_window(
     assert changed_snapshot.content_hash != snapshot.content_hash
 
 
+def test_hardened_bundle_supports_registered_601857_development_target(
+    tmp_path: Path,
+) -> None:
+    responses = json.loads(json.dumps(hardened_responses()).replace("600028", "601857"))
+    capture = capture_tushare_data_bundle(
+        TushareHttpAdapter(
+            TOKEN,
+            transport=FakeTransport(cast(list[dict[str, object]], responses)),
+            clock=lambda: NOW,
+        ),
+        TushareDataRequest(
+            tushare_code="601857.SH",
+            as_of_date=date(2019, 9, 18),
+            start_date=date(2019, 9, 18),
+            evaluation_start_date=date(2019, 9, 19),
+            end_date=date(2019, 9, 23),
+        ),
+    )
+    validated = validate_tushare_data_bundle(write_tushare_data_bundle(capture, tmp_path))
+    development_replay = replay_request(
+        validated.data_snapshot_id,
+        signal=replay_signal("601857.XSHG"),
+        instrument_ids=("601857.XSHG",),
+        target_selection_ref="opened-development-integrated-upstream:601857.v1",
+        simulation=SimulationSpec(
+            data_granularity="tushare_unadjusted_daily_with_source_limits.v2",
+            book_type="modeled_open_one_lot.v1",
+            fill_model="modeled_open_one_lot_no_slippage.v1",
+            fee_model="xshg_2019_fee_assumption.v1",
+            venue_ruleset="xshg_main_board_source_limit.v2",
+            base_currency="CNY",
+            starting_cash=Decimal("1000000"),
+            random_seed=0,
+        ),
+    )
+
+    from market_impact_agent.tushare_replay import run_validated_tushare_replay
+
+    result = run_validated_tushare_replay(development_replay, validated.path)
+
+    assert result.status is BacktestRunStatus.COMPLETED
+    assert result.manifest.request.instrument_ids == ("601857.XSHG",)
+
+
 def test_hardened_bundle_rejects_adjustment_factor_change(tmp_path: Path) -> None:
     capture = capture_tushare_data_bundle(
         TushareHttpAdapter(

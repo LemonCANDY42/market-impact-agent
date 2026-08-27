@@ -82,6 +82,7 @@ packages = ["src/market_impact_agent"]
 "schemas/method-quality-outcome-opening.schema.json" = "market_impact_agent/schemas/method-quality-outcome-opening.schema.json"
 "schemas/method-quality-clustered-estimate.schema.json" = "market_impact_agent/schemas/method-quality-clustered-estimate.schema.json"
 "schemas/common-crawl-locator.schema.json" = "market_impact_agent/schemas/common-crawl-locator.schema.json"
+"schemas/method-development-case.schema.json" = "market_impact_agent/schemas/method-development-case.schema.json"
 "examples/providers/minimax-m3-research-v1.json" = "market_impact_agent/builtin_provider_profiles/minimax-m3-research-v1.json"
 "skills/energy-supply/SKILL.md" = "market_impact_agent/builtin_skills/energy-supply/SKILL.md"
 "skills/energy-supply/skill.json" = "market_impact_agent/builtin_skills/energy-supply/skill.json"

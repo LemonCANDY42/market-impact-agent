@@ -1,0 +1,50 @@
+{
+  "schema_version": "market-impact.pattern-pack.v1",
+  "version": "opened-development-physical-energy-v1",
+  "available_at": "2030-08-23T00:00:00Z",
+  "entries": [
+    {
+      "pattern_id": "material-physical-loss",
+      "mechanism": "An unplanned loss that is large relative to global flow can tighten the prompt commodity balance and increase risk premium before substitution arrives.",
+      "transmission_scales": ["facility", "commodity", "industry", "listed-target"],
+      "applicability_conditions": [
+        "the loss is physically verified and material",
+        "inventory and spare capacity do not remove the shortfall before the target market opens"
+      ],
+      "counterexamples": [
+        "the outage is restored before entry",
+        "customer deliveries continue from inventory or unaffected capacity"
+      ],
+      "evidence_refs": ["pre-event-energy-supply-literature"]
+    },
+    {
+      "pattern_id": "restoration-and-inventory-offset",
+      "mechanism": "Restoration guidance, inventory drawdown, replacement output, and maintained deliveries reduce the persistence of a headline supply shock.",
+      "transmission_scales": ["operator", "commodity", "horizon"],
+      "applicability_conditions": [
+        "the restoration statement is visible before entry",
+        "the stated mitigation directly addresses physical availability or deliveries"
+      ],
+      "counterexamples": [
+        "restoration guidance lacks physical progress",
+        "deliveries remain impaired despite stated capacity"
+      ],
+      "evidence_refs": ["pre-event-emergency-response-literature"]
+    },
+    {
+      "pattern_id": "integrated-target-offset",
+      "mechanism": "A benchmark increase does not imply the same sign for an integrated issuer because upstream gains can be diluted by refining, marketing, policy, tax, or own-asset effects.",
+      "transmission_scales": ["commodity", "segment", "issuer"],
+      "applicability_conditions": [
+        "the target's segment mix is known before the event",
+        "the expected upstream benefit is not assumed to dominate without evidence"
+      ],
+      "counterexamples": [
+        "the target is a pure producer with unaffected output",
+        "segment disclosure demonstrates a dominant and immediate upstream sensitivity"
+      ],
+      "evidence_refs": ["pre-event-integrated-energy-accounting"]
+    }
+  ],
+  "pack_id": "pattern-0cafee00e9e035db87be8867dff9798478730b701a2869e31ea9dd886d09083c"
+}

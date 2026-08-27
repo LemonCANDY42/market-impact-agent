@@ -33,9 +33,16 @@ TUSHARE_HARDENED_MODELED_OPEN_ADAPTER_VERSION = "2.0.0"
 TUSHARE_HARDENED_DATA_GRANULARITY = "tushare_unadjusted_daily_with_source_limits.v2"
 TUSHARE_HARDENED_VENUE_RULESET = "xshg_main_board_source_limit.v2"
 TUSHARE_HARDENED_TARGET_SELECTION_REF = "registered-a-share-integrated-oil-proxy:600028.v1"
+TUSHARE_HARDENED_DEVELOPMENT_TARGET_SELECTION_REF = (
+    "opened-development-integrated-upstream:601857.v1"
+)
 
-_SUPPORTED_INSTRUMENT = "600028.XSHG"
-_SUPPORTED_TUSHARE_CODE = "600028.SH"
+_LEGACY_SUPPORTED_INSTRUMENT = "600028.XSHG"
+_LEGACY_SUPPORTED_TUSHARE_CODE = "600028.SH"
+_HARDENED_TARGET_SELECTION_REFS = {
+    "600028.XSHG": TUSHARE_HARDENED_TARGET_SELECTION_REF,
+    "601857.XSHG": TUSHARE_HARDENED_DEVELOPMENT_TARGET_SELECTION_REF,
+}
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _TICK = Decimal("0.01")
 _LOT_SIZE = 100
@@ -57,10 +64,24 @@ def load_validated_tushare_modeled_open(
     bundle = validate_tushare_data_bundle(bundle_path)
     manifest = bundle.manifest
     request_fields = _mapping(manifest, "request")
-    if bundle.instrument_id != _SUPPORTED_INSTRUMENT:
-        raise ValueError(f"unsupported replay target: expected {_SUPPORTED_INSTRUMENT}")
-    if _string(request_fields, "tushare_code") != _SUPPORTED_TUSHARE_CODE:
-        raise ValueError(f"unsupported Tushare target: expected {_SUPPORTED_TUSHARE_CODE}")
+    hardened = manifest.get("schema_version") == "market-impact.tushare-data-bundle.v2"
+    expected_tushare_code = bundle.instrument_id.removesuffix(".XSHG") + ".SH"
+    actual_tushare_code = _string(request_fields, "tushare_code")
+    if hardened:
+        if bundle.instrument_id not in _HARDENED_TARGET_SELECTION_REFS:
+            supported = ", ".join(sorted(_HARDENED_TARGET_SELECTION_REFS))
+            raise ValueError(f"unsupported hardened replay target: expected one of {supported}")
+        if actual_tushare_code != expected_tushare_code:
+            raise ValueError("hardened Tushare target does not match canonical instrument id")
+    else:
+        if bundle.instrument_id != _LEGACY_SUPPORTED_INSTRUMENT:
+            raise ValueError(
+                f"unsupported legacy replay target: expected {_LEGACY_SUPPORTED_INSTRUMENT}"
+            )
+        if actual_tushare_code != _LEGACY_SUPPORTED_TUSHARE_CODE:
+            raise ValueError(
+                f"unsupported legacy Tushare target: expected {_LEGACY_SUPPORTED_TUSHARE_CODE}"
+            )
     if _string(request_fields, "exchange") != "SSE":
         raise ValueError("the modeled-open adapter supports only the XSHG/SSE fixture")
 
@@ -83,7 +104,6 @@ def load_validated_tushare_modeled_open(
     calendar_rows = cast(
         list[dict[str, object]], pq.read_table(pa.BufferReader(calendar_bytes)).to_pylist()
     )
-    hardened = manifest.get("schema_version") == "market-impact.tushare-data-bundle.v2"
     stock_limit_rows: list[dict[str, object]] | None = None
     adj_factor_rows: list[dict[str, object]] | None = None
     if hardened:
@@ -183,7 +203,9 @@ def load_validated_tushare_modeled_open(
         exact_start_at=replay_start_at,
         exact_end_at=bars[-1].session_close_at,
         target_selection_ref=(
-            TUSHARE_HARDENED_TARGET_SELECTION_REF if hardened else TUSHARE_TARGET_SELECTION_REF
+            _HARDENED_TARGET_SELECTION_REFS[bundle.instrument_id]
+            if hardened
+            else TUSHARE_TARGET_SELECTION_REF
         ),
     )
     return snapshot, contract

@@ -12,8 +12,9 @@ v2 keeps eight development cases, 24 identity-masked retrospective holdout cases
 two comparison suites, an all-event denominator, and the existing cost/risk gates. Its executable
 clustered estimator first averages the five registered runs within each case and arm, then performs
 paired inference across 24 independent cases (eight for the family diagnostic). The committed
-synthetic case validates provenance, masking, and contract behavior only; it is not a holdout case
-and contains no market outcome.
+synthetic case validates provenance, masking, and contract behavior only. The first real opened
+development case now validates the end-to-end method-run, evidence-update, outcome-open, and
+Nautilus comparison path. Neither is a retrospective holdout or inferential evidence.
 
 This benchmark may establish whether one frozen research method adds repeatable value relative to
 another under the registered inputs. It cannot establish uncontaminated historical alpha by itself,
@@ -33,7 +34,11 @@ Public artifacts:
 - `examples/research/synthetic-energy-historical-evidence-v1.json`, development provenance
   hash `233dfcb0cf1b7aa8ab9804f88766786bcabfbe5a5c4edfed0d2ac5ab32c94043`;
 - `examples/research/synthetic-energy-masked-input-manifest-v1.json`, masked-input hash
-  `5ff211fbb265863c710642f5973772752ae2ba506a277ca84ec51a78c43d939e`.
+  `5ff211fbb265863c710642f5973772752ae2ba506a277ca84ec51a78c43d939e`;
+- `examples/calibration/method-development-abqaiq-v1.json`, opened-development case id
+  `method-development-case-63fef0a73fee4d204ae4037aa93d810f212a0eaf55eeb56e1cf7db8f93e838e1`,
+  plus its masked evidence, Pattern Pack, and two one-session Backtest Requests. See
+  `docs/ABQAIQ_DEVELOPMENT_BENCHMARK.md`.
 
 ## Research absorbed into Agent-usable form
 
@@ -57,8 +62,12 @@ was copied, so the repository's Apache-2.0 licensing and current attribution bou
 ## Evidence ladder
 
 1. **Development**: eight synthetic or already opened cases exercise success, contradiction,
-   missingness, alias consistency, revision, abstention, and cost paths. Results may guide code and
-   prompt repair but make no method-quality claim.
+   missingness, alias consistency, revision, abstention, and cost paths. One real opened case input
+   now exists: Abqaiq–Khurais uses attack and recovery information states within one Event Case.
+   Its Agent-visible quantities, names, and calendar dates are coarsened or shifted while relative
+   sequence and lag remain. The resulting case completed all 40 runs and both repeated replays;
+   every ensemble abstained, the fixed-long controls were net negative, and no method-ranking claim
+   is supported. Prior private identities remain invalid. Seven development cases remain.
 2. **Retrospective holdout**: v2 still cannot admit any case. The Common Crawl adapter now
    authenticates one immutable archive capture, but the generic WARC record does not authenticate
    the publisher's original `published_at`. Admission remains fail-closed until a source-specific
@@ -82,6 +91,10 @@ pass on top of the archive-capture authority.
 
 The Agent receives the separate masked Evidence Pack, masked evidence documents, and masked
 Pattern Pack documents, not their originals, hidden outcome metadata, or an external search tool.
+For the opened Abqaiq case, exact quantities, facility and issuer names, restoration and shipment
+details, and Agent-visible calendar dates are coarsened or shifted. Decision-relevant relative
+sequence and lag remain, as does residual narrative linkage. This is stronger masking, not
+authenticated holdout evidence; memorization or linkage from remaining clues is still possible.
 The Masked Agent Input Manifest content-binds both Evidence Packs, both evidence-document sets,
 both Pattern Pack bundles, and the one-to-one alias map. Validation compares the complete canonical
 alias transform, including `data_gaps` and all nested fields, while recomputing content-derived
@@ -158,11 +171,18 @@ method, and no best-observed-arm selection is allowed. The clustered estimator i
 schema validated, but it cannot produce benchmark evidence until the future content-identified
 case and run matrix is bound by Outcome Seals/Openings.
 
-Only the specification and synthetic masking/provenance fixtures exist. The strict evaluation
-schemas and validators have unit-level synthetic contract examples, not committed market outcome
-fixtures. The development and holdout corpus, per-case Market Snapshots, Outcome Seals, Outcome
-Openings, result artifacts, pair set, and all benchmark runs remain unbuilt; no outcome has been
-opened.
+The specification, synthetic masking/provenance fixtures, and one explicitly opened-development
+case input now exist. The Abqaiq case freezes two information states as one independent Event Case,
+masks historical identity, requires four arms with five completed valid replicates, records all
+terminal usage, and may open two repeated Nautilus results only after the judgments. It intentionally
+uses a posthoc Pattern Pack and known outcomes, so it does not enter the registered retrospective
+estimator. Its date-shifted, arm-content-bound replacement completed 40 of 40 Agent runs and passed
+joint preflight before four deterministic replays. Every ensemble abstained; the fixed-long control
+was net negative in both states. Because this is one opened Event Case and the arms have no
+ensemble-level decision difference, it supports implementation diagnosis but no method ranking.
+All earlier private reports, costs, replay results, and evaluations remain invalid.
+The remaining seven development cases, all 24 holdout cases, their authenticated Market
+Snapshots/Seals/Openings, the pair set, and the overall benchmark runs remain unbuilt.
 The opening contract requires sequence one and no prior opening, but this repository implements
 only artifact/validator-boundary enforcement, not a transactional global uniqueness store.
 
@@ -180,12 +200,15 @@ score remains the registered machine-validated result and is not investable PnL.
 
 ## Next workslice
 
-1. independently review the accepted Common Crawl capture adapter and add a source-specific
+1. select the second opened development case before adapting its evidence: require a documented
+   physical shock, clean target mapping, no corporate action inside the evaluation window, and a
+   positive fixed-long outcome under the frozen costs, so the benchmark tests over-abstention rather
+   than repeating the same negative-outcome shape;
+2. create the remaining seven development cases and pass supported-positive, offset-dominant,
+   missingness, ambiguity, revision, and cross-mechanism paths without opening a claim;
+3. independently review the accepted Common Crawl capture adapter and add a source-specific
    publisher-time extractor plus a frozen latency calibration; never substitute archive capture or
    current local retrieval time for the publisher's historical publication time;
-2. extend the validated masked-input materialization from the committed synthetic fixture to each
-   future development and holdout case, including its market snapshot;
-3. create the remaining seven development cases and pass all negative paths without opening a claim;
 4. define outcome-independent case admission queries and accept the source-specific receipt path;
 5. only after that authority exists, freeze all 24 authenticated Historical Evidence Manifests,
    Market Snapshots, and Outcome Seals before any method run;

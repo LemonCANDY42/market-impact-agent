@@ -1,0 +1,53 @@
+{
+  "schema_version": "market-impact.evidence-pack.v1",
+  "event_id": "masked-physical-supply-case-a",
+  "as_of": "2031-05-07T23:59:59Z",
+  "research_question": "Given only the frozen point-in-time evidence, should the eligible integrated upstream public-equity target be proposed up for one trading session, or should the analysis abstain?",
+  "evidence": [
+    {
+      "evidence_id": "pre-event-balance",
+      "claim_id": "pre-event-operations-normal",
+      "source_ref": "masked://official/pre-event-balance",
+      "source_tier": "official",
+      "available_at": "2031-05-03T23:59:59Z",
+      "content_hash": "19de2d664ceb62dce2f614a2c841b7f23cff1cf4b86a2645828b841db7d216e3",
+      "summary": "Pre-event official balance indicated broadly normal supply conditions.",
+      "untrusted_text": true
+    },
+    {
+      "evidence_id": "physical-loss",
+      "claim_id": "material-production-suspension",
+      "source_ref": "masked://primary/operator-loss-confirmation",
+      "source_tier": "primary",
+      "available_at": "2031-05-06T23:59:59Z",
+      "content_hash": "2da6eb8a63b36b62d057b5d95d1720ba04d3c5f9077ca94d8eafeeabc81a4ba4",
+      "summary": "Primary operator confirmed a globally material production suspension.",
+      "untrusted_text": true
+    },
+    {
+      "evidence_id": "target-mapping",
+      "claim_id": "integrated-upstream-exposure",
+      "source_ref": "masked://primary/issuer-pre-event-filing",
+      "source_tier": "primary",
+      "available_at": "2030-11-20T00:00:00Z",
+      "content_hash": "b09607ebb1b729c10c79ca161956ae02d970af9f2020d49c0411fae37a0d7081",
+      "summary": "Pre-event filing maps both upstream exposure and integrated-business offsets.",
+      "untrusted_text": true
+    }
+  ],
+  "pattern_packs": [
+    {
+      "pack_id": "pattern-0cafee00e9e035db87be8867dff9798478730b701a2869e31ea9dd886d09083c",
+      "version": "opened-development-physical-energy-v1",
+      "available_at": "2030-08-23T00:00:00Z",
+      "content_hash": "813fda6c745a96199dc37af040f4c203b5d6f161fdb62e9f78c976e6b00e3413"
+    }
+  ],
+  "allowed_targets": ["integrated-upstream-a"],
+  "data_gaps": [
+    "confirmed restoration duration is unavailable at the cutoff",
+    "a regulated benchmark settlement visible before entry is unavailable",
+    "target-specific immediate segment sensitivity is unavailable"
+  ],
+  "pack_id": "evidence-pack-3a7e7200da6e48c6967ac9204bfb1270d1d5cdcd56ac7e8c1270c0fc55c69399"
+}

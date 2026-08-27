@@ -50,8 +50,8 @@ consumed Parquet file as hash-bound private bytes before parsing it in memory. I
 derived fixture, needs no token or network access, and does not enable or verify the Tushare
 Provider.
 
-The adapter is deliberately bounded to validated `600028.SH`/`600028.XSHG` SSE data and its
-versioned XSHG main-board rules. It accepts any fully validated bundle whose snapshot and
+The legacy v1 adapter is deliberately bounded to validated `600028.SH`/`600028.XSHG` SSE data and
+its versioned XSHG main-board rules. It accepts any fully validated bundle whose snapshot and
 request window match, including generated bundles in contract tests; it does not hardcode a
 private bundle identity as an executable input. The committed request
 `examples/backtests/real-abqaiq-600028-tushare-request-v1.json` binds the existing Abqaiq
@@ -123,9 +123,10 @@ under the frozen assumptions. The private evidence/report hashes are recorded in
 `tushare-xshg-modeled-open` adapter version `2.0.0` preserves the one-lot modeled-open
 execution boundary and adds source-bound `adj_factor` and `stk_limit` tables. Its Simulation
 Specification names `tushare_unadjusted_daily_with_source_limits.v2` and
-`xshg_main_board_source_limit.v2`; target selection is the public registered mapping
-`registered-a-share-integrated-oil-proxy:600028.v1`, not the historical manual Abqaiq
-fixture.
+`xshg_main_board_source_limit.v2`. Its explicit target-selection allowlist now contains the public
+cohort mapping `registered-a-share-integrated-oil-proxy:600028.v1` and the opened-development
+mapping `opened-development-integrated-upstream:601857.v1`. Legacy v1 remains restricted to
+`600028`; v2 does not become a general ticker adapter.
 
 The v2 Data Snapshot may begin before the event cutoff. Those earlier sessions exist only
 for point-in-time observation rules. Momentum compares `close * adj_factor` using sessions
@@ -134,6 +135,14 @@ evaluation session, uses unadjusted OHLCV and source daily price limits, and req
 constant adjustment factor throughout that evaluation segment. A pre-evaluation corporate
 action can therefore inform an adjusted observation without introducing a discontinuity
 into the executable replay.
+
+The opened Abqaiq method-development case adds two private `601857.SH` Tushare snapshots and two
+committed one-session Backtest Requests. After all 40 Agent runs and joint report/request preflight,
+each request replayed twice with an identical result hash. The fixed-long control was net negative
+in both states under registered costs. Exact licensed observations and metrics remain private. The
+registered development request remains one session to avoid the known adjustment-factor
+discontinuity. All artifacts from earlier acceptance identities remain invalid. See
+`docs/ABQAIQ_DEVELOPMENT_BENCHMARK.md`.
 
 The first public cohort was frozen before its five test windows were captured. Seven private
 snapshots produced one private execution registration with 35 Variant Decisions: 25 buys
