@@ -57,6 +57,8 @@ class Validator(Protocol):
         "regime-evidence-manifest.schema.json",
         "regime-evidence-qualification-report.schema.json",
         "regime-agent-experiment-report.schema.json",
+        "regime-agent-validation-registration.schema.json",
+        "regime-agent-validation-report.schema.json",
         "method-skill-catalog.schema.json",
         "method-evidence-declaration.schema.json",
         "method-skill-ablation-registration.schema.json",
@@ -96,6 +98,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/famous-method-skill-catalog-v1.json",
         "examples/research/abqaiq-recovery-method-evidence-v1.json",
         "examples/research/market-regime-study-registration-v1.json",
+        "examples/research/regime-agent-validation-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -148,6 +151,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "method-evidence-declaration.schema.json"
     elif example_path.endswith("market-regime-study-registration-v1.json"):
         schema_name = "regime-study-registration.schema.json"
+    elif example_path.endswith("regime-agent-validation-v1.json"):
+        schema_name = "regime-agent-validation-registration.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     registry: Registry[Schema] = Registry()

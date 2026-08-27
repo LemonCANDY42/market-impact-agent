@@ -203,7 +203,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -219,7 +219,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -235,7 +235,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -251,7 +251,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "issuer_or_sector_fundamentals", "source_ids": ["issuer-sector-filings"], "minimum_records_per_checkpoint": 3, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
@@ -268,7 +268,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -284,7 +284,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -300,7 +300,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["state-council-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -316,7 +316,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "issuer_or_sector_fundamentals", "source_ids": ["issuer-sector-filings"], "minimum_records_per_checkpoint": 3, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
@@ -333,7 +333,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -349,7 +349,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -365,7 +365,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -381,7 +381,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -397,7 +397,7 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     },
@@ -429,10 +429,10 @@
         {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
         {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
-        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
         {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
       ]
     }
   ],
-  "registration_id": "regime-study-registration-df0ca2afdf125ea286e85c9c51e11b7830bdc555e9551d1c52bc0df91a9c0fa8"
+  "registration_id": "regime-study-registration-8e1646164d2c624d1d785df03dce97eed7ec401de58407dcf42af28570fb4405"
 }

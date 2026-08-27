@@ -29,16 +29,19 @@ from market_impact_agent.method_skills import (
     METHOD_EVIDENCE_DECLARATION_SCHEMA,
     MethodEvidenceBinding,
     MethodEvidenceDeclaration,
+    MethodSkill,
 )
 from market_impact_agent.regime_evidence import (
     RegimeCheckpoint,
     RegimeEvidenceManifest,
     RegimeEvidenceRecord,
+    has_point_in_time_authority,
 )
 from market_impact_agent.regime_study import (
     RegimeBaselineProtocol,
     RegimeStudyCase,
     RegimeStudyRegistration,
+    evaluate_regime_case_baselines,
 )
 from market_impact_agent.research import EvidenceTier
 
@@ -245,25 +248,20 @@ def build_regime_agent_experiment_report(
                 ),
             }
         )
-    cash_decisions = {item.checkpoint.session_date: "abstain" for item in ordered}
-    hold_decisions = {item.checkpoint.session_date: "propose" for item in ordered}
-    baselines = [
-        {
-            "baseline_id": name,
-            "path_metrics": evaluate_checkpoint_exposure_path(
-                rows=primary.rows,
-                start=market_case.tradable_start,
-                end=market_case.end,
-                checkpoint_decisions=decisions,
-                transaction_cost_bps_one_way=baseline_protocol.transaction_cost_bps_one_way,
-                annualization_sessions=baseline_protocol.annualization_sessions,
-                minimum_risk_sessions=baseline_protocol.minimum_risk_sessions,
-                risk_free_rate_annual=baseline_protocol.risk_free_rate_annual,
-                cvar_confidence=baseline_protocol.cvar_confidence,
-            ),
-        }
-        for name, decisions in (("cash", cash_decisions), ("primary_buy_and_hold", hold_decisions))
-    ]
+    baseline_result = evaluate_regime_case_baselines(
+        market_case,
+        series_by_id,
+        baseline_protocol,
+    )
+    if baseline_result.get("status") != "covered":
+        raise ValueError("regime experiment registered baselines are not covered")
+    strategy_results = cast(dict[str, object], baseline_result["strategies"])
+    baselines: list[dict[str, object]] = []
+    for baseline_id in baseline_protocol.strategies:
+        path_metrics = cast(dict[str, object], strategy_results[baseline_id])
+        if path_metrics.get("status") != "covered":
+            raise ValueError(f"regime experiment baseline is not covered: {baseline_id}")
+        baselines.append({"baseline_id": baseline_id, "path_metrics": path_metrics})
     all_actual_cost = formal_model_cost + prior_invalid_diagnostic_cost_microusd
     if all_actual_cost > total_cost_cap_microusd:
         raise ValueError("regime experiment total actual model cost exceeds the hard cap")
@@ -354,6 +352,7 @@ def materialize_regime_checkpoint_bundle(
     qualification_report: Mapping[str, object],
     checkpoint: RegimeCheckpoint,
     next_checkpoint_date: date | None,
+    treatment_method: MethodSkill,
     pattern_pack: PatternPack,
     pattern_pack_path: Path,
     official_documents_by_hash: Mapping[str, Mapping[str, object]],
@@ -365,6 +364,8 @@ def materialize_regime_checkpoint_bundle(
         raise ValueError("regime checkpoint bundle case identities do not match")
     if manifest.registration_id != registration.registration_id:
         raise ValueError("regime checkpoint bundle manifest does not bind the registration")
+    if treatment_method.skill_name not in study_case.candidate_method_skills:
+        raise ValueError("regime checkpoint treatment method is not registered for the case")
     qualified = assert_checkpoint_qualified(
         qualification_report,
         case_key=market_case.case_key,
@@ -383,7 +384,7 @@ def materialize_regime_checkpoint_bundle(
         next_checkpoint_date=next_checkpoint_date,
         case_end=market_case.end,
     )
-    visible = _checkpoint_records(
+    visible = select_checkpoint_records(
         manifest.records,
         market_case=market_case,
         study_case=study_case,
@@ -511,23 +512,32 @@ def materialize_regime_checkpoint_bundle(
         ),
     )
     pack_hash = canonical_hash(pack.to_dict())
-    binding = MethodEvidenceBinding(
-        evidence_type="timestamped_narrative_corpus",
-        evidence_refs=("timestamped-news-corpus",),
-        pattern_pack_refs=(),
+    source_by_id = {item.source_id: item for item in registration.source_catalog}
+    evidence_refs_by_type: dict[str, list[str]] = {}
+    for evidence_id, _claim_id, _tier, _summary, category in reference_specs:
+        evidence_types = {
+            evidence_type
+            for record in by_category[category]
+            for evidence_type in source_by_id[record.source_id].evidence_types
+        }
+        for evidence_type in evidence_types:
+            evidence_refs_by_type.setdefault(evidence_type, []).append(evidence_id)
+    bindings = method_evidence_bindings(
+        required_evidence=treatment_method.required_evidence,
+        evidence_refs_by_type={key: tuple(value) for key, value in evidence_refs_by_type.items()},
     )
     declaration_core: dict[str, object] = {
         "schema_version": METHOD_EVIDENCE_DECLARATION_SCHEMA,
         "evidence_pack_id": pack.pack_id,
         "evidence_pack_hash": pack_hash,
-        "evidence_types": [binding.to_dict()],
+        "evidence_types": [binding.to_dict() for binding in bindings],
         "outcomes_opened": True,
     }
     declaration = MethodEvidenceDeclaration(
         declaration_id=f"method-evidence-{canonical_hash(declaration_core)}",
         evidence_pack_id=pack.pack_id,
         evidence_pack_hash=pack_hash,
-        bindings=(binding,),
+        bindings=bindings,
         outcomes_opened=True,
     )
     destination = output_root / market_case.case_key / checkpoint.session_date.isoformat()
@@ -551,6 +561,26 @@ def materialize_regime_checkpoint_bundle(
     )
 
 
+def method_evidence_bindings(
+    *,
+    required_evidence: tuple[str, ...],
+    evidence_refs_by_type: Mapping[str, tuple[str, ...]],
+) -> tuple[MethodEvidenceBinding, ...]:
+    bindings: list[MethodEvidenceBinding] = []
+    for evidence_type in required_evidence:
+        evidence_refs = evidence_refs_by_type.get(evidence_type, ())
+        if not evidence_refs:
+            raise ValueError(f"regime checkpoint lacks treatment evidence type: {evidence_type}")
+        bindings.append(
+            MethodEvidenceBinding(
+                evidence_type=evidence_type,
+                evidence_refs=evidence_refs,
+                pattern_pack_refs=(),
+            )
+        )
+    return tuple(bindings)
+
+
 def assert_checkpoint_qualified(
     qualification_report: Mapping[str, object],
     *,
@@ -571,7 +601,7 @@ def assert_checkpoint_qualified(
         ),
         None,
     )
-    if case is None or case.get("all_checkpoints_ready") is not True:
+    if case is None:
         raise ValueError("regime experiment case is not qualified")
     raw_checkpoints = case.get("checkpoints")
     if not isinstance(raw_checkpoints, list):
@@ -803,7 +833,7 @@ def _eligible_horizon_sessions(
     return len(dates)
 
 
-def _checkpoint_records(
+def select_checkpoint_records(
     records: tuple[RegimeEvidenceRecord, ...],
     *,
     market_case: MarketRegimeCase,
@@ -818,6 +848,8 @@ def _checkpoint_records(
             continue
         requirement = requirement_by_category.get(record.category)
         if requirement is None or record.source_id not in requirement.source_ids:
+            continue
+        if not has_point_in_time_authority(record, checkpoint.cutoff_at):
             continue
         if record.category in {"market_price", "industry_price"}:
             expected_suffix = f"checkpoint={checkpoint.session_date.isoformat()}"

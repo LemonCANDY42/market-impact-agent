@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import gzip
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
 from html.parser import HTMLParser
+from io import BytesIO
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
@@ -17,7 +19,7 @@ from market_impact_agent.regime_evidence import (
 )
 
 _CSRC_HOSTS = frozenset({"csrc.gov.cn", "www.csrc.gov.cn"})
-_STATE_COUNCIL_HOSTS = frozenset({"english.www.gov.cn", "www.gov.cn"})
+_STATE_COUNCIL_HOSTS = frozenset({"english.gov.cn", "english.www.gov.cn", "www.gov.cn"})
 _NBS_HOSTS = frozenset({"stats.gov.cn", "www.stats.gov.cn"})
 _CSRC_DATE = re.compile(r"日期\s*[\uff1a:]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})")
 _CSRC_TRANSCRIPT_TIMESTAMP = re.compile(
@@ -26,6 +28,16 @@ _CSRC_TRANSCRIPT_TIMESTAMP = re.compile(
 _STATE_COUNCIL_UPDATED = re.compile(
     r"Updated:\s*([A-Za-z]+ [0-9]{1,2}, [0-9]{4} [0-9]{2}:[0-9]{2})"
 )
+_STATE_COUNCIL_UPDATED_LEGACY = re.compile(
+    r"Updated:\s*([A-Za-z]{3} [0-9]{1,2},[0-9]{4} [0-9]{1,2}:[0-9]{2} (?:AM|PM))"
+)
+_STATE_COUNCIL_CHINESE_PUBLISHED = re.compile(
+    r"(20[0-9]{2}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2})\s+来源[\N{FULLWIDTH COLON}:]"
+)
+_NBS_VISIBLE_PUBLISHED = re.compile(
+    r"发布时间[\N{FULLWIDTH COLON}:]\s*(20[0-9]{2}-[0-9]{2}-[0-9]{2})\s+([0-9]{2}:[0-9]{2})"
+)
+_MAX_DECOMPRESSED_HTML_BYTES = 20 * 1024 * 1024
 
 
 class _CsrcHtmlParser(HTMLParser):
@@ -296,17 +308,7 @@ def extract_state_council_regime_evidence(
         and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", publish_date) is None
     ):
         raise ValueError("State Council archived page publishdate is not canonical")
-    updated_matches = tuple(
-        dict.fromkeys(_STATE_COUNCIL_UPDATED.findall(" ".join(parser.text_parts)))
-    )
-    if len(updated_matches) != 1:
-        raise ValueError("State Council archived page must expose one exact Updated time")
-    try:
-        updated_local = datetime.strptime(updated_matches[0], "%B %d, %Y %H:%M").replace(
-            tzinfo=ZoneInfo("Asia/Shanghai")
-        )
-    except ValueError as exc:
-        raise ValueError("State Council archived page Updated time is invalid") from exc
+    updated_local = _state_council_updated_time(parser)
     if publish_date is not None and updated_local.date().isoformat() != publish_date:
         raise ValueError("State Council publishdate and Updated date disagree")
     published_at = updated_local.astimezone(UTC)
@@ -337,6 +339,27 @@ def extract_state_council_regime_evidence(
     )
 
 
+def _state_council_updated_time(parser: _CsrcHtmlParser) -> datetime:
+    text = " ".join(parser.text_parts)
+    candidates = tuple(
+        (*((item, "%B %d, %Y %H:%M") for item in _STATE_COUNCIL_UPDATED.findall(text)),)
+    )
+    legacy_candidates = tuple(
+        (item, "%b %d,%Y %I:%M %p") for item in _STATE_COUNCIL_UPDATED_LEGACY.findall(text)
+    )
+    chinese_candidates = tuple(
+        (item, "%Y-%m-%d %H:%M") for item in _STATE_COUNCIL_CHINESE_PUBLISHED.findall(text)
+    )
+    all_candidates = tuple(dict.fromkeys((*candidates, *legacy_candidates, *chinese_candidates)))
+    if len(all_candidates) != 1:
+        raise ValueError("State Council archived page must expose one exact Updated time")
+    value, source_format = all_candidates[0]
+    try:
+        return datetime.strptime(value, source_format).replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+    except ValueError as exc:
+        raise ValueError("State Council archived page Updated time is invalid") from exc
+
+
 def extract_nbs_macro_vintage(
     archive_record: VerifiedArchiveRecord | VerifiedInternetArchiveRecord,
     *,
@@ -359,10 +382,15 @@ def extract_nbs_macro_vintage(
     if not title:
         raise ValueError("NBS archived page does not expose a title")
     publication_time = parser.meta.get("pubdate")
+    source_format = "%Y/%m/%d %H:%M"
     if publication_time is None:
-        raise ValueError("NBS archived page must expose an exact PubDate")
+        matches = tuple(dict.fromkeys(_NBS_VISIBLE_PUBLISHED.findall(" ".join(parser.text_parts))))
+        if len(matches) != 1:
+            raise ValueError("NBS archived page must expose one exact publication time")
+        publication_time = " ".join(matches[0])
+        source_format = "%Y-%m-%d %H:%M"
     try:
-        published_local = datetime.strptime(publication_time, "%Y/%m/%d %H:%M").replace(
+        published_local = datetime.strptime(publication_time, source_format).replace(
             tzinfo=ZoneInfo("Asia/Shanghai")
         )
     except ValueError as exc:
@@ -421,12 +449,21 @@ def _authority_hash(
 
 
 def _decode_html(payload: bytes) -> str:
+    decoded_payload = payload
+    if payload.startswith(b"\x1f\x8b"):
+        try:
+            with gzip.GzipFile(fileobj=BytesIO(payload)) as archive:
+                decoded_payload = archive.read(_MAX_DECOMPRESSED_HTML_BYTES + 1)
+        except (EOFError, OSError) as exc:
+            raise ValueError("official archived page gzip payload is invalid") from exc
+        if len(decoded_payload) > _MAX_DECOMPRESSED_HTML_BYTES:
+            raise ValueError("official archived page exceeds the decompressed size limit")
     for encoding in ("utf-8", "gb18030"):
         try:
-            return payload.decode(encoding)
+            return decoded_payload.decode(encoding)
         except UnicodeDecodeError:
             continue
-    raise ValueError("CSRC archived page encoding is not supported")
+    raise ValueError("official archived page encoding is not supported")
 
 
 def _timestamp(value: datetime | None) -> str:

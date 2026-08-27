@@ -87,6 +87,40 @@ def test_internet_archive_index_selects_latest_exact_capture_before_cutoff() -> 
     ]
 
 
+def test_internet_archive_index_accepts_equivalent_explicit_default_port() -> None:
+    item = InternetArchiveIndexAdapter(
+        transport=lambda endpoint, target_url, timeout_seconds: (
+            '[["timestamp","original","statuscode","digest","mimetype"],'
+            '["20200125184255","http://english.www.gov.cn:80/source",'
+            '"200","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","text/html"]]'
+        )
+    ).locate_latest(
+        target_url="https://english.www.gov.cn/source",
+        not_after=datetime(2020, 2, 3, tzinfo=UTC),
+    )
+
+    assert item is not None
+    assert item.target_url == "http://english.www.gov.cn:80/source"
+
+
+def test_internet_archive_index_ignores_different_target_after_cutoff() -> None:
+    item = InternetArchiveIndexAdapter(
+        transport=lambda endpoint, target_url, timeout_seconds: (
+            '[["timestamp","original","statuscode","digest","mimetype"],'
+            '["20171222010430","http://www.gov.cn/source","200",'
+            '"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","text/html"],'
+            '["20230513185311","http://www.gov.cn//source","200",'
+            '"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB","text/html"]]'
+        )
+    ).locate_latest(
+        target_url="https://www.gov.cn/source",
+        not_after=datetime(2018, 1, 25, tzinfo=UTC),
+    )
+
+    assert item is not None
+    assert item.timestamp == "20171222010430"
+
+
 def test_internet_archive_replay_validates_exact_body_digest() -> None:
     item = locator()
     transport = FakeReplayTransport(

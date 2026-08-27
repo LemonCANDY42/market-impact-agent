@@ -106,22 +106,18 @@ The content-identified registration requires two established-news publishers and
 accepted articles per checkpoint, in addition to official context, macro vintages, positioning,
 market, and industry data. Bloomberg and Reuters are entitlement-dependent registered routes;
 GDELT and Common Crawl may locate records but cannot substitute for publisher identity or historical
-availability. The selected 2024 policy-rally case now passes three case-local checkpoints, including
-an explicit pre-cutoff event-revelation gate; the remaining cases still fail closed.
+availability. The selected 2024 policy-rally case was initially reported as passing three
+case-local checkpoints, including an explicit source-timestamp event-revelation check. Independent
+review found that implementation omitted `authority_at <= cutoff`: the exact archive capture and
+current publisher/provider versions were later than the historical decisions. Correct replay now
+fails all three checkpoints and all 18 selected six-case checkpoints.
 
-The resulting 18-run diagnostic compared the general Harness with only
-`narrative-diffusion-assessment` appended. Both arms proposed up at the four-session initial event.
-At the one-session continuation checkpoint, control abstained while the treatment proposed up; at
-the high-open reversal checkpoint, control proposed up while treatment abstained. Those two
-treatment-only decisions aligned with realized +4.45% and -4.37% open-to-close outcomes. The
-treatment path returned 36.89% after modeled costs versus 13.04% for control and 31.04% for CSI 300
-buy-and-hold. It made 3/3 direction/abstention choices versus control's 1/3. Formal cost was
-$0.240318 and all superseded plus formal diagnostics cost $0.669513 under the $10 cap.
-
-This is still outcome-opened, selected-case development evidence. It supports retaining the Skill
-for broader frozen comparison, not making it a default, asserting alpha, or promoting any execution
-gate. Six sessions are below the registered 20-session minimum, so Sharpe and annualized metrics
-remain unavailable rather than being estimated from an unstable sample.
+The earlier 18-run policy diagnostic and later 108-call six-case diagnostic are therefore retained
+only as invalid/superseded behavior and cost evidence. Their apparent narrative-Skill increment,
+returns, and directional scores cannot support method quality because the PIT admission gate did
+not pass. The six-case calls instead expose an always-abstain behavior with no Skill decision
+increment; descriptive same-window baselines show missed rallies and sector rotation. No method is
+promoted, and no execution gate changes.
 
 ## Reproduction boundary
 

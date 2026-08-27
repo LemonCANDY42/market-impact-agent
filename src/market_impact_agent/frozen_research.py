@@ -117,7 +117,7 @@ class FrozenResearchRepository:
                 required_capabilities=frozenset({"evidence.read"}),
                 side_effect=ToolSideEffect.READ_ONLY,
                 timeout_seconds=2,
-                max_result_bytes=16_384,
+                max_result_bytes=65_536,
                 handler=self.read_evidence,
             ),
             ToolDescriptor(

@@ -27,6 +27,9 @@ _NEWS_LATENCY_MODEL_HASH = canonical_hash(
 )
 _PUBLISHERS = {
     "english.news.cn": ("xinhua", "xinhua-established-news"),
+    "www.xinhuanet.com": ("xinhua", "xinhua-established-news"),
+    "xinhuanet.com": ("xinhua", "xinhua-established-news"),
+    "news.xinhuanet.com": ("xinhua", "xinhua-established-news"),
     "www.scmp.com": ("scmp", "scmp-established-news"),
     "scmp.com": ("scmp", "scmp-established-news"),
 }

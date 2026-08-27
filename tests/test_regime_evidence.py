@@ -18,6 +18,7 @@ from market_impact_agent.market_regimes import (
     RegimeTaxonomy,
     ValidatedRegimePanel,
 )
+from market_impact_agent.regime_agent_experiment import select_checkpoint_records
 from market_impact_agent.regime_evidence import (
     RegimeEvidenceAuthorityKind,
     RegimeEvidenceAvailabilityBasis,
@@ -405,7 +406,7 @@ def test_qualification_counts_independent_publishers_and_preserves_price_authori
     assert changed_news["ready"] is False
 
 
-def test_panel_publication_records_authorize_prices_without_rewriting_retrieval_time() -> None:
+def test_current_panel_verification_does_not_authorize_historical_prices() -> None:
     registration = _registration()
     dataset = _dataset()
     panel = _validated_panel(dataset)
@@ -455,14 +456,14 @@ def test_panel_publication_records_authorize_prices_without_rewriting_retrieval_
     checkpoint_result = cast(list[dict[str, object]], case["checkpoints"])[0]
     requirements = cast(list[dict[str, object]], checkpoint_result["requirements"])
     by_category = {cast(str, item["category"]): item for item in requirements}
-    assert by_category["market_price"]["point_in_time_authority"] is True
-    assert by_category["market_price"]["authority_record_count"] == 2
-    assert by_category["industry_price"]["point_in_time_authority"] is True
-    assert by_category["industry_price"]["authority_record_count"] == 1
-    assert checkpoint_result["ready"] is True
+    assert by_category["market_price"]["point_in_time_authority"] is False
+    assert by_category["market_price"]["authority_record_count"] == 0
+    assert by_category["industry_price"]["point_in_time_authority"] is False
+    assert by_category["industry_price"]["authority_record_count"] == 0
+    assert checkpoint_result["ready"] is False
 
 
-def test_current_verification_can_authenticate_historical_availability() -> None:
+def test_current_verification_cannot_authenticate_historical_availability() -> None:
     old_record = _record(
         source_id="official",
         category="official_context",
@@ -537,7 +538,67 @@ def test_current_verification_can_authenticate_historical_availability() -> None
 
     report = qualify_regime_evidence(dataset, panel, registration, manifest)
 
-    assert cast(list[dict[str, object]], report["cases"])[0]["all_checkpoints_ready"] is True
+    assert cast(list[dict[str, object]], report["cases"])[0]["all_checkpoints_ready"] is False
+
+
+def test_checkpoint_materialization_excludes_post_cutoff_authority() -> None:
+    registration = _registration()
+    dataset = _dataset()
+    market_case = dataset.cases[0]
+    study_case = registration.cases[0]
+    panel = _validated_panel(dataset)
+    checkpoint = generate_regime_checkpoints(
+        market_case,
+        study_case,
+        protocol=registration.checkpoint_protocol,
+        trading_dates=(date(2020, 1, 2),),
+    )[0]
+    authorized = _record(
+        source_id="official",
+        category="official_context",
+        publisher_id="official",
+        suffix="8",
+    )
+    post_cutoff = RegimeEvidenceRecord.build(
+        case_keys=authorized.case_keys,
+        category=authorized.category,
+        source_id=authorized.source_id,
+        provider_id=authorized.provider_id,
+        publisher_id=authorized.publisher_id,
+        source_ref="https://example.test/post-cutoff",
+        claim_id="claim-post-cutoff",
+        lineage_id="lineage-post-cutoff",
+        title=authorized.title,
+        occurred_at=authorized.occurred_at,
+        published_at=authorized.published_at,
+        source_updated_at=authorized.source_updated_at,
+        available_at=authorized.available_at,
+        availability_basis=authorized.availability_basis,
+        latency_model_id=authorized.latency_model_id,
+        latency_model_hash=authorized.latency_model_hash,
+        authority_kind=authorized.authority_kind,
+        authority_id="archive-post-cutoff",
+        authority_at=datetime(2026, 8, 27, tzinfo=UTC),
+        authority_hash="8" * 64,
+        content_hash=authorized.content_hash,
+        supersedes_id=authorized.supersedes_id,
+        license_scope=authorized.license_scope,
+    )
+    current_price_records = build_panel_authority_records(
+        panel,
+        market_case=market_case,
+        checkpoints=(checkpoint,),
+    )
+
+    visible = select_checkpoint_records(
+        (authorized, post_cutoff, *current_price_records),
+        market_case=market_case,
+        study_case=study_case,
+        registration=registration,
+        checkpoint=checkpoint,
+    )
+
+    assert tuple(item.record_id for item in visible) == (authorized.record_id,)
 
 
 def test_event_first_checkpoint_requires_post_anchor_revelation() -> None:
@@ -557,7 +618,14 @@ def test_event_first_checkpoint_requires_post_anchor_revelation() -> None:
     )
     registration = replace(base_registration, cases=(study_case,))
     dataset = replace(_dataset(), cases=(event_case,))
-    panel = _validated_panel(dataset)
+    current_panel = _validated_panel(dataset)
+    panel = replace(
+        current_panel,
+        panel=replace(
+            current_panel.panel,
+            retrieved_at=datetime(2020, 1, 2, 1, 20, tzinfo=UTC),
+        ),
+    )
     checkpoint = generate_regime_checkpoints(
         event_case,
         study_case,
@@ -633,7 +701,7 @@ def test_event_first_checkpoint_requires_post_anchor_revelation() -> None:
         latency_model_hash=None,
         authority_kind=RegimeEvidenceAuthorityKind.VERIFIED_ARCHIVE,
         authority_id="archive-event",
-        authority_at=datetime(2020, 1, 3, tzinfo=UTC),
+        authority_at=datetime(2020, 1, 2, 1, 15, tzinfo=UTC),
         authority_hash="8" * 64,
         content_hash="9" * 64,
         supersedes_id=None,

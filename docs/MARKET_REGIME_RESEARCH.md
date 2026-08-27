@@ -82,20 +82,28 @@ distinguishing content completeness from point-in-time authority. Market and ind
 the current Tushare panel remains usable for descriptive baselines but is intentionally not granted
 original-vintage authority.
 
-The 2026-08-28 case-local qualification now binds 169 records to the exact dataset, registration,
-and private panel. The 2024 policy-rally case passes all six registered categories at 24 September,
-30 September, and 8 October. The first checkpoint additionally binds the archived CSRC live
-transcript segment timestamped 09:10:58 Asia/Shanghai: its operative reserve-ratio, policy-rate,
-mortgage, swap-facility, and buyback-relending statements were visible before the frozen 09:25
-cutoff. A new semantic event-revelation gate rejects an event checkpoint that merely has enough old
-official documents. Xinhua/SCMP publisher records, NBS vintages, fixed Tushare market/industry
-versions, and exchange margin summaries remain bound to their own publication/update/availability
-semantics; later or mismatched publisher versions are metadata-only and never substituted.
+The selected six-case slice is content-rich but does **not** pass the strict point-in-time gate.
+It covers the 2018 bear market, 2019 Q1 rebound, 2020 closure shock, 2021 sector rotation, 2024
+policy rally, and 2024 post-rally whipsaw. Each selected checkpoint has at least eight
+established-news records from Xinhua and SCMP plus the requested market, industry, official, macro,
+and positioning content. Discovery metadata never substitutes for a direct publisher version.
+When an exact private article body is already content-matched, the materializer reuses it;
+otherwise the publisher excerpt and its declared limitation remain explicit.
 
-The whole 15-case study is still not source-complete, and no multi-case method-effect claim is open.
-Only this selected, outcome-opened development case may run the bounded diagnostic below. Its
-qualification is evidence for one input path, not proof that the historical corpus is generally
-complete or that retrieved Tushare history is an original vintage.
+The first policy checkpoint has a source timestamp of 09:10:58 Asia/Shanghai for the CSRC live
+transcript, but its exact archive authority was captured only on 7 October, after the 24 September
+09:25 cutoff. It therefore cannot authenticate that historical source version for that decision.
+The same distinction invalidates current Tushare backfills, 2026 publisher snapshots, and later
+positioning verification as PIT authority even when their source-reported publication time plus a
+modeled latency falls before the checkpoint.
+
+The corrected qualification requires both strategy availability and immutable authority time to
+precede the cutoff. Its private report,
+`regime-evidence-qualification-report-c597952dfb3e6003efaea51395bce8836808289fa5b990779ea418d295a25c8d`,
+qualifies 0/18 selected checkpoints. The earlier `e3d76a...` report is invalidated audit evidence:
+it checked authority kind but omitted the authority-time comparison. The whole 15-case study is
+still not source-complete, and Bloomberg/Reuters entitlement routes were not silently replaced by
+free sources.
 
 ## Frozen return windows
 
@@ -139,39 +147,52 @@ but improved maximum drawdown in only 2/15. It lost more than the primary index 
 and 2018 and 2022 bear windows, and it also lagged in the 2016-2018 quality rise and 2024 broad
 rebound. These opened, selected windows are comparator diagnostics, not inference or alpha.
 
-## First complete representative-case Agent diagnostic
+## Invalidated six-case Agent diagnostic
 
-The first end-to-end policy-rally experiment freezes three pre-open checkpoints and compares the
-general Agent Harness with the same Harness plus only `narrative-diffusion-assessment`. Each arm ran
-three times per checkpoint on CLIProxyAPI `gpt-5.6-luna`, `reasoning_effort=xhigh`, for 18/18 valid
-runs. All runs used the same six Evidence Items, Pattern Pack, target alias, tools, and eligible
-horizon. The Agent never saw realized outcomes, broker access, or an executable instrument.
+The attempted validation compared the general Harness with the same Harness plus one routed method
+Skill over six cases and three pre-open checkpoints per case. Each arm made three independent
+CLIProxyAPI `gpt-5.6-luna`, `reasoning_effort=xhigh` calls, so 108 calls completed with structurally
+valid outputs and evidence/Pattern references. The post-run PIT audit invalidates them as formal
+Regime Agent experiments because their qualification report is not reproducible under the corrected
+authority-time gate. They remain descriptive, outcome-opened behavior and cost evidence only.
 
-| Checkpoint | Eligible horizon return | General 3-run majority | Plus narrative Skill | Increment |
-| --- | ---: | --- | --- | --- |
-| 2024-09-24, 4 sessions | +14.15% | propose up, 3/3 | propose up, 3/3 | same decision |
-| 2024-09-30, 1 session | +4.45% | abstain, 3/3 | propose up, 2/3 | helpful in this case |
-| 2024-10-08, 1 session | -4.37% | propose up, 2/3 | abstain, 3/3 | helpful in this case |
+Both arms produced the same majority decision at all 18 checkpoints: abstain. Each therefore
+returned 0%, with zero turnover and drawdown; Sharpe is undefined because the return path has zero
+volatility. The 12/18 directional-hit count means cash happened to match the sign test on 12
+checkpoint horizons. It does not show useful market timing: neither the routed Skills nor the
+general arm entered any positive regime, and the routed Skill was helpful at 0 checkpoints,
+harmful at 0, and decision-identical at 18.
 
-With registered-open fills and 10 basis points per one-way turnover, the general arm returned
-13.04%, the added-Skill arm 36.89%, CSI 300 buy-and-hold 31.04%, and cash 0%. The general arm's
-close-valued maximum drawdown was -4.46%; the Skill arm's was 0%. The Skill arm made the correct
-direction/abstention choice at 3/3 checkpoints versus 1/3 for control. All 31 registered industries
-rose over the case interval; their median open-to-close return was 31.13%, confirming unusually
-broad opportunity rather than a normal market sample.
+The four registered baselines now use the same case windows and 10-basis-point one-way cost model:
 
-Sharpe, annualized return, and annualized volatility are deliberately `null`: the case has only six
-trading sessions, below the registered 20-session minimum. CVaR and drawdown are close-valued path
-diagnostics and do not erase the separately reported 8 October open-to-close reversal. Formal v3
-model cost was $0.240318; including invalid or superseded v1/v2 diagnostics, total actual model cost
-was $0.669513 under the $10 cap. The content-identified private report is
-`regime-agent-experiment-report-549b24bbebaac242f1bee3bb6c633d9160f5199382ae0793100b9fa50aa08e4e`.
+| Opened case | Primary index return / Sharpe / max DD | Equal-sector return / Sharpe / max DD | Lagged sector momentum return / Sharpe / max DD |
+| --- | ---: | ---: | ---: |
+| 2018 bear | -32.41% / -1.87 / -32.41% | -34.00% / -1.93 / -35.27% | -41.73% / -2.39 / -41.73% |
+| 2019 Q1 rebound | +32.67% / 5.00 / -4.95% | +34.81% / 5.24 / -4.29% | +23.36% / 3.23 / -6.60% |
+| 2020 closure shock | -3.11% / -0.60 / -16.08% | +2.19% / 0.65 / -14.00% | +10.25% / 1.82 / -14.18% |
+| 2021 sector rotation | -11.43% / -0.75 / -17.78% | +5.24% / 0.50 / -9.22% | +0.75% / 0.17 / -19.09% |
+| 2024 policy rally | +31.04% / n/a / 0.00% | +32.19% / n/a / 0.00% | +36.40% / n/a / 0.00% |
+| 2024 whipsaw | -5.71% / -0.96 / -9.22% | -2.13% / -0.23 / -8.45% | -6.45% / -0.57 / -13.39% |
 
-This is a successful full-process diagnostic and a promising in-case Skill increment, not a method
-acceptance result. Outcomes were already known to the builder, the case was selected, and three
-checkpoints cannot estimate generalization. The next evidence-bearing step is the same frozen
-three-pair protocol across additional qualified policy, bear, quiet, rotation, and black-swan cases;
-failed source gates must remain in the denominator without model calls.
+The 2024 policy window has only six sessions, so annualized risk metrics are deliberately `null`
+under the registered 20-session minimum. Across cases, mean primary-index, equal-sector, and
+lagged-momentum returns are +1.84%, +6.38%, and +3.76%. Holding cash beats those baselines in only
+4/6, 2/6, and 2/6 cases respectively. In particular, cash misses the 2019 and 2024 broad rallies
+and the positive industry paths during the 2020 and 2021 rotation windows.
+
+The attempted six-case calls cost $1.028187. Including every invalid or superseded diagnostic,
+total actual model cost is $2.436518 under the single shared $20 cap. Cost reconciliation now derives
+prior diagnostic spend from every exact case report; callers cannot supply a lower scalar. The old
+private aggregate report
+`regime-agent-validation-report-20a1b4f3c042041d9499a4a584f8678b28729fd9468b74cb016131f9f8fa8202`
+is invalidated and must not be used as acceptance evidence.
+
+The descriptive result still shows no Skill increment and an always-abstain failure mode, but it
+accepts neither the evidence gate nor the Agent validation pipeline. Exact Provider, panel,
+Manifest, and qualification identities are now bound into the validation registration and checked
+against every case report. No paper or live authority follows. The next model call must wait for
+source versions whose archive/provider authority actually predates each cutoff; rerunning the same
+inputs or merely adding personas is not evidence-bearing.
 
 ## Private data and commands
 

@@ -195,6 +195,15 @@ Tokens by 5.7% without a visible process or decision improvement on this sparse 
 remains opt-in rather than part of every Agent run. This does not evaluate richer multi-source news
 batches, where the Skill's declared precondition actually holds.
 
+The attempted A-share regime validation made 108 paired Luna xhigh Agent calls over six opened
+cases under one shared $20 cap, but an independent audit found the qualification gate did not
+require archive/provider authority to predate each checkpoint. Correct replay qualifies 0/18
+selected checkpoints, so every run is retained only as invalidated descriptive behavior and cost
+evidence. Both arms always abstained; same-window primary-index, equal-sector, and lagged
+sector-momentum baselines expose missed rallies and rotations. Exact lineage and cost reconciliation
+now fail closed. This is not Agent effectiveness, alpha, paper trading, or live authority. See
+[docs/MARKET_REGIME_RESEARCH.md](docs/MARKET_REGIME_RESEARCH.md).
+
 The first archive-capture adapter is now reproducible through `market-impact archive
 common-crawl-verify`. It verifies a fixed Common Crawl byte range, one complete gzip/WARC member,
 capture metadata, target/status, and payload/block digests; redirects, widened origins, changed

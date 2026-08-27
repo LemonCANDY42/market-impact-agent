@@ -291,7 +291,7 @@ def evaluate_regime_study_baselines(
     results: list[dict[str, object]] = []
     for case in dataset.cases:
         plan = plan_by_case[case.case_key]
-        result = _evaluate_case_baselines(case, by_id, registration.baseline_protocol)
+        result = evaluate_regime_case_baselines(case, by_id, registration.baseline_protocol)
         results.append(
             {
                 **result,
@@ -346,7 +346,7 @@ def write_regime_study_baseline_report(
     return destination
 
 
-def _evaluate_case_baselines(
+def evaluate_regime_case_baselines(
     case: MarketRegimeCase,
     by_id: dict[str, RegimeSeries],
     protocol: RegimeBaselineProtocol,

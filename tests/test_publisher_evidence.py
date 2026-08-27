@@ -47,6 +47,32 @@ def test_xinhua_news_binds_exact_visible_publication_time_and_body_digest() -> N
     assert record.license_scope == "private_licensed"
 
 
+@pytest.mark.parametrize(
+    "host",
+    ("www.xinhuanet.com", "xinhuanet.com", "news.xinhuanet.com"),
+)
+def test_legacy_xinhua_hosts_share_the_same_publisher_contract(host: str) -> None:
+    payload = b"""
+    <html><head>
+      <meta name="publishdate" content="2018-01-24">
+      <meta property="og:title" content="Chinese shares close higher Wednesday">
+    </head><body><span>2018-01-24 17:02:31</span><p>Market report body.</p></body></html>
+    """
+
+    record = extract_publisher_news_evidence(
+        url=f"https://{host}/english/2018-01/24/c_136921022.htm",
+        payload=payload,
+        retrieved_at=datetime(2026, 8, 28, tzinfo=UTC),
+        case_keys=("cn-2018-bear-market",),
+        claim_id="xinhua-2018-01-24-close",
+        lineage_id="xinhua-136921022",
+    )
+
+    assert record.publisher_id == "xinhua"
+    assert record.source_id == "xinhua-established-news"
+    assert record.published_at == datetime(2018, 1, 24, 9, 2, 31, tzinfo=UTC)
+
+
 def test_scmp_news_uses_published_and_modified_metadata_for_current_version() -> None:
     payload = b"""
     <html><head>

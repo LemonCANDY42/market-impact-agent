@@ -38,6 +38,9 @@ def test_synthetic_energy_fixture_is_fully_content_bound(repo_root: Path) -> Non
         == repository.evidence_pack.pattern_packs[0].content_hash
     )
     assert {tool.name for tool in tools} == {"read_evidence", "read_pattern_pack"}
+    by_name = {tool.name: tool for tool in tools}
+    assert by_name["read_evidence"].max_result_bytes == 65_536
+    assert by_name["read_pattern_pack"].max_result_bytes == 16_384
 
 
 def test_frozen_energy_fixture_rejects_tampered_content(

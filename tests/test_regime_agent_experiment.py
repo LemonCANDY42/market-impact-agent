@@ -20,6 +20,7 @@ from market_impact_agent.regime_agent_experiment import (
     assert_checkpoint_qualified,
     build_regime_agent_experiment_report,
     evaluate_checkpoint_exposure_path,
+    method_evidence_bindings,
     write_regime_agent_experiment_report,
 )
 from market_impact_agent.regime_evidence import RegimeCheckpoint
@@ -117,13 +118,18 @@ def test_checkpoint_qualification_gate_is_case_local_and_fail_closed() -> None:
         "cases": [
             {
                 "case_key": "case-a",
-                "all_checkpoints_ready": True,
+                "all_checkpoints_ready": False,
                 "checkpoints": [
                     {
                         "session_date": "2024-09-24",
                         "cutoff_at": "2024-09-24T01:25:00Z",
                         "ready": True,
-                    }
+                    },
+                    {
+                        "session_date": "2024-09-25",
+                        "cutoff_at": "2024-09-25T01:25:00Z",
+                        "ready": False,
+                    },
                 ],
             }
         ],
@@ -146,16 +152,44 @@ def test_checkpoint_qualification_gate_is_case_local_and_fail_closed() -> None:
         )
 
 
+def test_method_evidence_bindings_follow_the_frozen_treatment_requirements() -> None:
+    bindings = method_evidence_bindings(
+        required_evidence=("price_or_market_context", "consensus_or_positioning"),
+        evidence_refs_by_type={
+            "price_or_market_context": ("market-context", "industry-rotation"),
+            "consensus_or_positioning": ("positioning-flow",),
+            "timestamped_narrative_corpus": ("timestamped-news-corpus",),
+        },
+    )
+
+    assert tuple(item.evidence_type for item in bindings) == (
+        "price_or_market_context",
+        "consensus_or_positioning",
+    )
+    assert bindings[0].evidence_refs == ("market-context", "industry-rotation")
+    assert bindings[1].evidence_refs == ("positioning-flow",)
+
+    with pytest.raises(ValueError, match="reference_class"):
+        method_evidence_bindings(
+            required_evidence=("reference_class",),
+            evidence_refs_by_type={},
+        )
+
+
 def test_complete_regime_experiment_reports_skill_increment_and_quant_paths(
     tmp_path: Path,
 ) -> None:
     dates = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))
     primary_rows: tuple[dict[str, object], ...] = (
+        {"trade_date": "20231228", "open": "90", "close": "92"},
+        {"trade_date": "20231229", "open": "92", "close": "95"},
         {"trade_date": "20240102", "open": "100", "close": "110"},
         {"trade_date": "20240103", "open": "110", "close": "121"},
         {"trade_date": "20240104", "open": "130", "close": "117"},
     )
     sector_rows: tuple[dict[str, object], ...] = (
+        {"trade_date": "20231228", "open": "80", "close": "82"},
+        {"trade_date": "20231229", "open": "82", "close": "84"},
         {"trade_date": "20240102", "open": "100", "close": "105"},
         {"trade_date": "20240103", "open": "105", "close": "110"},
         {"trade_date": "20240104", "open": "110", "close": "108"},
@@ -210,7 +244,12 @@ def test_complete_regime_experiment_reports_skill_increment_and_quant_paths(
         rebalance_frequency="monthly_first_session",
         momentum_lookback_sessions=1,
         momentum_top_k=1,
-        strategies=("cash", "primary_buy_and_hold"),
+        strategies=(
+            "cash",
+            "primary_buy_and_hold",
+            "equal_sector_buy_and_hold",
+            "lagged_sector_momentum",
+        ),
     )
     controls = ("propose", "abstain", "propose")
     treatments = ("propose", "propose", "abstain")
@@ -279,6 +318,18 @@ def test_complete_regime_experiment_reports_skill_increment_and_quant_paths(
     assert (
         arms["general_plus_narrative_diffusion_assessment"]["directional_hit_rate"] == "1.00000000"
     )
+    baselines = {
+        cast(str, item["baseline_id"]): item
+        for item in cast(list[dict[str, object]], result["baselines"])
+    }
+    assert tuple(baselines) == baseline.strategies
+    equal_sector_path = cast(
+        dict[str, object], baselines["equal_sector_buy_and_hold"]["path_metrics"]
+    )
+    momentum_path = cast(dict[str, object], baselines["lagged_sector_momentum"]["path_metrics"])
+    assert equal_sector_path["total_return"] == "0.08000000"
+    assert momentum_path["total_return"] == "0.08000000"
+    assert momentum_path["information_ratio_vs_primary"] is None
     assert result["inference_eligible"] is False
     assert result["execution_capability"] == "none"
     path = write_regime_agent_experiment_report(result, root=tmp_path)

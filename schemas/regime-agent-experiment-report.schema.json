@@ -164,6 +164,15 @@
         "sharpe": {"anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]},
         "max_drawdown": {"$ref": "#/$defs/decimal"},
         "cvar": {"$ref": "#/$defs/decimal"},
+        "information_ratio_vs_primary": {
+          "anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]
+        },
+        "upside_capture_ratio": {
+          "anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]
+        },
+        "downside_loss_participation_ratio": {
+          "anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]
+        },
         "turnover": {"$ref": "#/$defs/decimal"},
         "modeled_cost": {"$ref": "#/$defs/decimal"}
       }

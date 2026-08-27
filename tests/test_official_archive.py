@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -200,6 +201,74 @@ def test_state_council_archive_extracts_exact_updated_time() -> None:
     assert record.publisher_id == "state-council"
 
 
+def test_state_council_archive_accepts_legacy_updated_time_format() -> None:
+    payload = b"""
+    <html><head><title>China mobilizes medical supplies to Wuhan</title></head>
+    <body><span>Updated:</span> Jan 25,2020 8:54 PM <p>Source text.</p></body></html>
+    """
+    locator = replace(
+        _archive_record().locator,
+        target_url=(
+            "http://english.gov.cn/statecouncil/ministries/202001/25/"
+            "content_WS5e2c3a9cc6d019625c603f24.html"
+        ),
+        timestamp="20200128060802",
+        digest="sha1:" + "D" * 32,
+    )
+    archive_record = replace(
+        _archive_record(),
+        locator=locator,
+        target_url=locator.target_url,
+        captured_at=datetime(2020, 1, 28, 6, 8, 2, tzinfo=UTC),
+        payload=payload,
+        payload_sha256=sha256(payload).hexdigest(),
+        payload_digest=locator.digest,
+    )
+
+    record = extract_state_council_regime_evidence(
+        archive_record,
+        case_keys=("cn-2020-covid-closure-shock",),
+        claim_id="gov-cn-2020-01-25-medical-supplies",
+        lineage_id="gov-cn-WS5e2c3a9cc6d019625c603f24",
+    )
+
+    assert record.published_at == datetime(2020, 1, 25, 12, 54, tzinfo=UTC)
+    assert record.source_updated_at == record.published_at
+
+
+def test_state_council_archive_accepts_visible_chinese_publication_time() -> None:
+    payload = """
+    <html><head><title>中央经济工作会议在北京举行_滚动新闻_中国政府网</title></head>
+    <body><span>2017-12-20 18:24 来源\N{FULLWIDTH COLON} 新华社</span>
+    <p>会议正文。</p></body></html>
+    """.encode()
+    locator = replace(
+        _archive_record().locator,
+        target_url="http://www.gov.cn/xinwen/2017-12/20/content_5248899.htm",
+        timestamp="20171222010430",
+        digest="sha1:" + "E" * 32,
+    )
+    archive_record = replace(
+        _archive_record(),
+        locator=locator,
+        target_url=locator.target_url,
+        captured_at=datetime(2017, 12, 22, 1, 4, 30, tzinfo=UTC),
+        payload=payload,
+        payload_sha256=sha256(payload).hexdigest(),
+        payload_digest=locator.digest,
+    )
+
+    record = extract_state_council_regime_evidence(
+        archive_record,
+        case_keys=("cn-2018-bear-market",),
+        claim_id="gov-cn-2017-central-economic-work-conference",
+        lineage_id="gov-cn-content-5248899",
+    )
+
+    assert record.published_at == datetime(2017, 12, 20, 10, 24, tzinfo=UTC)
+    assert record.available_at == record.published_at
+
+
 def test_nbs_archive_extracts_exact_macro_release_vintage() -> None:
     payload = """
     <html><head>
@@ -236,3 +305,37 @@ def test_nbs_archive_extracts_exact_macro_release_vintage() -> None:
     assert record.source_id == "nbs-macro-vintage"
     assert record.provider_id == "nbs-release-archive"
     assert record.publisher_id == "nbs"
+
+
+@pytest.mark.parametrize("compress", [False, True])
+def test_nbs_archive_accepts_visible_legacy_publication_time(compress: bool) -> None:
+    html = """
+    <html><head><title>2017年12月份居民消费价格同比上涨1.8%</title></head>
+    <body>来源\N{FULLWIDTH COLON}国家统计局 发布时间\N{FULLWIDTH COLON}2018-01-10 09:10</body>
+    </html>
+    """.encode()
+    payload = gzip.compress(html, mtime=0) if compress else html
+    locator = replace(
+        _archive_record().locator,
+        target_url="http://www.stats.gov.cn/tjsj/zxfb/201801/t20180110_1571525.html",
+        timestamp="20180110090148",
+        digest="sha1:" + "F" * 32,
+    )
+    archive_record = replace(
+        _archive_record(),
+        locator=locator,
+        target_url=locator.target_url,
+        captured_at=datetime(2018, 1, 10, 9, 1, 48, tzinfo=UTC),
+        payload=payload,
+        payload_sha256=sha256(payload).hexdigest(),
+        payload_digest=locator.digest,
+    )
+
+    record = extract_nbs_macro_vintage(
+        archive_record,
+        case_keys=("cn-2018-bear-market",),
+        claim_id="nbs-2017-12-cpi",
+        lineage_id="nbs-t20180110-1571525",
+    )
+
+    assert record.published_at == datetime(2018, 1, 10, 1, 10, tzinfo=UTC)

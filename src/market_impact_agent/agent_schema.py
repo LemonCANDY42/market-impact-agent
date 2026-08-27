@@ -44,6 +44,8 @@ AGENT_SCHEMA_FILES = (
     "method-skill-ablation-registration.schema.json",
     "method-skill-ablation-audit-correction.schema.json",
     "regime-agent-experiment-report.schema.json",
+    "regime-agent-validation-registration.schema.json",
+    "regime-agent-validation-report.schema.json",
 )
 
 

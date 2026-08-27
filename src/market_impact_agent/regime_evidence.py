@@ -611,7 +611,7 @@ def _qualify_event_revelation(
         and record.published_at < checkpoint.cutoff_at
         and record.available_at <= checkpoint.cutoff_at
         and (record.source_updated_at is None or record.source_updated_at <= checkpoint.cutoff_at)
-        and _has_integrity_authority(record)
+        and has_point_in_time_authority(record, checkpoint.cutoff_at)
     )
     latest = _latest_versions(candidates)
     record_ids = sorted(record.record_id for record in latest)
@@ -712,7 +712,9 @@ def _qualify_requirement(
     latest = _latest_versions(candidates)
     content_count = len(latest)
     content_distinct = _distinct_sources(latest, requirement.category)
-    verified = tuple(item for item in latest if _has_integrity_authority(item))
+    verified = tuple(
+        item for item in latest if has_point_in_time_authority(item, checkpoint.cutoff_at)
+    )
     verified_count = len(verified)
     verified_distinct = _distinct_sources(verified, requirement.category)
     content_complete = (
@@ -767,15 +769,18 @@ def _price_authority_records(
             and record.source_ref == expected_ref
             and record.content_hash == expected_hash
             and record.available_at <= checkpoint.cutoff_at
-            and _has_integrity_authority(record)
+            and has_point_in_time_authority(record, checkpoint.cutoff_at)
         )
         if len(candidates) == 1:
             matched.append(candidates[0])
     return tuple(matched)
 
 
-def _has_integrity_authority(record: RegimeEvidenceRecord) -> bool:
-    return record.authority_kind in {
+def has_point_in_time_authority(
+    record: RegimeEvidenceRecord,
+    cutoff_at: datetime,
+) -> bool:
+    return record.authority_at <= cutoff_at and record.authority_kind in {
         RegimeEvidenceAuthorityKind.ACTUAL_RECEIPT,
         RegimeEvidenceAuthorityKind.PROVIDER_VERSION,
         RegimeEvidenceAuthorityKind.VERIFIED_ARCHIVE,

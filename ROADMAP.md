@@ -210,19 +210,21 @@ inputs and accepted Method Quality scoring until this gate opens.
   source-specific CSRC, State Council, and NBS HTML extractors. Add the semantic event-revelation
   gate and a CSRC live-transcript segment extractor: old official background cannot qualify the
   first event checkpoint. Later captures are never backfilled into earlier checkpoints.
-- [x] Complete the first selected representative-case Agent diagnostic. The 2024 policy-rally case
-  binds 169 evidence records and three qualified checkpoints; 18/18 paired Luna xhigh runs complete
-  with the same frozen six-item evidence surface. The optional narrative-diffusion Skill aligns with
-  3/3 checkpoint outcomes versus control's 1/3 and returns 36.89% versus 13.04% for control and
-  31.04% for CSI 300 buy-and-hold under registered fills/costs. Formal cost is $0.240318; all actual
-  development cost is $0.669513 under $10. This opened selected-case result is inference-ineligible,
-  has no Sharpe at six sessions, and grants no paper/live authority.
+- [x] Audit and invalidate the attempted six-case Agent validation. All 108 Luna xhigh calls
+  completed structurally, but the qualification gate checked authority kind without requiring
+  `authority_at <= cutoff`. Correct replay qualifies 0/18 selected checkpoints, so the runs are
+  descriptive invalid/superseded diagnostics, not formal experiments. They show both arms always
+  abstaining and missing positive broad/sector baselines, but cannot support a pipeline or Skill
+  claim. Attempted calls cost $1.028187; all actual diagnostic spend is $2.436518 under the shared
+  $20 cap. Aggregate lineage and costs now bind exact Provider/panel/Manifest/qualification IDs and
+  reconcile from case reports rather than caller assertions. No paper/live authority follows.
 - [ ] Complete source-specific historical capture for exchange official material, additional macro
   vintages, positioning, filings, Bloomberg, and Reuters. Add a defensible original-vintage
   or explicitly bounded price-history treatment. Bind every checkpoint to accepted source versions
-  and latency authority before any multi-case method-Skill model run. Qualify additional policy,
-  bear, quiet, rotation, and black-swan cases without outcome-based replacement. Keep the existing
-  three-pair CPA cap; do not spend model budget on a case whose source or event-revelation gate fails.
+  and latency authority before any masked method-Skill model run. Qualify additional quiet,
+  slow-trend, revision, and black-swan cases without outcome-based replacement. Keep three paired
+  replicates and the shared $20 CPA cap; do not spend model budget on a case whose source or
+  event-revelation gate fails, and do not rerun the unchanged always-abstain decision surface.
 - Promote the prospective physical-energy family only if its frozen Agent Phase 2 holdout
   passes; the registration and committed synthetic slice are not acceptance evidence.
 - Research broader single-event and cumulative-narrative families, including

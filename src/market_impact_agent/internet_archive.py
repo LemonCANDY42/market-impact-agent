@@ -205,6 +205,9 @@ class InternetArchiveIndexAdapter:
             if not all(isinstance(value, str) for value in values.values()):
                 raise ValueError("Internet Archive index record fields must be strings")
             string_values = cast(dict[str, str], values)
+            captured_at = _capture_timestamp(string_values["timestamp"])
+            if captured_at > not_after:
+                continue
             captured_url = string_values["original"]
             if not _same_archive_target(target_url, captured_url):
                 raise ValueError("Internet Archive index returned a different target URL")
@@ -215,8 +218,7 @@ class InternetArchiveIndexAdapter:
                 http_status=_decimal_integer(string_values["statuscode"], "statuscode"),
                 media_type=string_values["mimetype"],
             )
-            if item.captured_at <= not_after:
-                candidates.append(item)
+            candidates.append(item)
         if not candidates:
             return None
         return max(candidates, key=lambda item: (item.captured_at, item.source_version_id))
@@ -424,12 +426,20 @@ def _same_archive_target(requested_url: str, captured_url: str) -> bool:
     return (
         requested.scheme in {"http", "https"}
         and captured.scheme in {"http", "https"}
-        and requested.netloc.casefold() == captured.netloc.casefold()
+        and requested.hostname is not None
+        and captured.hostname is not None
+        and requested.hostname.casefold() == captured.hostname.casefold()
+        and _uses_default_port(requested.scheme, requested.port)
+        and _uses_default_port(captured.scheme, captured.port)
         and requested.path == captured.path
         and requested.params == captured.params
         and requested.query == captured.query
         and requested.fragment == captured.fragment
     )
+
+
+def _uses_default_port(scheme: str, port: int | None) -> bool:
+    return port is None or port == (443 if scheme == "https" else 80)
 
 
 def _decimal_integer(value: str, field: str) -> int:

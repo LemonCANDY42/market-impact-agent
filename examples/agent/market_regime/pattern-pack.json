@@ -1,0 +1,71 @@
+{
+  "schema_version": "market-impact.pattern-pack.v1",
+  "version": "opened-development-general-market-regime-v1",
+  "available_at": "2017-02-01T00:00:00Z",
+  "entries": [
+    {
+      "pattern_id": "expectations-versus-observed-change",
+      "mechanism": "Market returns depend on the difference between new evidence and expectations already reflected in prices, not on whether the observed news is good or bad in isolation.",
+      "transmission_scales": [
+        "evidence",
+        "expectations",
+        "price"
+      ],
+      "applicability_conditions": [
+        "pre-decision price and evidence context are available",
+        "the claimed surprise can be distinguished from the level of the reported fact"
+      ],
+      "counterexamples": [
+        "the expectation baseline is unobserved",
+        "the price move is attributed to the event only because it occurred later"
+      ],
+      "evidence_refs": [
+        "https://doi.org/10.1111/j.1540-6261.1970.tb00518.x"
+      ]
+    },
+    {
+      "pattern_id": "risk-appetite-and-financing-cycle",
+      "mechanism": "Changes in risk tolerance, leverage, liquidity, and financing constraints can reinforce or reverse market trends across broad and industry levels without a fixed periodic cycle.",
+      "transmission_scales": [
+        "positioning",
+        "financing-conditions",
+        "industry-breadth",
+        "broad-market"
+      ],
+      "applicability_conditions": [
+        "point-in-time positioning or financing evidence is available",
+        "breadth and price context support the proposed transmission channel"
+      ],
+      "counterexamples": [
+        "a narrow constituent move explains the broad index",
+        "the financing or positioning observation is stale or only visible after the cutoff"
+      ],
+      "evidence_refs": [
+        "https://www.oaktreecapital.com/docs/default-source/memos/2015-09-09-its-not-easy.pdf?sfvrsn=2"
+      ]
+    },
+    {
+      "pattern_id": "narrative-diffusion-and-crowding",
+      "mechanism": "A repeated story can coordinate attention and flows, while fast adoption and leveraged participation can also increase reversal risk; diffusion alone does not prove truth or persistence.",
+      "transmission_scales": [
+        "narrative",
+        "attention",
+        "positioning",
+        "liquidity",
+        "horizon"
+      ],
+      "applicability_conditions": [
+        "a timestamped multi-source corpus is available",
+        "the proposed price link names an observable attention, expectation, funding, or demand channel"
+      ],
+      "counterexamples": [
+        "repetition is only duplicated syndication",
+        "independent fundamental evidence dominates and the narrative channel is unsupported"
+      ],
+      "evidence_refs": [
+        "https://www.nber.org/papers/w23075"
+      ]
+    }
+  ],
+  "pack_id": "pattern-709a822a5ee69c09bdcebf25d4cba207d0a844825b193e9dc6b89bc4d7bb650d"
+}
