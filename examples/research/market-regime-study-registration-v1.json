@@ -1,0 +1,438 @@
+{
+  "schema_version": "market-impact.regime-study-registration.v1",
+  "version": "a-share-representative-regime-study-v1",
+  "dataset_id": "market-regime-dataset-5c7e9826138ad0cb8f68f0e2d3c48fed2118712ad5b0d3bf94dc5483e801eca7",
+  "dataset_hash": "5c7e9826138ad0cb8f68f0e2d3c48fed2118712ad5b0d3bf94dc5483e801eca7",
+  "method_catalog_id": "method-skill-catalog-f438e45a7ef80c751da4a6817e9de6c837f73ba901642510ffb2d23ee8218a8d",
+  "method_catalog_hash": "f438e45a7ef80c751da4a6817e9de6c837f73ba901642510ffb2d23ee8218a8d",
+  "outcomes_opened": true,
+  "source_catalog": [
+    {
+      "source_id": "tushare-market",
+      "category": "market_price",
+      "provider_id": "tushare-http",
+      "source_tier": "regulated",
+      "acquisition_mode": "implemented_source_publication_model",
+      "point_in_time_authority": true,
+      "evidence_types": ["price_or_market_context", "valuation_or_price"],
+      "license_note": "Private token-backed index history; each checkpoint binds the exact as-of rows and a conservative next-day availability rule. This authenticates modeled availability, not an original provider vintage."
+    },
+    {
+      "source_id": "tushare-industry",
+      "category": "industry_price",
+      "provider_id": "tushare-http",
+      "source_tier": "regulated",
+      "acquisition_mode": "implemented_source_publication_model",
+      "point_in_time_authority": true,
+      "evidence_types": ["price_or_market_context"],
+      "license_note": "Private SW2021 index history; each checkpoint binds all 31 series and the same conservative next-day availability rule. Licensed rows are never committed."
+    },
+    {
+      "source_id": "csrc-official-archive",
+      "category": "official_context",
+      "provider_id": "csrc-web-archive",
+      "source_tier": "official",
+      "acquisition_mode": "implemented_authenticated_archive",
+      "point_in_time_authority": true,
+      "evidence_types": ["new_evidence", "fundamental_feedback"],
+      "license_note": "Source-specific CSRC HTML extraction binds a conservative source-reported publication time to a verified immutable archive hash; payloads remain private."
+    },
+    {
+      "source_id": "state-council-official-archive",
+      "category": "official_context",
+      "provider_id": "gov-cn-web-archive",
+      "source_tier": "official",
+      "acquisition_mode": "implemented_authenticated_archive",
+      "point_in_time_authority": true,
+      "evidence_types": ["new_evidence", "fundamental_feedback"],
+      "license_note": "State Council English HTML extraction binds the exact source Updated time to a verified immutable archive hash; payloads remain private."
+    },
+    {
+      "source_id": "exchange-official-archive",
+      "category": "official_context",
+      "provider_id": "sse-szse-web-archive",
+      "source_tier": "regulated",
+      "acquisition_mode": "planned_archive_capture",
+      "point_in_time_authority": false,
+      "evidence_types": ["new_evidence", "fundamental_feedback"],
+      "license_note": "Bind notices, rule versions, and market-closure publications."
+    },
+    {
+      "source_id": "pbc-macro-vintage",
+      "category": "macro_vintage",
+      "provider_id": "pbc-release-archive",
+      "source_tier": "official",
+      "acquisition_mode": "planned_archive_capture",
+      "point_in_time_authority": false,
+      "evidence_types": ["reference_class", "new_evidence"],
+      "license_note": "Bind monetary-policy reports and release vintages, not today-only values."
+    },
+    {
+      "source_id": "nbs-macro-vintage",
+      "category": "macro_vintage",
+      "provider_id": "nbs-release-archive",
+      "source_tier": "official",
+      "acquisition_mode": "implemented_authenticated_archive",
+      "point_in_time_authority": true,
+      "evidence_types": ["reference_class", "new_evidence"],
+      "license_note": "Source-specific NBS HTML extraction binds exact PubDate times to digest-verified historical replays; payloads remain private and later revisions require separate lineage."
+    },
+    {
+      "source_id": "bloomberg-licensed-news",
+      "category": "established_news",
+      "provider_id": "bloomberg-licensed-adapter",
+      "source_tier": "established_news",
+      "acquisition_mode": "planned_entitlement_required",
+      "point_in_time_authority": false,
+      "evidence_types": ["timestamped_narrative_corpus", "new_evidence"],
+      "license_note": "Metadata and hashes only unless the user's entitlement permits local private storage; never commit content."
+    },
+    {
+      "source_id": "reuters-licensed-news",
+      "category": "established_news",
+      "provider_id": "reuters-licensed-adapter",
+      "source_tier": "established_news",
+      "acquisition_mode": "planned_entitlement_required",
+      "point_in_time_authority": false,
+      "evidence_types": ["timestamped_narrative_corpus", "new_evidence"],
+      "license_note": "Metadata and hashes only unless licensed; preserve publisher timestamps and versions."
+    },
+    {
+      "source_id": "xinhua-established-news",
+      "category": "established_news",
+      "provider_id": "publisher-https-snapshot",
+      "source_tier": "established_news",
+      "acquisition_mode": "implemented_source_reported_version",
+      "point_in_time_authority": true,
+      "evidence_types": ["timestamped_narrative_corpus", "new_evidence"],
+      "license_note": "Exact publisher timestamp and body digest; only metadata is committed and the research copy remains private."
+    },
+    {
+      "source_id": "scmp-established-news",
+      "category": "established_news",
+      "provider_id": "publisher-https-snapshot",
+      "source_tier": "established_news",
+      "acquisition_mode": "implemented_source_reported_version",
+      "point_in_time_authority": true,
+      "evidence_types": ["timestamped_narrative_corpus", "new_evidence"],
+      "license_note": "Exact publisher publication/update metadata and body digest; only metadata is committed and the research copy remains private."
+    },
+    {
+      "source_id": "exchange-positioning-flow",
+      "category": "positioning_or_expectations",
+      "provider_id": "tushare-http",
+      "source_tier": "regulated",
+      "acquisition_mode": "implemented_source_publication_model",
+      "point_in_time_authority": true,
+      "evidence_types": ["consensus_or_positioning", "participant_belief_or_flow"],
+      "license_note": "Private SSE/SZSE margin summaries bind each exchange-date row to the Tushare table hash and documented daily 09:00 update rule."
+    },
+    {
+      "source_id": "issuer-sector-filings",
+      "category": "issuer_or_sector_fundamentals",
+      "provider_id": "exchange-filing-archive",
+      "source_tier": "regulated",
+      "acquisition_mode": "planned_archive_capture",
+      "point_in_time_authority": false,
+      "evidence_types": ["cash_flow_or_earning_power", "fundamental_feedback"],
+      "license_note": "Use filing versions visible at each checkpoint; never backfill later restatements silently."
+    },
+    {
+      "source_id": "gdelt-discovery",
+      "category": "archive_discovery",
+      "provider_id": "gdelt",
+      "source_tier": "specialist",
+      "acquisition_mode": "discovery_only",
+      "point_in_time_authority": false,
+      "evidence_types": ["timestamped_narrative_corpus"],
+      "license_note": "Discovery aid only; publisher or archive evidence remains required."
+    },
+    {
+      "source_id": "common-crawl-discovery",
+      "category": "archive_discovery",
+      "provider_id": "common-crawl",
+      "source_tier": "specialist",
+      "acquisition_mode": "discovery_only",
+      "point_in_time_authority": false,
+      "evidence_types": ["timestamped_narrative_corpus"],
+      "license_note": "Archive locator only until a source version and availability basis are bound."
+    }
+  ],
+  "checkpoint_protocol": {
+    "timezone": "Asia/Shanghai",
+    "decision_time_local": "09:25:00",
+    "price_lookback_sessions": 60,
+    "news_lookback_calendar_days": {
+      "monthly": 31,
+      "weekly": 14,
+      "event_then_weekly": 14
+    },
+    "maximum_age_calendar_days": {
+      "official_context": 365,
+      "macro_vintage": 120,
+      "positioning_or_expectations": 14,
+      "issuer_or_sector_fundamentals": 180
+    }
+  },
+  "baseline_protocol": {
+    "annualization_sessions": 252,
+    "minimum_risk_sessions": 20,
+    "risk_free_rate_annual": "0",
+    "cvar_confidence": "0.95",
+    "transaction_cost_bps_one_way": "10",
+    "rebalance_frequency": "monthly_first_session",
+    "momentum_lookback_sessions": 20,
+    "momentum_top_k": 3,
+    "strategies": [
+      "cash",
+      "primary_buy_and_hold",
+      "equal_sector_buy_and_hold",
+      "lagged_sector_momentum"
+    ]
+  },
+  "cases": [
+    {
+      "case_key": "cn-2014-2015-leveraged-melt-up",
+      "decision_schedule": "monthly",
+      "analysis_needs": ["feedback_loop", "cycle_position", "narrative_diffusion"],
+      "candidate_method_skills": ["second-level-cycle-context", "reflexive-feedback-check", "narrative-diffusion-assessment"],
+      "query_terms": ["A股 杠杆牛市 融资融券 2014 2015", "China stock leverage rally 2014 2015"],
+      "evaluation_horizons": ["near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2015-disorder-deleveraging",
+      "decision_schedule": "weekly",
+      "analysis_needs": ["feedback_loop", "cycle_position", "consensus_gap"],
+      "candidate_method_skills": ["second-level-cycle-context", "reflexive-feedback-check"],
+      "query_terms": ["A股 异常波动 去杠杆 强制平仓 2015", "China stock crash deleveraging 2015"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2016-circuit-breaker-microstress",
+      "decision_schedule": "event_then_weekly",
+      "analysis_needs": ["base_rate_update", "priced_expectations"],
+      "candidate_method_skills": ["expectations-base-rates"],
+      "query_terms": ["A股 熔断机制 2016 证监会", "China circuit breaker January 2016"],
+      "evaluation_horizons": ["immediate_5d", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2016-2018-quality-slow-bull",
+      "decision_schedule": "monthly",
+      "analysis_needs": ["owner_value", "cycle_position"],
+      "candidate_method_skills": ["owner-value-discipline", "second-level-cycle-context"],
+      "query_terms": ["A股 核心资产 价值 白马股 2016 2017", "China A shares quality value rally 2017"],
+      "evaluation_horizons": ["near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "issuer_or_sector_fundamentals", "source_ids": ["issuer-sector-filings"], "minimum_records_per_checkpoint": 3, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2018-bear-market",
+      "decision_schedule": "monthly",
+      "analysis_needs": ["cycle_position", "narrative_diffusion"],
+      "candidate_method_skills": ["second-level-cycle-context", "narrative-diffusion-assessment"],
+      "query_terms": ["A股 熊市 去杠杆 贸易摩擦 2018", "China stocks bear market trade tensions 2018"],
+      "evaluation_horizons": ["near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2019-q1-fast-rebound",
+      "decision_schedule": "weekly",
+      "analysis_needs": ["cycle_position", "consensus_gap"],
+      "candidate_method_skills": ["second-level-cycle-context"],
+      "query_terms": ["A股 2019 一季度 反弹 社融", "China stocks rebound Q1 2019 credit"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2020-covid-closure-shock",
+      "decision_schedule": "event_then_weekly",
+      "analysis_needs": ["base_rate_update", "narrative_diffusion"],
+      "candidate_method_skills": ["expectations-base-rates", "narrative-diffusion-assessment"],
+      "query_terms": ["新冠疫情 A股 延期开市 2020", "China stocks COVID market closure 2020"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["state-council-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2020-2021-structural-recovery",
+      "decision_schedule": "monthly",
+      "analysis_needs": ["owner_value", "cycle_position"],
+      "candidate_method_skills": ["owner-value-discipline", "second-level-cycle-context"],
+      "query_terms": ["A股 结构性行情 复苏 核心资产 2020 2021", "China A shares structural recovery 2020 2021"],
+      "evaluation_horizons": ["near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "issuer_or_sector_fundamentals", "source_ids": ["issuer-sector-filings"], "minimum_records_per_checkpoint": 3, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2021-index-flat-sector-rotation",
+      "decision_schedule": "monthly",
+      "analysis_needs": ["cycle_position", "narrative_diffusion"],
+      "candidate_method_skills": ["second-level-cycle-context", "narrative-diffusion-assessment"],
+      "query_terms": ["A股 行业轮动 2021 新能源 周期 消费", "China sector rotation 2021 A shares"],
+      "evaluation_horizons": ["near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2022-multishock-bear",
+      "decision_schedule": "monthly",
+      "analysis_needs": ["cycle_position", "narrative_diffusion"],
+      "candidate_method_skills": ["second-level-cycle-context", "narrative-diffusion-assessment"],
+      "query_terms": ["A股 2022 熊市 疫情 地产 能源 美联储", "China stocks 2022 multiple shocks"],
+      "evaluation_horizons": ["near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2022-reopening-policy",
+      "decision_schedule": "event_then_weekly",
+      "analysis_needs": ["base_rate_update", "narrative_diffusion"],
+      "candidate_method_skills": ["expectations-base-rates", "narrative-diffusion-assessment"],
+      "query_terms": ["二十条 优化疫情防控 A股 2022 11月", "China reopening twenty measures stocks November 2022"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2023-2024-smallcap-liquidity-stress",
+      "decision_schedule": "weekly",
+      "analysis_needs": ["feedback_loop", "cycle_position"],
+      "candidate_method_skills": ["second-level-cycle-context", "reflexive-feedback-check"],
+      "query_terms": ["A股 小微盘 流动性 量化 2024 2月", "China small cap liquidity stress February 2024"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "exchange-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2024-broad-rebound",
+      "decision_schedule": "weekly",
+      "analysis_needs": ["cycle_position", "consensus_gap"],
+      "candidate_method_skills": ["second-level-cycle-context"],
+      "query_terms": ["A股 2024 2月 反弹 国家队 市场流动性", "China stocks broad rebound February 2024"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2024-policy-melt-up",
+      "decision_schedule": "event_then_weekly",
+      "analysis_needs": ["feedback_loop", "narrative_diffusion"],
+      "candidate_method_skills": ["reflexive-feedback-check", "narrative-diffusion-assessment"],
+      "query_terms": ["A股 924 行情 政策 2024", "China stocks September 24 2024 policy rally"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["xinhua-established-news", "scmp-established-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    },
+    {
+      "case_key": "cn-2024-post-rally-whipsaw",
+      "decision_schedule": "weekly",
+      "analysis_needs": ["cycle_position", "narrative_diffusion"],
+      "candidate_method_skills": ["second-level-cycle-context", "narrative-diffusion-assessment"],
+      "query_terms": ["A股 2024 10月 冲高回落 震荡 行业轮动", "China stocks post rally whipsaw Q4 2024"],
+      "evaluation_horizons": ["immediate_5d", "near_term_12w", "full_case"],
+      "source_requirements": [
+        {"category": "market_price", "source_ids": ["tushare-market"], "minimum_records_per_checkpoint": 60, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "industry_price", "source_ids": ["tushare-industry"], "minimum_records_per_checkpoint": 31, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "official_context", "source_ids": ["csrc-official-archive", "state-council-official-archive"], "minimum_records_per_checkpoint": 1, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "macro_vintage", "source_ids": ["pbc-macro-vintage", "nbs-macro-vintage"], "minimum_records_per_checkpoint": 2, "minimum_distinct_sources": 1, "authenticated_availability_required": true},
+        {"category": "established_news", "source_ids": ["bloomberg-licensed-news", "reuters-licensed-news"], "minimum_records_per_checkpoint": 8, "minimum_distinct_sources": 2, "authenticated_availability_required": true},
+        {"category": "positioning_or_expectations", "source_ids": ["exchange-positioning-flow"], "minimum_records_per_checkpoint": 5, "minimum_distinct_sources": 1, "authenticated_availability_required": true}
+      ]
+    }
+  ],
+  "registration_id": "regime-study-registration-df0ca2afdf125ea286e85c9c51e11b7830bdc555e9551d1c52bc0df91a9c0fa8"
+}

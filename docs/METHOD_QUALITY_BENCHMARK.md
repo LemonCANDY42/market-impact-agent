@@ -224,9 +224,9 @@ score remains the registered machine-validated result and is not investable PnL.
    than repeating the same negative-outcome shape;
 2. create the remaining seven development cases and pass supported-positive, offset-dominant,
    missingness, ambiguity, revision, and cross-mechanism paths without opening a claim;
-3. independently review the accepted Common Crawl capture adapter and add a source-specific
-   publisher-time extractor plus a frozen latency calibration; never substitute archive capture or
-   current local retrieval time for the publisher's historical publication time;
+3. independently review the accepted Common Crawl and CSRC source-specific paths, then add an
+   established-news publisher-time extractor plus a frozen latency calibration; never substitute
+   archive capture or current local retrieval time for the publisher's historical publication time;
 4. define outcome-independent case admission queries and accept the source-specific receipt path;
 5. only after that authority exists, freeze all 24 authenticated Historical Evidence Manifests,
    Market Snapshots, and Outcome Seals before any method run;

@@ -1,0 +1,12 @@
+{
+  "schema_version": "market-impact.common-crawl-locator.v1",
+  "collection": "CC-MAIN-2024-42",
+  "target_url": "https://english.www.gov.cn/news/202409/25/content_WS66f3602ec6d0868f4e8eb3c0.html",
+  "timestamp": "20241009222054",
+  "filename": "crawl-data/CC-MAIN-2024-42/segments/1727944253654.26/warc/CC-MAIN-20241009211335-20241010001335-00063.warc.gz",
+  "offset": 201570427,
+  "length": 7287,
+  "digest": "sha1:KPL37TATUVBEYARSSDAYOQ7B3S3UW73I",
+  "http_status": 200,
+  "source_version_id": "common-crawl-record-d55beffd41ccfcd55cb75a162a4e03178d750038eb6918f47e9c5afc7a642fe2"
+}

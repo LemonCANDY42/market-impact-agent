@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-agent-experiment-report.schema.json",
+  "title": "Regime Agent Experiment Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "case_key",
+    "panel_id",
+    "manifest_id",
+    "qualification_report_id",
+    "provider_profile_id",
+    "treatment_skill",
+    "evidence_pack_ids",
+    "checkpoint_count",
+    "formal_run_count",
+    "checkpoint_results",
+    "arms",
+    "baselines",
+    "market_context",
+    "skill_increment",
+    "cost",
+    "limitations",
+    "inference_eligible",
+    "broker_reachability",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.regime-agent-experiment-report.v1"},
+    "report_id": {
+      "type": "string",
+      "pattern": "^regime-agent-experiment-report-[0-9a-f]{64}$"
+    },
+    "case_key": {"type": "string", "minLength": 1},
+    "panel_id": {"type": "string", "minLength": 1},
+    "manifest_id": {"type": "string", "minLength": 1},
+    "qualification_report_id": {"type": "string", "minLength": 1},
+    "provider_profile_id": {"type": "string", "minLength": 1},
+    "treatment_skill": {"type": "string", "minLength": 1},
+    "evidence_pack_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checkpoint_count": {"type": "integer", "minimum": 1},
+    "formal_run_count": {"type": "integer", "minimum": 6},
+    "checkpoint_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/checkpoint"}
+    },
+    "arms": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/arm_summary"}
+    },
+    "baselines": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/baseline"}
+    },
+    "market_context": {"$ref": "#/$defs/market_context"},
+    "skill_increment": {"$ref": "#/$defs/skill_increment"},
+    "cost": {"$ref": "#/$defs/cost"},
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "inference_eligible": {"const": false},
+    "broker_reachability": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{8}$"},
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_date",
+        "cutoff_at",
+        "eligible_horizon_sessions",
+        "eligible_open_to_close_return",
+        "evidence_pack_id",
+        "report_id",
+        "actual_model_cost_microusd",
+        "arms",
+        "incremental_skill_effect"
+      ],
+      "properties": {
+        "session_date": {"type": "string", "format": "date"},
+        "cutoff_at": {"type": "string", "format": "date-time"},
+        "eligible_horizon_sessions": {"type": "integer", "minimum": 1},
+        "eligible_open_to_close_return": {"$ref": "#/$defs/decimal"},
+        "evidence_pack_id": {"type": "string", "minLength": 1},
+        "report_id": {"type": "string", "minLength": 1},
+        "actual_model_cost_microusd": {"type": "integer", "minimum": 0},
+        "arms": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/arm_aggregate"}
+        },
+        "incremental_skill_effect": {
+          "enum": ["helpful", "harmful", "same_decision"]
+        }
+      }
+    },
+    "arm_aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm_id",
+        "replicate_count",
+        "valid_run_count",
+        "invalid_run_count",
+        "propose_count",
+        "abstain_count",
+        "majority_decision",
+        "invalid_reasons"
+      ],
+      "properties": {
+        "arm_id": {"type": "string", "minLength": 1},
+        "replicate_count": {"const": 3},
+        "valid_run_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "invalid_run_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "propose_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "abstain_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "majority_decision": {"enum": ["propose", "abstain"]},
+        "invalid_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "path_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "session_count",
+        "risk_metrics_eligible",
+        "total_return",
+        "annualized_return",
+        "annualized_volatility",
+        "sharpe",
+        "max_drawdown",
+        "cvar",
+        "turnover",
+        "modeled_cost"
+      ],
+      "properties": {
+        "status": {"const": "covered"},
+        "session_count": {"type": "integer", "minimum": 1},
+        "risk_metrics_eligible": {"type": "boolean"},
+        "total_return": {"$ref": "#/$defs/decimal"},
+        "annualized_return": {"anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]},
+        "annualized_volatility": {"anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]},
+        "sharpe": {"anyOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]},
+        "max_drawdown": {"$ref": "#/$defs/decimal"},
+        "cvar": {"$ref": "#/$defs/decimal"},
+        "turnover": {"$ref": "#/$defs/decimal"},
+        "modeled_cost": {"$ref": "#/$defs/decimal"}
+      }
+    },
+    "arm_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm_id",
+        "checkpoint_decisions",
+        "directional_hit_count",
+        "directional_hit_rate",
+        "path_metrics"
+      ],
+      "properties": {
+        "arm_id": {"type": "string", "minLength": 1},
+        "checkpoint_decisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["session_date", "decision"],
+            "properties": {
+              "session_date": {"type": "string", "format": "date"},
+              "decision": {"enum": ["propose", "abstain"]}
+            }
+          }
+        },
+        "directional_hit_count": {"type": "integer", "minimum": 0},
+        "directional_hit_rate": {"$ref": "#/$defs/decimal"},
+        "path_metrics": {"$ref": "#/$defs/path_metrics"}
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_id", "path_metrics"],
+      "properties": {
+        "baseline_id": {"type": "string", "minLength": 1},
+        "path_metrics": {"$ref": "#/$defs/path_metrics"}
+      }
+    },
+    "series_return": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["series_id", "open_to_close_return"],
+      "properties": {
+        "series_id": {"type": "string", "minLength": 1},
+        "open_to_close_return": {"$ref": "#/$defs/decimal"}
+      }
+    },
+    "market_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["period_start", "period_end", "main_indices", "industry_summary"],
+      "properties": {
+        "period_start": {"type": "string", "format": "date"},
+        "period_end": {"type": "string", "format": "date"},
+        "main_indices": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/series_return"}
+        },
+        "industry_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "industry_count",
+            "positive_industry_count",
+            "median_open_to_close_return",
+            "leaders",
+            "laggards",
+            "all_industries"
+          ],
+          "properties": {
+            "industry_count": {"type": "integer", "minimum": 1},
+            "positive_industry_count": {"type": "integer", "minimum": 0},
+            "median_open_to_close_return": {"$ref": "#/$defs/decimal"},
+            "leaders": {"type": "array", "items": {"$ref": "#/$defs/series_return"}},
+            "laggards": {"type": "array", "items": {"$ref": "#/$defs/series_return"}},
+            "all_industries": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/series_return"}
+            }
+          }
+        }
+      }
+    },
+    "skill_increment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "helpful_checkpoint_count",
+        "harmful_checkpoint_count",
+        "same_decision_checkpoint_count"
+      ],
+      "properties": {
+        "helpful_checkpoint_count": {"type": "integer", "minimum": 0},
+        "harmful_checkpoint_count": {"type": "integer", "minimum": 0},
+        "same_decision_checkpoint_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formal_model_cost_microusd",
+        "prior_invalid_or_superseded_diagnostic_cost_microusd",
+        "all_actual_model_cost_microusd",
+        "hard_cap_microusd",
+        "within_budget"
+      ],
+      "properties": {
+        "formal_model_cost_microusd": {"type": "integer", "minimum": 0},
+        "prior_invalid_or_superseded_diagnostic_cost_microusd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "all_actual_model_cost_microusd": {"type": "integer", "minimum": 0},
+        "hard_cap_microusd": {"type": "integer", "minimum": 1},
+        "within_budget": {"const": true}
+      }
+    }
+  }
+}

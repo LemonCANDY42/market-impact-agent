@@ -1,0 +1,9 @@
+{
+  "schema_version": "market-impact.internet-archive-locator.v1",
+  "source_version_id": "internet-archive-record-7cdbf7bdd1a043c718adc4154964896930c1ebb681fa03dc7711d07c29d6bce7",
+  "target_url": "http://www.csrc.gov.cn/csrc/c100028/c7473562/content.shtml",
+  "timestamp": "20240414223413",
+  "digest": "sha1:7BTL6EWWQU62S35FE65YWTS5MNVOJWDS",
+  "http_status": 200,
+  "media_type": "text/html"
+}

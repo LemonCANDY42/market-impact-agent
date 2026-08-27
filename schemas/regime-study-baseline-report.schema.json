@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-study-baseline-report.schema.json",
+  "title": "Market Regime Long-Horizon Baseline Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "registration_hash",
+    "dataset_id",
+    "dataset_hash",
+    "panel_id",
+    "panel_hash",
+    "provider_id",
+    "provider_version",
+    "historical_vintage",
+    "outcomes_opened",
+    "research_only",
+    "agent_visible",
+    "agent_effectiveness_claim_eligible",
+    "price_indices_are_non_executable_proxies",
+    "case_count",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.regime-study-baseline-report.v1"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^regime-study-registration-[0-9a-f]{64}$"
+    },
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "dataset_id": {"type": "string", "pattern": "^market-regime-dataset-[0-9a-f]{64}$"},
+    "dataset_hash": {"$ref": "#/$defs/sha256"},
+    "panel_id": {"type": "string", "pattern": "^regime-panel-[0-9a-f]{64}$"},
+    "panel_hash": {"$ref": "#/$defs/sha256"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "provider_version": {"type": "string", "minLength": 1},
+    "historical_vintage": {"type": "string", "minLength": 1},
+    "outcomes_opened": {"type": "boolean"},
+    "research_only": {"const": true},
+    "agent_visible": {"const": false},
+    "agent_effectiveness_claim_eligible": {"const": false},
+    "price_indices_are_non_executable_proxies": {"const": true},
+    "case_count": {"type": "integer", "minimum": 1},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{8}$"},
+    "nullableDecimal": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/decimal"}]},
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "session_count",
+        "risk_metrics_eligible",
+        "total_return",
+        "annualized_return",
+        "annualized_volatility",
+        "sharpe",
+        "max_drawdown",
+        "cvar",
+        "information_ratio_vs_primary",
+        "upside_capture_ratio",
+        "downside_loss_participation_ratio",
+        "turnover",
+        "modeled_cost"
+      ],
+      "properties": {
+        "status": {"const": "covered"},
+        "session_count": {"type": "integer", "minimum": 1},
+        "risk_metrics_eligible": {"type": "boolean"},
+        "total_return": {"$ref": "#/$defs/decimal"},
+        "annualized_return": {"$ref": "#/$defs/nullableDecimal"},
+        "annualized_volatility": {"$ref": "#/$defs/nullableDecimal"},
+        "sharpe": {"$ref": "#/$defs/nullableDecimal"},
+        "max_drawdown": {"$ref": "#/$defs/decimal"},
+        "cvar": {"$ref": "#/$defs/decimal"},
+        "information_ratio_vs_primary": {"$ref": "#/$defs/nullableDecimal"},
+        "upside_capture_ratio": {"$ref": "#/$defs/nullableDecimal"},
+        "downside_loss_participation_ratio": {"$ref": "#/$defs/nullableDecimal"},
+        "turnover": {"$ref": "#/$defs/decimal"},
+        "modeled_cost": {"$ref": "#/$defs/decimal"}
+      }
+    },
+    "strategyResult": {
+      "oneOf": [
+        {"$ref": "#/$defs/metric"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"const": "insufficient_history"}}
+        }
+      ]
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_key", "ready_for_outcome_blinded_agent_run", "blockers"],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "ready_for_outcome_blinded_agent_run": {"type": "boolean"},
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_key",
+        "status",
+        "session_count",
+        "strategies",
+        "analysis_needs",
+        "candidate_method_skills",
+        "source_readiness"
+      ],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "status": {"enum": ["covered", "missing_series", "incomplete_common_path"]},
+        "session_count": {"type": "integer", "minimum": 0},
+        "strategies": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/strategyResult"}
+        },
+        "analysis_needs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "candidate_method_skills": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "source_readiness": {"$ref": "#/$defs/readiness"}
+      }
+    }
+  }
+}

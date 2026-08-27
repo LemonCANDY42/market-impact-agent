@@ -1,0 +1,28 @@
+{
+  "schema_version": "market-impact.publisher-news-corpus.v1",
+  "corpus_id": "publisher-news-corpus-af2c1f08af86bac67525ff122c7014eb8ec3b57d0f0e8c490ab7a6c661d53027",
+  "case_keys": ["cn-2024-policy-melt-up"],
+  "outcomes_opened": true,
+  "latency_model": "publisher-http-five-minute-latency-v1",
+  "articles": [
+    {"url": "https://english.news.cn/20240910/05d2f2e062174ae4a5c84cf46b5508b1/c.html", "claim_id": "xinhua-2024-09-10-close", "lineage_id": "xinhua-05d2f2e062174ae4a5c84cf46b5508b1"},
+    {"url": "https://english.news.cn/20240911/08f5a676e53c4ec19db56c074a9f6c22/c.html", "claim_id": "xinhua-2024-09-11-close", "lineage_id": "xinhua-08f5a676e53c4ec19db56c074a9f6c22"},
+    {"url": "https://english.news.cn/20240913/21a493e50ce04abd82d0bf92fc83416b/c.html", "claim_id": "xinhua-2024-09-13-open", "lineage_id": "xinhua-21a493e50ce04abd82d0bf92fc83416b"},
+    {"url": "https://english.news.cn/20240918/c515b03bc83c4f8ba90474b28bc938e5/c.html", "claim_id": "xinhua-2024-09-18-close", "lineage_id": "xinhua-c515b03bc83c4f8ba90474b28bc938e5"},
+    {"url": "https://english.news.cn/20240919/38f2072daccd4734bebb4c29839ce223/c.html", "claim_id": "xinhua-2024-09-19-close", "lineage_id": "xinhua-38f2072daccd4734bebb4c29839ce223"},
+    {"url": "https://english.news.cn/20240920/193620f0c61e43e0a76373681624d91f/c.html", "claim_id": "xinhua-2024-09-20-close", "lineage_id": "xinhua-193620f0c61e43e0a76373681624d91f"},
+    {"url": "https://english.news.cn/20240923/4e02dea5d2e64930a604db111781b813/c.html", "claim_id": "xinhua-2024-09-23-close", "lineage_id": "xinhua-4e02dea5d2e64930a604db111781b813"},
+    {"url": "https://english.news.cn/20240924/a26412bd28124d8a826141b2ad2de15f/c.html", "claim_id": "xinhua-2024-09-24-open", "lineage_id": "xinhua-a26412bd28124d8a826141b2ad2de15f"},
+    {"url": "https://english.news.cn/20240924/81f6b5b9c0f843ca8a736cfbfb67bb16/c.html", "claim_id": "xinhua-2024-09-24-close", "lineage_id": "xinhua-81f6b5b9c0f843ca8a736cfbfb67bb16"},
+    {"url": "https://english.news.cn/20240924/cd1ecf7c09014cb591e40a707f9c7951/c.html", "claim_id": "xinhua-2024-09-24-stimulus", "lineage_id": "xinhua-cd1ecf7c09014cb591e40a707f9c7951"},
+    {"url": "https://english.news.cn/20240925/1a17137b59c4437084c8d1be14f2d3cf/c.html", "claim_id": "xinhua-2024-09-25-midday", "lineage_id": "xinhua-1a17137b59c4437084c8d1be14f2d3cf"},
+    {"url": "https://english.news.cn/20240926/c4c20128725643f8931a46da2adfc152/c.html", "claim_id": "xinhua-2024-09-26-close", "lineage_id": "xinhua-c4c20128725643f8931a46da2adfc152"},
+    {"url": "https://english.news.cn/20240927/fcdfa72e08ff4d1c81561f3464c7ce1e/c.html", "claim_id": "xinhua-2024-09-27-close", "lineage_id": "xinhua-fcdfa72e08ff4d1c81561f3464c7ce1e"},
+    {"url": "https://www.scmp.com/business/china-business/article/3278947/chinas-stocks-hover-around-5-year-low-trading-resumes-after-holiday", "claim_id": "scmp-2024-09-18-stocks", "lineage_id": "scmp-3278947"},
+    {"url": "https://www.scmp.com/business/markets/article/3279838/stock-surge-continues-investors-hong-kong-mainland-china-gobble-stimulus", "claim_id": "scmp-2024-09-25-stimulus-rally", "lineage_id": "scmp-3279838"},
+    {"url": "https://www.scmp.com/economy/policy/article/3280292/china-markets-blast-rocket-boosters-pull-u-turn-beijings-big-policy-stimulus-plans", "claim_id": "scmp-2024-09-27-policy-pivot", "lineage_id": "scmp-3280292"},
+    {"url": "https://www.scmp.com/business/china-business/article/3280471/hong-kong-stocks-set-best-month-nearly-2-years-property-stimulus-fuels-gains", "claim_id": "scmp-2024-09-30-record-rally", "lineage_id": "scmp-3280471"}
+  ],
+  "licensed_payloads_committed": false,
+  "execution_capability": "none"
+}

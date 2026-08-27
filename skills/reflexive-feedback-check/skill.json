@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Reflexive feedback check research method.",
+  "instructions_hash": "07c2a3417c47a137a5338b7090b7558a758795a5caaf9b5d4f43c626eaf7bfb8",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "ba0fe5d62dc6f44788e87b7caf85358a671a4a88dfc14c02046aad58bd7e9c05",
+  "name": "reflexive-feedback-check",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/reflexive-feedback-check",
+  "version": "1.0.0"
+}

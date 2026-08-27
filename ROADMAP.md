@@ -19,9 +19,9 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 - [x] Capture and validate current public Polymarket and Kalshi snapshots through real
   endpoints; add a disabled World Monitor discovery adapter with explicit unavailable-cache
   behavior and no false empty-data claim.
-- [ ] Add source-specific historical publication/vintage and revision adapters plus frozen
-  latency models calibrated from prospective real-time receipts. Current snapshots alone are
-  not historical point-in-time evidence.
+- [ ] Extend source-specific historical publication/vintage and revision adapters plus frozen
+  latency models calibrated from prospective real-time receipts. The CSRC HTML/archive path proves
+  one official source class; current snapshots and unadapted sources remain non-authoritative.
 - [x] Build immutable Evidence Item and Event Envelope materialization with occurrence,
   publication, visibility, retrieval, revision, and duplicate-claim semantics.
 - Implement event-archetype, transmission-channel, directness, revelation-mode, and
@@ -86,6 +86,15 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   Model Provider Profile/Factory, success/failure Usage Ledger, hard per-run estimated-cost
   cap, and a four-arm same-input ablation runner. Treat synthetic comparison as process
   evidence only; do not use it to reopen an outcome-frozen cohort.
+- [x] Add the first evidence-gated public-investor method catalog: owner value, second-level cycle
+  context, expectations/base rates, reflexive feedback, and narrative diffusion. Freeze a
+  three-pair Luna xhigh diagnostic with CPA Usage Keeper pricing and a hard $10 aggregate cap.
+  The opened Abqaiq recovery result completed 6/6 Agent runs with full evidence/Pattern coverage;
+  both arms abstained 3/3, so retain the method as optional process evidence rather than claiming
+  incremental quality. Correct the original six-`model_call_count` label to six Agent runs and
+  retain the observed 12 Provider requests in a schema-validated, content-identified correction
+  backed by a redacted CPA event artifact. Replace caller-reported evidence labels with a
+  content-identified declaration binding each method-evidence type to exact Evidence/Pattern refs.
 - [x] Freeze a separate method-quality protocol with historical identity masking, strict Source
   Version Receipt and evaluation artifact contracts, train-only outcome memory, eight development
   and 24 holdout case targets, content-bound general/family Skill routes, deterministic directional
@@ -142,9 +151,10 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   did not create a visible decision or news-quality improvement on this sparse three/five-item
   case. Keep it opt-in for genuinely multi-source news batches; this is not a negative universal
   result or a method-quality claim.
-- [ ] Implement and accept source-specific publication-time extraction plus a frozen latency
-  calibration and build the first complete historical case. Until then v2 admits no retrospective
-  holdout, even when the archive capture and internal receipt hashes are valid.
+- [ ] Implement and accept source-specific established-news publication-time extraction plus a
+  frozen latency calibration and build the first complete historical case. The accepted CSRC
+  official-page extractor does not satisfy this news gate. Until then v2 admits no retrospective
+  holdout, even when archive capture and internal receipt hashes are valid.
 - [ ] Build the remaining seven opened development cases across positive, offsetting, missing,
   ambiguous, revision, and cross-mechanism paths. Separately, after publisher-time authority exists,
   freeze all 24 outcome-independent masked historical holdout cases with authenticated evidence and matching
@@ -177,7 +187,42 @@ observability, and injection/secret negative cases while exposing no broker or a
 capability. A fresh MiniMax M3 China-endpoint run passed the same hardened surface. This work
 does not establish model quality or reopen the failed trading-calibration gate.
 
+Research-only market-state case registration, private source qualification, and descriptive
+benchmark/sector diagnostics may proceed without promotion. They must remain outside Agent-visible
+inputs and accepted Method Quality scoring until this gate opens.
+
 - Add market-state/style rotation and probabilistic climate/agriculture cases.
+- [x] Freeze the first 15-case A-share Regime Study Registration. It assigns candidate method
+  Skills by case, requires official/macro/positioning/market/industry evidence and at least eight
+  established-news items from two publishers per checkpoint, and keeps Bloomberg/Reuters
+  entitlement routes distinct from GDELT/Common Crawl discovery. The readiness audit correctly
+  rejects all current retrospective cases for Agent effectiveness because authenticated historical
+  availability is not yet established.
+- [x] Run the first no-model long-horizon comparator over the private five-index/31-industry panel.
+  All 15 cases were covered; 12 support annualized risk statistics. Cash, primary-index,
+  equal-sector, and lagged monthly top-three momentum now report costs, turnover, drawdown, CVaR,
+  Sharpe, information ratio, and upside/downside participation. These opened, selected windows and
+  non-executable industry indices are difficulty diagnostics only.
+- [x] Implement the content-identified Regime Evidence Manifest and per-checkpoint qualification
+  report, including frozen 09:25 Asia/Shanghai cutoffs, category freshness windows, revision
+  lineage, publisher diversity, and distinct actual-receipt/source-reported/modeled-latency bases.
+  Add fixed-collection Common Crawl lookup, digest-verified Internet Archive replay, and
+  source-specific CSRC, State Council, and NBS HTML extractors. Add the semantic event-revelation
+  gate and a CSRC live-transcript segment extractor: old official background cannot qualify the
+  first event checkpoint. Later captures are never backfilled into earlier checkpoints.
+- [x] Complete the first selected representative-case Agent diagnostic. The 2024 policy-rally case
+  binds 169 evidence records and three qualified checkpoints; 18/18 paired Luna xhigh runs complete
+  with the same frozen six-item evidence surface. The optional narrative-diffusion Skill aligns with
+  3/3 checkpoint outcomes versus control's 1/3 and returns 36.89% versus 13.04% for control and
+  31.04% for CSI 300 buy-and-hold under registered fills/costs. Formal cost is $0.240318; all actual
+  development cost is $0.669513 under $10. This opened selected-case result is inference-ineligible,
+  has no Sharpe at six sessions, and grants no paper/live authority.
+- [ ] Complete source-specific historical capture for exchange official material, additional macro
+  vintages, positioning, filings, Bloomberg, and Reuters. Add a defensible original-vintage
+  or explicitly bounded price-history treatment. Bind every checkpoint to accepted source versions
+  and latency authority before any multi-case method-Skill model run. Qualify additional policy,
+  bear, quiet, rotation, and black-swan cases without outcome-based replacement. Keep the existing
+  three-pair CPA cap; do not spend model budget on a case whose source or event-revelation gate fails.
 - Promote the prospective physical-energy family only if its frozen Agent Phase 2 holdout
   passes; the registration and committed synthetic slice are not acceptance evidence.
 - Research broader single-event and cumulative-narrative families, including

@@ -80,8 +80,9 @@ _Avoid_: Agent role, expert opinion, prompt template
 
 **Skill Route**:
 A content-identified selection of applicable Research Method Skills from a frozen catalog and
-research context. It records why each Skill was included and never lets the model silently add
-its own method or capability.
+point-in-time market, narrative, analysis-need, and evidence context. It records selected and
+evidence-rejected methods, never uses realized outcomes for selection, and never lets the model
+silently add its own method or capability.
 _Avoid_: Prompt routing, model-selected tools
 
 **Event Cluster**:
@@ -95,6 +96,63 @@ such as an issuer action, geopolitical-security event, or physical disruption.
 One Event Cluster has one primary archetype; linked causes and consequences are
 represented as separate clusters and Transmission Paths.
 _Avoid_: Topic, sector label, transmission mechanism
+
+**Market State Descriptor**:
+A research-only, point-in-time description of market direction/speed plus independent volatility,
+drawdown, recovery, breadth/dispersion, narrative-salience, and causal-complexity axes. Its primary
+price state is `up_fast`, `up_mild`, `down_fast`, `down_mild`, or `unclassified`; it is not an Event
+Archetype or a claim that an Agent could trade a retrospectively selected period.
+_Avoid_: Bull/bear story bucket, smoothed hindsight regime, Event Archetype
+
+**Regime Study Registration**:
+A content-identified research plan binding every representative Market State case to candidate
+Research Method Skills, checkpoint cadence, case-specific search terms, minimum source diversity,
+evidence-type coverage, and one frozen long-horizon baseline protocol. It distinguishes an
+implemented adapter from authenticated historical availability and keeps discovery archives from
+silently satisfying an evidence requirement. An outcome-opened registration can support
+descriptive diagnostics only.
+_Avoid_: Backtest result, completed evidence corpus, Agent prompt
+
+**Regime Evidence Record**:
+A content-identified, case-scoped source version that retains source/provider/publisher identity,
+claim and revision lineage, occurrence/publication/update/availability times, the explicit
+availability basis, immutable authority identity/time/hash, and content hash. Licensed payloads
+remain outside the record. A source-reported time is distinct from an actual receipt or modeled
+latency and does not inherit authority from local retrieval.
+_Avoid_: Article metadata, current web page, inferred historical visibility
+
+**Regime Evidence Manifest**:
+A private, content-identified binding from one Regime Study Registration and exact market panel to
+the complete set of candidate Regime Evidence Records. It validates source/category/provider
+registration, revision lineage, and artifact identity but does not by itself declare any checkpoint
+complete or authorize an Agent run.
+_Avoid_: News corpus, Evidence Pack, source-readiness claim
+
+**Regime Evidence Qualification Report**:
+A content-identified per-case, per-checkpoint evaluation of registered record minima, independent
+source diversity, lookback freshness, and point-in-time authority. It reports content completeness
+and authenticated availability separately. The first checkpoint of an event-timed case additionally
+requires a verified event-revelation record published between the registered event observation and
+decision cutoff; older background documents cannot satisfy that semantic gate. Only a fully passing
+report may open the diagnostic Agent comparison; an outcome-opened registration can never support
+an effectiveness claim.
+_Avoid_: Model evaluation, source plan, successful backtest
+
+**Regime Agent Experiment Report**:
+A private, content-identified development diagnostic binding qualified checkpoint Evidence Packs,
+three paired runs per Method Arm, the exact Provider Profile, majority decisions, registered-open
+path metrics, market/industry comparators, and the complete model-cost ledger. It may describe a
+Skill's incremental decisions inside the opened case, but one retrospective case is not a general
+effectiveness, alpha, paper, or live-execution claim.
+_Avoid_: Strategy acceptance, holdout result, deployable signal
+
+**Regime Study Baseline Report**:
+A private, panel-bound evaluator result comparing cash, the primary market index, an equal-sector
+buy-and-hold proxy, and lagged monthly sector momentum using daily paths, modeled costs, turnover,
+drawdown, CVaR, Sharpe, information ratio, and upside/downside participation. Industry indices are
+non-executable research proxies; the report measures case difficulty and comparator strength, not
+Agent skill or alpha.
+_Avoid_: Strategy acceptance, execution simulation, method-Skill effect
 
 **Revelation Mode**:
 How evidence becomes observable: scheduled, unscheduled, continuously updated,

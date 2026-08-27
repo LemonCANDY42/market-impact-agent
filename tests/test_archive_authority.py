@@ -11,6 +11,7 @@ import pytest
 from market_impact_agent.archive_authority import (
     COMMON_CRAWL_DATA_ENDPOINT,
     CommonCrawlArchiveAdapter,
+    CommonCrawlIndexAdapter,
     CommonCrawlLocator,
     RangeResponse,
     common_crawl_locator_from_dict,
@@ -229,3 +230,84 @@ def test_common_crawl_rejects_a_gzip_bomb_before_materializing_it() -> None:
             transport=FakeRangeTransport(response_for(compressed, item)),
             clock=lambda: NOW,
         ).fetch(item)
+
+
+def test_common_crawl_index_selects_latest_exact_capture_before_cutoff() -> None:
+    calls: list[tuple[str, str, float]] = []
+
+    def transport(endpoint: str, target_url: str, timeout_seconds: float) -> str:
+        calls.append((endpoint, target_url, timeout_seconds))
+        return "\n".join(
+            (
+                '{"timestamp":"20241007171301","url":"http://example.test/source",'
+                '"status":"200","digest":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",'
+                '"length":"1200","offset":"50",'
+                '"filename":"crawl-data/CC-MAIN-2024-42/segments/a/warc/a.warc.gz"}',
+                '{"timestamp":"20241009171301","url":"http://example.test/source",'
+                '"status":"200","digest":"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",'
+                '"length":"1300","offset":"70",'
+                '"filename":"crawl-data/CC-MAIN-2024-42/segments/b/warc/b.warc.gz"}',
+            )
+        )
+
+    locator = CommonCrawlIndexAdapter(transport=transport).locate_latest(
+        collection="CC-MAIN-2024-42",
+        target_url="https://example.test/source",
+        not_after=datetime(2024, 10, 8, tzinfo=UTC),
+    )
+
+    assert locator is not None
+    assert locator.timestamp == "20241007171301"
+    assert locator.target_url == "http://example.test/source"
+    assert locator.digest == "sha1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    assert calls == [
+        (
+            "https://index.commoncrawl.org/CC-MAIN-2024-42-index",
+            "https://example.test/source",
+            30.0,
+        )
+    ]
+
+
+def test_common_crawl_index_fails_closed_on_origin_target_and_cutoff() -> None:
+    with pytest.raises(ValueError, match="official HTTPS origin"):
+        CommonCrawlIndexAdapter(index_endpoint="https://example.test")
+
+    wrong_target = (
+        '{"timestamp":"20241007171301","url":"https://other.test/source",'
+        '"status":"200","digest":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",'
+        '"length":"1200","offset":"50",'
+        '"filename":"crawl-data/CC-MAIN-2024-42/segments/a/warc/a.warc.gz"}'
+    )
+
+    def wrong_target_transport(endpoint: str, target_url: str, timeout_seconds: float) -> str:
+        return wrong_target
+
+    with pytest.raises(ValueError, match="different target"):
+        CommonCrawlIndexAdapter(transport=wrong_target_transport).locate_latest(
+            collection="CC-MAIN-2024-42",
+            target_url="https://example.test/source",
+            not_after=datetime(2024, 10, 8, tzinfo=UTC),
+        )
+
+    def empty_transport(endpoint: str, target_url: str, timeout_seconds: float) -> str:
+        return ""
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        CommonCrawlIndexAdapter(transport=empty_transport).locate_latest(
+            collection="CC-MAIN-2024-42",
+            target_url="https://example.test/source",
+            not_after=datetime(2024, 10, 8),
+        )
+
+    def no_capture_transport(endpoint: str, target_url: str, timeout_seconds: float) -> str:
+        return '{"message":"No Captures found for: test"}'
+
+    assert (
+        CommonCrawlIndexAdapter(transport=no_capture_transport).locate_latest(
+            collection="CC-MAIN-2024-42",
+            target_url="https://example.test/source",
+            not_after=datetime(2024, 10, 8, tzinfo=UTC),
+        )
+        is None
+    )

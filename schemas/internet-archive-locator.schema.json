@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/internet-archive-locator.schema.json",
+  "title": "Internet Archive Replay Locator",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "target_url",
+    "timestamp",
+    "digest",
+    "http_status",
+    "media_type",
+    "source_version_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.internet-archive-locator.v1"},
+    "target_url": {"type": "string", "format": "uri", "pattern": "^https?://"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{14}$"},
+    "digest": {"type": "string", "pattern": "^sha1:[A-Z2-7]{32}$"},
+    "http_status": {"const": 200},
+    "media_type": {"enum": ["text/html", "application/xhtml+xml"]},
+    "source_version_id": {
+      "type": "string",
+      "pattern": "^internet-archive-record-[0-9a-f]{64}$"
+    }
+  }
+}

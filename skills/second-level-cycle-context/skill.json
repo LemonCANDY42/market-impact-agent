@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Second level cycle context research method.",
+  "instructions_hash": "b39a16b8c70fd639453d995476a3b89d6d8320b87ed6767028a7c57061bd5dba",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "18b83093c313d49b89aff104917f5010161b92098e497d3fdaae8380f89e864c",
+  "name": "second-level-cycle-context",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/second-level-cycle-context",
+  "version": "1.0.0"
+}

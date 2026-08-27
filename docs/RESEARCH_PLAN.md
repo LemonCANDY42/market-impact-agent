@@ -75,6 +75,25 @@ This permits a geopolitical attack, the physical disruption it causes, a later s
 and the resulting A-share flow response to remain distinguishable while still forming one
 inspectable causal chain.
 
+## Market-state and rotation context
+
+Historical capability research uses a small deployable price-state layer plus orthogonal context,
+not a fixed seven-story taxonomy. The price layer is `up_fast`, `up_mild`, `down_fast`,
+`down_mild`, or `unclassified`, computed only from information through the prior executable session.
+Volatility, drawdown, recovery, sector dispersion, narrative salience, causal complexity, and causal
+directness stay separate. In particular, contemporaneously obvious news and a causal story that is
+easy to tell only after the outcome are different observations.
+
+The registered retrospective cases and deterministic three-window market/industry diagnostics are
+defined in `docs/MARKET_REGIME_RESEARCH.md`. Case identity and realized labels remain evaluator-only;
+they cannot be inserted into Agent inputs or used to reopen the Phase 3 gate.
+
+Named-investor research procedures are separately represented by evidence-gated, persona-free
+Research Method Skills. Their point-in-time routing, allowed questions, explicit non-capabilities,
+and first small paired diagnostic are defined in `docs/METHOD_SKILLS.md`. A market-state label may
+narrow applicability but cannot satisfy a method's missing evidence gate or select a method from
+realized returns.
+
 ## Historical analog skill
 
 The analog system is hierarchical and lazy-loaded:

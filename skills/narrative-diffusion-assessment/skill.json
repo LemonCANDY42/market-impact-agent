@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Narrative diffusion assessment research method.",
+  "instructions_hash": "b247775a26429d6a715a1ea50c9b8f17446614b3c7161e0f4fa8e65f5530da2f",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "c7121671108024d213fb78e15092de95b4f5abb0fcd412826221583e342dc695",
+  "name": "narrative-diffusion-assessment",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/narrative-diffusion-assessment",
+  "version": "1.0.0"
+}

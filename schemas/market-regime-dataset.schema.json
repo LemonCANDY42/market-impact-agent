@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/market-regime-dataset.schema.json",
+  "title": "Market Regime Research Dataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "dataset_id", "version", "detector", "main_market_indices", "industry_proxy_catalog", "cases"],
+  "properties": {
+    "schema_version": {"const": "market-impact.market-regime-dataset.v1"},
+    "dataset_id": {"type": "string", "pattern": "^market-regime-dataset-[0-9a-f]{64}$"},
+    "version": {"type": "string", "minLength": 1},
+    "detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_index", "direction_short_sessions", "direction_long_sessions", "volatility_sessions", "fast_abs_z_threshold", "feature_lag"],
+      "properties": {
+        "primary_index": {"type": "string", "minLength": 1},
+        "direction_short_sessions": {"type": "integer", "minimum": 1},
+        "direction_long_sessions": {"type": "integer", "minimum": 1},
+        "volatility_sessions": {"type": "integer", "minimum": 1},
+        "fast_abs_z_threshold": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "feature_lag": {"const": "through_previous_session"}
+      }
+    },
+    "main_market_indices": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9]{6}\\.(?:SH|SZ)$"}},
+    "industry_proxy_catalog": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["proxy_id", "source", "industry_name", "tushare_code"],
+        "properties": {
+          "proxy_id": {"type": "string", "minLength": 1},
+          "source": {"const": "SW2021"},
+          "industry_name": {"type": "string", "minLength": 1},
+          "tushare_code": {"type": "string", "pattern": "^[0-9]{6}\\.SI$"}
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "event_anchor": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["observed_at", "anchor_session", "price_anchor", "executable"],
+      "properties": {
+        "observed_at": {"type": "string", "format": "date-time"},
+        "anchor_session": {"type": "string", "format": "date"},
+        "price_anchor": {"enum": ["prior_close", "session_open", "session_close"]},
+        "executable": {"type": "boolean"}
+      }
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_direction", "path_speed", "volatility", "drawdown", "recovery", "narrative_salience", "causal_complexity", "causal_directness"],
+      "properties": {
+        "path_direction": {"enum": ["up", "down", "mixed"]},
+        "path_speed": {"enum": ["fast", "mild", "unclassified"]},
+        "volatility": {"type": "string", "minLength": 1},
+        "drawdown": {"type": "string", "minLength": 1},
+        "recovery": {"type": "string", "minLength": 1},
+        "narrative_salience": {"enum": ["corroborated_obvious", "authority_obvious", "diffuse", "contested", "unavailable"]},
+        "causal_complexity": {"type": "string", "minLength": 1},
+        "causal_directness": {"type": "string", "minLength": 1}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_key", "status", "identity_sensitive", "path_start", "event_anchor", "tradable_start", "end", "axes", "capability_targets", "primary_market_index", "optional_execution_etf_proxies", "source_refs"],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "status": {"const": "retrospective_research_candidate"},
+        "identity_sensitive": {"const": true},
+        "path_start": {"type": "string", "format": "date"},
+        "event_anchor": {"$ref": "#/$defs/event_anchor"},
+        "tradable_start": {"type": "string", "format": "date"},
+        "end": {"type": "string", "format": "date"},
+        "axes": {"$ref": "#/$defs/axes"},
+        "capability_targets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "primary_market_index": {"type": "string", "minLength": 1},
+        "required_market_indices": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "required_industry_proxies": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "optional_execution_etf_proxies": {"type": "array", "items": {"type": "string"}},
+        "source_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

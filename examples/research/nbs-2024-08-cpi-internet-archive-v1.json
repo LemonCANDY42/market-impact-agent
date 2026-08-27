@@ -1,0 +1,9 @@
+{
+  "schema_version": "market-impact.internet-archive-locator.v1",
+  "target_url": "https://www.stats.gov.cn/sj/zxfb/202409/t20240909_1956311.html",
+  "timestamp": "20240909020425",
+  "digest": "sha1:HEQ7MPOYUMT4NQMWOVQL3FLIARYKEG3M",
+  "http_status": 200,
+  "media_type": "text/html",
+  "source_version_id": "internet-archive-record-bf2a08e582c9e81aeb0d4dba7f27073f33d84973caf59b216e70106d40f3e439"
+}

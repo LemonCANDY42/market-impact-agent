@@ -1,0 +1,50 @@
+{
+  "schema_version": "market-impact.pattern-pack.v1",
+  "version": "opened-development-policy-regime-v1",
+  "available_at": "2024-01-01T00:00:00Z",
+  "entries": [
+    {
+      "pattern_id": "coordinated-policy-transmission",
+      "mechanism": "A coordinated, operationally specified policy package can affect broad-equity discount rates, financing conditions, and risk appetite before slower fundamental effects become observable.",
+      "transmission_scales": ["policy-tool", "financial-conditions", "broad-market"],
+      "applicability_conditions": [
+        "the exact tools and responsible authorities are visible before entry",
+        "the proposed market link does not rely only on a later price move"
+      ],
+      "counterexamples": [
+        "implementation is unspecified or outside the relevant transmission channel",
+        "the package was already fully anticipated in positioning and prices"
+      ],
+      "evidence_refs": ["pre-event-monetary-and-market-policy-literature"]
+    },
+    {
+      "pattern_id": "breadth-and-flow-diffusion",
+      "mechanism": "Broad participation, turnover, and financing-flow changes can show whether an initial policy narrative is diffusing beyond a narrow group, but they do not establish persistence by themselves.",
+      "transmission_scales": ["participant-flow", "industry-breadth", "broad-market"],
+      "applicability_conditions": [
+        "breadth and flow observations were available before the decision cutoff",
+        "multiple industries or participant groups corroborate the change"
+      ],
+      "counterexamples": [
+        "a small number of high-weight sectors explains the move",
+        "flow measures are stale, revised later, or measured after the cutoff"
+      ],
+      "evidence_refs": ["pre-event-market-breadth-and-liquidity-literature"]
+    },
+    {
+      "pattern_id": "crowding-and-gap-risk",
+      "mechanism": "Rapid narrative adoption and leveraged participation can increase upside participation and reversal risk at the same time, so persistence and invalidation must be assessed together.",
+      "transmission_scales": ["narrative", "positioning", "liquidity", "horizon"],
+      "applicability_conditions": [
+        "the evidence shows unusually fast narrative or positioning change",
+        "the registered horizon spans a gap or liquidity discontinuity"
+      ],
+      "counterexamples": [
+        "participation remains gradual and financing conditions are stable",
+        "independent fundamental evidence dominates the short-term narrative channel"
+      ],
+      "evidence_refs": ["pre-event-crowding-and-gap-risk-literature"]
+    }
+  ],
+  "pack_id": "pattern-599afed92080807c49afe02f9b832009c6f6123a3efd622e47d1a832615d62d1"
+}

@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/method-skill-ablation-registration.schema.json",
+  "title": "Market Impact Method Skill Ablation Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "experiment_id",
+    "registered_at",
+    "provider_profile_id",
+    "provider_profile_hash",
+    "method_catalog_id",
+    "method_evidence_declaration_id",
+    "method_evidence_declaration_hash",
+    "evidence_pack_id",
+    "evidence_pack_hash",
+    "control_skills",
+    "treatment_skills",
+    "control_manifest_hashes",
+    "treatment_manifest_hashes",
+    "method_route_id",
+    "routing_context",
+    "replicate_count",
+    "run_order",
+    "common_input_hash",
+    "cpa_pricing",
+    "cost_estimate",
+    "outcomes_opened",
+    "inference_eligible",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.method-skill-ablation.v2"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^method-skill-ablation-[0-9a-f]{64}$"
+    },
+    "experiment_id": {"type": "string", "minLength": 1},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "provider_profile_id": {
+      "type": "string",
+      "pattern": "^model-provider-[0-9a-f]{64}$"
+    },
+    "provider_profile_hash": {"$ref": "#/$defs/hash"},
+    "method_catalog_id": {
+      "type": "string",
+      "pattern": "^method-skill-catalog-[0-9a-f]{64}$"
+    },
+    "method_evidence_declaration_id": {
+      "type": "string",
+      "pattern": "^method-evidence-[0-9a-f]{64}$"
+    },
+    "method_evidence_declaration_hash": {"$ref": "#/$defs/hash"},
+    "evidence_pack_id": {
+      "type": "string",
+      "pattern": "^evidence-pack-[0-9a-f]{64}$"
+    },
+    "evidence_pack_hash": {"$ref": "#/$defs/hash"},
+    "control_skills": {"$ref": "#/$defs/identifiers"},
+    "treatment_skills": {"$ref": "#/$defs/identifiers"},
+    "control_manifest_hashes": {"$ref": "#/$defs/hashes"},
+    "treatment_manifest_hashes": {"$ref": "#/$defs/hashes"},
+    "method_route_id": {
+      "type": "string",
+      "pattern": "^method-skill-route-[0-9a-f]{64}$"
+    },
+    "routing_context": {"$ref": "#/$defs/routing_context"},
+    "replicate_count": {"const": 3},
+    "run_order": {"const": "interleaved_by_replicate_then_arm"},
+    "common_input_hash": {"$ref": "#/$defs/hash"},
+    "cpa_pricing": {"$ref": "#/$defs/cpa_pricing"},
+    "cost_estimate": {"$ref": "#/$defs/cost_estimate"},
+    "outcomes_opened": {"type": "boolean"},
+    "inference_eligible": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "identifiers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "hashes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/hash"}
+    },
+    "routing_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market_state",
+        "narrative_salience",
+        "analysis_needs",
+        "available_evidence",
+        "outcomes_opened"
+      ],
+      "properties": {
+        "market_state": {
+          "enum": ["up_fast", "up_mild", "down_fast", "down_mild", "unclassified"]
+        },
+        "narrative_salience": {
+          "enum": [
+            "corroborated_obvious",
+            "authority_obvious",
+            "diffuse",
+            "contested",
+            "unavailable"
+          ]
+        },
+        "analysis_needs": {"$ref": "#/$defs/identifiers"},
+        "available_evidence": {"$ref": "#/$defs/identifiers"},
+        "outcomes_opened": {"type": "boolean"}
+      }
+    },
+    "cpa_pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "keeper_version",
+        "model",
+        "captured_at",
+        "pricing_style",
+        "prompt_microusd_per_million_tokens",
+        "completion_microusd_per_million_tokens",
+        "cache_read_microusd_per_million_tokens",
+        "cache_write_microusd_per_million_tokens",
+        "price_multiplier",
+        "rules",
+        "source_origin"
+      ],
+      "properties": {
+        "schema_version": {"const": "market-impact.cpa-pricing-snapshot.v1"},
+        "keeper_version": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "pricing_style": {"const": "openai"},
+        "prompt_microusd_per_million_tokens": {"type": "integer", "minimum": 0},
+        "completion_microusd_per_million_tokens": {"type": "integer", "minimum": 0},
+        "cache_read_microusd_per_million_tokens": {"type": "integer", "minimum": 0},
+        "cache_write_microusd_per_million_tokens": {"type": "integer", "minimum": 0},
+        "price_multiplier": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value", "multiplier"],
+            "properties": {
+              "key": {"type": "string", "minLength": 1},
+              "value": {"type": "string", "minLength": 1},
+              "multiplier": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"}
+            }
+          }
+        },
+        "source_origin": {"const": "http://127.0.0.1:8080"}
+      }
+    },
+    "cost_estimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_run_count",
+        "provider_request_upper_bound",
+        "raw_max_cost_microusd",
+        "safety_multiplier",
+        "guarded_max_cost_microusd",
+        "hard_cap_microusd",
+        "within_budget"
+      ],
+      "properties": {
+        "agent_run_count": {"const": 6},
+        "provider_request_upper_bound": {"type": "integer", "minimum": 6},
+        "raw_max_cost_microusd": {"type": "integer", "minimum": 0},
+        "safety_multiplier": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "guarded_max_cost_microusd": {"type": "integer", "minimum": 0},
+        "hard_cap_microusd": {"type": "integer", "minimum": 1, "maximum": 10000000},
+        "within_budget": {"const": true}
+      }
+    }
+  }
+}

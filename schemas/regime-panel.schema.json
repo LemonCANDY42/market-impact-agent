@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-panel.schema.json",
+  "title": "Private Regime Market Context Panel",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "dataset_id", "dataset_hash", "provider_id", "provider_version", "historical_vintage", "retrieved_at", "industry_taxonomy", "series", "proxy_resolution", "panel_hash", "panel_id"],
+  "properties": {
+    "schema_version": {"const": "market-impact.regime-panel.v1"},
+    "dataset_id": {"type": "string", "pattern": "^market-regime-dataset-[0-9a-f]{64}$"},
+    "dataset_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "provider_id": {"const": "tushare-http"},
+    "provider_version": {"const": "0.1.0"},
+    "historical_vintage": {"const": "retrieved_historical_not_original_vintage"},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "industry_taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "level", "fields", "rows", "retrieved_at", "content_hash"],
+      "properties": {
+        "source": {"const": "SW2021"},
+        "level": {"const": "L1"},
+        "fields": {
+          "type": "array",
+          "const": ["index_code", "industry_name", "parent_code", "level", "industry_code", "is_pub", "src"]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {"type": "string", "pattern": "^[0-9]{6}\\.SI$"},
+              {"type": "string", "minLength": 1},
+              {"type": "string"},
+              {"const": "L1"},
+              {"type": ["string", "number"]},
+              {"type": ["string", "number"]},
+              {"const": "SW2021"}
+            ],
+            "items": false,
+            "minItems": 7,
+            "maxItems": 7
+          }
+        },
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "series": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["series_id", "kind", "tushare_code", "source", "return_basis", "rows"],
+        "properties": {
+          "series_id": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["market", "industry"]},
+          "tushare_code": {"type": "string", "pattern": "^[0-9]{6}\\.(?:SH|SZ|SI)$"},
+          "source": {"enum": ["index_daily", "sw_daily"]},
+          "return_basis": {"const": "price"},
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["trade_date", "open", "close"],
+              "properties": {
+                "trade_date": {"type": "string", "pattern": "^(?:[0-9]{8}|[0-9]{4}-[0-9]{2}-[0-9]{2})$"},
+                "open": {"type": ["string", "number"]},
+                "close": {"type": ["string", "number"]}
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"kind": {"const": "market"}}},
+            "then": {
+              "properties": {
+                "source": {"const": "index_daily"},
+                "tushare_code": {"pattern": "^[0-9]{6}\\.(?:SH|SZ)$"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"kind": {"const": "industry"}}},
+            "then": {
+              "properties": {
+                "source": {"const": "sw_daily"},
+                "tushare_code": {"pattern": "^[0-9]{6}\\.SI$"}
+              }
+            }
+          }
+        ]
+      }
+    },
+    "proxy_resolution": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "array",
+        "prefixItems": [{"type": "string", "minLength": 1}, {"type": "string", "minLength": 1}],
+        "items": false,
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "panel_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "panel_id": {"type": "string", "pattern": "^regime-panel-[0-9a-f]{64}$"}
+  }
+}

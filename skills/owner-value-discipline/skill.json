@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Owner value discipline research method.",
+  "instructions_hash": "ee87c60a5f8a66eb8d8f623823d63b11e4ceb8b4fab7ba40513f8ac10cf3978d",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "b097b97f9866670230ea65856c8538cfa435bd5afd8f06cd93e2c7a79a0a9ffb",
+  "name": "owner-value-discipline",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/owner-value-discipline",
+  "version": "1.0.0"
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": "market-impact.common-crawl-locator.v1",
+  "collection": "CC-MAIN-2024-42",
+  "target_url": "http://www.csrc.gov.cn/csrc/c106311/c7508374/content.shtml",
+  "timestamp": "20241007171301",
+  "filename": "crawl-data/CC-MAIN-2024-42/segments/1727944253475.8/warc/CC-MAIN-20241007162146-20241007192146-00420.warc.gz",
+  "offset": 32516824,
+  "length": 26990,
+  "digest": "sha1:YYVTNGZB26RKJK3IYODO7KZC7ZIYJ2V7",
+  "http_status": 200,
+  "source_version_id": "common-crawl-record-6d22ba7fadccb88758b5e5e9bc5af49e5e3680fa197daaea78c52cf1b1093bab"
+}

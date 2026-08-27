@@ -183,6 +183,157 @@ def test_daily_uses_the_documented_unadjusted_contract() -> None:
     ]
 
 
+def test_index_and_industry_endpoints_use_source_bound_price_contracts() -> None:
+    index_fields = (
+        "ts_code",
+        "trade_date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "pre_close",
+        "change",
+        "pct_chg",
+        "vol",
+        "amount",
+    )
+    sw_fields = (
+        "ts_code",
+        "trade_date",
+        "name",
+        "open",
+        "low",
+        "high",
+        "close",
+        "change",
+        "pct_change",
+        "vol",
+        "amount",
+        "pe",
+        "pb",
+        "float_mv",
+        "total_mv",
+    )
+    classify_fields = (
+        "index_code",
+        "industry_name",
+        "parent_code",
+        "level",
+        "industry_code",
+        "is_pub",
+        "src",
+    )
+    transport = FakeTransport(
+        [
+            response(
+                index_fields,
+                [["000300.SH", "20260825", 10.0, 10.2, 9.9, 10.1, 10.0, 0.1, 1.0, 2.0, 3.0]],
+            ),
+            response(
+                sw_fields,
+                [
+                    [
+                        "801750.SI",
+                        "20260825",
+                        "计算机",
+                        10.0,
+                        9.9,
+                        10.2,
+                        10.1,
+                        0.1,
+                        1.0,
+                        2.0,
+                        3.0,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ]
+                ],
+            ),
+            response(
+                classify_fields,
+                [["801750.SI", "计算机", "", "L1", "710000", "1", "SW2021"]],
+            ),
+        ]
+    )
+    adapter = TushareHttpAdapter(TOKEN, transport=transport, clock=lambda: NOW)
+
+    index_table = adapter.fetch_index_daily(
+        tushare_code="000300.SH", start_date="20260825", end_date="20260825"
+    )
+    industry_table = adapter.fetch_sw_daily(
+        tushare_code="801750.SI", start_date="20260825", end_date="20260825"
+    )
+    classification = adapter.fetch_index_classification()
+
+    assert index_table.api_name == "index_daily"
+    assert industry_table.api_name == "sw_daily"
+    assert classification.rows[0][0] == "801750.SI"
+    assert [request["api_name"] for request in transport.requests] == [
+        "index_daily",
+        "sw_daily",
+        "index_classify",
+    ]
+
+
+def test_industry_ohlc_allows_only_one_basis_point_source_rounding() -> None:
+    fields = (
+        "ts_code",
+        "trade_date",
+        "name",
+        "open",
+        "low",
+        "high",
+        "close",
+        "change",
+        "pct_change",
+        "vol",
+        "amount",
+        "pe",
+        "pb",
+        "float_mv",
+        "total_mv",
+    )
+    rounded: list[object] = [
+        "801080.SI",
+        "20151230",
+        "电子",
+        3521.64,
+        3515.6,
+        3582.2,
+        3582.41,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        None,
+        None,
+        None,
+        None,
+    ]
+    materially_invalid: list[object] = [*rounded]
+    materially_invalid[6] = 3600.0
+    accepted = TushareHttpAdapter(
+        TOKEN,
+        transport=FakeTransport([response(fields, [rounded])]),
+        clock=lambda: NOW,
+    )
+    rejected = TushareHttpAdapter(
+        TOKEN,
+        transport=FakeTransport([response(fields, [materially_invalid])]),
+        clock=lambda: NOW,
+    )
+
+    assert accepted.fetch_sw_daily(
+        tushare_code="801080.SI", start_date="20151230", end_date="20151230"
+    ).rows
+    with pytest.raises(ValueError, match="high is below"):
+        rejected.fetch_sw_daily(
+            tushare_code="801080.SI", start_date="20151230", end_date="20151230"
+        )
+
+
 def test_adjustment_factor_and_stock_limit_use_source_bound_contracts() -> None:
     adj_fields = ("ts_code", "trade_date", "adj_factor")
     limit_fields = ("ts_code", "trade_date", "pre_close", "up_limit", "down_limit")
@@ -460,3 +611,62 @@ def test_date_ranges_are_validated_before_transport(start_date: str, end_date: s
         adapter.fetch_trade_calendar(exchange="SSE", start_date=start_date, end_date=end_date)
 
     assert transport.requests == []
+
+
+def test_margin_summary_uses_documented_exchange_and_daily_contract() -> None:
+    fields = (
+        "trade_date",
+        "exchange_id",
+        "rzye",
+        "rzmre",
+        "rzche",
+        "rqye",
+        "rqmcl",
+        "rzrqye",
+    )
+    rows: list[list[object]] = [
+        ["20240923", "SSE", 750_000.0, 10_000.0, 9_000.0, 5_000.0, 200.0, 755_000.0],
+        ["20240923", "SZSE", 680_000.0, 8_000.0, 7_500.0, 4_000.0, 100.0, 684_000.0],
+    ]
+    transport = FakeTransport([response(fields, rows)])
+    adapter = TushareHttpAdapter(TOKEN, transport=transport, clock=lambda: NOW)
+
+    table = adapter.fetch_margin_summary(start_date="20240920", end_date="20240923")
+
+    assert table.rows == tuple(tuple(row) for row in rows)
+    assert transport.requests == [
+        {
+            "api_name": "margin",
+            "token": TOKEN,
+            "params": {"end_date": "20240923", "start_date": "20240920"},
+            "fields": "trade_date,exchange_id,rzye,rzmre,rzche,rqye,rqmcl,rzrqye",
+        }
+    ]
+
+
+def test_margin_summary_rejects_unknown_exchange_or_negative_values() -> None:
+    fields = (
+        "trade_date",
+        "exchange_id",
+        "rzye",
+        "rzmre",
+        "rzche",
+        "rqye",
+        "rqmcl",
+        "rzrqye",
+    )
+    bad_exchange = TushareHttpAdapter(
+        TOKEN,
+        transport=FakeTransport([response(fields, [["20240923", "OTHER", 1, 1, 1, 1, 1, 1]])]),
+        clock=lambda: NOW,
+    )
+    with pytest.raises(ValueError, match="margin exchange_id"):
+        bad_exchange.fetch_margin_summary(start_date="20240920", end_date="20240923")
+
+    negative = TushareHttpAdapter(
+        TOKEN,
+        transport=FakeTransport([response(fields, [["20240923", "SSE", -1, 1, 1, 1, 1, 1]])]),
+        clock=lambda: NOW,
+    )
+    with pytest.raises(ValueError, match="rzye"):
+        negative.fetch_margin_summary(start_date="20240920", end_date="20240923")

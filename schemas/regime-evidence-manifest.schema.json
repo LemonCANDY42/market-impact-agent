@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-evidence-manifest.schema.json",
+  "title": "Market Regime Evidence Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "dataset_id",
+    "dataset_hash",
+    "registration_id",
+    "registration_hash",
+    "panel_id",
+    "panel_hash",
+    "outcomes_opened",
+    "records",
+    "licensed_payloads_committed",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.regime-evidence-manifest.v1"},
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-manifest-[0-9a-f]{64}$"
+    },
+    "dataset_id": {"type": "string", "pattern": "^market-regime-dataset-[0-9a-f]{64}$"},
+    "dataset_hash": {"$ref": "#/$defs/sha256"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^regime-study-registration-[0-9a-f]{64}$"
+    },
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "panel_id": {"type": "string", "pattern": "^regime-panel-[0-9a-f]{64}$"},
+    "panel_hash": {"$ref": "#/$defs/sha256"},
+    "outcomes_opened": {"type": "boolean"},
+    "records": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/record"}
+    },
+    "licensed_payloads_committed": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableTimestamp": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "format": "date-time"}
+      ]
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "case_keys",
+        "category",
+        "source_id",
+        "provider_id",
+        "publisher_id",
+        "source_ref",
+        "claim_id",
+        "lineage_id",
+        "title",
+        "occurred_at",
+        "published_at",
+        "source_updated_at",
+        "available_at",
+        "availability_basis",
+        "latency_model_id",
+        "latency_model_hash",
+        "authority_kind",
+        "authority_id",
+        "authority_at",
+        "authority_hash",
+        "content_hash",
+        "supersedes_id",
+        "license_scope"
+      ],
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "pattern": "^regime-evidence-record-[0-9a-f]{64}$"
+        },
+        "case_keys": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "category": {
+          "enum": [
+            "market_price",
+            "industry_price",
+            "official_context",
+            "macro_vintage",
+            "established_news",
+            "positioning_or_expectations",
+            "issuer_or_sector_fundamentals"
+          ]
+        },
+        "source_id": {"type": "string", "minLength": 1},
+        "provider_id": {"type": "string", "minLength": 1},
+        "publisher_id": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "format": "uri"},
+        "claim_id": {"type": "string", "minLength": 1},
+        "lineage_id": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "occurred_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "published_at": {"type": "string", "format": "date-time"},
+        "source_updated_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "available_at": {"type": "string", "format": "date-time"},
+        "availability_basis": {
+          "enum": ["actual_receipt", "source_reported", "modeled_latency"]
+        },
+        "latency_model_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "latency_model_hash": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
+        "authority_kind": {
+          "enum": ["actual_receipt", "provider_version", "verified_archive"]
+        },
+        "authority_id": {"type": "string", "minLength": 1},
+        "authority_at": {"type": "string", "format": "date-time"},
+        "authority_hash": {"$ref": "#/$defs/sha256"},
+        "content_hash": {"$ref": "#/$defs/sha256"},
+        "supersedes_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^regime-evidence-record-[0-9a-f]{64}$"}
+          ]
+        },
+        "license_scope": {
+          "enum": ["metadata_only", "public_document", "private_licensed"]
+        }
+      }
+    }
+  }
+}

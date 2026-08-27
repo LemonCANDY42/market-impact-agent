@@ -228,6 +228,18 @@ The historical run remains runtime evidence; it is not relabeled as a prospectiv
 
 ## Research Method Skills and four-arm ablation
 
+The separate evidence-gated public-investor method catalog and its first three-pair Luna xhigh
+diagnostic are documented in `docs/METHOD_SKILLS.md`. It adds five persona-free methods rather than
+five analyst identities. The Abqaiq recovery comparison changed only the appended
+`expectations-base-rates` Skill; both arms abstained 3/3 with complete evidence and Pattern Pack
+coverage. CPA observed 12 successful Provider requests costing $0.02276136, while the conservative
+project Usage Ledger recorded $0.030045. This is process and cost evidence only, not a method rank.
+The v2 registration corrects the original v1 `model_call_count=6` label to six Agent runs, prices
+input at the worst ordinary/cache rate, and records a separate Provider-request bound. It also
+replaces caller-reported evidence labels with a content-identified declaration of exact
+Evidence/Pattern refs. The original report remains immutable; a schema-validated correction and
+redacted content-addressed CPA event artifact preserve the repaired semantics.
+
 Stable work normally expressed as TradingAgents-style analyst, bull/bear, and risk roles or
 Vibe-Trading-style event teams is represented here as persona-free Research Method Skills.
 The committed catalog contains neutral point-in-time evidence discipline, event/market

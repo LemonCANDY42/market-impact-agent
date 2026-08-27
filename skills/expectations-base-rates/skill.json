@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Expectations base rates research method.",
+  "instructions_hash": "a2ce8c3fd7d8bb3e14e266f9a5da531df15effcd3ea418fdfbd2679dbc21f59b",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "fffb4cda7da7adafffdbb6277e3dfe9c10679f262c8315b0c876831ebdcf75a0",
+  "name": "expectations-base-rates",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/expectations-base-rates",
+  "version": "1.0.0"
+}

@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-study-registration.schema.json",
+  "title": "Market Regime Research Study Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "version",
+    "dataset_id",
+    "dataset_hash",
+    "method_catalog_id",
+    "method_catalog_hash",
+    "outcomes_opened",
+    "source_catalog",
+    "checkpoint_protocol",
+    "baseline_protocol",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.regime-study-registration.v1"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^regime-study-registration-[0-9a-f]{64}$"
+    },
+    "version": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "pattern": "^market-regime-dataset-[0-9a-f]{64}$"},
+    "dataset_hash": {"$ref": "#/$defs/sha256"},
+    "method_catalog_id": {
+      "type": "string",
+      "pattern": "^method-skill-catalog-[0-9a-f]{64}$"
+    },
+    "method_catalog_hash": {"$ref": "#/$defs/sha256"},
+    "outcomes_opened": {"type": "boolean"},
+    "source_catalog": {
+      "type": "array",
+      "minItems": 6,
+      "items": {"$ref": "#/$defs/source"}
+    },
+    "checkpoint_protocol": {"$ref": "#/$defs/checkpointProtocol"},
+    "baseline_protocol": {"$ref": "#/$defs/baselineProtocol"},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonemptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "sourceCategory": {
+      "enum": [
+        "market_price",
+        "industry_price",
+        "official_context",
+        "macro_vintage",
+        "established_news",
+        "positioning_or_expectations",
+        "issuer_or_sector_fundamentals",
+        "archive_discovery"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "category",
+        "provider_id",
+        "source_tier",
+        "acquisition_mode",
+        "point_in_time_authority",
+        "evidence_types",
+        "license_note"
+      ],
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "category": {"$ref": "#/$defs/sourceCategory"},
+        "provider_id": {"type": "string", "minLength": 1},
+        "source_tier": {
+          "enum": [
+            "official",
+            "regulated",
+            "primary",
+            "established_news",
+            "specialist",
+            "community",
+            "unverified"
+          ]
+        },
+        "acquisition_mode": {
+          "enum": [
+            "implemented_retrieved_history",
+            "implemented_authenticated_archive",
+            "implemented_source_publication_model",
+            "implemented_source_reported_version",
+            "planned_archive_capture",
+            "planned_entitlement_required",
+            "discovery_only"
+          ]
+        },
+        "point_in_time_authority": {"type": "boolean"},
+        "evidence_types": {"$ref": "#/$defs/nonemptyStrings"},
+        "license_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "checkpointProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timezone",
+        "decision_time_local",
+        "price_lookback_sessions",
+        "news_lookback_calendar_days",
+        "maximum_age_calendar_days"
+      ],
+      "properties": {
+        "timezone": {"const": "Asia/Shanghai"},
+        "decision_time_local": {
+          "type": "string",
+          "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
+        },
+        "price_lookback_sessions": {"type": "integer", "minimum": 1},
+        "news_lookback_calendar_days": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["monthly", "weekly", "event_then_weekly"],
+          "properties": {
+            "monthly": {"type": "integer", "minimum": 1},
+            "weekly": {"type": "integer", "minimum": 1},
+            "event_then_weekly": {"type": "integer", "minimum": 1}
+          }
+        },
+        "maximum_age_calendar_days": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "official_context",
+            "macro_vintage",
+            "positioning_or_expectations",
+            "issuer_or_sector_fundamentals"
+          ],
+          "properties": {
+            "official_context": {"type": "integer", "minimum": 1},
+            "macro_vintage": {"type": "integer", "minimum": 1},
+            "positioning_or_expectations": {"type": "integer", "minimum": 1},
+            "issuer_or_sector_fundamentals": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "baselineProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annualization_sessions",
+        "minimum_risk_sessions",
+        "risk_free_rate_annual",
+        "cvar_confidence",
+        "transaction_cost_bps_one_way",
+        "rebalance_frequency",
+        "momentum_lookback_sessions",
+        "momentum_top_k",
+        "strategies"
+      ],
+      "properties": {
+        "annualization_sessions": {"type": "integer", "minimum": 1},
+        "minimum_risk_sessions": {"type": "integer", "minimum": 2},
+        "risk_free_rate_annual": {
+          "type": "string",
+          "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"
+        },
+        "cvar_confidence": {"type": "string", "pattern": "^0\\.[0-9]+$"},
+        "transaction_cost_bps_one_way": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+        },
+        "rebalance_frequency": {"const": "monthly_first_session"},
+        "momentum_lookback_sessions": {"type": "integer", "minimum": 1},
+        "momentum_top_k": {"type": "integer", "minimum": 1},
+        "strategies": {
+          "const": [
+            "cash",
+            "primary_buy_and_hold",
+            "equal_sector_buy_and_hold",
+            "lagged_sector_momentum"
+          ]
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "source_ids",
+        "minimum_records_per_checkpoint",
+        "minimum_distinct_sources",
+        "authenticated_availability_required"
+      ],
+      "properties": {
+        "category": {"$ref": "#/$defs/sourceCategory"},
+        "source_ids": {"$ref": "#/$defs/nonemptyStrings"},
+        "minimum_records_per_checkpoint": {"type": "integer", "minimum": 1},
+        "minimum_distinct_sources": {"type": "integer", "minimum": 1},
+        "authenticated_availability_required": {"type": "boolean"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_key",
+        "decision_schedule",
+        "analysis_needs",
+        "candidate_method_skills",
+        "query_terms",
+        "evaluation_horizons",
+        "source_requirements"
+      ],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "decision_schedule": {
+          "enum": ["event_then_weekly", "weekly", "monthly"]
+        },
+        "analysis_needs": {"$ref": "#/$defs/nonemptyStrings"},
+        "candidate_method_skills": {"$ref": "#/$defs/nonemptyStrings"},
+        "query_terms": {"$ref": "#/$defs/nonemptyStrings"},
+        "evaluation_horizons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["immediate_5d", "near_term_12w", "full_case"]}
+        },
+        "source_requirements": {
+          "type": "array",
+          "minItems": 6,
+          "items": {"$ref": "#/$defs/requirement"}
+        }
+      }
+    }
+  }
+}

@@ -9,6 +9,10 @@ Official contract references: [`stock_basic`](https://tushare.pro/document/1?doc
 [`daily`](https://tushare.pro/document/2?doc_id=27). The hardened v2 bundle additionally
 uses [`adj_factor`](https://tushare.pro/document/2?doc_id=28) and
 [`stk_limit`](https://tushare.pro/document/2?doc_id=183).
+The separate research-only market-context panel uses
+[`index_daily`](https://tushare.pro/document/2?doc_id=95),
+[`index_classify`](https://tushare.pro/document/2?doc_id=181), and
+[`sw_daily`](https://tushare.pro/document/2?doc_id=327).
 
 ## Accepted contract surface
 
@@ -27,6 +31,16 @@ contract. It requests only these bounded interfaces and fields:
 - `stk_limit`: the same instrument/date window with source `pre_close`, `up_limit`, and
   `down_limit`.
 
+The research-only regime adapter surface additionally permits bounded `index_daily` and `sw_daily`
+queries for the registered market and SW2021 Level-1 price indices, plus `index_classify` to verify
+the source taxonomy. Regime capture first reads the complete `SW2021`/`L1` classification table and
+requires every registered proxy's source, code, and Chinese industry name to match it before making
+any `sw_daily` request. The normalized taxonomy table content hash and retrieval time are bound into
+the panel. These rows are stored in a separate private content-identified panel, never in
+the stock Data Snapshot and never as Agent-visible evidence. The source rows remain unchanged; its
+OHLC coherence check tolerates only source rounding discrepancies up to one basis point and rejects
+larger inconsistencies. See `MARKET_REGIME_RESEARCH.md`.
+
 Responses must have the exact requested field set, scalar rectangular rows, valid dates,
 matching query identities, unique primary keys, coherent OHLC values, and fewer than the
 documented 6,000-row response ceiling. A `trade_cal` response must also contain exactly one
@@ -34,6 +48,12 @@ row for every natural date in its requested inclusive interval; omitting the sam
 both calendar and daily responses therefore cannot hide a gap. Fields and rows are normalized
 before hashing, so transport order does not change table identity. The token is excluded from
 hashes, returned objects, error text, examples, and committed artifacts.
+
+The regime registry accepts only `SW2021` proxies with unique six-digit `.SI` Tushare codes. A
+missing, duplicate, unsupported, or taxonomy-mismatched proxy fails capture; no industry proxy is
+silently omitted. A regime panel likewise accepts only the fixed `tushare-http` Provider/version,
+the declared historical-vintage label, price-return `index_daily` market series, price-return
+`sw_daily` industry series, and a complete catalog-to-series mapping.
 
 ## Listing snapshot and universe semantics
 

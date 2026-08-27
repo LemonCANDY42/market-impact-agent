@@ -36,8 +36,14 @@ AGENT_SCHEMA_FILES = (
     "method-quality-outcome-opening.schema.json",
     "method-quality-clustered-estimate.schema.json",
     "common-crawl-locator.schema.json",
+    "internet-archive-locator.schema.json",
     "method-development-case.schema.json",
     "news-observation-batch.schema.json",
+    "method-skill-catalog.schema.json",
+    "method-evidence-declaration.schema.json",
+    "method-skill-ablation-registration.schema.json",
+    "method-skill-ablation-audit-correction.schema.json",
+    "regime-agent-experiment-report.schema.json",
 )
 
 

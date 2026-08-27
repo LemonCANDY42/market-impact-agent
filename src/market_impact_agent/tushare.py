@@ -48,6 +48,55 @@ _DAILY_FIELDS = (
 )
 _ADJ_FACTOR_FIELDS = ("ts_code", "trade_date", "adj_factor")
 _STK_LIMIT_FIELDS = ("ts_code", "trade_date", "pre_close", "up_limit", "down_limit")
+_INDEX_DAILY_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "pre_close",
+    "change",
+    "pct_chg",
+    "vol",
+    "amount",
+)
+_SW_DAILY_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "name",
+    "open",
+    "low",
+    "high",
+    "close",
+    "change",
+    "pct_change",
+    "vol",
+    "amount",
+    "pe",
+    "pb",
+    "float_mv",
+    "total_mv",
+)
+_INDEX_CLASSIFY_FIELDS = (
+    "index_code",
+    "industry_name",
+    "parent_code",
+    "level",
+    "industry_code",
+    "is_pub",
+    "src",
+)
+_MARGIN_FIELDS = (
+    "trade_date",
+    "exchange_id",
+    "rzye",
+    "rzmre",
+    "rzche",
+    "rqye",
+    "rqmcl",
+    "rzrqye",
+)
 _LIST_STATUSES = ("L", "D", "P", "G")
 _EXCHANGE_SUFFIXES = {"SSE": "XSHG", "SZSE": "XSHE"}
 _ROW_LIMIT = 6000
@@ -256,6 +305,118 @@ class TushareHttpAdapter:
             down_limit = _number(row[indexes["down_limit"]], "down_limit", positive=True)
             if not down_limit < pre_close < up_limit:
                 raise ValueError("stk_limit requires down_limit < pre_close < up_limit")
+        return table
+
+    def fetch_index_daily(
+        self,
+        *,
+        tushare_code: str,
+        start_date: str,
+        end_date: str,
+    ) -> TushareTable:
+        return self._fetch_market_index_table(
+            api_name="index_daily",
+            tushare_code=tushare_code,
+            start_date=start_date,
+            end_date=end_date,
+            fields=_INDEX_DAILY_FIELDS,
+        )
+
+    def fetch_sw_daily(
+        self,
+        *,
+        tushare_code: str,
+        start_date: str,
+        end_date: str,
+    ) -> TushareTable:
+        return self._fetch_market_index_table(
+            api_name="sw_daily",
+            tushare_code=tushare_code,
+            start_date=start_date,
+            end_date=end_date,
+            fields=_SW_DAILY_FIELDS,
+        )
+
+    def fetch_index_classification(
+        self,
+        *,
+        source: str = "SW2021",
+        level: str = "L1",
+    ) -> TushareTable:
+        if source not in {"SW2014", "SW2021"}:
+            raise ValueError("index classification source must be SW2014 or SW2021")
+        if level not in {"L1", "L2", "L3"}:
+            raise ValueError("index classification level must be L1, L2, or L3")
+        table = self._query(
+            api_name="index_classify",
+            params={"level": level, "src": source},
+            fields=_INDEX_CLASSIFY_FIELDS,
+        )
+        _require_unique_rows(table, key_fields=("index_code",))
+        indexes = {field: table.fields.index(field) for field in table.fields}
+        for row in table.rows:
+            if _string(row[indexes["level"]], "level") != level:
+                raise ValueError("index_classify level conflicts with query")
+            if _string(row[indexes["src"]], "src") != source:
+                raise ValueError("index_classify src conflicts with query")
+        return table
+
+    def fetch_margin_summary(
+        self,
+        *,
+        start_date: str,
+        end_date: str,
+    ) -> TushareTable:
+        """Fetch the documented daily exchange-level margin summary."""
+        _date_range(start_date, end_date)
+        table = self._query(
+            api_name="margin",
+            params={"start_date": start_date, "end_date": end_date},
+            fields=_MARGIN_FIELDS,
+        )
+        _require_unique_rows(table, key_fields=("trade_date", "exchange_id"))
+        indexes = {field: table.fields.index(field) for field in table.fields}
+        start = _date(start_date, "start_date")
+        end = _date(end_date, "end_date")
+        for row in table.rows:
+            trade_date = _date(_string(row[indexes["trade_date"]], "trade_date"), "trade_date")
+            if not start <= trade_date <= end:
+                raise ValueError("margin trade_date falls outside the requested range")
+            exchange_id = _string(row[indexes["exchange_id"]], "exchange_id")
+            if exchange_id not in {"SSE", "SZSE", "BSE"}:
+                raise ValueError("margin exchange_id is unsupported")
+            for field in _MARGIN_FIELDS[2:]:
+                _number(row[indexes[field]], field, positive=False)
+        return table
+
+    def _fetch_market_index_table(
+        self,
+        *,
+        api_name: str,
+        tushare_code: str,
+        start_date: str,
+        end_date: str,
+        fields: tuple[str, ...],
+    ) -> TushareTable:
+        _date_range(start_date, end_date)
+        if not tushare_code or len(tushare_code) > 24 or "." not in tushare_code:
+            raise ValueError("market index tushare_code is invalid")
+        table = self._query(
+            api_name=api_name,
+            params={
+                "ts_code": tushare_code,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            fields=fields,
+        )
+        _require_unique_rows(table, key_fields=("ts_code", "trade_date"))
+        _validate_market_index_table(
+            table,
+            tushare_code=tushare_code,
+            start_date=_date(start_date, "start_date"),
+            end_date=_date(end_date, "end_date"),
+        )
         return table
 
     def _fetch_dated_instrument_table(
@@ -647,6 +808,10 @@ def tushare_table_content_hash(
         "daily": _DAILY_FIELDS,
         "adj_factor": _ADJ_FACTOR_FIELDS,
         "stk_limit": _STK_LIMIT_FIELDS,
+        "index_daily": _INDEX_DAILY_FIELDS,
+        "sw_daily": _SW_DAILY_FIELDS,
+        "index_classify": _INDEX_CLASSIFY_FIELDS,
+        "margin": _MARGIN_FIELDS,
     }.get(api_name)
     if expected_fields is None or fields != expected_fields:
         raise ValueError("unsupported Tushare table identity contract")
@@ -672,6 +837,17 @@ def _canonical_source_row(
     row: tuple[object, ...],
 ) -> tuple[object, ...]:
     values = dict(zip(fields, row, strict=True))
+    if api_name in {"index_daily", "sw_daily", "index_classify"}:
+        return tuple(_canonical_generic_value(values[field], field) for field in fields)
+    if api_name == "margin":
+        return (
+            _date(_string(values["trade_date"], "trade_date"), "trade_date").isoformat(),
+            _string(values["exchange_id"], "exchange_id"),
+            *(
+                _canonical_six_place_decimal(values[field], field, positive=False)
+                for field in _MARGIN_FIELDS[2:]
+            ),
+        )
     if api_name == "stock_basic":
         return (
             _string(values["ts_code"], "ts_code"),
@@ -711,6 +887,22 @@ def _canonical_source_row(
         _canonical_six_place_decimal(values["vol"], "vol", positive=False),
         _canonical_six_place_decimal(values["amount"], "amount", positive=False),
     )
+
+
+def _canonical_generic_value(value: object, field_name: str) -> object:
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            number = Decimal(str(value))
+        except InvalidOperation as exc:
+            raise ValueError(f"{field_name} must be finite") from exc
+        if not number.is_finite():
+            raise ValueError(f"{field_name} must be finite")
+        return format(number.normalize(), "f")
+    raise ValueError(f"{field_name} contains an unsupported JSON value")
 
 
 def _canonical_optional_date(value: object, field_name: str) -> str | None:
@@ -818,6 +1010,35 @@ def _validate_dated_instrument_table(
             raise ValueError(f"{table.api_name} trade_date is outside the query range")
         for field in positive_fields:
             _number(row[indexes[field]], field, positive=True)
+
+
+def _validate_market_index_table(
+    table: TushareTable,
+    *,
+    tushare_code: str,
+    start_date: date,
+    end_date: date,
+) -> None:
+    indexes = {field: table.fields.index(field) for field in table.fields}
+    for row in table.rows:
+        if _string(row[indexes["ts_code"]], "ts_code") != tushare_code:
+            raise ValueError(f"{table.api_name} ts_code conflicts with the query")
+        trade_date = _date(_string(row[indexes["trade_date"]], "trade_date"), "trade_date")
+        if not start_date <= trade_date <= end_date:
+            raise ValueError(f"{table.api_name} trade_date is outside the query range")
+        prices = {
+            field: _number(row[indexes[field]], field, positive=True)
+            for field in ("open", "high", "low", "close")
+        }
+        rounding_tolerance = max(prices.values()) * Decimal("0.0001")
+        if prices["high"] + rounding_tolerance < max(
+            prices["open"], prices["low"], prices["close"]
+        ):
+            raise ValueError(f"{table.api_name} high is below another OHLC price")
+        if prices["low"] - rounding_tolerance > min(
+            prices["open"], prices["high"], prices["close"]
+        ):
+            raise ValueError(f"{table.api_name} low is above another OHLC price")
 
 
 def _listing_payload(listing: StockListing) -> dict[str, object]:

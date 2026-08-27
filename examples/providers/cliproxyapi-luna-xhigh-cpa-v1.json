@@ -1,0 +1,32 @@
+{
+  "schema_version": "market-impact.model-provider-profile.v1",
+  "adapter_kind": "cliproxyapi-openai-compatible",
+  "provider_id": "cliproxyapi-openai-compatible",
+  "origin": "http://127.0.0.1:8317",
+  "api_path": "/v1/chat/completions",
+  "models_path": "/v1/models",
+  "model": "gpt-5.6-luna",
+  "credential_env": "MARKET_IMPACT_CLIPROXY_API_KEY",
+  "context_window_tokens": 272000,
+  "reserved_output_tokens": 8192,
+  "temperature": 0.1,
+  "top_p": 0.95,
+  "reasoning_effort": "xhigh",
+  "budget": {
+    "max_turns": 8,
+    "max_tool_calls": 12,
+    "max_input_tokens": 500000,
+    "max_output_tokens": 32768,
+    "max_wall_seconds": 600.0,
+    "max_result_bytes": 256000,
+    "max_estimated_cost_microusd": 200000
+  },
+  "pricing": {
+    "pricing_id": "cpa-usage-keeper-gpt-5.6-luna-v1.14.5-2026-08-27",
+    "input_microusd_per_million_tokens": 200000,
+    "output_microusd_per_million_tokens": 1200000
+  },
+  "max_attempts": 2,
+  "retry_backoff_seconds": 0.25,
+  "profile_id": "model-provider-52b4bf4a43f9acedeca767f9cce37a732856bf52b0e9da07665d88ffe8ce79b3"
+}

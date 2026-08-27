@@ -12,12 +12,13 @@ from http.client import HTTPMessage
 from pathlib import Path
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from market_impact_agent.domain import require_aware
 
 COMMON_CRAWL_DATA_ENDPOINT = "https://data.commoncrawl.org"
+COMMON_CRAWL_INDEX_ENDPOINT = "https://index.commoncrawl.org"
 COMMON_CRAWL_PROVIDER_ID = "common-crawl-warc"
 COMMON_CRAWL_ARCHIVE_ID = "common-crawl"
 COMMON_CRAWL_ADAPTER_VERSION = "1.0.0"
@@ -27,6 +28,7 @@ _COLLECTION_PATTERN = re.compile(r"CC-MAIN-[0-9]{4}-[0-9]{2}")
 _DIGEST_PATTERN = re.compile(r"sha1:[A-Z2-7]{32}")
 _MAX_COMPRESSED_RECORD_BYTES = 20 * 1024 * 1024
 _MAX_DECOMPRESSED_RECORD_BYTES = 20 * 1024 * 1024
+_MAX_INDEX_RESPONSE_BYTES = 10 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +121,15 @@ class RangeTransport(Protocol):
     ) -> RangeResponse: ...
 
 
+class IndexTransport(Protocol):
+    def __call__(
+        self,
+        endpoint: str,
+        target_url: str,
+        timeout_seconds: float,
+    ) -> str: ...
+
+
 @dataclass(frozen=True, slots=True)
 class VerifiedArchiveRecord:
     provider_id: str
@@ -179,6 +190,62 @@ class VerifiedArchiveRecord:
             "payload_retained_in_report": False,
             "execution_capability": "none",
         }
+
+
+class CommonCrawlIndexAdapter:
+    def __init__(
+        self,
+        *,
+        index_endpoint: str = COMMON_CRAWL_INDEX_ENDPOINT,
+        timeout_seconds: float = 30.0,
+        transport: IndexTransport | None = None,
+    ) -> None:
+        if index_endpoint != COMMON_CRAWL_INDEX_ENDPOINT:
+            raise ValueError("Common Crawl index endpoint must remain the official HTTPS origin")
+        if timeout_seconds <= 0:
+            raise ValueError("Common Crawl timeout_seconds must be positive")
+        self._index_endpoint = index_endpoint
+        self._timeout_seconds = timeout_seconds
+        self._transport = _index_get if transport is None else transport
+
+    def locate_latest(
+        self,
+        *,
+        collection: str,
+        target_url: str,
+        not_after: datetime,
+    ) -> CommonCrawlLocator | None:
+        if _COLLECTION_PATTERN.fullmatch(collection) is None:
+            raise ValueError("Common Crawl collection must be a fixed CC-MAIN identifier")
+        parsed_target = urlparse(target_url)
+        if parsed_target.scheme not in {"http", "https"} or not parsed_target.netloc:
+            raise ValueError("Common Crawl target_url must be an absolute HTTP(S) URL")
+        require_aware(not_after, "Common Crawl index cutoff")
+        endpoint = f"{self._index_endpoint}/{collection}-index"
+        raw = self._transport(endpoint, target_url, self._timeout_seconds)
+        candidates: list[CommonCrawlLocator] = []
+        for line_number, line in enumerate(raw.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Common Crawl index line {line_number} is not valid JSON"
+                ) from exc
+            if not isinstance(payload, dict):
+                raise ValueError(f"Common Crawl index line {line_number} must be an object")
+            typed_payload = cast(dict[str, object], payload)
+            if "message" in typed_payload:
+                if len(typed_payload) == 1 and isinstance(typed_payload["message"], str):
+                    continue
+                raise ValueError("Common Crawl index message has unexpected fields")
+            locator = _locator_from_index_record(collection, target_url, typed_payload)
+            if locator.http_status == 200 and locator.captured_at <= not_after:
+                candidates.append(locator)
+        if not candidates:
+            return None
+        return max(candidates, key=lambda item: (item.captured_at, item.source_version_id))
 
 
 class CommonCrawlArchiveAdapter:
@@ -378,6 +445,96 @@ def _range_get(url: str, start: int, end: int, timeout_seconds: float) -> RangeR
             )
     except (HTTPError, URLError, TimeoutError) as exc:
         raise RuntimeError("Common Crawl range request failed") from exc
+
+
+def _index_get(endpoint: str, target_url: str, timeout_seconds: float) -> str:
+    query = urlencode(
+        {
+            "url": target_url,
+            "output": "json",
+            "matchType": "exact",
+            "filter": "status:200",
+        }
+    )
+    request = Request(
+        f"{endpoint}?{query}",
+        headers={
+            "Accept": "application/x-ndjson, application/json",
+            "User-Agent": (
+                "market-impact-agent/0.1 (+https://github.com/LemonCANDY42/market-impact-agent)"
+            ),
+        },
+        method="GET",
+    )
+    try:
+        with build_opener(_NoRedirectHandler()).open(
+            request,
+            timeout=timeout_seconds,
+        ) as response:
+            if response.status != 200:
+                raise RuntimeError("Common Crawl index request did not return HTTP 200")
+            body = response.read(_MAX_INDEX_RESPONSE_BYTES + 1)
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError("Common Crawl index request failed") from exc
+    if len(body) > _MAX_INDEX_RESPONSE_BYTES:
+        raise ValueError("Common Crawl index response exceeds the bounded contract")
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Common Crawl index response is not UTF-8") from exc
+
+
+def _locator_from_index_record(
+    collection: str,
+    requested_url: str,
+    payload: Mapping[str, object],
+) -> CommonCrawlLocator:
+    required = {"timestamp", "url", "status", "digest", "length", "offset", "filename"}
+    if not required.issubset(payload):
+        raise ValueError("Common Crawl index record is missing authority-bearing fields")
+    captured_url = _index_string(payload, "url")
+    if not _same_archive_target(requested_url, captured_url):
+        raise ValueError("Common Crawl index returned a different target URL")
+    return CommonCrawlLocator(
+        collection=collection,
+        target_url=captured_url,
+        timestamp=_index_string(payload, "timestamp"),
+        filename=_index_string(payload, "filename"),
+        offset=_index_integer(payload, "offset"),
+        length=_index_integer(payload, "length"),
+        digest=_index_string(payload, "digest"),
+        http_status=_index_integer(payload, "status"),
+    )
+
+
+def _same_archive_target(requested_url: str, captured_url: str) -> bool:
+    requested = urlparse(requested_url)
+    captured = urlparse(captured_url)
+    return (
+        requested.scheme in {"http", "https"}
+        and captured.scheme in {"http", "https"}
+        and requested.netloc.casefold() == captured.netloc.casefold()
+        and requested.path == captured.path
+        and requested.params == captured.params
+        and requested.query == captured.query
+        and requested.fragment == captured.fragment
+    )
+
+
+def _index_string(payload: Mapping[str, object], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Common Crawl index {key} must be a non-empty string")
+    return value
+
+
+def _index_integer(payload: Mapping[str, object], key: str) -> int:
+    value = payload.get(key)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and re.fullmatch(r"0|[1-9][0-9]*", value):
+        return int(value)
+    raise ValueError(f"Common Crawl index {key} must be a canonical integer")
 
 
 def _validate_range_response(response: RangeResponse, locator: CommonCrawlLocator) -> None:

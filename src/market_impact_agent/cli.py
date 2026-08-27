@@ -8,6 +8,7 @@ import platform
 import sys
 from collections.abc import Iterable, Sequence
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -34,7 +35,10 @@ from market_impact_agent.agent_runtime import (
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.agent_study import load_agent_phase2_preregistration
 from market_impact_agent.archive_authority import (
+    COMMON_CRAWL_LOCATOR_SCHEMA,
     CommonCrawlArchiveAdapter,
+    CommonCrawlIndexAdapter,
+    VerifiedArchiveRecord,
     load_common_crawl_locator,
 )
 from market_impact_agent.backtests import (
@@ -51,12 +55,28 @@ from market_impact_agent.energy_monitor import EnergySourceMonitor
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.evidence_freeze import freeze_due_evidence_packs
 from market_impact_agent.frozen_research import FrozenResearchRepository
+from market_impact_agent.internet_archive import (
+    INTERNET_ARCHIVE_LOCATOR_SCHEMA,
+    InternetArchiveAdapter,
+    InternetArchiveIndexAdapter,
+    VerifiedInternetArchiveRecord,
+    load_internet_archive_locator,
+)
+from market_impact_agent.market_regimes import (
+    capture_regime_panel,
+    evaluate_regime_dataset,
+    load_market_regime_dataset,
+    validate_regime_panel,
+    write_regime_panel,
+    write_regime_report,
+)
 from market_impact_agent.method_benchmark import (
     load_historical_evidence_manifest,
     load_masked_agent_input_manifest,
     load_method_quality_benchmark,
     load_method_quality_evaluation_specification,
 )
+from market_impact_agent.method_skills import load_method_skill_catalog
 from market_impact_agent.model_provider import (
     ModelProviderFactory,
     default_model_provider_profile_path,
@@ -66,6 +86,11 @@ from market_impact_agent.observations import (
     ValidatedObservationBundle,
     validate_prediction_market_batch,
     write_prediction_market_batch,
+)
+from market_impact_agent.official_archive import (
+    extract_csrc_regime_evidence,
+    extract_nbs_macro_vintage,
+    extract_state_council_regime_evidence,
 )
 from market_impact_agent.prediction_markets import (
     KalshiPublicAdapter,
@@ -77,6 +102,21 @@ from market_impact_agent.prediction_markets import (
     world_monitor_provider_manifest,
 )
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
+from market_impact_agent.regime_evidence import (
+    RegimeEvidenceManifest,
+    load_regime_evidence_manifest,
+    load_regime_evidence_record,
+    qualify_regime_evidence,
+    write_regime_evidence_manifest,
+    write_regime_evidence_qualification_report,
+    write_regime_evidence_record,
+)
+from market_impact_agent.regime_study import (
+    assess_regime_study_readiness,
+    evaluate_regime_study_baselines,
+    load_regime_study_registration,
+    write_regime_study_baseline_report,
+)
 from market_impact_agent.registry import ProviderRegistry
 from market_impact_agent.research_methods import load_research_method_catalog
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
@@ -135,6 +175,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Range-fetch and verify one fixed Common Crawl WARC record",
     )
     common_crawl_parser.add_argument("--locator", required=True, type=Path)
+    common_crawl_locate_parser = archive_subparsers.add_parser(
+        "common-crawl-locate",
+        help="Locate the latest exact Common Crawl capture before a fixed cutoff",
+    )
+    common_crawl_locate_parser.add_argument("--collection", required=True)
+    common_crawl_locate_parser.add_argument("--url", required=True)
+    common_crawl_locate_parser.add_argument("--not-after", required=True, type=_aware_timestamp)
+    internet_archive_parser = archive_subparsers.add_parser(
+        "internet-archive-verify",
+        help="Fetch and digest-verify one fixed Internet Archive replay",
+    )
+    internet_archive_parser.add_argument("--locator", required=True, type=Path)
+    internet_archive_locate_parser = archive_subparsers.add_parser(
+        "internet-archive-locate",
+        help="Locate the latest exact Internet Archive capture before a fixed cutoff",
+    )
+    internet_archive_locate_parser.add_argument("--url", required=True)
+    internet_archive_locate_parser.add_argument("--not-after", required=True, type=_aware_timestamp)
 
     prediction_parser = subparsers.add_parser(
         "prediction", help="Capture or validate read-only prediction-market observations"
@@ -179,6 +237,81 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Validate one local Tushare data bundle"
     )
     tushare_validate_parser.add_argument("path", type=Path)
+
+    regime_parser = subparsers.add_parser(
+        "regime", help="Build research-only market-state and sector context diagnostics"
+    )
+    regime_subparsers = regime_parser.add_subparsers(dest="regime_command", required=True)
+    regime_validate_parser = regime_subparsers.add_parser(
+        "validate", help="Validate one public retrospective case registry"
+    )
+    regime_validate_parser.add_argument("--dataset", required=True, type=Path)
+    regime_capture_parser = regime_subparsers.add_parser(
+        "capture", help="Capture a private Tushare index and industry panel"
+    )
+    regime_capture_parser.add_argument("--dataset", required=True, type=Path)
+    regime_evaluate_parser = regime_subparsers.add_parser(
+        "evaluate", help="Evaluate three frozen return windows without Agent access"
+    )
+    regime_evaluate_parser.add_argument("--dataset", required=True, type=Path)
+    regime_evaluate_parser.add_argument("--panel", required=True, type=Path)
+    regime_study_validate_parser = regime_subparsers.add_parser(
+        "study-validate", help="Validate rich-source and long-horizon study registration"
+    )
+    regime_study_validate_parser.add_argument("--dataset", required=True, type=Path)
+    regime_study_validate_parser.add_argument("--method-catalog", required=True, type=Path)
+    regime_study_validate_parser.add_argument("--registration", required=True, type=Path)
+    regime_study_evaluate_parser = regime_subparsers.add_parser(
+        "study-evaluate", help="Evaluate frozen long-horizon market and rotation baselines"
+    )
+    regime_study_evaluate_parser.add_argument("--dataset", required=True, type=Path)
+    regime_study_evaluate_parser.add_argument("--method-catalog", required=True, type=Path)
+    regime_study_evaluate_parser.add_argument("--registration", required=True, type=Path)
+    regime_study_evaluate_parser.add_argument("--panel", required=True, type=Path)
+    regime_evidence_capture_parser = regime_subparsers.add_parser(
+        "evidence-capture-csrc",
+        help="Verify one archived CSRC page and store its public evidence metadata",
+    )
+    regime_evidence_capture_parser.add_argument("--locator", required=True, type=Path)
+    regime_evidence_capture_parser.add_argument("--case-key", required=True, action="append")
+    regime_evidence_capture_parser.add_argument("--claim-id", required=True)
+    regime_evidence_capture_parser.add_argument("--lineage-id", required=True)
+    regime_state_council_capture_parser = regime_subparsers.add_parser(
+        "evidence-capture-state-council",
+        help="Verify one archived State Council page and store its public evidence metadata",
+    )
+    regime_state_council_capture_parser.add_argument("--locator", required=True, type=Path)
+    regime_state_council_capture_parser.add_argument("--case-key", required=True, action="append")
+    regime_state_council_capture_parser.add_argument("--claim-id", required=True)
+    regime_state_council_capture_parser.add_argument("--lineage-id", required=True)
+    regime_nbs_capture_parser = regime_subparsers.add_parser(
+        "evidence-capture-nbs",
+        help="Verify one archived NBS release and store its public macro-vintage metadata",
+    )
+    regime_nbs_capture_parser.add_argument("--locator", required=True, type=Path)
+    regime_nbs_capture_parser.add_argument("--case-key", required=True, action="append")
+    regime_nbs_capture_parser.add_argument("--claim-id", required=True)
+    regime_nbs_capture_parser.add_argument("--lineage-id", required=True)
+    regime_evidence_manifest_parser = regime_subparsers.add_parser(
+        "evidence-manifest",
+        help="Bind evidence records to one frozen dataset, registration, and market panel",
+    )
+    regime_evidence_manifest_parser.add_argument("--dataset", required=True, type=Path)
+    regime_evidence_manifest_parser.add_argument("--method-catalog", required=True, type=Path)
+    regime_evidence_manifest_parser.add_argument("--registration", required=True, type=Path)
+    regime_evidence_manifest_parser.add_argument("--panel", required=True, type=Path)
+    regime_evidence_manifest_parser.add_argument(
+        "--record", required=True, action="append", type=Path
+    )
+    regime_evidence_qualify_parser = regime_subparsers.add_parser(
+        "evidence-qualify",
+        help="Evaluate every frozen checkpoint against the registered source minima",
+    )
+    regime_evidence_qualify_parser.add_argument("--dataset", required=True, type=Path)
+    regime_evidence_qualify_parser.add_argument("--method-catalog", required=True, type=Path)
+    regime_evidence_qualify_parser.add_argument("--registration", required=True, type=Path)
+    regime_evidence_qualify_parser.add_argument("--panel", required=True, type=Path)
+    regime_evidence_qualify_parser.add_argument("--manifest", required=True, type=Path)
 
     backtest_parser = subparsers.add_parser("backtest", help="Run deterministic backtests")
     backtest_subparsers = backtest_parser.add_subparsers(dest="backtest_command", required=True)
@@ -275,6 +408,56 @@ def build_parser() -> argparse.ArgumentParser:
         "--state-root",
         type=Path,
         default=Path(".market-impact/method-ablation-runs"),
+    )
+    method_skill_ablation_parser = agent_subparsers.add_parser(
+        "method-skill-ablation-run",
+        help="Run a three-pair method Skill diagnostic with CPA cost preflight",
+    )
+    method_skill_ablation_parser.add_argument("--method-catalog", required=True, type=Path)
+    method_skill_ablation_parser.add_argument(
+        "--method-evidence-declaration", required=True, type=Path
+    )
+    method_skill_ablation_parser.add_argument("--provider-profile", required=True, type=Path)
+    _add_agent_bundle_arguments(method_skill_ablation_parser)
+    method_skill_ablation_parser.add_argument("--experiment-id", required=True)
+    method_skill_ablation_parser.add_argument("--treatment-skill", required=True)
+    method_skill_ablation_parser.add_argument(
+        "--market-state",
+        required=True,
+        choices=("up_fast", "up_mild", "down_fast", "down_mild", "unclassified"),
+    )
+    method_skill_ablation_parser.add_argument(
+        "--narrative-salience",
+        required=True,
+        choices=(
+            "corroborated_obvious",
+            "authority_obvious",
+            "diffuse",
+            "contested",
+            "unavailable",
+        ),
+    )
+    method_skill_ablation_parser.add_argument(
+        "--analysis-need",
+        required=True,
+        action="append",
+        dest="analysis_needs",
+    )
+    method_skill_ablation_parser.add_argument("--outcomes-opened", action="store_true")
+    method_skill_ablation_parser.add_argument(
+        "--max-total-cost-usd",
+        type=Decimal,
+        default=Decimal("10"),
+    )
+    method_skill_ablation_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    method_skill_ablation_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/method-skill-ablation-runs"),
     )
     method_development_parser = agent_subparsers.add_parser(
         "method-development-run",
@@ -505,6 +688,145 @@ def verify_common_crawl_archive(
     locator = load_common_crawl_locator(locator_path)
     record = (CommonCrawlArchiveAdapter() if adapter is None else adapter).fetch(locator)
     return record.to_dict()
+
+
+def locate_common_crawl_archive(
+    *,
+    collection: str,
+    target_url: str,
+    not_after: datetime,
+    adapter: CommonCrawlIndexAdapter | None = None,
+) -> dict[str, object] | None:
+    locator = (CommonCrawlIndexAdapter() if adapter is None else adapter).locate_latest(
+        collection=collection,
+        target_url=target_url,
+        not_after=not_after,
+    )
+    return None if locator is None else locator.to_dict()
+
+
+def verify_internet_archive(
+    locator_path: Path,
+    *,
+    adapter: InternetArchiveAdapter | None = None,
+) -> dict[str, object]:
+    payload = json.loads(locator_path.read_text(encoding="utf-8"))
+    errors = validate_agent_contract(payload, "internet-archive-locator.schema.json")
+    if errors:
+        raise ValueError("; ".join(errors))
+    locator = load_internet_archive_locator(locator_path)
+    record = (InternetArchiveAdapter() if adapter is None else adapter).fetch(locator)
+    return record.to_dict()
+
+
+def locate_internet_archive(
+    *,
+    target_url: str,
+    not_after: datetime,
+    adapter: InternetArchiveIndexAdapter | None = None,
+) -> dict[str, object] | None:
+    locator = (InternetArchiveIndexAdapter() if adapter is None else adapter).locate_latest(
+        target_url=target_url,
+        not_after=not_after,
+    )
+    return None if locator is None else locator.to_dict()
+
+
+def _fetch_verified_archive(
+    locator_path: Path,
+    *,
+    common_crawl_adapter: CommonCrawlArchiveAdapter | None = None,
+    internet_archive_adapter: InternetArchiveAdapter | None = None,
+) -> VerifiedArchiveRecord | VerifiedInternetArchiveRecord:
+    payload = json.loads(locator_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise TypeError("archive locator must be an object")
+    typed_payload = cast(dict[str, object], payload)
+    schema_version = typed_payload.get("schema_version")
+    if schema_version == COMMON_CRAWL_LOCATOR_SCHEMA:
+        locator = load_common_crawl_locator(locator_path)
+        adapter = (
+            CommonCrawlArchiveAdapter() if common_crawl_adapter is None else common_crawl_adapter
+        )
+        return adapter.fetch(locator)
+    if schema_version == INTERNET_ARCHIVE_LOCATOR_SCHEMA:
+        locator = load_internet_archive_locator(locator_path)
+        adapter = (
+            InternetArchiveAdapter()
+            if internet_archive_adapter is None
+            else internet_archive_adapter
+        )
+        return adapter.fetch(locator)
+    raise ValueError("unsupported archive locator schema version")
+
+
+def capture_csrc_regime_evidence(
+    *,
+    locator_path: Path,
+    case_keys: tuple[str, ...],
+    claim_id: str,
+    lineage_id: str,
+    archive_adapter: CommonCrawlArchiveAdapter | None = None,
+    internet_archive_adapter: InternetArchiveAdapter | None = None,
+) -> tuple[Path, dict[str, object]]:
+    archive_record = _fetch_verified_archive(
+        locator_path,
+        common_crawl_adapter=archive_adapter,
+        internet_archive_adapter=internet_archive_adapter,
+    )
+    evidence = extract_csrc_regime_evidence(
+        archive_record,
+        case_keys=case_keys,
+        claim_id=claim_id,
+        lineage_id=lineage_id,
+    )
+    return write_regime_evidence_record(evidence), evidence.to_dict()
+
+
+def capture_state_council_regime_evidence(
+    *,
+    locator_path: Path,
+    case_keys: tuple[str, ...],
+    claim_id: str,
+    lineage_id: str,
+    archive_adapter: CommonCrawlArchiveAdapter | None = None,
+    internet_archive_adapter: InternetArchiveAdapter | None = None,
+) -> tuple[Path, dict[str, object]]:
+    archive_record = _fetch_verified_archive(
+        locator_path,
+        common_crawl_adapter=archive_adapter,
+        internet_archive_adapter=internet_archive_adapter,
+    )
+    evidence = extract_state_council_regime_evidence(
+        archive_record,
+        case_keys=case_keys,
+        claim_id=claim_id,
+        lineage_id=lineage_id,
+    )
+    return write_regime_evidence_record(evidence), evidence.to_dict()
+
+
+def capture_nbs_macro_vintage(
+    *,
+    locator_path: Path,
+    case_keys: tuple[str, ...],
+    claim_id: str,
+    lineage_id: str,
+    archive_adapter: CommonCrawlArchiveAdapter | None = None,
+    internet_archive_adapter: InternetArchiveAdapter | None = None,
+) -> tuple[Path, dict[str, object]]:
+    archive_record = _fetch_verified_archive(
+        locator_path,
+        common_crawl_adapter=archive_adapter,
+        internet_archive_adapter=internet_archive_adapter,
+    )
+    evidence = extract_nbs_macro_vintage(
+        archive_record,
+        case_keys=case_keys,
+        claim_id=claim_id,
+        lineage_id=lineage_id,
+    )
+    return write_regime_evidence_record(evidence), evidence.to_dict()
 
 
 def capture_tushare(
@@ -1215,6 +1537,16 @@ def _compact_date(value: str) -> date:
         raise argparse.ArgumentTypeError("dates must use valid YYYYMMDD values") from exc
 
 
+def _aware_timestamp(value: str) -> datetime:
+    try:
+        result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("timestamps must use ISO 8601") from exc
+    if result.tzinfo is None or result.utcoffset() is None:
+        raise argparse.ArgumentTypeError("timestamps must include an explicit timezone")
+    return result
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
@@ -1247,6 +1579,52 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["archive_capture_accepted"] is True else 1
+    if args.command == "archive" and args.archive_command == "common-crawl-locate":
+        try:
+            result = locate_common_crawl_archive(
+                collection=args.collection,
+                target_url=args.url,
+                not_after=args.not_after,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"located": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        if result is None:
+            print(json.dumps({"located": False, "reason": "no_capture_before_cutoff"}))
+            return 1
+        print(json.dumps({"located": True, "locator": result}, indent=2, sort_keys=True))
+        return 0
+    if args.command == "archive" and args.archive_command == "internet-archive-verify":
+        try:
+            result = verify_internet_archive(args.locator)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"verified": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["archive_capture_accepted"] is True else 1
+    if args.command == "archive" and args.archive_command == "internet-archive-locate":
+        try:
+            result = locate_internet_archive(
+                target_url=args.url,
+                not_after=args.not_after,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"located": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        if result is None:
+            print(json.dumps({"located": False, "reason": "no_capture_before_cutoff"}))
+            return 1
+        print(json.dumps({"located": True, "locator": result}, indent=2, sort_keys=True))
+        return 0
     if args.command == "prediction" and args.prediction_command == "capture":
         try:
             if args.provider == "polymarket":
@@ -1373,6 +1751,265 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 0
+    if args.command == "regime" and args.regime_command == "validate":
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "valid": True,
+                    "dataset_id": dataset.dataset_id,
+                    "case_count": len(dataset.cases),
+                    "market_index_count": len(dataset.main_market_indices),
+                    "industry_proxy_count": len(dataset.industry_proxy_catalog),
+                    "research_only": True,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "capture":
+        token = os.environ.get("TUSHARE_TOKEN", "")
+        if not token:
+            print(
+                json.dumps({"captured": False, "error": "TUSHARE_TOKEN is not configured"}),
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+            panel = capture_regime_panel(TushareHttpAdapter(token), dataset)
+            panel_path = write_regime_panel(panel)
+            validated = validate_regime_panel(panel_path)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "captured": True,
+                    "panel_id": validated.panel_id,
+                    "panel_hash": validated.panel_hash,
+                    "path": validated.path.as_posix(),
+                    "series_count": len(validated.panel.series),
+                    "historical_vintage": validated.panel.historical_vintage,
+                    "provider_verified": False,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "evaluate":
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+            panel = validate_regime_panel(args.panel)
+            result = evaluate_regime_dataset(dataset, panel)
+            report_path = write_regime_report(result, panel)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {**result, "report_path": report_path.as_posix()},
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "study-validate":
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+            method_catalog = load_method_skill_catalog(args.method_catalog)
+            registration = load_regime_study_registration(
+                args.registration,
+                dataset=dataset,
+                method_catalog=method_catalog,
+            )
+            readiness = assess_regime_study_readiness(registration)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(json.dumps({"valid": True, **readiness}, indent=2, sort_keys=True))
+        return 0
+    if args.command == "regime" and args.regime_command == "study-evaluate":
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+            method_catalog = load_method_skill_catalog(args.method_catalog)
+            registration = load_regime_study_registration(
+                args.registration,
+                dataset=dataset,
+                method_catalog=method_catalog,
+            )
+            panel = validate_regime_panel(args.panel)
+            report = evaluate_regime_study_baselines(dataset, panel, registration)
+            report_path = write_regime_study_baseline_report(
+                report,
+                panel_id=panel.panel_id,
+                registration_id=registration.registration_id,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "valid": True,
+                    "registration_id": registration.registration_id,
+                    "panel_id": panel.panel_id,
+                    "case_count": report["case_count"],
+                    "agent_effectiveness_claim_eligible": False,
+                    "report_path": report_path.as_posix(),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "evidence-capture-csrc":
+        try:
+            path, record = capture_csrc_regime_evidence(
+                locator_path=args.locator,
+                case_keys=tuple(args.case_key),
+                claim_id=args.claim_id,
+                lineage_id=args.lineage_id,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "captured": True,
+                    "record_id": record["record_id"],
+                    "published_at": record["published_at"],
+                    "authority_at": record["authority_at"],
+                    "path": path.as_posix(),
+                    "licensed_payload_committed": False,
+                    "execution_capability": "none",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "evidence-capture-state-council":
+        try:
+            path, record = capture_state_council_regime_evidence(
+                locator_path=args.locator,
+                case_keys=tuple(args.case_key),
+                claim_id=args.claim_id,
+                lineage_id=args.lineage_id,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "captured": True,
+                    "record_id": record["record_id"],
+                    "published_at": record["published_at"],
+                    "authority_at": record["authority_at"],
+                    "path": path.as_posix(),
+                    "licensed_payload_committed": False,
+                    "execution_capability": "none",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "evidence-capture-nbs":
+        try:
+            path, record = capture_nbs_macro_vintage(
+                locator_path=args.locator,
+                case_keys=tuple(args.case_key),
+                claim_id=args.claim_id,
+                lineage_id=args.lineage_id,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "captured": True,
+                    "record_id": record["record_id"],
+                    "published_at": record["published_at"],
+                    "authority_at": record["authority_at"],
+                    "path": path.as_posix(),
+                    "licensed_payload_committed": False,
+                    "execution_capability": "none",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command in {
+        "evidence-manifest",
+        "evidence-qualify",
+    }:
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+            method_catalog = load_method_skill_catalog(args.method_catalog)
+            registration = load_regime_study_registration(
+                args.registration,
+                dataset=dataset,
+                method_catalog=method_catalog,
+            )
+            panel = validate_regime_panel(args.panel)
+            if args.regime_command == "evidence-manifest":
+                records = tuple(load_regime_evidence_record(path) for path in args.record)
+                manifest = RegimeEvidenceManifest.build(
+                    dataset_id=dataset.dataset_id,
+                    dataset_hash=dataset.dataset_hash,
+                    registration_id=registration.registration_id,
+                    registration_hash=registration.registration_hash,
+                    panel_id=panel.panel_id,
+                    panel_hash=panel.panel_hash,
+                    outcomes_opened=registration.outcomes_opened,
+                    records=records,
+                )
+                manifest_path = write_regime_evidence_manifest(manifest)
+                result = {
+                    "valid": True,
+                    "manifest_id": manifest.manifest_id,
+                    "record_count": len(records),
+                    "path": manifest_path.as_posix(),
+                    "execution_capability": "none",
+                }
+            else:
+                manifest = load_regime_evidence_manifest(
+                    args.manifest,
+                    dataset=dataset,
+                    validated_panel=panel,
+                    registration=registration,
+                )
+                report = qualify_regime_evidence(dataset, panel, registration, manifest)
+                report_path = write_regime_evidence_qualification_report(report)
+                result = {
+                    "valid": True,
+                    "report_id": report["report_id"],
+                    "case_count": report["case_count"],
+                    "all_source_requirements_ready": report["all_source_requirements_ready"],
+                    "diagnostic_agent_run_eligible": report["diagnostic_agent_run_eligible"],
+                    "agent_effectiveness_claim_eligible": report[
+                        "agent_effectiveness_claim_eligible"
+                    ],
+                    "path": report_path.as_posix(),
+                    "execution_capability": "none",
+                }
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "agent" and args.agent_command == "validate":
         try:
             result = validate_agent_bundle(
@@ -1433,6 +2070,83 @@ def main(argv: Sequence[str] | None = None) -> int:
                     skill_root=args.skill_root,
                     state_root=args.state_root,
                     ensemble_state_root=args.ensemble_state_root,
+                )
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name != "mcp":
+                raise
+            print(
+                json.dumps(
+                    {
+                        "completed": False,
+                        "error": (
+                            "Agent execution requires the optional dependency group; "
+                            "install market-impact-agent[agent]"
+                        ),
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent" and args.agent_command == "method-skill-ablation-run":
+        try:
+            from market_impact_agent.method_skills import (
+                MethodRoutingContext,
+                load_method_evidence_declaration,
+            )
+            from market_impact_agent.paired_skill_ablation_runner import (
+                run_paired_method_skill_ablation,
+            )
+
+            requested_usd = cast(Decimal, args.max_total_cost_usd)
+            requested_microusd = requested_usd * Decimal("1000000")
+            if (
+                not requested_usd.is_finite()
+                or requested_microusd != requested_microusd.to_integral_value()
+                or not Decimal("0") < requested_usd <= Decimal("10")
+            ):
+                raise ValueError(
+                    "max-total-cost-usd must be positive, at most 10, and use at most "
+                    "six decimal places"
+                )
+            evidence_declaration = load_method_evidence_declaration(
+                args.method_evidence_declaration
+            )
+            result = asyncio.run(
+                run_paired_method_skill_ablation(
+                    method_catalog_path=args.method_catalog,
+                    method_evidence_declaration_path=args.method_evidence_declaration,
+                    provider_profile_path=args.provider_profile,
+                    evidence_pack_path=args.evidence_pack,
+                    evidence_documents_path=args.evidence_documents,
+                    pattern_pack_paths=tuple(args.pattern_packs),
+                    experiment_id=args.experiment_id,
+                    treatment_skill=args.treatment_skill,
+                    routing_context=MethodRoutingContext(
+                        market_state=args.market_state,
+                        narrative_salience=args.narrative_salience,
+                        analysis_needs=tuple(args.analysis_needs),
+                        available_evidence=evidence_declaration.available_evidence,
+                        outcomes_opened=args.outcomes_opened,
+                    ),
+                    skill_root=args.skill_root,
+                    state_root=args.state_root,
+                    max_total_cost_microusd=int(requested_microusd),
                 )
             )
         except ModuleNotFoundError as exc:

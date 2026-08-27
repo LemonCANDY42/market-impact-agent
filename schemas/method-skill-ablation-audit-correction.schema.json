@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/method-skill-ablation-audit-correction.schema.json",
+  "title": "Market Impact Method Skill Ablation Audit Correction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "correction_id",
+    "original_registration_id",
+    "original_report_id",
+    "corrected_contract_version",
+    "correction",
+    "corrected_preflight",
+    "cpa_observation",
+    "project_ledger_cost_usd",
+    "inference_eligible",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.method-skill-ablation-audit-correction.v1"},
+    "correction_id": {
+      "type": "string",
+      "pattern": "^method-skill-ablation-audit-correction-[0-9a-f]{64}$"
+    },
+    "original_registration_id": {
+      "type": "string",
+      "pattern": "^method-skill-ablation-[0-9a-f]{64}$"
+    },
+    "original_report_id": {
+      "type": "string",
+      "pattern": "^method-skill-ablation-report-[0-9a-f]{64}$"
+    },
+    "corrected_contract_version": {"const": "market-impact.method-skill-ablation.v2"},
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registered_field",
+        "registered_value",
+        "correct_semantics",
+        "agent_run_count",
+        "observed_provider_request_count",
+        "budget_validity"
+      ],
+      "properties": {
+        "registered_field": {"const": "cost_estimate.model_call_count"},
+        "registered_value": {"const": 6},
+        "correct_semantics": {"const": "agent_run_count"},
+        "agent_run_count": {"const": 6},
+        "observed_provider_request_count": {"const": 12},
+        "budget_validity": {"const": "unchanged_cumulative_token_limits_are_per_agent_run"}
+      }
+    },
+    "corrected_preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_run_count",
+        "provider_request_upper_bound",
+        "raw_max_cost_microusd",
+        "safety_multiplier",
+        "guarded_max_cost_microusd",
+        "hard_cap_microusd",
+        "cache_prices_included"
+      ],
+      "properties": {
+        "agent_run_count": {"const": 6},
+        "provider_request_upper_bound": {"const": 96},
+        "raw_max_cost_microusd": {"const": 985932},
+        "safety_multiplier": {"const": "1.25"},
+        "guarded_max_cost_microusd": {"const": 1232415},
+        "hard_cap_microusd": {"const": 10000000},
+        "cache_prices_included": {"const": true}
+      }
+    },
+    "cpa_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_hash",
+        "keeper_version",
+        "window_start",
+        "window_end",
+        "model",
+        "reasoning_effort",
+        "provider_requests",
+        "failed_requests",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cost_usd"
+      ],
+      "properties": {
+        "artifact_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "keeper_version": {"const": "v1.14.5"},
+        "window_start": {"type": "string", "format": "date-time"},
+        "window_end": {"type": "string", "format": "date-time"},
+        "model": {"const": "gpt-5.6-luna"},
+        "reasoning_effort": {"const": "xhigh"},
+        "provider_requests": {"const": 12},
+        "failed_requests": {"const": 0},
+        "input_tokens": {"const": 59358},
+        "output_tokens": {"const": 15142},
+        "cache_read_tokens": {"const": 40448},
+        "cost_usd": {"const": "0.02276136"}
+      }
+    },
+    "project_ledger_cost_usd": {"const": "0.030045"},
+    "inference_eligible": {"const": false},
+    "execution_capability": {"const": "none"}
+  }
+}

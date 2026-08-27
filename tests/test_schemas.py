@@ -48,7 +48,19 @@ class Validator(Protocol):
         "method-quality-outcome-opening.schema.json",
         "method-quality-clustered-estimate.schema.json",
         "common-crawl-locator.schema.json",
+        "internet-archive-locator.schema.json",
         "method-development-case.schema.json",
+        "market-regime-dataset.schema.json",
+        "regime-panel.schema.json",
+        "regime-study-registration.schema.json",
+        "regime-study-baseline-report.schema.json",
+        "regime-evidence-manifest.schema.json",
+        "regime-evidence-qualification-report.schema.json",
+        "regime-agent-experiment-report.schema.json",
+        "method-skill-catalog.schema.json",
+        "method-evidence-declaration.schema.json",
+        "method-skill-ablation-registration.schema.json",
+        "method-skill-ablation-audit-correction.schema.json",
     ],
 )
 def test_schema_is_valid(schema_name: str) -> None:
@@ -74,7 +86,16 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/calibration/method-quality-benchmark-v2.json",
         "examples/calibration/method-quality-evaluation-specification-v2.json",
         "examples/research/common-crawl-complete-capture-v1.json",
+        "examples/research/csrc-2024-policy-common-crawl-v1.json",
+        "examples/research/gov-cn-2024-stimulus-common-crawl-v1.json",
+        "examples/research/csrc-2024-merger-reform-internet-archive-v1.json",
+        "examples/research/nbs-2024-08-economy-internet-archive-v1.json",
+        "examples/research/nbs-2024-08-cpi-internet-archive-v1.json",
         "examples/calibration/method-development-abqaiq-v1.json",
+        "examples/research/market-regime-dataset-v1.json",
+        "examples/research/famous-method-skill-catalog-v1.json",
+        "examples/research/abqaiq-recovery-method-evidence-v1.json",
+        "examples/research/market-regime-study-registration-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -101,10 +122,32 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "method-quality-evaluation-specification.schema.json"
     elif example_path.endswith("method-quality-evaluation-specification-v2.json"):
         schema_name = "method-quality-evaluation-specification-v2.schema.json"
-    elif example_path.endswith("common-crawl-complete-capture-v1.json"):
+    elif example_path.endswith(
+        (
+            "common-crawl-complete-capture-v1.json",
+            "csrc-2024-policy-common-crawl-v1.json",
+            "gov-cn-2024-stimulus-common-crawl-v1.json",
+        )
+    ):
         schema_name = "common-crawl-locator.schema.json"
+    elif example_path.endswith(
+        (
+            "csrc-2024-merger-reform-internet-archive-v1.json",
+            "nbs-2024-08-economy-internet-archive-v1.json",
+            "nbs-2024-08-cpi-internet-archive-v1.json",
+        )
+    ):
+        schema_name = "internet-archive-locator.schema.json"
     elif example_path.endswith("method-development-abqaiq-v1.json"):
         schema_name = "method-development-case.schema.json"
+    elif example_path.endswith("market-regime-dataset-v1.json"):
+        schema_name = "market-regime-dataset.schema.json"
+    elif example_path.endswith("famous-method-skill-catalog-v1.json"):
+        schema_name = "method-skill-catalog.schema.json"
+    elif example_path.endswith("abqaiq-recovery-method-evidence-v1.json"):
+        schema_name = "method-evidence-declaration.schema.json"
+    elif example_path.endswith("market-regime-study-registration-v1.json"):
+        schema_name = "regime-study-registration.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     registry: Registry[Schema] = Registry()

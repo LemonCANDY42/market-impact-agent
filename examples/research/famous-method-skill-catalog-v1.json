@@ -1,0 +1,76 @@
+{
+  "schema_version": "market-impact.method-skill-catalog.v1",
+  "version": "1.0.0",
+  "methods": [
+    {
+      "skill_name": "owner-value-discipline",
+      "lineage": "Public Berkshire Hathaway materials by Warren Buffett and Charlie Munger",
+      "source_refs": [
+        "https://www.berkshirehathaway.com/2008ar/2008ar.pdf",
+        "https://www.berkshirehathaway.com/letters/1999.html"
+      ],
+      "applicable_market_states": ["up_mild", "down_mild", "unclassified"],
+      "applicable_narratives": [],
+      "analysis_needs": ["owner_value"],
+      "required_evidence": ["cash_flow_or_earning_power", "valuation_or_price"],
+      "prohibited_uses": ["one_session_timing", "good_company_implies_buy", "uncited_precise_value"],
+      "priority": 10
+    },
+    {
+      "skill_name": "second-level-cycle-context",
+      "lineage": "Howard Marks second-level thinking and non-mechanical cycle memos",
+      "source_refs": [
+        "https://www.oaktreecapital.com/insights/memo/taking-the-temperature",
+        "https://www.oaktreecapital.com/docs/default-source/memos/2015-09-09-its-not-easy.pdf?sfvrsn=2"
+      ],
+      "applicable_market_states": ["up_fast", "up_mild", "down_fast", "down_mild", "unclassified"],
+      "applicable_narratives": [],
+      "analysis_needs": ["consensus_gap", "cycle_position"],
+      "required_evidence": ["price_or_market_context", "consensus_or_positioning"],
+      "prohibited_uses": ["mechanical_cycle_timing", "automatic_contrarianism", "uncited_consensus"],
+      "priority": 20
+    },
+    {
+      "skill_name": "expectations-base-rates",
+      "lineage": "Michael Mauboussin and Counterpoint Global expectations and base-rate research",
+      "source_refs": [
+        "https://www.morganstanley.com/im/publication/insights/articles/article_bayesandbaserates2_ltr.pdf",
+        "https://www.morganstanley.com/im/en-us/financial-advisor/insights/consilient-observer/opportunities-and-expectations.html"
+      ],
+      "applicable_market_states": ["up_fast", "up_mild", "down_fast", "down_mild", "unclassified"],
+      "applicable_narratives": [],
+      "analysis_needs": ["base_rate_update", "priced_expectations"],
+      "required_evidence": ["reference_class", "new_evidence"],
+      "prohibited_uses": ["base_rate_as_cause", "reference_class_cherry_pick", "history_as_destiny"],
+      "priority": 30
+    },
+    {
+      "skill_name": "reflexive-feedback-check",
+      "lineage": "George Soros public lectures on fallibility, reflexivity, and boom-bust processes",
+      "source_refs": [
+        "https://www.opensocietyfoundations.org/uploads/9ae17912-2262-4646-8ffc-d01afc934c36/george-soros-general-theory-of-reflexivity-transcript.pdf",
+        "https://www.georgesoros.com/2012/04/12/george_soros_remarks_at_the_institute_for_new_economic_thinking_annual_plen/"
+      ],
+      "applicable_market_states": ["up_fast", "down_fast"],
+      "applicable_narratives": [],
+      "analysis_needs": ["feedback_loop"],
+      "required_evidence": ["participant_belief_or_flow", "fundamental_feedback"],
+      "prohibited_uses": ["every_trend_is_reflexive", "turning_point_prediction", "price_only_feedback_claim"],
+      "priority": 40
+    },
+    {
+      "skill_name": "narrative-diffusion-assessment",
+      "lineage": "Robert Shiller narrative-economics research",
+      "source_refs": [
+        "https://www.nber.org/papers/w23075"
+      ],
+      "applicable_market_states": ["up_fast", "up_mild", "down_fast", "down_mild", "unclassified"],
+      "applicable_narratives": ["corroborated_obvious", "authority_obvious", "diffuse", "contested"],
+      "analysis_needs": ["narrative_diffusion"],
+      "required_evidence": ["timestamped_narrative_corpus"],
+      "prohibited_uses": ["virality_as_truth", "diffusion_as_trade_signal", "single_story_forced_cause"],
+      "priority": 50
+    }
+  ],
+  "catalog_id": "method-skill-catalog-f438e45a7ef80c751da4a6817e9de6c837f73ba901642510ffb2d23ee8218a8d"
+}

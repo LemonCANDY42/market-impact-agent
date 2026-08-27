@@ -1,0 +1,27 @@
+{
+  "schema_version": "market-impact.method-evidence-declaration.v1",
+  "evidence_pack_id": "evidence-pack-8237a6b8f8b58884df56922dc81ceebfbabdbb0b953c48c1de46ec14cabbe615",
+  "evidence_pack_hash": "6addcbf698de6af661b942e81c083b334fef4196dc751ac5943e442ec7f5d24b",
+  "evidence_types": [
+    {
+      "evidence_type": "reference_class",
+      "evidence_refs": [],
+      "pattern_pack_refs": [
+        "pattern-0cafee00e9e035db87be8867dff9798478730b701a2869e31ea9dd886d09083c"
+      ]
+    },
+    {
+      "evidence_type": "new_evidence",
+      "evidence_refs": [
+        "pre-event-balance",
+        "physical-loss",
+        "restoration-update",
+        "shipment-mitigation",
+        "target-mapping"
+      ],
+      "pattern_pack_refs": []
+    }
+  ],
+  "outcomes_opened": true,
+  "declaration_id": "method-evidence-b4e0bd0222d2be89fcacd2341d4d5100cd79207e61687f7aaac4f98783cadb0d"
+}

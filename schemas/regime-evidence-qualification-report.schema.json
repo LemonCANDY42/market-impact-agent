@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-evidence-qualification-report.schema.json",
+  "title": "Market Regime Evidence Qualification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "dataset_id",
+    "registration_id",
+    "panel_id",
+    "manifest_id",
+    "outcomes_opened",
+    "case_count",
+    "all_source_requirements_ready",
+    "diagnostic_agent_run_eligible",
+    "agent_effectiveness_claim_eligible",
+    "cases",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.regime-evidence-qualification-report.v1"
+    },
+    "report_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-qualification-report-[0-9a-f]{64}$"
+    },
+    "dataset_id": {
+      "type": "string",
+      "pattern": "^market-regime-dataset-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^regime-study-registration-[0-9a-f]{64}$"
+    },
+    "panel_id": {
+      "type": "string",
+      "pattern": "^regime-panel-[0-9a-f]{64}$"
+    },
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-manifest-[0-9a-f]{64}$"
+    },
+    "outcomes_opened": {"type": "boolean"},
+    "case_count": {"type": "integer", "minimum": 1},
+    "all_source_requirements_ready": {"type": "boolean"},
+    "diagnostic_agent_run_eligible": {"type": "boolean"},
+    "agent_effectiveness_claim_eligible": {"type": "boolean"},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_key",
+        "checkpoint_count",
+        "all_checkpoints_ready",
+        "checkpoints"
+      ],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "checkpoint_count": {"type": "integer", "minimum": 0},
+        "all_checkpoints_ready": {"type": "boolean"},
+        "checkpoints": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/checkpoint"}
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_date",
+        "cutoff_at",
+        "ready",
+        "event_revelation",
+        "requirements"
+      ],
+      "properties": {
+        "session_date": {"type": "string", "format": "date"},
+        "cutoff_at": {"type": "string", "format": "date-time"},
+        "ready": {"type": "boolean"},
+        "event_revelation": {"$ref": "#/$defs/event_revelation"},
+        "requirements": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/requirement"}
+        }
+      }
+    },
+    "event_revelation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "ready", "record_ids", "blockers"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "ready": {"type": "boolean"},
+        "record_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^regime-evidence-record-[0-9a-f]{64}$"
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["missing_event_revelation"]}
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "record_count",
+        "authority_record_count",
+        "distinct_source_count",
+        "minimum_records",
+        "minimum_distinct_sources",
+        "content_complete",
+        "point_in_time_authority",
+        "ready",
+        "blockers"
+      ],
+      "properties": {
+        "category": {"type": "string", "minLength": 1},
+        "record_count": {"type": "integer", "minimum": 0},
+        "authority_record_count": {"type": "integer", "minimum": 0},
+        "distinct_source_count": {"type": "integer", "minimum": 0},
+        "minimum_records": {"type": "integer", "minimum": 1},
+        "minimum_distinct_sources": {"type": "integer", "minimum": 1},
+        "content_complete": {"type": "boolean"},
+        "point_in_time_authority": {"type": "boolean"},
+        "ready": {"type": "boolean"},
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "insufficient_records",
+              "insufficient_distinct_sources",
+              "no_point_in_time_authority"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
