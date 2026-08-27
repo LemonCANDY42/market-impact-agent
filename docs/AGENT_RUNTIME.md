@@ -5,10 +5,11 @@
 The bounded research-only Agent runtime passed its current local runtime gate. It includes
 redirect denial for credential-bearing requests, same-connection MCP snapshot revalidation,
 terminal-artifact/run/journal binding, exact tool execution-limit identity,
-optional-dependency isolation, and explicit compactor identity. A fresh private MiniMax M3
-v4 run completed against that exact surface. This is not model-quality, event-family, alpha,
-Provider-portability, paper, or live acceptance. No model, Skill, MCP server, or tool receives
-broker credentials or a path around hard policy.
+optional-dependency isolation, and explicit compactor identity. Fresh private MiniMax M3 and
+CLIProxyAPI `gpt-5.6-luna` xhigh runs both completed against the same full synthetic Agent surface.
+This establishes bounded Model Provider substitution through the tool/Judgment/audit chain; it is
+not model quality, event-family quality, alpha, paper, or live acceptance. No model, Skill, MCP
+server, or tool receives broker credentials or a path around hard policy.
 
 The machine-local environment names are:
 
@@ -16,6 +17,10 @@ The machine-local environment names are:
 - `MINIMAX_BASE_URL=https://api.minimaxi.com`: China API origin; the adapter appends the
   versioned API path;
 - `MINIMAX_MODEL=MiniMax-M3`: explicit model identity with no silent substitution.
+- `MARKET_IMPACT_CLIPROXY_API_KEY`: a dedicated local project credential injected only into the
+  experiment process;
+- CLIProxyAPI Profile values are fixed to `http://127.0.0.1:8317`, `gpt-5.6-luna`, and
+  `reasoning_effort=xhigh`; alternate origins, models, or effort values are rejected.
 
 MiniMax's official [M3 model page](https://www.minimax.io/models/text/m3),
 [OpenAI-compatible API guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
@@ -24,6 +29,10 @@ MiniMax's official [M3 model page](https://www.minimax.io/models/text/m3),
 Provider references. The API key never enters prompts, run artifacts, model history, tool
 arguments, logs, or committed configuration. The runtime records a versioned cost estimate;
 it is not an invoice and currently does not subtract automatic prompt-cache discounts.
+The CLIProxyAPI credential remains only in the trusted machine configuration and is not copied to
+the repository or global shell configuration. Codex OAuth is included usage with no asserted
+USD/token rate, so the Usage Ledger records Token and latency budgets while its marginal estimated
+USD cost is zero; that zero must not be read as unlimited quota or no resource consumption.
 
 ## Smallest complete runtime
 
@@ -39,8 +48,8 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - normalized usage, latency, finish reason, error class, and request/response identities;
 - declared capability checks for tools, streaming, context size, and structured output;
 - no silent model or endpoint fallback; an unavailable configured model fails closed;
-- credential-bearing requests reject every HTTP redirect and recheck the exact pinned China
-  origin at the network boundary;
+- credential-bearing requests reject every HTTP redirect and recheck the exact adapter-specific
+  pinned origin at the network boundary, including the MiniMax China origin and CLIProxy loopback;
 - secret injection at process/request boundary only, plus redacted errors and traces.
 
 ### Run lifecycle and durable state
@@ -227,6 +236,25 @@ the existing physical-energy family method. A deterministic Skill Route selects 
 applicable to the frozen asset class, mechanism family, and available Pattern Pack; the route,
 reasons, manifests, tools, and capabilities are content identified before any model call.
 
+The separate `news-evidence-assessment` Skill is an optional general evidence-quality method,
+adapted from useful sample-size and source-disagreement checks in the external TradingAgents news
+pipeline. It inventories admitted news, separates facts from opinions, checks source/claim
+independence and timing, and reports only a qualitative coverage-assessment confidence. It depends
+on `evidence-core`, permits only `read_evidence`, cannot mint Evidence, and cannot set
+`CandidateImpact.confidence`, direction, weight, or execution. It is not inserted into the frozen
+four-arm result after the fact; any comparison must use a new content-bound paired registration.
+
+The first such private paired diagnostic used CLIProxyAPI `gpt-5.6-luna` xhigh and interleaved five
+replicates per attack/recovery state. All 20 runs completed; both control and treatment abstained in
+all ten state-replicates. Control used 70,535 input and 22,198 output Tokens; the optional Skill
+used 79,115 input and 23,454 output Tokens, increases of 12.2% and 5.7%. The final Judgments did not
+show a systematic new inventory of source count, lineage independence, fact/opinion mix, or
+coverage confidence. This sparse opened-development case therefore gives no reason to load the
+Skill by default. It remains available for a later genuinely multi-source News Observation Batch,
+where its declared precondition can be exercised. The private report is
+`private-news-ablation-report-8ad1284720331aa27ea05f85cfe9b03e72ba047c26f35f467504ab50bfea84cb`
+under Usage Ledger hash `4d999354ee7a9d923f4ab989e7cec02ed7ae1558deafb1eeb04bad6fd57c7f95`.
+
 The frozen comparison has four arms: neutral evidence; general methods; general methods plus
 Pattern Pack review; and those layers plus the energy-family method. The Pattern-enabled arms
 differ in both instructions and access: they receive `pattern.read`, `read_pattern_pack`, and the
@@ -247,24 +275,35 @@ and [Provider registry](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c2
 Their outputs are prior art only; this Harness retains its own evidence, policy, and execution
 authority boundaries.
 
-A later isolated deployment of pinned TradingAgents `0.3.1` used the same two strongly masked
-opened-development information states and MiniMax M3. Both native runs returned `Hold`, but the
-multi-role transcript introduced facts and quantitative assumptions absent from the frozen input,
-and one state exercised structured-output-to-free-text degradation. It therefore remains a private
-external behavior/cost diagnostic rather than a runtime dependency or valid method arm. The
-first-run memory paths were empty, but review found an upstream pending-decision resolver that
-could fetch Yahoo returns on reuse; the private runner now disables that lifecycle path and rejects
-experiment-id reuse. The deployment and news-source/post-processing findings are recorded in
+Pinned TradingAgents `0.3.1` remains isolated outside the Harness. Its earlier strongly masked
+MiniMax smoke is retained only as a negative input-isolation and structured-degradation diagnostic.
+The current native-capability baseline instead supplies the real Abqaiq event and `601857.SH`
+target, registered news and Tushare market data no later than each historical cutoff, and preserves
+the project's native analyst, debate, risk, and model-prior methods on CLIProxyAPI Luna xhigh. It
+disables only cross-run memory, the pending-decision outcome resolver, post-cutoff/live retrieval,
+and broker reachability, and it rejects experiment-id reuse. This is an external behavior,
+stability, and resource-use baseline, not a Harness runtime dependency or a causal method arm. The
+deployment and news-source/post-processing findings are recorded in
 `docs/TRADINGAGENTS_EXTERNAL_BASELINE.md`.
+
+The native Luna xhigh comparison completed all ten interleaved runs with zero structured-output
+degradation. Attack ratings were four `Hold` and one `Sell`; recovery ratings were three `Hold` and
+two `Underweight`. All ten map to abstention in the Harness's one-sided long action space. The
+external graph used 174 model calls, 903,651 input and 376,799 output Tokens, and 7,531.109
+cumulative seconds. Inspected reports provided broad multi-role investment memoranda but also
+generated precise levels and sentiment values from sparse inputs and drifted from one session to
+weeks or months. This records native behavior rather than treating role count or report length as
+quality evidence.
 
 The Model Provider Profile is the single public model-entry contract. It binds adapter kind,
 exact origin and model, credential environment reference, context/output limits, sampling,
-retry policy, pricing, and a per-run 50,000 micro-USD estimated-cost ceiling. MiniMax remains
-the first concrete adapter. A factory-level fixture proves adapter substitution and identity
-checks, but Provider portability remains unaccepted until a second real adapter passes the
-same runtime corpus. The historical v2 single/ensemble commands now use the same Profile and
-Factory for Provider construction while retaining their already registered v2 runtime budget;
-new method-ablation runs use the full Profile, including the hard cost ceiling.
+optional reasoning effort, retry policy, pricing, and per-run budgets. MiniMax and CLIProxyAPI are
+the first two concrete adapters. Both passed model discovery, exact-identity, text, function-tool,
+redirect/origin, and full synthetic Agent checks through the same Factory and `AgentEngine`.
+`agent run --provider-profile` is the uniform command entry; no Provider-specific runtime branch is
+needed. Historical registered MiniMax experiments remain bound to their original Profile, while
+new experiments may explicitly freeze the Luna xhigh Profile. This proves bounded runtime
+portability, not equal model behavior or equivalent cost semantics.
 
 The first real-model comparison,
 `synthetic-method-ablation-minimax-m3-20260826-v1`, completed all 20 runs and retained them
@@ -376,11 +415,13 @@ uv run market-impact agent validate \
   --pattern-pack examples/agent/energy_supply/pattern-pack.json
 ```
 
-Run a new private real-model judgment only after the three documented MiniMax environment
-variables are present:
+Run a new private real-model judgment only after the selected Profile's credential environment is
+present. The historical default remains the frozen MiniMax Profile; use the explicit Luna Profile
+for new Luna xhigh runs:
 
 ```bash
 uv run market-impact agent run \
+  --provider-profile examples/providers/cliproxyapi-luna-xhigh-v1.json \
   --run-id YOUR_UNIQUE_RUN_ID \
   --evidence-pack examples/agent/energy_supply/evidence-pack.json \
   --evidence-documents examples/agent/energy_supply/evidence-documents.json \
@@ -413,11 +454,11 @@ Intent and Backtest Request, then replays that request twice through the unchang
 bridge with identical result identity. The ensemble path revalidates all three agreeing
 Artifacts and their frozen binding. Nautilus does not call the model.
 
-Current non-claims remain explicit: only the MiniMax adapter passed, so Provider portability
-is not established; the synthetic energy case is pipeline evidence, not event-family
-calibration; Skills are installed, updated, or removed only through explicit user-authorized
-repository/filesystem changes, never by the model; and the current research runtime exposes
-read-only tools only.
+Current non-claims remain explicit: two adapters passed the bounded runtime surface, but one Luna
+run does not rank models or prove repeated behavioral equivalence; the synthetic energy case is
+pipeline evidence, not event-family calibration; Skills are installed, updated, or removed only
+through explicit user-authorized repository/filesystem changes, never by the model; and the
+current research runtime exposes read-only tools only.
 
 The bounded local runtime gate is satisfied. It does not override the failed Phase 2
 trading-calibration gate and grants no paper or live capability.

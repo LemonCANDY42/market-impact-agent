@@ -186,6 +186,40 @@ cutoff, plus the pre-outcome Exposure Registry and exact Pattern Packs. Its cont
 manifest binds the study, source coverage, registry, accrual decision, evidence documents,
 raw hashes, and Pattern Packs and is revalidated on every idempotent reopen.
 
+## Normalized historical news batches
+
+The first Provider-neutral news boundary is now implemented in
+`news-observation-batch.schema.json`. A content-identified `NewsQuery` freezes historical or
+masked-replay mode, an exact UTC half-open `[start_at, end_at)` publication window, terms,
+per-source limit, and the ordered Provider/version/upstream-source registrations. A batch is
+invalid if attempts are missing, added, reordered, or silently routed through an unregistered
+fallback.
+
+Every attempt reports one typed state: `data`, `no_data`, `not_configured`, `rate_limited`, or
+`error`. Only actual `data`/`no_data` responses carry a raw-response hash and record counts;
+rate-limit and error states carry explicit error classification and cannot masquerade as empty
+news. Deterministic filtering happens before the per-source limit. Historical and future-shifted
+masked replays both reject missing `published_at`, out-of-window publication, missing
+`available_at`, and `source_updated_at` or availability at or after the cutoff without consulting
+the host clock. Publication selects the half-open query window. For an exact accepted content
+version, `available_at` cannot precede either `published_at` or the optional `source_updated_at`,
+and all three independently gate the version at the cutoff. This ordering does not equate
+availability with Harness receipt or `retrieved_at`.
+
+Accepted observations preserve Provider/source versions, upstream record and lineage identities,
+raw-content hash, `published_at`, optional `source_updated_at`, and `available_at`. Deduplication
+uses version lineage across Providers, never title text, so syndicated copies are not independent
+confirmation while different articles with the same headline remain distinct. Rejection counts
+are reconciled against every raw result, and the schema plus canonical parser fail closed on
+identity or count tampering.
+
+This slice normalizes already fetched records; it does not yet live-enable Yahoo, GDELT, Bloomberg,
+Reddit, StockTwits, or another news vendor. Licensed text remains outside committed artifacts.
+The separate content-identified `news-evidence-assessment` Skill can describe sample size,
+independent claims/sources, fact-versus-opinion mix, disagreement, timing gaps, and a qualitative
+coverage-assessment confidence. It is read-only, cannot mint Evidence, cannot set an automatic
+signal or weight, and explicitly does not replace `CandidateImpact.confidence`.
+
 ## Next acceptance gate
 
 Before this prospective study can complete its Phase 2 calibration:

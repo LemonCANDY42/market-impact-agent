@@ -435,6 +435,25 @@ def test_skill_registry_denies_capability_and_dependency_cycles(tmp_path: Path) 
         SkillRegistry(cycle_root).discover()
 
 
+def test_news_evidence_assessment_skill_is_content_bound_and_read_only() -> None:
+    registry = SkillRegistry(Path("skills"))
+
+    loaded = registry.load(
+        ("news-evidence-assessment",),
+        allowed_capabilities=frozenset({"evidence.read"}),
+    )
+
+    assert [item.manifest.name for item in loaded] == [
+        "evidence-core",
+        "news-evidence-assessment",
+    ]
+    news = loaded[-1]
+    assert news.manifest.allowed_tools == frozenset({"read_evidence"})
+    assert news.manifest.allowed_mcp_servers == frozenset()
+    assert "not `CandidateImpact.confidence`" in news.instructions
+    assert "mint an Evidence Item" in news.instructions
+
+
 def test_tool_descriptor_model_surface_does_not_expose_handler(tmp_path: Path) -> None:
     async def handler(_arguments: dict[str, object]) -> object:
         return {"ok": True}

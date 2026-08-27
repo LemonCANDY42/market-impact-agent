@@ -1,0 +1,15 @@
+{
+  "allowed_mcp_servers": [],
+  "allowed_tools": ["read_evidence"],
+  "conflicts": [],
+  "dependencies": ["evidence-core"],
+  "description": "Derived news sample, independence, disagreement, timing, and confidence assessment.",
+  "instructions_hash": "0a6842cd0ecab2f98d6bcbae40911e10ab5c63c5cc4709bcc08c6a5b36c39bec",
+  "instructions_path": "SKILL.md",
+  "manifest_hash": "e0b61130c7dd6b8e846561def22f810c672f3e71706413064bf6a4a445a52264",
+  "name": "news-evidence-assessment",
+  "required_capabilities": ["evidence.read"],
+  "schema_version": "market-impact.skill-manifest.v1",
+  "source": "repo://skills/news-evidence-assessment",
+  "version": "1.0.0"
+}

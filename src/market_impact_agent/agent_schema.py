@@ -37,6 +37,7 @@ AGENT_SCHEMA_FILES = (
     "method-quality-clustered-estimate.schema.json",
     "common-crawl-locator.schema.json",
     "method-development-case.schema.json",
+    "news-observation-batch.schema.json",
 )
 
 

@@ -59,13 +59,23 @@ third-party trading framework or copy its prompts.
 TradingAgents and StockBench are Apache-2.0; Vibe-Trading and FinMem are MIT. No third-party code
 was copied, so the repository's Apache-2.0 licensing and current attribution boundary do not change.
 
-The pinned TradingAgents `0.3.1` external baseline was subsequently deployed outside the Harness
-and run once against each strongly masked Abqaiq information state. Both native decisions were
-`Hold`, but the role graph introduced historical identities, named analogues, market quantities,
-and decision assumptions absent from the frozen input. The observations are retained as a negative
-input-isolation and cost diagnostic, not a benchmark arm or method-quality result. See
-`docs/TRADINGAGENTS_EXTERNAL_BASELINE.md` for the deployment, news-pipeline review, and gate for a
-future evidence-locked comparison.
+The pinned TradingAgents `0.3.1` external deployment has two distinct purposes. Its earlier
+strongly masked MiniMax smoke is retained as a negative input-isolation diagnostic because the
+native graph recovered identities and unsupported quantities. The current Luna xhigh
+native-capability baseline deliberately supplies the real event and target while binding retrieved
+news and market data to the historical cutoffs; native roles, debate, risk methods, and model priors
+remain intact. Cross-run memory, outcome reflection, post-cutoff/live retrieval, and broker access
+remain disabled. Its 5-by-2 comparison measures behavior, stability, and resource use only. It is
+not a registered Harness arm or method-quality result because this is one opened Event Case and the
+systems receive different model-visible identity and orchestration. See
+`docs/TRADINGAGENTS_EXTERNAL_BASELINE.md`.
+
+The native Luna xhigh 5-by-2 completed ten of ten runs with zero structured-output degradation.
+Ratings were seven `Hold`, two `Underweight`, and one `Sell`, mapping to ten abstentions in the
+registered one-sided long action space. The graph used 174 model calls, 903,651 input and 376,799
+output Tokens, and 7,531.109 cumulative seconds. Its breadth, horizon drift, sparse-input precision,
+and rating variation are process observations only; no single opened Event Case can establish a
+method ranking.
 
 ## Evidence ladder
 

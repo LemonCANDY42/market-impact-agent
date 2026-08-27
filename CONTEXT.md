@@ -17,6 +17,13 @@ Evidence. It retains original upstream identity, aggregator identity when presen
 publication/update times, strategy availability, local retrieval, and completeness gaps.
 _Avoid_: API response, trusted fact
 
+**News Observation Batch**:
+A content-identified result of one historical or masked-replay news query over an exact ordered
+Provider/source chain. It preserves typed fetch outcomes, raw hashes, publication/update/availability
+times, version lineage, filtering rejections, and accepted observations under one UTC half-open
+window. It is normalized source material, not automatically admitted Evidence or sentiment.
+_Avoid_: News digest, fallback search, Evidence Pack
+
 **Availability Time**:
 The earliest instant a strategy may use one exact source version, measured from a real-time
 receipt or derived from source publication plus a frozen, source-specific latency model.

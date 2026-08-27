@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/news-observation-batch.schema.json",
+  "title": "Market Impact News Observation Batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "query", "attempts", "observations"],
+  "properties": {
+    "schema_version": {"const": "market-impact.news-observation-batch.v1"},
+    "batch_id": {"type": "string", "pattern": "^news-batch-[0-9a-f]{64}$"},
+    "query": {"$ref": "#/$defs/query"},
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/attempt"}
+    },
+    "observations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/observation"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+    "nullableInteger": {
+      "oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]
+    },
+    "nullableString": {
+      "oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_id", "provider_version", "source_id", "source_version"],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "source_id": {"type": "string", "minLength": 1},
+        "source_version": {"type": "string", "minLength": 1}
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_id",
+        "mode",
+        "start_at",
+        "end_at",
+        "terms",
+        "limit_per_source",
+        "sources"
+      ],
+      "properties": {
+        "query_id": {"type": "string", "pattern": "^news-query-[0-9a-f]{64}$"},
+        "mode": {"enum": ["historical", "masked_replay"]},
+        "start_at": {"type": "string", "format": "date-time"},
+        "end_at": {"type": "string", "format": "date-time"},
+        "terms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "limit_per_source": {"type": "integer", "minimum": 1},
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/source"}
+        }
+      }
+    },
+    "rejectionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "missing_published_at": {"type": "integer", "minimum": 1},
+        "before_window": {"type": "integer", "minimum": 1},
+        "at_or_after_window_end": {"type": "integer", "minimum": 1},
+        "missing_available_at": {"type": "integer", "minimum": 1},
+        "available_at_or_after_window_end": {"type": "integer", "minimum": 1},
+        "source_updated_at_or_after_window_end": {"type": "integer", "minimum": 1},
+        "duplicate_lineage": {"type": "integer", "minimum": 1},
+        "source_limit": {"type": "integer", "minimum": 1}
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_key",
+        "status",
+        "checked_at",
+        "completed_at",
+        "raw_content_hash",
+        "raw_record_count",
+        "accepted_record_count",
+        "rejection_counts",
+        "error_class",
+        "error_summary"
+      ],
+      "properties": {
+        "source_key": {"type": "string", "minLength": 3},
+        "status": {"enum": ["data", "no_data", "not_configured", "rate_limited", "error"]},
+        "checked_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": "string", "format": "date-time"},
+        "raw_content_hash": {"$ref": "#/$defs/nullableSha256"},
+        "raw_record_count": {"$ref": "#/$defs/nullableInteger"},
+        "accepted_record_count": {"$ref": "#/$defs/nullableInteger"},
+        "rejection_counts": {"$ref": "#/$defs/rejectionCounts"},
+        "error_class": {"$ref": "#/$defs/nullableString"},
+        "error_summary": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "provider_id",
+        "provider_version",
+        "source_id",
+        "source_version",
+        "upstream_record_id",
+        "lineage_id",
+        "title",
+        "raw_content_hash",
+        "published_at",
+        "source_updated_at",
+        "available_at"
+      ],
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "pattern": "^news-observation-[0-9a-f]{64}$"
+        },
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "source_id": {"type": "string", "minLength": 1},
+        "source_version": {"type": "string", "minLength": 1},
+        "upstream_record_id": {"type": "string", "minLength": 1},
+        "lineage_id": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "raw_content_hash": {"$ref": "#/$defs/sha256"},
+        "published_at": {"type": "string", "format": "date-time"},
+        "source_updated_at": {
+          "oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]
+        },
+        "available_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

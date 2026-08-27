@@ -113,16 +113,35 @@ remain closed; the opened cohort cannot be retuned and relabeled as unseen evide
   completed, every ensemble abstained, and both one-session replays were deterministic. The
   fixed-long control was net negative in both states. This accepts the implementation diagnostic,
   not a method ranking or alpha claim; artifacts from earlier case identities remain invalid.
-- [x] Deploy pinned TradingAgents `0.3.1` outside the Harness and run one native multi-agent smoke
-  decision per strongly masked state with role data tools frozen. Both returned `Hold`, but role
-  outputs injected historical identity, external analogues, and unsupported quantities. Review
-  also found a latent pending-decision Yahoo-return resolver on reuse; the private runner now
-  disables it and rejects existing experiment ids. Retain this as a negative input-isolation/cost
-  diagnostic, not a benchmark arm or permission to integrate a multi-agent authority.
-- [ ] Before any formal external five-replicate comparison, build a separately identified
-  evidence-locked adapter that preserves Evidence Item lineage, blocks unsupported identity and
-  number injection between roles, disables live/history-memory inputs, records structured-output
-  degradation, and passes a zero-contamination smoke under a frozen budget.
+- [x] Deploy pinned TradingAgents `0.3.1` outside the Harness. Preserve its native roles, prompts,
+  debate, risk graph, and model prior knowledge while binding retrieved news and market data to the
+  real Abqaiq event/target and each historical cutoff. Disable only outcome reflection, cross-run
+  memory, post-cutoff/live data, and broker reachability. The earlier masked MiniMax smoke returned
+  `Hold`; the first real-identity CLIProxyAPI Luna attack run also returned `Hold` with 19 model
+  calls and no structured-output degradation. These remain distinct experiments. This is an
+  external baseline, not Harness authority or execution.
+- [x] Add a second content-identified model Provider Profile and adapter for the exact local
+  CLIProxyAPI loopback origin, dedicated project credential, `gpt-5.6-luna`, and `xhigh`. Text,
+  function-tool, model-availability, identity, origin, environment-proxy bypass, and existing
+  MiniMax regression checks pass.
+  Included Codex OAuth usage records Token counts but has no asserted USD/token price.
+- [x] Complete the native TradingAgents five-replicate comparison for attack and recovery on Luna
+  xhigh. All 10 runs completed with zero structured-output degradation: seven `Hold`, two
+  `Underweight`, and one `Sell`, mapping to 10 abstentions in the Harness's one-sided long action
+  space. The native graph used 174 model calls, 903,651 input and 376,799 output Tokens, and
+  7,531.109 cumulative seconds. This accepts an external behavior/stability/resource baseline,
+  not a method-quality result from one opened Event Case.
+- [x] Implement the Provider-neutral historical news batch contract: exact ordered source chain,
+  typed data/no-data/not-configured/rate-limit/error outcomes, UTC half-open filtering before
+  limits, no host-clock treatment of undated records, version-lineage deduplication, reconciled
+  rejection counts, and canonical/schema validation. Add a read-only `news-evidence-assessment`
+  Skill that describes sample independence and disagreement but mints no Evidence or signal weight.
+- [x] Run the content-bound Luna xhigh paired development diagnostic for `general_methods` versus
+  the same route plus `news-evidence-assessment`. All 20 attack/recovery runs completed and both
+  arms abstained in every replicate. The Skill added 12.2% input Tokens and 5.7% output Tokens but
+  did not create a visible decision or news-quality improvement on this sparse three/five-item
+  case. Keep it opt-in for genuinely multi-source news batches; this is not a negative universal
+  result or a method-quality claim.
 - [ ] Implement and accept source-specific publication-time extraction plus a frozen latency
   calibration and build the first complete historical case. Until then v2 admits no retrospective
   holdout, even when the archive capture and internal receipt hashes are valid.

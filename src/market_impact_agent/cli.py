@@ -26,9 +26,6 @@ from market_impact_agent.agent_contracts import (
 )
 from market_impact_agent.agent_runtime import (
     ModelProvider,
-    ProviderPricing,
-    RuntimeBudget,
-    RuntimeConfig,
     SkillRegistry,
     ToolAccessContext,
     ToolRegistry,
@@ -216,10 +213,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_agent_bundle_arguments(agent_validate_parser)
     agent_run_parser = agent_subparsers.add_parser(
-        "run", help="Run one local MiniMax judgment against a frozen Evidence Pack"
+        "run", help="Run one local model judgment against a frozen Evidence Pack"
     )
     _add_agent_bundle_arguments(agent_run_parser)
     agent_run_parser.add_argument("--run-id", required=True)
+    agent_run_parser.add_argument(
+        "--provider-profile",
+        type=Path,
+        default=default_model_provider_profile_path(),
+    )
     agent_run_parser.add_argument(
         "--skill-root",
         type=Path,
@@ -1079,6 +1081,7 @@ async def run_agent_bundle(
     run_id: str,
     skill_root: Path,
     state_root: Path,
+    provider_profile_path: Path | None = None,
 ) -> dict[str, object]:
     try:
         from market_impact_agent.agent_engine import AgentEngine, AgentRunRequest
@@ -1094,7 +1097,9 @@ async def run_agent_bundle(
         evidence_documents_path=evidence_documents_path,
         pattern_pack_paths=pattern_pack_paths,
     )
-    profile = load_model_provider_profile(default_model_provider_profile_path())
+    profile = load_model_provider_profile(
+        provider_profile_path or default_model_provider_profile_path()
+    )
     provider = cast(
         AvailableModelProvider,
         ModelProviderFactory.with_builtin_adapters().create(profile),
@@ -1105,28 +1110,8 @@ async def run_agent_bundle(
     tool_registry = ToolRegistry(artifact_store)
     for descriptor in repository.tool_descriptors():
         tool_registry.register(descriptor)
-    config = RuntimeConfig(
-        provider_id=provider.provider_id,
-        model=provider.model,
-        context_window_tokens=131_072,
-        reserved_output_tokens=8_192,
-        temperature=1,
-        top_p=0.95,
-        budget=RuntimeBudget(
-            max_turns=8,
-            max_tool_calls=12,
-            max_input_tokens=500_000,
-            max_output_tokens=32_768,
-            max_wall_seconds=300,
-            max_result_bytes=256_000,
-        ),
-        pricing=ProviderPricing(
-            pricing_id="minimax-m3-paygo-2026-08-26-context-le-512k",
-            input_microusd_per_million_tokens=300_000,
-            output_microusd_per_million_tokens=1_200_000,
-        ),
-    )
-    api_key = os.environ.get("MINIMAX_API_KEY", "")
+    config = profile.runtime_config()
+    api_key = os.environ.get(profile.credential_env, "")
     engine = AgentEngine(
         provider=provider,
         config=config,
@@ -1413,6 +1398,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     run_id=args.run_id,
                     skill_root=args.skill_root,
                     state_root=args.state_root,
+                    provider_profile_path=args.provider_profile,
                 )
             )
         except (

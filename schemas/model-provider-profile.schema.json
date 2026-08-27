@@ -37,6 +37,10 @@
     "reserved_output_tokens": {"type": "integer", "minimum": 1},
     "temperature": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
     "top_p": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "reasoning_effort": {
+      "type": "string",
+      "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+    },
     "budget": {
       "type": "object",
       "additionalProperties": false,

@@ -8,37 +8,50 @@ upstream commit
 The clone, virtual environment, adapter, model transcripts, and reports remain under the ignored
 `.market-impact/` tree. No third-party code or runtime dependency entered this repository, no
 secret was written to a file, and no broker, account, paper, or live-execution capability was
-reachable. The two first runs had empty per-run memory paths, so upstream's pending-decision return
-resolver had nothing to process and no live market read entered their output. Review nevertheless
-found that resolver remained latent and could contact Yahoo on an experiment-directory reuse; the
-private runner now disables memory and the resolver and rejects an existing experiment id.
+reachable. The current runner sets no memory log, disables upstream's pending-decision return
+resolver, isolates every graph, and rejects an existing experiment id. No current or later Yahoo
+return can enter a repeated run.
 
-This was a behavior and cost diagnostic against the same two strongly masked information states
-used by the opened Abqaiq development case. It was not a registered benchmark arm. Its result
-cannot rank TradingAgents against the Harness because the native role prompts did not preserve the
-frozen-input boundary.
+Two distinct experiments must not be conflated:
 
-## Frozen-input deployment
+- The earlier MiniMax smoke supplied strongly masked evidence and a target alias. It exposed a
+  mismatch between native role prompts and an evidence-only test: the graph recovered historical
+  identities, named analogues, unsupported quantities, and one structured-output degradation. It
+  remains a negative input-isolation diagnostic.
+- The current Luna xhigh experiment is deliberately native. It supplies the real Abqaiq event and
+  `601857.SH` target, cutoff-bound registered news and Tushare OHLCV, and preserves TradingAgents'
+  role prompts, debate, risk graph, and model prior knowledge. These native priors are part of the
+  external baseline, not a contamination failure.
 
-The external runner used the upstream MiniMax China Provider, exact model `MiniMax-M3`, temperature
-zero, one investment-debate round, and one risk-debate round. It enabled market, social/news
-sentiment, news, and fundamentals analysts, followed by bull/bear researchers, a research manager,
-a trader, three risk perspectives, and the portfolio manager.
+The current experiment compares decisions, stability, process, latency, and Token use with the
+Harness. It is not a registered Harness arm or a causal method ranking: this is one already opened
+Event Case, and the two systems receive different model-visible identity and orchestration.
 
-Every TradingAgents data tool was replaced before graph construction:
+## Native-capability deployment
 
-- news tools returned only the state-specific masked Evidence Pack and evidence documents;
-- the fundamentals tool returned only the frozen target-exposure mapping;
-- price, technical, social, macro, accounting, insider, and prediction-market tools returned
-  explicit unavailable sentinels;
-- the real ticker and issuer were unavailable; the graph received only
-  `integrated-upstream-a`;
-- each observed run began with a fresh private memory path, so no earlier decision or reflection
-  was loaded, although upstream appended a pending decision after completion; and
-- `Buy` or `Overweight` mapped to the Harness's long proposal, while every other native rating
-  mapped to abstention.
+The current runner uses the dedicated CLIProxyAPI project Key, exact local model
+`gpt-5.6-luna`, `reasoning_effort=xhigh`, temperature `0.1`, one investment-debate round, and one
+risk-debate round. It enables market, social/news sentiment, news, and fundamentals analysts,
+followed by bull/bear researchers, a research manager, a trader, three risk perspectives, and the
+portfolio manager. The upstream unknown-model warning is expected because `0.3.1` predates Luna;
+the gateway and Harness both reject silent model substitution.
 
-## Observed result
+Every TradingAgents data tool is replaced before graph construction:
+
+- event and global-news tools return the same registered event items visible no later than each
+  cutoff: the 15 September attack state and 18 September recovery state;
+- market and indicator tools return only the registered Tushare `601857.SH` snapshot filtered no
+  later than the cutoff;
+- the fundamentals tool returns the registered target/exposure context;
+- social, macro, accounting, insider, and prediction-market paths return explicit unavailable
+  sentinels when no historical point-in-time input is registered;
+- cross-run memory and outcome reflection are disabled while native role reasoning remains intact;
+  and
+- `Buy` or `Overweight` maps to the Harness's one-sided long proposal; every other native rating
+  maps to abstention. Native short views remain visible in the report but cannot silently expand
+  the Harness action space.
+
+## Earlier masked MiniMax diagnostic
 
 | Information state | Native result | Harness mapping | LLM calls | Input tokens | Output tokens | Estimated cost | Wall time |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -46,21 +59,56 @@ Every TradingAgents data tool was replaced before graph construction:
 | Recovery | `Hold` | Abstain | 15 | 63,503 | 48,927 | USD 0.077764 | 641.849 s |
 | Total | two `Hold` results | two abstentions | 32 | 147,512 | 88,256 | USD 0.150162 | 1,089.306 s |
 
-Both abstentions avoid the registered fixed-long controls, which were net negative in both opened
-states. This is not evidence that either reasoning method predicted returns: abstention has zero
-research score, both states belong to one already opened Event Case, and the external method ran
-only once per state.
+Both masked-smoke abstentions avoid the registered fixed-long controls, which were net negative in
+both opened states. This is not evidence that either reasoning method predicted returns:
+abstention has zero research score, both states belong to one already opened Event Case, and this
+legacy external method ran only once per state.
 
 The ten accepted `family_guided` Harness runs across the same two states cost USD 0.091915. The two
 single-run TradingAgents diagnostics therefore cost about 1.63 times that entire ten-run arm. The
-full four-arm Harness comparison cost USD 0.397066 for 40 runs. These numbers describe observed
-resource use, not an apples-to-apples quality comparison. Projecting the two external observations
-to five replicates per state would cost roughly USD 0.75 and take roughly 91 minutes if behavior
-scaled linearly; that work was not spent after the validity failure became clear.
+full four-arm Harness comparison cost USD 0.397066 for 40 runs. These legacy numbers describe
+observed resource use, not an apples-to-apples quality comparison. They are not used to estimate
+Luna included-usage cost, which has no asserted USD/token price.
 
-## Why the native result is not a clean comparison
+## Native Luna xhigh 5-by-2 result
 
-The attack transcript introduced facts and analogues absent from every model-visible input,
+Experiment `abqaiq-ta-native-luna-xhigh-20260827-v1` completed five interleaved attack/recovery
+replicates. All ten runs used the exact registered input bindings and completed without a
+structured-output degradation.
+
+| Information state | Native ratings | Harness long mapping | LLM calls | Input Tokens | Output Tokens | Cumulative time |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Attack | 4 `Hold`, 1 `Sell` | 5 abstentions | 89 | 445,205 | 195,274 | 3,922.862 s |
+| Recovery | 3 `Hold`, 2 `Underweight` | 5 abstentions | 85 | 458,446 | 181,525 | 3,608.247 s |
+| Total | 7 `Hold`, 2 `Underweight`, 1 `Sell` | 10 abstentions | 174 | 903,651 | 376,799 | 7,531.109 s |
+
+The content hash of the private report is
+`06fbb8435f9648d9647a4e65614c261e7b5cd7a088fb07c10b82bd93837172f2`.
+Included Codex OAuth usage is recorded in Tokens and latency; no USD/token rate or zero-consumption
+claim is made.
+
+The result shows that the native graph is not a fixed-rule echo: its ratings varied between neutral
+and negative views. It also shows no stable long thesis for either state. Mapping every non-long
+rating to abstention preserves the Harness's registered action space but does not score the
+external framework's short or underweight ability.
+
+The external reports are broader than one Harness Judgment: they combine technical, fundamental,
+sentiment, news, bull/bear, trader, and risk views into an actionable memorandum. That breadth is
+expensive and does not enforce the same evidence discipline. Across inspected runs, the graph
+generated precise support levels and `5.x/10` sentiment values from four market rows, and final
+horizons drifted from the requested one session to several weeks or one-to-three months. Reports
+also repeatedly called unavailable macro, prediction, social, and accounting tools. These are
+observable native behaviors, not reasons to rewrite the external project.
+
+The Harness's comparable opened-development runs were cheaper, retained exact Evidence references,
+and kept the one-session/action-space boundary, but they also abstained throughout this sparse
+case. Neither system has demonstrated alpha, calibration across Event Cases, or readiness for paper
+or live execution.
+
+## What the earlier masked smoke established
+
+The earlier masked attack transcript introduced facts and analogues absent from every
+model-visible input,
 including the original Abqaiq identity and year, named geopolitical episodes, named oil
 benchmarks and peer issuers, historical price moves, probabilities, betas, and transmission
 coefficients. The recovery transcript did not name the original event, but still invented a
@@ -68,10 +116,10 @@ specific sentiment score, revenue-accrual mechanics, trigger levels, and executi
 that were not in evidence. Raw transcripts remain private; this document records only the failure
 classes.
 
-The attack run also exercised upstream's graceful structured-output fallback for two decision
-roles. The run completed, but free text replaced the intended typed contract. That is a useful
-availability behavior for an interactive assistant and an unacceptable silent quality change for
-an auditable benchmark unless the degradation is recorded and scored.
+The earlier attack run also exercised upstream's graceful structured-output fallback for two
+decision roles. The run completed, but free text replaced the intended typed contract. That is a
+useful availability behavior for an interactive assistant and an unacceptable silent quality
+change for an auditable benchmark unless the degradation is recorded and scored.
 
 Post-run review found another upstream lifecycle hazard: `propagate()` resolves prior pending
 decisions before each graph run by fetching ticker and benchmark returns from Yahoo and may inject
@@ -80,11 +128,12 @@ one-shot observations, but the original adapter would not have been frozen on re
 private runner now sets no memory log, disables the resolver, and refuses an existing experiment
 directory. The existing smoke outputs are not relabeled as evidence of that later hardening.
 
-The final `Hold` is consequently an external-system smoke result, not same-input method evidence.
-Running more replicates would increase apparent sample size and cost without repairing treatment
-identity. The existing `research-discipline`, `evidence-core`, `event-market-context`, and
-`adversarial-risk` Skills already forbid these behaviors; the diagnostic supports those controls
-and does not justify duplicating them.
+The two earlier `Hold` outputs are consequently external-system smoke results, not same-input
+method evidence. The current native-capability baseline addresses a different question: how the
+unmodified external method behaves when it is allowed to know the real event and target while its
+retrieved data remain bounded by time. It does not relabel the masked smoke or make the two system
+inputs identical. The existing `research-discipline`, `evidence-core`, `event-market-context`, and
+`adversarial-risk` Skills continue to enforce the Harness's stricter evidence boundary.
 
 ## News collection and post-processing review
 
@@ -115,7 +164,7 @@ cross-source divergence, event-versus-opinion separation, recurring narratives, 
 confidence when sources are sparse. The news analyst separately combines ticker/global news,
 FRED, and live Polymarket context into prose before the debate and decision graph.
 
-### Patterns to absorb
+### Patterns absorbed in the current slice
 
 - Require UTC-aware half-open windows.
 - Make the configured source chain explicit; never let fallback change source identity silently.
@@ -125,6 +174,14 @@ FRED, and live Polymarket context into prose before the debate and decision grap
   event-versus-opinion mix, and confidence. It remains a derived assessment, never canonical
   evidence or an automatic trading weight.
 - Test every source adapter for future-dated and undated-record leakage.
+
+The public `NewsObservationBatch` contract now implements the ordered source chain, typed fetch
+states, strict UTC half-open filtering before limits, unconditional undated rejection for
+historical/masked replay, exact-version publication/update/availability gates, lineage-based
+deduplication, and reconciled rejection counts. The optional `news-evidence-assessment` Skill
+implements the qualitative sample/independence/disagreement review with read-only Evidence access.
+Its first sparse-case 20-run paired diagnostic changed no decision or visible process outcome while
+adding Tokens, so it remains opt-in until a genuinely multi-source batch exercises its precondition.
 
 ### Patterns not to absorb
 
@@ -149,20 +206,19 @@ FRED, and live Polymarket context into prose before the debate and decision grap
 The Harness's Observation and Evidence contracts remain the authority. TradingAgents contributes
 useful adapter tests and derived-analysis patterns, not canonical state or orchestration ownership.
 
-## Next comparison gate
+## Comparison boundary and next gate
 
-Keep the pinned native deployment as a private negative/control diagnostic. A formal external
-comparison may begin only after a separate evidence-locked adapter:
+No evidence-locked rewrite is required for the native external baseline. Such a rewrite would
+measure a project-specific modification rather than TradingAgents' actual role and prior-knowledge
+method. The current 5-by-2 experiment therefore keeps native reasoning and freezes only the parts
+needed for a fair behavioral observation: event/state, cutoff-bound retrieved inputs, target,
+model, reasoning effort, role graph, debate rounds, temperature, action mapping, no memory or
+outcome reflection, no post-cutoff/live source, and no broker reachability. Every structured-output
+degradation remains counted rather than hidden.
 
-1. scans every role output for forbidden identity tokens, unsupported named entities, numbers, and
-   external-history claims before any downstream role sees it;
-2. preserves Evidence Item citations and publication/availability metadata through the final
-   decision;
-3. disables outcome reflection, live/recent data, and cross-run memory;
-4. records every structured-to-free-text fallback as a validity-affecting degradation; and
-5. passes one state with zero contamination under a frozen cost and token ceiling.
-
-That adapter would be a modified evidence-only TradingAgents treatment, not a measurement of the
-native project. Only after the gate passes should it run the registered five replicates per state.
-The external framework must remain outside Harness authority and cannot gain execution capability
-from a favorable research result.
+Completion of this experiment can support only a description of behavior, stability, process, and
+resource use on one opened Event Case. Any quality or promotion comparison requires multiple
+independent pre-registered Event Cases with authenticated point-in-time evidence and outcomes,
+simple baselines, an explicit treatment identity, and the Harness's existing promotion evaluator.
+The external framework remains outside Harness authority and cannot gain paper or live execution
+capability from a favorable research result.

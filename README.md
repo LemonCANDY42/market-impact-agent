@@ -52,12 +52,17 @@ The bootstrap implements:
 - a bounded local Agent Harness with content-addressed Evidence/Pattern/Judgment contracts,
   append-only crash-safe runs, automatic context compaction, on-demand hashed Skills, typed
   permissioned tools, official MCP lifecycle handling, budgets, cancellation, redaction,
-  closed-output correction, and a pinned MiniMax M3 China-endpoint Provider;
+  closed-output correction, a pinned MiniMax M3 China-endpoint Provider, and a pinned local
+  CLIProxyAPI `gpt-5.6-luna` xhigh Provider;
 - persona-free, automatically routed Research Method Skills adapted from stable event,
   fundamental, market-context, and adversarial-risk workflows; a frozen four-arm ablation
   holds evidence/model/action space constant while varying only those method layers;
 - a content-identified Model Provider Profile/Factory plus a hash-chained Usage Ledger for
-  successful and failed runs, including a per-run estimated-cost ceiling;
+  successful and failed runs, including per-run Token/time/result budgets and a cost ceiling when
+  the Provider has a defensible USD/token price;
+- a Provider-neutral historical news batch contract with exact ordered source registrations,
+  typed missingness/failures, strict UTC half-open filtering before limits, lineage deduplication,
+  and a read-only news-evidence assessment Skill that cannot mint Evidence or signal weight;
 - a synthetic physical-energy supply-shock vertical slice with both one generated Judgment
   Artifact and a generated three-of-five Ensemble Decision deterministically admitted into
   the existing Signal Intent and Backtest Request, then replayed by the unchanged Nautilus
@@ -93,8 +98,6 @@ Planned integrations are documented but **not claimed as working**:
 - a separately validated Nautilus-to-IBKR paper Provider;
 - an external-process VeighNa bridge for future A-share gateways;
 - HTTP/gRPC execution-provider transports.
-- a second model Provider adapter; the accepted MiniMax v4 evidence covers one Provider only
-  and does not establish runtime portability.
 
 NautilusTrader is the selected default engine foundation and behavioral reference. The
 Harness uses it through an engine-neutral backtest bridge; later execution Providers still
@@ -120,10 +123,11 @@ evidence. No baseline-superiority, alpha, Phase 3, paper, or live claim has pass
 
 The bounded research-only Agent runtime and its exact non-claims are recorded in
 [docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). Deterministic hardening, base-wheel isolation,
-the private MiniMax M3 v4 single run, and the private five-replicate v2 ensemble run pass the
-current local runtime gates. This proves one pinned Provider and the auditable
-Agent-to-frozen-decision pipeline, not model quality, event-family calibration, alpha,
-Provider portability, or execution readiness. The real ensemble selected `600938.XSHG`, while
+the private MiniMax M3 v4 single run, the private five-replicate v2 ensemble run, and a full
+CLIProxyAPI Luna xhigh single run pass the current local runtime gates. This proves bounded
+Provider substitution through the same auditable Agent-to-frozen-decision pipeline, not model
+quality, repeated behavioral equivalence, event-family calibration, alpha, or execution readiness.
+The real ensemble selected `600938.XSHG`, while
 the committed deterministic replay fixture uses `600028.XSHG`; those results are deliberately
 not combined. None of this overrides the failed trading-calibration result.
 
@@ -166,13 +170,30 @@ non-inferential diagnostic; the remaining seven development cases and all holdou
 unbuilt. See
 [docs/METHOD_QUALITY_BENCHMARK.md](docs/METHOD_QUALITY_BENCHMARK.md).
 
-Pinned TradingAgents `0.3.1` was also deployed privately as an external same-input smoke baseline.
-Both opened-case states produced `Hold`, but native role outputs supplied historical identities and
-quantities absent from the frozen evidence, so the run is a negative input-isolation/cost
-diagnostic rather than a method comparison. Review also found a latent live-return resolver on
-memory reuse and host-time-dependent admission of undated news; neither behavior is accepted by
-the Harness. Its news collection/post-processing review and the gate for a future evidence-locked arm are in
-[docs/TRADINGAGENTS_EXTERNAL_BASELINE.md](docs/TRADINGAGENTS_EXTERNAL_BASELINE.md).
+Pinned TradingAgents `0.3.1` is deployed privately as an external native-capability baseline. The
+current Luna xhigh runner gives it the real Abqaiq event and `601857.SH` target, registered
+cutoff-bound news and Tushare market data, and its unchanged analyst, debate, risk, and model-prior
+methods. Only cross-run memory, outcome reflection, post-cutoff/live data, and broker reachability
+are disabled. The earlier strongly masked MiniMax smoke remains a negative input-isolation
+diagnostic; it is not the current native comparison. The native 5-by-2 run compares behavior,
+resource use, and stability with the Harness, but different model-visible identity and architecture
+prevent a causal same-method ranking from this one opened Event Case. Deployment and news-pipeline
+findings are in [docs/TRADINGAGENTS_EXTERNAL_BASELINE.md](docs/TRADINGAGENTS_EXTERNAL_BASELINE.md).
+
+The native Luna xhigh 5-by-2 completed all ten runs with zero structured-output degradation. Its
+ratings were seven `Hold`, two `Underweight`, and one `Sell`; all map to abstention in the Harness's
+one-sided long action space. The native graph used 174 model calls, 903,651 input and 376,799
+output Tokens, and 7,531.109 cumulative seconds. Its reports were broad and actionable but drifted
+beyond the requested one-session horizon and generated precise levels and sentiment values from
+sparse inputs. This is behavior, stability, and resource-use evidence, not a method ranking or an
+alpha result.
+
+The first isolated Luna xhigh diagnostic for the optional news-assessment Skill completed 20 of
+20 paired runs. Both the general-method control and the otherwise identical Skill treatment
+abstained in every attack/recovery replicate. The Skill increased input Tokens by 12.2% and output
+Tokens by 5.7% without a visible process or decision improvement on this sparse opened case, so it
+remains opt-in rather than part of every Agent run. This does not evaluate richer multi-source news
+batches, where the Skill's declared precondition actually holds.
 
 The first archive-capture adapter is now reproducible through `market-impact archive
 common-crawl-verify`. It verifies a fixed Common Crawl byte range, one complete gzip/WARC member,

@@ -15,6 +15,7 @@ from market_impact_agent.agent_runtime import (
     RuntimeBudget,
     RuntimeConfig,
 )
+from market_impact_agent.cliproxy_provider import CLIProxyLunaConfig, CLIProxyLunaProvider
 from market_impact_agent.minimax_provider import MiniMaxOpenAIProvider, MiniMaxProviderConfig
 
 MODEL_PROVIDER_PROFILE_SCHEMA = "market-impact.model-provider-profile.v1"
@@ -35,6 +36,7 @@ class ModelProviderProfile:
     reserved_output_tokens: int
     temperature: float
     top_p: float
+    reasoning_effort: str | None
     budget: RuntimeBudget
     pricing: ProviderPricing
     max_attempts: int
@@ -59,6 +61,8 @@ class ModelProviderProfile:
             raise ValueError("reserved output tokens must fit the context window")
         if not 0 < self.temperature <= 1 or not 0 < self.top_p <= 1:
             raise ValueError("Model Provider Profile sampling values must be in (0, 1]")
+        if self.reasoning_effort is not None:
+            _nonempty(self.reasoning_effort, "reasoning_effort")
         if not 1 <= self.max_attempts <= 3:
             raise ValueError("Model Provider Profile max_attempts must be between one and three")
         if (
@@ -78,7 +82,7 @@ class ModelProviderProfile:
         return f"model-provider-{self.profile_hash}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": MODEL_PROVIDER_PROFILE_SCHEMA,
             "adapter_kind": self.adapter_kind,
             "provider_id": self.provider_id,
@@ -96,6 +100,9 @@ class ModelProviderProfile:
             "max_attempts": self.max_attempts,
             "retry_backoff_seconds": self.retry_backoff_seconds,
         }
+        if self.reasoning_effort is not None:
+            payload["reasoning_effort"] = self.reasoning_effort
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "profile_id": self.profile_id}
@@ -121,6 +128,7 @@ class ModelProviderFactory:
     def with_builtin_adapters(cls) -> ModelProviderFactory:
         factory = cls()
         factory.register("minimax-openai-compatible", _build_minimax)
+        factory.register("cliproxyapi-openai-compatible", _build_cliproxyapi)
         return factory
 
     def register(self, adapter_kind: str, builder: ProviderBuilder) -> None:
@@ -147,7 +155,7 @@ def load_model_provider_profile(path: Path) -> ModelProviderProfile:
     if not all(isinstance(key, str) for key in mapping):
         raise TypeError("Model Provider Profile must have string keys")
     payload = cast(dict[str, object], mapping)
-    expected = {
+    required = {
         "schema_version",
         "profile_id",
         "adapter_kind",
@@ -166,7 +174,8 @@ def load_model_provider_profile(path: Path) -> ModelProviderProfile:
         "max_attempts",
         "retry_backoff_seconds",
     }
-    if set(payload) != expected:
+    allowed = required | {"reasoning_effort"}
+    if not required <= set(payload) or not set(payload) <= allowed:
         raise ValueError("Model Provider Profile fields are invalid")
     if _string(payload, "schema_version") != MODEL_PROVIDER_PROFILE_SCHEMA:
         raise ValueError("unsupported Model Provider Profile schema_version")
@@ -202,6 +211,11 @@ def load_model_provider_profile(path: Path) -> ModelProviderProfile:
         reserved_output_tokens=_integer(payload, "reserved_output_tokens"),
         temperature=_number(payload, "temperature"),
         top_p=_number(payload, "top_p"),
+        reasoning_effort=(
+            None
+            if payload.get("reasoning_effort") is None
+            else _string(payload, "reasoning_effort")
+        ),
         budget=RuntimeBudget(
             max_turns=_integer(budget_raw, "max_turns"),
             max_tool_calls=_integer(budget_raw, "max_tool_calls"),
@@ -237,6 +251,8 @@ def default_model_provider_profile_path() -> Path:
 
 
 def _build_minimax(profile: ModelProviderProfile) -> ModelProvider:
+    if profile.reasoning_effort is not None:
+        raise ValueError("MiniMax Model Provider Profile cannot set reasoning_effort")
     api_key = os.environ.get(profile.credential_env, "")
     if not api_key:
         raise ValueError(f"Model Provider credential is missing: {profile.credential_env}")
@@ -252,6 +268,26 @@ def _build_minimax(profile: ModelProviderProfile) -> ModelProvider:
         config=MiniMaxProviderConfig(
             base_url=profile.origin,
             model=profile.model,
+            api_path=profile.api_path,
+            models_path=profile.models_path,
+            max_attempts=profile.max_attempts,
+            retry_backoff_seconds=profile.retry_backoff_seconds,
+        ),
+    )
+
+
+def _build_cliproxyapi(profile: ModelProviderProfile) -> ModelProvider:
+    api_key = os.environ.get(profile.credential_env, "")
+    if not api_key:
+        raise ValueError(f"Model Provider credential is missing: {profile.credential_env}")
+    if profile.reasoning_effort is None:
+        raise ValueError("CLIProxyAPI Model Provider Profile requires reasoning_effort")
+    return CLIProxyLunaProvider(
+        api_key=api_key,
+        config=CLIProxyLunaConfig(
+            origin=profile.origin,
+            model=profile.model,
+            reasoning_effort=profile.reasoning_effort,
             api_path=profile.api_path,
             models_path=profile.models_path,
             max_attempts=profile.max_attempts,
