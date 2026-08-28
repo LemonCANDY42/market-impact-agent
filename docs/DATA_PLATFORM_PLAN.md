@@ -322,10 +322,13 @@ SHA-256. Its content identity was independently recomputed with the Harness `can
 contains neither the token nor any
 source row; licensed payloads remain private and uncommitted.
 
-The `report_rc` response exceeded its documentation's stated 3,000-row single-call limit. That
-runtime/documentation divergence is an acceptance test requirement: the adapter must send explicit
-pagination/row bounds, detect truncation or overflow, and prove complete retrieval for its registered
-window rather than assuming the documented limit is enforced.
+The owner confirmed that this deployment uses a 10,000-plus-point account. The `report_rc`
+documentation says that tier has no total-volume limit, while the same page still states a
+3,000-row single-call maximum. The actual bounded request returned 4,802 rows successfully, so the
+current high-tier runtime either relaxes that per-call limit or has moved ahead of the published
+limit text. This is not an entitlement failure. The adapter must still use explicit pagination and
+row bounds, detect truncation or overflow, and prove complete retrieval for its registered window;
+it must not turn one observed 4,802-row response into a permanent Provider guarantee.
 
 Primary references used by this gate are the official Tushare contracts for
 [`report_rc`](https://tushare.pro/document/2?doc_id=292),
