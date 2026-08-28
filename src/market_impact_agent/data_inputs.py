@@ -535,7 +535,7 @@ class DataSnapshot:
                 observation
             ):
                 raise ValueError("prospective Data Snapshot requires actual receipt authority")
-        expected_complete = _coverage_complete(self.query, self.attempts)
+        expected_complete = data_snapshot_coverage_complete(self.query, self.attempts)
         if self.coverage_complete != expected_complete:
             raise ValueError("data snapshot coverage_complete does not match attempts")
         if self.completed_at != max(item.retrieved_at for item in self.attempts):
@@ -793,7 +793,7 @@ class DataInputHarness:
             "query": query.to_dict(),
             "attempts": [item.to_dict() for item in attempt_tuple],
             "observations": [item.to_dict() for item in accepted],
-            "coverage_complete": _coverage_complete(query, attempt_tuple),
+            "coverage_complete": data_snapshot_coverage_complete(query, attempt_tuple),
             "completed_at": _timestamp(max(item.retrieved_at for item in attempt_tuple)),
         }
         return DataSnapshot(
@@ -1056,7 +1056,7 @@ def data_snapshot_from_dict(value: object) -> DataSnapshot:
     attempts_value = _list(payload.get("attempts"), "data snapshot attempts")
     observations_value = _list(payload.get("observations"), "data snapshot observations")
     attempts = tuple(_attempt_from_dict(item) for item in attempts_value)
-    observations = tuple(_observation_from_dict(item) for item in observations_value)
+    observations = tuple(source_observation_from_dict(item) for item in observations_value)
     snapshot = DataSnapshot(
         snapshot_id=_string(payload, "snapshot_id"),
         query=query,
@@ -1123,7 +1123,7 @@ def _attempt_from_dict(value: object) -> DataProviderAttempt:
     )
 
 
-def _observation_from_dict(value: object) -> SourceObservation:
+def source_observation_from_dict(value: object) -> SourceObservation:
     payload = _object(value, "source observation")
     times_payload = _object(payload.get("times"), "source observation times")
     latency_payload = times_payload.get("latency_model")
@@ -1171,7 +1171,7 @@ def _observation_from_dict(value: object) -> SourceObservation:
     )
 
 
-def _coverage_complete(
+def data_snapshot_coverage_complete(
     query: DataQuery,
     attempts: tuple[DataProviderAttempt, ...],
 ) -> bool:

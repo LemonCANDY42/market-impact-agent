@@ -6,7 +6,8 @@ import json
 import os
 import platform
 import sys
-from collections.abc import Iterable, Sequence
+import time
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -93,6 +94,7 @@ from market_impact_agent.model_provider import (
 )
 from market_impact_agent.observations import (
     ObservationCapability,
+    ObservationProviderManifest,
     ValidatedObservationBundle,
     validate_prediction_market_batch,
     write_prediction_market_batch,
@@ -110,6 +112,10 @@ from market_impact_agent.prediction_markets import (
     kalshi_provider_manifest,
     polymarket_provider_manifest,
     world_monitor_provider_manifest,
+)
+from market_impact_agent.prospective_data import (
+    ProspectiveCollectionPolicy,
+    ProspectiveDataJournal,
 )
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.regime_archive_recovery import (
@@ -148,6 +154,7 @@ from market_impact_agent.source_coverage import (
 )
 from market_impact_agent.syndication_feed import (
     SyndicationFeedProvider,
+    SyndicationFeedSourceConfig,
     load_syndication_feed_source,
 )
 from market_impact_agent.tushare import TushareHttpAdapter
@@ -200,6 +207,48 @@ def build_parser() -> argparse.ArgumentParser:
     feed_capture_parser.add_argument("--minimum-data-sources", type=int)
     feed_capture_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
     feed_capture_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    feed_collect_parser = data_subparsers.add_parser(
+        "collect-feed",
+        help="Continuously journal prospective feed receipts and content revisions",
+    )
+    feed_collect_parser.add_argument(
+        "--source-config",
+        required=True,
+        action="append",
+        type=Path,
+        dest="source_configs",
+    )
+    feed_collect_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
+    feed_collect_parser.add_argument("--keyword", action="append", default=[])
+    feed_collect_parser.add_argument("--max-items", type=int, default=50)
+    feed_collect_parser.add_argument("--minimum-data-sources", type=int)
+    feed_collect_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
+    feed_collect_parser.add_argument("--poll-interval-seconds", type=int, default=300)
+    feed_collect_parser.add_argument("--maximum-gap-seconds", type=int)
+    feed_collect_parser.add_argument(
+        "--cycles",
+        type=int,
+        default=1,
+        help="Number of cycles; use 0 for continuous collection until interrupted",
+    )
+    feed_collect_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    feed_freeze_parser = data_subparsers.add_parser(
+        "freeze-feed-dataset",
+        help="Freeze journaled receipts into an Agent-readable snapshot and Parquet dataset",
+    )
+    feed_freeze_parser.add_argument("--policy-id", required=True)
+    feed_freeze_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
+    feed_freeze_parser.add_argument("--not-after", required=True, type=_aware_timestamp)
+    feed_freeze_parser.add_argument("--minimum-data-sources", type=int)
+    feed_freeze_parser.add_argument(
         "--state-root",
         type=Path,
         default=Path(".market-impact/data-inputs"),
@@ -976,18 +1025,7 @@ def capture_syndication_data_snapshot(
         provider_timeout_seconds=provider_timeout_seconds,
     )
     harness.register(replay_provider)
-    manifest_hash = canonical_hash(replay_provider.manifest.to_dict())
-    sources = tuple(
-        DataSourceBinding(
-            provider_id=replay_provider.manifest.provider_id,
-            provider_version=replay_provider.manifest.provider_version,
-            upstream_source=config.source_id,
-            manifest_hash=manifest_hash,
-            source_config_hash=config.artifact_hash,
-            required=True,
-        )
-        for config in configs
-    )
+    sources = _syndication_source_bindings(replay_provider.manifest, configs)
     minimum = len(sources) if minimum_data_sources is None else minimum_data_sources
     query = DataQuery.build(
         capability=ObservationCapability.EVENT_REVELATION,
@@ -1000,6 +1038,132 @@ def capture_syndication_data_snapshot(
         minimum_data_sources=minimum,
     )
     return asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
+
+
+def collect_syndication_feed_journal(
+    *,
+    source_config_paths: tuple[Path, ...],
+    window_start: datetime,
+    keywords: tuple[str, ...],
+    max_items: int,
+    minimum_data_sources: int | None,
+    state_root: Path,
+    provider_timeout_seconds: float,
+    poll_interval_seconds: int,
+    maximum_gap_seconds: int | None,
+    cycles: int,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> dict[str, object]:
+    if cycles < 0:
+        raise ValueError("cycles must be non-negative")
+    configs = tuple(load_syndication_feed_source(path) for path in source_config_paths)
+    provider = SyndicationFeedProvider(configs)
+    gap_seconds = poll_interval_seconds * 2 if maximum_gap_seconds is None else maximum_gap_seconds
+    policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        sources=_syndication_source_bindings(provider.manifest, configs),
+        window_start=window_start.astimezone(UTC),
+        parameters={"keywords": list(keywords), "max_items": max_items},
+        poll_interval_seconds=poll_interval_seconds,
+        maximum_gap_seconds=gap_seconds,
+    )
+    journal = ProspectiveDataJournal(LocalDataSnapshotStore(state_root))
+    completed = 0
+    last_snapshot: DataSnapshot | None = None
+    last_append: dict[str, object] | None = None
+    interrupted = False
+    try:
+        while cycles == 0 or completed < cycles:
+            snapshot = capture_syndication_data_snapshot(
+                source_config_paths=source_config_paths,
+                window_start=window_start,
+                source_policy_id=policy.policy_id,
+                keywords=keywords,
+                max_items=max_items,
+                minimum_data_sources=minimum_data_sources,
+                state_root=state_root,
+                provider_timeout_seconds=provider_timeout_seconds,
+            )
+            append = journal.record_snapshot(snapshot, policy=policy)
+            completed += 1
+            last_snapshot = snapshot
+            last_append = append.to_dict()
+            if cycles != 0 and completed >= cycles:
+                break
+            sleeper(float(policy.poll_interval_seconds))
+    except KeyboardInterrupt:
+        interrupted = True
+    return {
+        "collected": completed > 0,
+        "interrupted": interrupted,
+        "cycles_completed": completed,
+        "policy": policy.to_dict(),
+        "last_data_snapshot_id": (None if last_snapshot is None else last_snapshot.snapshot_id),
+        "last_capture_cutoff_at": (
+            None if last_snapshot is None else _utc_timestamp(last_snapshot.query.as_of)
+        ),
+        "last_append": last_append,
+        "journal_stats": journal.stats(policy_id=policy.policy_id) if completed else None,
+        "state_root": state_root.resolve().as_posix(),
+        "historical_pit_claim": False,
+        "evidence_promoted": False,
+        "execution_capability": False,
+    }
+
+
+def freeze_syndication_feed_dataset(
+    *,
+    policy_id: str,
+    window_start: datetime,
+    not_after: datetime,
+    minimum_data_sources: int | None,
+    state_root: Path,
+) -> dict[str, object]:
+    store = LocalDataSnapshotStore(state_root)
+    journal = ProspectiveDataJournal(store)
+    snapshot = journal.freeze_snapshot(
+        policy_id=policy_id,
+        window_start=window_start.astimezone(UTC),
+        not_after=not_after.astimezone(UTC),
+        minimum_data_sources=minimum_data_sources,
+    )
+    dataset = (
+        journal.materialize_snapshot_parquet(snapshot_id=snapshot.snapshot_id)
+        if snapshot.coverage_complete
+        else None
+    )
+    return {
+        "frozen": snapshot.coverage_complete,
+        "requested_not_after": _utc_timestamp(not_after),
+        "effective_cutoff_at": _utc_timestamp(snapshot.query.as_of),
+        "data_snapshot_id": snapshot.snapshot_id,
+        "coverage_complete": snapshot.coverage_complete,
+        "observation_count": len(snapshot.observations),
+        "dataset": None if dataset is None else dataset.to_dict(),
+        "state_root": state_root.resolve().as_posix(),
+        "agent_tool_eligible": snapshot.coverage_complete,
+        "historical_pit_claim": False,
+        "evidence_promoted": False,
+        "execution_capability": False,
+    }
+
+
+def _syndication_source_bindings(
+    manifest: ObservationProviderManifest,
+    configs: tuple[SyndicationFeedSourceConfig, ...],
+) -> tuple[DataSourceBinding, ...]:
+    manifest_hash = canonical_hash(manifest.to_dict())
+    return tuple(
+        DataSourceBinding(
+            provider_id=manifest.provider_id,
+            provider_version=manifest.provider_version,
+            upstream_source=config.source_id,
+            manifest_hash=manifest_hash,
+            source_config_hash=config.artifact_hash,
+            required=True,
+        )
+        for config in configs
+    )
 
 
 def validate_agent_bundle(
@@ -1687,6 +1851,12 @@ def _aware_timestamp(value: str) -> datetime:
     return result
 
 
+def _utc_timestamp(value: datetime) -> str:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("timestamp must be timezone-aware")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
@@ -1742,6 +1912,45 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if snapshot.coverage_complete else 1
+    if args.command == "data" and args.data_command == "collect-feed":
+        try:
+            result = collect_syndication_feed_journal(
+                source_config_paths=tuple(args.source_configs),
+                window_start=args.window_start,
+                keywords=tuple(args.keyword),
+                max_items=args.max_items,
+                minimum_data_sources=args.minimum_data_sources,
+                state_root=args.state_root,
+                provider_timeout_seconds=args.provider_timeout_seconds,
+                poll_interval_seconds=args.poll_interval_seconds,
+                maximum_gap_seconds=args.maximum_gap_seconds,
+                cycles=args.cycles,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"collected": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["collected"] is True else 1
+    if args.command == "data" and args.data_command == "freeze-feed-dataset":
+        try:
+            result = freeze_syndication_feed_dataset(
+                policy_id=args.policy_id,
+                window_start=args.window_start,
+                not_after=args.not_after,
+                minimum_data_sources=args.minimum_data_sources,
+                state_root=args.state_root,
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(
+                json.dumps({"frozen": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["coverage_complete"] is True else 1
     if args.command == "archive" and args.archive_command == "common-crawl-verify":
         try:
             result = verify_common_crawl_archive(args.locator)

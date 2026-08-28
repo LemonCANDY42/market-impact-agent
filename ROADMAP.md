@@ -24,6 +24,20 @@ not begin because an earlier API exists; its acceptance evidence must exist.
   immutable Data Snapshots, persistent complete-snapshot cache, and bound read-only Agent tools.
   This is framework acceptance with fixture Providers, not acceptance of a historical or live
   vendor adapter.
+- [x] Add the local prospective receipt plane: content-identified collection policies, append-only
+  source receipts and version sightings, cadence/gap qualification, immutable Snapshot freeze,
+  Parquet/ZSTD projection, and reuse of the run-authorized frozen Snapshot Agent tool. Keep
+  SQLite/CAS authoritative, DuckDB/Polars optional, and distributed infrastructure deferred until
+  scale evidence exists.
+- [ ] Accept the first A-share prospective source set for official event facts, market/industry
+  context, positioning, macro vintages, and effective-dated tradable-universe mappings. Each route
+  must pass rights, transport, completeness, timestamp/revision, market-semantics, and deterministic
+  replay gates before it can support checkpoint experiments or paper operation.
+- [ ] Add Harness-owned Attention Watches after the receipt plane is accepted: content-identified
+  event/query scope, TTL and budgets, fixed/adaptive cadence, deterministic change/corroboration
+  triggers, durable restart state, duplicate suppression, and an idempotent wake-up outbox that
+  freezes a new Data Snapshot before starting a fresh Agent run. Watches remain read-only and cannot
+  submit paper or live orders.
 - [ ] Extend source-specific historical publication/vintage and revision adapters plus frozen
   latency models calibrated from prospective real-time receipts. The CSRC HTML/archive path proves
   one official source class; current snapshots and unadapted sources remain non-authoritative.

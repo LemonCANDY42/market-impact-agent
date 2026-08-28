@@ -45,6 +45,9 @@ The bootstrap implements:
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte
   retention, and records actual receipt without claiming historical PIT or article-body rights;
+- an append-only Prospective Receipt Journal that preserves every source attempt and content
+  revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
+  private Parquet/ZSTD analytical projections without becoming another evidence authority;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
@@ -259,6 +262,9 @@ publisher's original `published_at`, so it cannot yet admit a method-quality his
 The historical recovery ladder, publisher archive audit/materialization commands, remaining PIT
 gaps, and stock-versus-index price basis are in
 [docs/PIT_EVIDENCE_RECOVERY.md](docs/PIT_EVIDENCE_RECOVERY.md).
+The current and future data-plane layers, source gates, adopted or deferred infrastructure,
+continuous collection flow, and scale triggers are in
+[docs/DATA_PLATFORM_PLAN.md](docs/DATA_PLATFORM_PLAN.md).
 
 The research reset is now frozen in
 [docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts

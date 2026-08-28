@@ -173,6 +173,21 @@ receipt authority is introduced. Future receipts may calibrate future latency tr
 backdate historical evidence.
 _Avoid_: Current-page backfill, inferred historical availability, modeled delay
 
+**Prospective Receipt Journal**:
+An append-only, policy-bound record of prospective collection attempts, first actual receipts,
+immutable content versions, and later sightings. It may freeze a cadence-qualified selection into a
+Data Snapshot and emit a compressed analytical projection, but it is not a Source Observation,
+Evidence authority, feature store, scheduler, or execution ledger.
+_Avoid_: Latest-value cache, historical archive, data warehouse, broker journal
+
+**Attention Watch**:
+A Harness-approved, content-identified, expiring read-only policy that periodically reuses registered
+Data Queries and Providers for one event or entity, evaluates deterministic new-information
+triggers, and may enqueue one idempotent Agent wake-up bound to a newly frozen Data Snapshot. The
+Agent may propose a Watch; it cannot choose arbitrary network routes, keep itself resident, bypass
+budgets, mutate prior Judgments, notify arbitrary destinations, or submit an order from the Watch.
+_Avoid_: Long-running Agent, cron prompt, market-data stream, order trigger
+
 **Regime Agent Experiment Report**:
 A private, content-identified development diagnostic binding qualified checkpoint Evidence Packs,
 three paired runs per Method Arm, the exact Provider Profile, majority decisions, registered-open

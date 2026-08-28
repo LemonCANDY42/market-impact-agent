@@ -24,6 +24,8 @@ class Validator(Protocol):
         "data-query.schema.json",
         "data-snapshot.schema.json",
         "syndication-feed-source.schema.json",
+        "prospective-collection-policy.schema.json",
+        "prospective-dataset-manifest.schema.json",
         "event-transmission.schema.json",
         "backtest-request.schema.json",
         "backtest-result.schema.json",

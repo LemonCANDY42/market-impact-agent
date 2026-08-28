@@ -95,6 +95,44 @@ def test_feed_capture_cli_generates_cutoff_from_frozen_source_receipts() -> None
     assert not hasattr(args, "as_of")
 
 
+def test_feed_collection_and_freeze_cli_bind_cadence_and_cutoff() -> None:
+    collect = build_parser().parse_args(
+        [
+            "data",
+            "collect-feed",
+            "--source-config",
+            "examples/providers/federal-reserve-press-feed-v1.json",
+            "--window-start",
+            "2026-08-28T07:00:00Z",
+            "--poll-interval-seconds",
+            "60",
+            "--maximum-gap-seconds",
+            "90",
+            "--cycles",
+            "2",
+        ]
+    )
+    freeze = build_parser().parse_args(
+        [
+            "data",
+            "freeze-feed-dataset",
+            "--policy-id",
+            "prospective-collection-policy-" + "a" * 64,
+            "--window-start",
+            "2026-08-28T07:00:00Z",
+            "--not-after",
+            "2026-08-28T07:02:00Z",
+        ]
+    )
+
+    assert collect.data_command == "collect-feed"
+    assert collect.poll_interval_seconds == 60
+    assert collect.maximum_gap_seconds == 90
+    assert collect.cycles == 2
+    assert freeze.data_command == "freeze-feed-dataset"
+    assert freeze.not_after == datetime(2026, 8, 28, 7, 2, tzinfo=UTC)
+
+
 def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dependency() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = textwrap.dedent(

@@ -258,3 +258,44 @@ market-impact data capture-feed \
 
 The command returns a private Data Snapshot ID and its generated `capture_cutoff_at`. It does not
 promote observations to Evidence or grant any paper/live capability.
+
+## Continuous prospective collection
+
+For future PIT evidence, repeat the one-shot capture under a content-identified collection policy
+and append every result to the local Prospective Receipt Journal:
+
+```bash
+market-impact data collect-feed \
+  --source-config examples/providers/federal-reserve-press-feed-v1.json \
+  --window-start 2026-08-28T07:00:00Z \
+  --poll-interval-seconds 300 \
+  --maximum-gap-seconds 600 \
+  --cycles 2
+```
+
+Every source attempt remains visible. An identical upstream record and content hash becomes a new
+sighting of the existing version; changed content creates a new immutable version under the same
+lineage. `--cycles 0` is the explicit foreground continuous mode. It does not install a daemon or
+scheduler.
+
+Freeze only after the journal covers the requested interval:
+
+```bash
+market-impact data freeze-feed-dataset \
+  --policy-id prospective-collection-policy-<sha256> \
+  --window-start 2026-08-28T07:00:00Z \
+  --not-after 2026-08-28T07:10:00Z
+```
+
+The requested upper bound is not asserted as a receipt. The output Snapshot uses the last selected
+actual receipt as its effective cutoff. Missing start coverage, an internal cadence gap, a stale
+final receipt, or a failed required source makes the Snapshot incomplete and therefore unavailable
+to `FrozenDataSnapshotToolBinding`. A successful freeze also writes a private content-identified
+Parquet/ZSTD projection for efficient research scans. Exact source bytes remain in the existing
+content-addressed artifact store.
+
+The projection is created only for a complete Snapshot and binds that exact Snapshot ID and window;
+an incomplete cadence audit produces no standalone dataset manifest.
+
+See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
+matrix, A-share source order, operational limits, and evolution gates.

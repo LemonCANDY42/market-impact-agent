@@ -213,3 +213,8 @@ needs historically authoritative market, industry, and positioning versions at e
 Older industry cases also need the classification effective at their checkpoint; the current
 SW2021 backcast remains a hindsight-only opportunity bound. Until a new Qualification Report passes,
 Agent comparisons remain diagnostic and cannot support alpha, paper, or live claims.
+
+In parallel, the Prospective Receipt Journal and source-acceptance sequence in
+[DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) collect genuine future availability/authority and
+build reusable datasets. That path improves future backtests and paper/live inputs, but it does not
+change the remaining historical strict-PIT blockers above.
