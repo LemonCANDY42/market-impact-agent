@@ -4,11 +4,13 @@ import json
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 from typing import cast
 
 import pytest
 
+from market_impact_agent.accrual import OccurrenceSourceObservation
 from market_impact_agent.market_regimes import (
     EventAnchor,
     MarketRegimeCase,
@@ -18,6 +20,7 @@ from market_impact_agent.market_regimes import (
     RegimeTaxonomy,
     ValidatedRegimePanel,
 )
+from market_impact_agent.observations import AvailabilityBasis
 from market_impact_agent.regime_agent_experiment import select_checkpoint_records
 from market_impact_agent.regime_evidence import (
     RegimeEvidenceAuthorityKind,
@@ -28,11 +31,21 @@ from market_impact_agent.regime_evidence import (
     load_regime_evidence_manifest,
     load_regime_evidence_record,
     qualify_regime_evidence,
+    regime_evidence_from_actual_receipt,
     write_regime_evidence_manifest,
     write_regime_evidence_qualification_report,
     write_regime_evidence_record,
 )
 from market_impact_agent.regime_market_evidence import build_panel_authority_records
+from market_impact_agent.regime_modeled_pit import (
+    RegimeModeledPitCategoryRule,
+    RegimeModeledPitPolicy,
+    assert_modeled_checkpoint_qualified,
+    load_regime_modeled_pit_policy,
+    modeled_visible_records,
+    qualify_regime_evidence_modeled_pit,
+    write_regime_modeled_pit_qualification_report,
+)
 from market_impact_agent.regime_study import (
     RegimeBaselineProtocol,
     RegimeCheckpointProtocol,
@@ -41,6 +54,7 @@ from market_impact_agent.regime_study import (
     RegimeStudyRegistration,
     RegimeStudySource,
 )
+from market_impact_agent.research import EvidenceTier
 
 
 def _market_case(*, end: date) -> MarketRegimeCase:
@@ -320,6 +334,45 @@ def test_availability_basis_fails_closed_for_receipts_and_modeled_latency() -> N
             ),
             availability_basis=RegimeEvidenceAvailabilityBasis.ACTUAL_RECEIPT,
         )
+
+
+def test_prospective_actual_receipt_maps_to_canonical_regime_evidence() -> None:
+    retrieved_at = datetime(2026, 8, 28, 1, 25, tzinfo=UTC)
+    claim = "Exchange reports the current financing balance."
+    observation = OccurrenceSourceObservation(
+        provider_id="exchange-feed-v1",
+        upstream_source="sse",
+        upstream_record_id="margin-20260828",
+        source_ref="https://example.test/margin/20260828",
+        source_tier=EvidenceTier.REGULATED,
+        occurred_at=datetime(2026, 8, 27, 7, tzinfo=UTC),
+        published_at=datetime(2026, 8, 28, 1, 20, tzinfo=UTC),
+        source_updated_at=None,
+        available_at=retrieved_at,
+        retrieved_at=retrieved_at,
+        availability_basis=AvailabilityBasis.ACTUAL_RECEIPT,
+        raw_content_hash="a" * 64,
+        claim_summary=claim,
+        claim_hash=sha256(claim.encode()).hexdigest(),
+    )
+
+    record = regime_evidence_from_actual_receipt(
+        observation,
+        case_keys=("synthetic-weekly",),
+        category="positioning_or_expectations",
+        source_id="exchange-positioning-flow",
+        publisher_id="sse",
+        claim_id="margin-balance-20260828",
+        lineage_id="margin-balance-sse",
+        title="SSE financing balance for 2026-08-28",
+        license_scope="private_licensed",
+    )
+
+    assert record.available_at == retrieved_at
+    assert record.authority_at == retrieved_at
+    assert record.availability_basis is RegimeEvidenceAvailabilityBasis.ACTUAL_RECEIPT
+    assert record.authority_kind is RegimeEvidenceAuthorityKind.ACTUAL_RECEIPT
+    assert record.content_hash == observation.raw_content_hash
 
     with pytest.raises(ValueError, match="latency model"):
         replace(
@@ -808,4 +861,170 @@ def test_private_evidence_artifacts_are_content_named_and_mode_0600(
         write_regime_evidence_qualification_report(
             changed_report,
             root=tmp_path / "qualifications",
+        )
+
+
+def _modeled_policy(*, news_delay_seconds: int = 0) -> RegimeModeledPitPolicy:
+    return RegimeModeledPitPolicy.build(
+        version="test-modeled-pit-v1",
+        description="Synthetic opened-outcome modeled-PIT process diagnostic.",
+        category_rules=tuple(
+            RegimeModeledPitCategoryRule(
+                category=category,
+                visibility_basis=(
+                    "prior_session_panel_snapshot"
+                    if category in {"market_price", "industry_price"}
+                    else "record_available_at_plus_safety_delay"
+                ),
+                allowed_availability_bases=(
+                    RegimeEvidenceAvailabilityBasis.ACTUAL_RECEIPT,
+                    RegimeEvidenceAvailabilityBasis.SOURCE_REPORTED,
+                    RegimeEvidenceAvailabilityBasis.MODELED_LATENCY,
+                ),
+                safety_delay_seconds=(news_delay_seconds if category == "established_news" else 0),
+            )
+            for category in (
+                "market_price",
+                "industry_price",
+                "official_context",
+                "macro_vintage",
+                "established_news",
+                "positioning_or_expectations",
+                "issuer_or_sector_fundamentals",
+            )
+        ),
+    )
+
+
+def test_modeled_pit_qualifies_reconstruction_without_promoting_strict_authority(
+    tmp_path: Path,
+) -> None:
+    registration = _registration()
+    dataset = _dataset()
+    panel = _validated_panel(dataset)
+    checkpoint = generate_regime_checkpoints(
+        dataset.cases[0],
+        registration.cases[0],
+        protocol=registration.checkpoint_protocol,
+        trading_dates=(date(2020, 1, 2),),
+    )[0]
+    records = (
+        *build_panel_authority_records(
+            panel,
+            market_case=dataset.cases[0],
+            checkpoints=(checkpoint,),
+        ),
+        _record(
+            source_id="official",
+            category="official_context",
+            publisher_id="official",
+            suffix="1",
+        ),
+        _record(source_id="macro", category="macro_vintage", publisher_id="macro", suffix="2"),
+        _record(
+            source_id="positioning",
+            category="positioning_or_expectations",
+            publisher_id="exchange",
+            suffix="3",
+        ),
+        _record(
+            source_id="news-a",
+            category="established_news",
+            publisher_id="publisher-a",
+            suffix="4",
+        ),
+        _record(
+            source_id="news-b",
+            category="established_news",
+            publisher_id="publisher-b",
+            suffix="5",
+        ),
+    )
+    manifest = RegimeEvidenceManifest.build(
+        dataset_id=dataset.dataset_id,
+        dataset_hash=dataset.dataset_hash,
+        registration_id=registration.registration_id,
+        registration_hash=registration.registration_hash,
+        panel_id=panel.panel_id,
+        panel_hash=panel.panel_hash,
+        outcomes_opened=True,
+        records=records,
+    )
+    strict = qualify_regime_evidence(dataset, panel, registration, manifest)
+    policy = _modeled_policy()
+
+    modeled = qualify_regime_evidence_modeled_pit(
+        dataset,
+        panel,
+        registration,
+        manifest,
+        strict,
+        policy,
+    )
+
+    assert strict["diagnostic_agent_run_eligible"] is False
+    assert modeled["eligible_checkpoint_count"] == 1
+    assert modeled["exploratory_agent_run_eligible"] is True
+    assert modeled["strict_pit_eligible"] is False
+    assert modeled["inference_eligible"] is False
+    modeled_case = cast(list[dict[str, object]], modeled["cases"])[0]
+    modeled_checkpoint = cast(list[dict[str, object]], modeled_case["checkpoints"])[0]
+    requirements = cast(list[dict[str, object]], modeled_checkpoint["requirements"])
+    market = next(item for item in requirements if item["category"] == "market_price")
+    assert market["ready"] is True
+    assert market["point_in_time_authority"] is False
+    assert market["authority_gap"] is True
+    assert (
+        assert_modeled_checkpoint_qualified(
+            modeled,
+            case_key=dataset.cases[0].case_key,
+            session_date=checkpoint.session_date,
+            manifest_id=manifest.manifest_id,
+            policy_id=policy.policy_id,
+        )["ready"]
+        is True
+    )
+    with pytest.raises(ValueError, match="exploratory qualification"):
+        assert_modeled_checkpoint_qualified(
+            strict,
+            case_key=dataset.cases[0].case_key,
+            session_date=checkpoint.session_date,
+            manifest_id=manifest.manifest_id,
+            policy_id=policy.policy_id,
+        )
+    visible = modeled_visible_records(
+        manifest.records,
+        market_case=dataset.cases[0],
+        study_case=registration.cases[0],
+        registration=registration,
+        checkpoint=checkpoint,
+        policy=policy,
+    )
+    assert {item.category for item in visible} == {
+        "market_price",
+        "industry_price",
+        "official_context",
+        "macro_vintage",
+        "established_news",
+        "positioning_or_expectations",
+    }
+    path = write_regime_modeled_pit_qualification_report(modeled, root=tmp_path)
+    assert path.name == f"{modeled['report_id']}.json"
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_modeled_pit_policy_is_content_addressed_and_requires_all_unique_categories(
+    tmp_path: Path,
+) -> None:
+    policy = _modeled_policy()
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(policy.to_dict()), encoding="utf-8")
+
+    assert load_regime_modeled_pit_policy(path) == policy
+    duplicate = (*policy.category_rules[:-1], policy.category_rules[0])
+    with pytest.raises(ValueError, match="every category exactly once"):
+        RegimeModeledPitPolicy.build(
+            version="duplicate-v1",
+            description="Invalid duplicate category policy.",
+            category_rules=duplicate,
         )

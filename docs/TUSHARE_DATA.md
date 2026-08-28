@@ -110,7 +110,12 @@ mode `0700` and contains mode-`0600` files:
 
 A hardened v2 bundle also contains `adj_factors.parquet` and `stock_limits.parquet`. Its
 `data_start_date` may precede the evaluation start so a pre-cutoff momentum rule can observe
-adjusted closes. Adjustment-factor changes are allowed only in that observation segment.
+cutoff-normalized adjusted closes. For the last factor `F_c` whose session ends by the cutoff,
+the research series is `raw_close_t * F_t / F_c`; sessions and factors after the cutoff do not
+enter it. This removes corporate-action discontinuities without presenting an adjusted price as
+an executable quote. A bundle retrieved later is still a retrospective reconstruction and does
+not prove that its factor version existed at the historical cutoff. Adjustment-factor changes are
+allowed only in that observation segment.
 The evaluation segment must keep one factor, and the replay uses unadjusted daily prices plus
 source-provided limits from `evaluation_start_date` onward. Every hardened table must cover
 exactly the same open sessions and retain independent query provenance and hashes.
@@ -134,6 +139,11 @@ fails closed because `daily` alone cannot distinguish a genuine suspension from 
 data. The pipeline does not synthesize order-book depth, suspension state, or executable
 opening liquidity from OHLCV. Adjustment factors are used only for registered pre-cutoff
 observation rules; they do not turn the source into observed executable prices.
+
+The regime panel is different: `index_daily` and `sw_daily` are price indices, so stock-style
+adjustment factors do not apply. They are suitable for descriptive price-index movement. A claim
+about investor total return requires a point-in-time total-return index or an implementable ETF
+path including distributions, costs, and corporate actions. See `PIT_EVIDENCE_RECOVERY.md`.
 
 ## Acceptance status
 

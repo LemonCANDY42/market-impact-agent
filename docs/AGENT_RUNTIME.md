@@ -63,7 +63,11 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - read-only result replay after restart; mutating-tool duplicate-side-effect acceptance is
   outside the current surface;
 - terminal replay revalidates the journal chain and binds the stored artifact to the exact run,
-  journal tail, terminal status, and run-row timestamps.
+  journal tail, terminal status, and run-row timestamps. A completed Judgment also has to match the
+  `judgment.validated` proposal, transcript, and metrics hashes plus the final model-turn assistant
+  payload and raw-response artifact; a separately rewritten canonical terminal object fails closed.
+  Every returned `ModelTurn.model` and replayed Judgment Provider/model identity must exactly match
+  the active frozen Provider Profile, including for replaceable custom Provider implementations.
 
 ### Context and automatic compaction
 
@@ -134,6 +138,9 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - local inspection and an append-only Usage Ledger report tokens, estimated cost, latency,
   retries, context pressure, and terminal state for successful and failed runs without
   exposing secrets or licensed payloads;
+- multi-experiment cost reports reconcile every supplied Usage Ledger by exact Run ID, reject
+  conflicting duplicate payloads, and bind the content hash, status counts, unique-run count, and
+  full estimated-cost union instead of accepting a caller-supplied historical total;
 - deterministic fixtures cover ordinary turns, multi-tool turns, tool errors, retry/resume,
   cancellation, compaction, Skill activation, MCP failure, malformed output, and injection;
 - one locked MiniMax M3 acceptance corpus is run without broker reachability;

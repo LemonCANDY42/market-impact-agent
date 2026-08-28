@@ -121,6 +121,9 @@ def _case_report(
                 "eligible_horizon_sessions": 5,
                 "eligible_open_to_close_return": "0.01000000",
                 "evidence_pack_id": "evidence-pack-" + str(index + 1) * 64,
+                "paired_registration_id": "method-skill-ablation-" + str(index + 5) * 64,
+                "paired_registration_hash": str(index + 5) * 64,
+                "common_input_hash": "a" * 64,
                 "report_id": "paired-report-" + str(index + 1) * 64,
                 "actual_model_cost_microusd": checkpoint_costs[index],
                 "arms": [

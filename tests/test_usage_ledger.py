@@ -6,7 +6,11 @@ import pytest
 
 from market_impact_agent.agent_engine import AgentRunResult, RunMetrics
 from market_impact_agent.runtime_store import RunStatus
-from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
+from market_impact_agent.usage_ledger import (
+    UsageLedger,
+    UsageRecord,
+    reconcile_usage_ledgers,
+)
 
 NOW = datetime(2026, 8, 26, 12, tzinfo=UTC)
 
@@ -67,3 +71,51 @@ def test_usage_ledger_covers_success_and_failure_with_an_append_only_hash_chain(
             "UPDATE usage_records SET payload_hash = ? WHERE run_id = ?",
             ("0" * 64, "completed-run"),
         )
+
+
+def test_usage_ledger_union_deduplicates_identical_runs_and_reconciles_cost(
+    tmp_path: Path,
+) -> None:
+    first = UsageLedger(tmp_path / "first" / "usage.sqlite3")
+    second = UsageLedger(tmp_path / "second" / "usage.sqlite3")
+    shared = _record("shared-run", RunStatus.COMPLETED, 10)
+    first.append(shared)
+    first.append(_record("failed-run", RunStatus.FAILED, 3))
+    second.append(shared)
+    second.append(_record("other-run", RunStatus.COMPLETED, 7))
+
+    result = reconcile_usage_ledgers((first.path, second.path))
+
+    assert result.ledger_count == 2
+    assert result.duplicate_record_count == 1
+    assert result.unique_run_count == 3
+    assert result.completed_run_count == 2
+    assert result.failed_run_count == 1
+    assert result.total_estimated_cost_microusd == 20
+    assert result.status_counts == {"completed": 2, "failed": 1}
+    assert tuple(item.run_id for item in result.records) == (
+        "failed-run",
+        "other-run",
+        "shared-run",
+    )
+    assert len(result.union_hash) == 64
+
+
+def test_usage_ledger_union_rejects_conflicting_duplicate_run_ids(tmp_path: Path) -> None:
+    first = UsageLedger(tmp_path / "first" / "usage.sqlite3")
+    second = UsageLedger(tmp_path / "second" / "usage.sqlite3")
+    first.append(_record("shared-run", RunStatus.COMPLETED, 10))
+    second.append(_record("shared-run", RunStatus.COMPLETED, 11))
+
+    with pytest.raises(ValueError, match="conflicting content"):
+        reconcile_usage_ledgers((first.path, second.path))
+
+
+def test_usage_ledger_union_rejects_symlinked_ledgers(tmp_path: Path) -> None:
+    ledger = UsageLedger(tmp_path / "real" / "usage.sqlite3")
+    ledger.append(_record("completed-run", RunStatus.COMPLETED, 10))
+    link = tmp_path / "linked.sqlite3"
+    link.symlink_to(ledger.path)
+
+    with pytest.raises(ValueError, match="real ledger files"):
+        reconcile_usage_ledgers((link,))

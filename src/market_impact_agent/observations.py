@@ -24,6 +24,12 @@ PREDICTION_MARKET_BATCH_SCHEMA = "market-impact.prediction-market-batch.v1"
 
 
 class ObservationCapability(StrEnum):
+    EVENT_REVELATION = "event_revelation"
+    PRIOR_EXPECTATION = "prior_expectation"
+    MARKET_CONTEXT = "market_context"
+    EXPOSURE_CANDIDATES = "exposure_candidates"
+    POSITIONING = "positioning"
+    MACRO_VINTAGE = "macro_vintage"
     PREDICTION_MARKET_DISCOVERY = "prediction_market_discovery"
     PREDICTION_MARKET_SNAPSHOT = "prediction_market_snapshot"
     PREDICTION_MARKET_HISTORY = "prediction_market_history"

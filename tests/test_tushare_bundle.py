@@ -623,7 +623,7 @@ def test_hardened_bundle_uses_adjusted_observation_history_before_replay(
         visible_at=datetime(2019, 9, 18, 23, 59, 59, tzinfo=UTC),
     )
 
-    assert closes == ((datetime(2019, 9, 18, 7, tzinfo=UTC), Decimal("4.98") * Decimal("6.7")),)
+    assert closes == ((datetime(2019, 9, 18, 7, tzinfo=UTC), Decimal("4.98")),)
 
 
 def test_bundle_identity_binds_calendar_and_daily_retrieval_times(tmp_path: Path) -> None:

@@ -119,11 +119,23 @@ not pass. The six-case calls instead expose an always-abstain behavior with no S
 increment; descriptive same-window baselines show missed rallies and sector rotation. No method is
 promoted, and no execution gate changes.
 
+The later Modeled-PIT process diagnostic used recovered article bodies and a separate exploratory
+qualification without changing strict PIT. All 108 corrected-horizon runs still abstained and every
+checkpoint remained decision-identical across arms. Run-level blockers concentrated on horizon
+persistence (108/108), event identity or attribution (106/108), and expectation delta (105/108).
+This result does not demote the routed Skills: the common event, horizon, and target contract blocked
+both arms before a method-specific increment could be observed. Another Skill ablation should wait
+for a registered event fact, prior expectation, mechanism-appropriate horizon set, and executable
+target mapping.
+
 ## Reproduction boundary
 
 The public command is `agent method-skill-ablation-run`. It requires exactly three paired
 replicates, one appended treatment Skill, a content-bound Method Evidence Declaration, a live local
-CPA pricing snapshot matching the frozen Provider Profile, and a hard cap no greater than $10.
+CPA pricing snapshot matching the frozen Provider Profile, an explicit
+`--eligible-horizon-sessions` equal to the registered outcome horizon, and a hard cap no greater
+than $10. The horizon is passed into the common Agent instruction and later rechecked against any
+proposed candidate; a caller cannot rely on the runner's former one-session default.
 Registration is written only after evidence-reference, pricing, routing, dependency, capability,
 and common-input checks pass. Every terminal run enters the
 append-only Usage Ledger; the report remains inference-ineligible and execution-free.

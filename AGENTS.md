@@ -2,8 +2,10 @@
 
 ## Outcome
 
-Build the smallest auditable harness that converts point-in-time event evidence
-into policy-gated intents consumable by replaceable trading engines.
+Build the smallest auditable path to Agent-directed automated paper and live
+trading. The current harness converts point-in-time event evidence into
+policy-gated intents consumable by replaceable trading engines while later
+execution phases remain fail-closed until their acceptance gates pass.
 
 ## Boundaries
 

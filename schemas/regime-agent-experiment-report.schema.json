@@ -87,6 +87,9 @@
         "eligible_horizon_sessions",
         "eligible_open_to_close_return",
         "evidence_pack_id",
+        "paired_registration_id",
+        "paired_registration_hash",
+        "common_input_hash",
         "report_id",
         "actual_model_cost_microusd",
         "arms",
@@ -98,6 +101,18 @@
         "eligible_horizon_sessions": {"type": "integer", "minimum": 1},
         "eligible_open_to_close_return": {"$ref": "#/$defs/decimal"},
         "evidence_pack_id": {"type": "string", "minLength": 1},
+        "paired_registration_id": {
+          "type": "string",
+          "pattern": "^method-skill-ablation-[0-9a-f]{64}$"
+        },
+        "paired_registration_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "common_input_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
         "report_id": {"type": "string", "minLength": 1},
         "actual_model_cost_microusd": {"type": "integer", "minimum": 0},
         "arms": {

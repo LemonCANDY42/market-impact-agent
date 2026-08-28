@@ -31,6 +31,7 @@ from market_impact_agent.method_skills import (
     MethodEvidenceDeclaration,
     MethodSkill,
 )
+from market_impact_agent.paired_skill_ablation_contract import paired_skill_common_input_hash
 from market_impact_agent.regime_evidence import (
     RegimeCheckpoint,
     RegimeEvidenceManifest,
@@ -67,9 +68,21 @@ class RegimeCheckpointBundle:
 class CompletedRegimeCheckpointExperiment:
     checkpoint: RegimeCheckpoint
     eligible_horizon_sessions: int
-    evidence_pack_id: str
+    evidence_pack: EvidencePack
+    method_evidence_declaration: MethodEvidenceDeclaration
     registration: Mapping[str, object]
     report: Mapping[str, object]
+    execution_audit_paths: PairedExecutionAuditPaths | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PairedExecutionAuditPaths:
+    experiment_root: Path
+    evidence_pack_path: Path
+    evidence_documents_path: Path
+    pattern_pack_paths: tuple[Path, ...]
+    provider_profile_path: Path
+    skill_root: Path
 
 
 def build_regime_agent_experiment_report(
@@ -127,6 +140,7 @@ def build_regime_agent_experiment_report(
     for item in ordered:
         report = item.report
         registration = item.registration
+        registration_hash, common_input_hash = validate_paired_experiment_identity(item)
         if (
             report.get("diagnostic_valid") is not True
             or report.get("replicate_count") != 3
@@ -134,10 +148,6 @@ def build_regime_agent_experiment_report(
             or report.get("execution_capability") != "none"
         ):
             raise ValueError("regime experiment contains an invalid checkpoint report")
-        if report.get("registration_id") != registration.get("registration_id"):
-            raise ValueError("regime experiment report does not bind its registration")
-        if registration.get("evidence_pack_id") != item.evidence_pack_id:
-            raise ValueError("regime experiment registration does not bind its Evidence Pack")
         provider_profile_id = registration.get("provider_profile_id")
         if not isinstance(provider_profile_id, str) or not provider_profile_id:
             raise TypeError("regime experiment provider profile identity is invalid")
@@ -146,7 +156,7 @@ def build_regime_agent_experiment_report(
         if not isinstance(treatment_difference, str) or not treatment_difference:
             raise TypeError("regime experiment treatment difference is invalid")
         treatment_differences.add(treatment_difference)
-        evidence_pack_ids.append(item.evidence_pack_id)
+        evidence_pack_ids.append(item.evidence_pack.pack_id)
         raw_cost = report.get("cost")
         if not isinstance(raw_cost, Mapping):
             raise TypeError("regime experiment cost record is invalid")
@@ -210,7 +220,10 @@ def build_regime_agent_experiment_report(
                 "cutoff_at": _timestamp(item.checkpoint.cutoff_at),
                 "eligible_horizon_sessions": item.eligible_horizon_sessions,
                 "eligible_open_to_close_return": _format(eligible_return),
-                "evidence_pack_id": item.evidence_pack_id,
+                "evidence_pack_id": item.evidence_pack.pack_id,
+                "paired_registration_id": registration.get("registration_id"),
+                "paired_registration_hash": registration_hash,
+                "common_input_hash": common_input_hash,
                 "report_id": report.get("report_id"),
                 "actual_model_cost_microusd": actual_cost,
                 "arms": aggregates,
@@ -313,6 +326,81 @@ def build_regime_agent_experiment_report(
     }
 
 
+def validate_paired_experiment_identity(
+    item: CompletedRegimeCheckpointExperiment,
+) -> tuple[str, str]:
+    registration = dict(item.registration)
+    registration_errors = validate_agent_contract(
+        registration,
+        "method-skill-ablation-registration.schema.json",
+    )
+    if registration_errors:
+        raise ValueError("; ".join(registration_errors))
+    registration_core = {
+        key: value for key, value in registration.items() if key != "registration_id"
+    }
+    registration_hash = canonical_hash(registration_core)
+    if registration.get("registration_id") != f"method-skill-ablation-{registration_hash}":
+        raise ValueError("regime experiment registration is not content-addressed")
+
+    report = dict(item.report)
+    if report.get("schema_version") != "market-impact.method-skill-ablation-report.v2":
+        raise ValueError("regime experiment paired report schema is unsupported")
+    report_core = {key: value for key, value in report.items() if key != "report_id"}
+    if report.get("report_id") != f"method-skill-ablation-report-{canonical_hash(report_core)}":
+        raise ValueError("regime experiment paired report is not content-addressed")
+    if (
+        report.get("registration_id") != registration.get("registration_id")
+        or report.get("registration_hash") != registration_hash
+        or report.get("experiment_id") != registration.get("experiment_id")
+    ):
+        raise ValueError("regime experiment report does not bind its registration")
+    if report.get("provider_profile_id") != registration.get("provider_profile_id") or report.get(
+        "provider_profile_hash"
+    ) != registration.get("provider_profile_hash"):
+        raise ValueError("regime experiment report provider binding drifted")
+    method_route = report.get("method_route")
+    if not isinstance(method_route, Mapping):
+        raise TypeError("regime experiment report method route is invalid")
+    typed_method_route = cast(Mapping[str, object], method_route)
+    if typed_method_route.get("route_id") != registration.get("method_route_id"):
+        raise ValueError("regime experiment report method route binding drifted")
+    treatment_skills = registration.get("treatment_skills")
+    if not isinstance(treatment_skills, list) or not treatment_skills:
+        raise TypeError("regime experiment treatment Skills are invalid")
+    if report.get("only_treatment_difference") != treatment_skills[-1]:
+        raise ValueError("regime experiment treatment binding drifted")
+
+    evidence_pack_hash = canonical_hash(item.evidence_pack.to_dict())
+    outcomes_opened = registration.get("outcomes_opened")
+    if not isinstance(outcomes_opened, bool):
+        raise TypeError("regime experiment outcome visibility is invalid")
+    item.method_evidence_declaration.validate_against(
+        evidence_pack_id=item.evidence_pack.pack_id,
+        evidence_pack_hash=evidence_pack_hash,
+        evidence_ids=frozenset(value.evidence_id for value in item.evidence_pack.evidence),
+        pattern_pack_ids=frozenset(value.pack_id for value in item.evidence_pack.pattern_packs),
+        outcomes_opened=outcomes_opened,
+    )
+    if (
+        registration.get("evidence_pack_id") != item.evidence_pack.pack_id
+        or registration.get("evidence_pack_hash") != evidence_pack_hash
+        or registration.get("method_evidence_declaration_id")
+        != item.method_evidence_declaration.declaration_id
+        or registration.get("method_evidence_declaration_hash")
+        != item.method_evidence_declaration.declaration_hash
+    ):
+        raise ValueError("regime experiment registration input bindings drifted")
+    common_input_hash = paired_skill_common_input_hash(
+        item.evidence_pack,
+        item.method_evidence_declaration,
+        eligible_horizon_sessions=item.eligible_horizon_sessions,
+    )
+    if registration.get("common_input_hash") != common_input_hash:
+        raise ValueError("regime experiment registered horizon or common input drifted")
+    return registration_hash, common_input_hash
+
+
 def write_regime_agent_experiment_report(
     report: Mapping[str, object],
     *,
@@ -378,7 +466,7 @@ def materialize_regime_checkpoint_bundle(
     primary = series_by_id.get(market_case.primary_market_index)
     if primary is None:
         raise ValueError("regime checkpoint primary market series is unavailable")
-    horizon_sessions = _eligible_horizon_sessions(
+    horizon_sessions = eligible_horizon_sessions(
         primary,
         checkpoint.session_date,
         next_checkpoint_date=next_checkpoint_date,
@@ -391,6 +479,53 @@ def materialize_regime_checkpoint_bundle(
         registration=registration,
         checkpoint=checkpoint,
     )
+    return materialize_regime_checkpoint_bundle_from_visible_records(
+        validated_panel=validated_panel,
+        market_case=market_case,
+        study_case=study_case,
+        registration=registration,
+        manifest=manifest,
+        checkpoint=checkpoint,
+        horizon_sessions=horizon_sessions,
+        treatment_method=treatment_method,
+        pattern_pack=pattern_pack,
+        pattern_pack_path=pattern_pack_path,
+        official_documents_by_hash=official_documents_by_hash,
+        news_documents_by_hash=news_documents_by_hash,
+        positioning_documents_by_hash=positioning_documents_by_hash,
+        output_root=output_root,
+        visible=visible,
+        evidence_scope_ref=manifest.manifest_id,
+        safety_delay_seconds_by_category={},
+        data_gaps=(
+            "the price index is a non-executable research proxy with no registered ETF mapping",
+            "historical provider rows authenticate modeled availability, not original receipt",
+            "the opened development case may be recognizable despite target aliasing",
+        ),
+    )
+
+
+def materialize_regime_checkpoint_bundle_from_visible_records(
+    *,
+    validated_panel: ValidatedRegimePanel,
+    market_case: MarketRegimeCase,
+    study_case: RegimeStudyCase,
+    registration: RegimeStudyRegistration,
+    manifest: RegimeEvidenceManifest,
+    checkpoint: RegimeCheckpoint,
+    horizon_sessions: int,
+    treatment_method: MethodSkill,
+    pattern_pack: PatternPack,
+    pattern_pack_path: Path,
+    official_documents_by_hash: Mapping[str, Mapping[str, object]],
+    news_documents_by_hash: Mapping[str, Mapping[str, object]],
+    positioning_documents_by_hash: Mapping[str, Mapping[str, object]],
+    output_root: Path,
+    visible: tuple[RegimeEvidenceRecord, ...],
+    evidence_scope_ref: str,
+    safety_delay_seconds_by_category: Mapping[str, int],
+    data_gaps: tuple[str, ...],
+) -> RegimeCheckpointBundle:
     by_category = {
         category: tuple(item for item in visible if item.category == category)
         for category in (
@@ -474,11 +609,15 @@ def materialize_regime_checkpoint_bundle(
                 evidence_id=evidence_id,
                 claim_id=claim_id,
                 source_ref=(
-                    f"regime-manifest://{manifest.manifest_id}/{market_case.case_key}/"
+                    f"regime-manifest://{evidence_scope_ref}/{market_case.case_key}/"
                     f"{checkpoint.session_date.isoformat()}/{category}"
                 ),
                 source_tier=tier,
-                available_at=max(item.available_at for item in records),
+                available_at=max(
+                    item.available_at
+                    + timedelta(seconds=safety_delay_seconds_by_category.get(category, 0))
+                    for item in records
+                ),
                 content_hash=canonical_hash(document),
                 summary=summary,
                 untrusted_text=True,
@@ -489,6 +628,7 @@ def materialize_regime_checkpoint_bundle(
         + canonical_hash(
             {
                 "manifest_id": manifest.manifest_id,
+                "evidence_scope_ref": evidence_scope_ref,
                 "case_key": market_case.case_key,
                 "checkpoint": checkpoint.session_date.isoformat(),
             }
@@ -505,11 +645,7 @@ def materialize_regime_checkpoint_bundle(
         evidence=tuple(references),
         pattern_packs=(pattern_reference,),
         allowed_targets=(_TARGET_ALIAS,),
-        data_gaps=(
-            "the price index is a non-executable research proxy with no registered ETF mapping",
-            "historical provider rows authenticate modeled availability, not original receipt",
-            "the opened development case may be recognizable despite target aliasing",
-        ),
+        data_gaps=data_gaps,
     )
     pack_hash = canonical_hash(pack.to_dict())
     source_by_id = {item.source_id: item for item in registration.source_catalog}
@@ -588,6 +724,11 @@ def assert_checkpoint_qualified(
     session_date: date,
     manifest_id: str,
 ) -> dict[str, object]:
+    if (
+        qualification_report.get("schema_version")
+        != "market-impact.regime-evidence-qualification-report.v1"
+    ):
+        raise ValueError("regime experiment requires a strict PIT qualification report")
     if qualification_report.get("manifest_id") != manifest_id:
         raise ValueError("regime experiment qualification does not bind the evidence manifest")
     raw_cases = qualification_report.get("cases")
@@ -815,7 +956,7 @@ def evaluate_checkpoint_exposure_path(
     )
 
 
-def _eligible_horizon_sessions(
+def eligible_horizon_sessions(
     primary: RegimeSeries,
     checkpoint_date: date,
     *,

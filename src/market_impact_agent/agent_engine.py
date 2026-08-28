@@ -328,7 +328,7 @@ class AgentEngine:
             created_at=started_at,
         )
         if record.status.terminal:
-            return self._terminal_result(record)
+            return self._terminal_result(record, surface=surface)
         metrics = _MutableMetrics()
         try:
             return await self._run_with_control(
@@ -467,6 +467,7 @@ class AgentEngine:
             event_id = f"{request.run_id}.turn.{turn_number}"
             existing = self.journal.event(event_id)
             if existing is None:
+                self._validate_active_provider_identity()
                 turn = await self.provider.complete(
                     messages=ledger.messages(),
                     tools=() if contract_corrections else model_tools,
@@ -481,6 +482,9 @@ class AgentEngine:
             else:
                 turn = self._load_turn(existing, surface=surface)
             self._record_turn_metrics(metrics, turn)
+            self._validate_active_provider_identity()
+            if turn.model != self.config.model:
+                raise ValueError("Model Provider returned an unexpected model identity")
             _enforce_run_budgets(metrics, self.config)
             last_raw_response_hash = canonical_hash(turn.raw_response)
             ledger.append(_assistant_entry(request.run_id, turn_number, turn))
@@ -549,8 +553,8 @@ class AgentEngine:
             judgment = JudgmentArtifact.build(
                 run_id=request.run_id,
                 evidence_pack_id=request.evidence_pack.pack_id,
-                provider_id=self.provider.provider_id,
-                model=self.provider.model,
+                provider_id=self.config.provider_id,
+                model=self.config.model,
                 runtime_config_hash=self.config.config_hash,
                 prompt_hash=prompt_hash,
                 skill_hashes=tuple(item.manifest.manifest_hash for item in loaded_skills),
@@ -851,7 +855,12 @@ class AgentEngine:
             metrics=frozen_metrics,
         )
 
-    def _terminal_result(self, record: RunRecord) -> AgentRunResult:
+    def _terminal_result(
+        self,
+        record: RunRecord,
+        *,
+        surface: _ExecutionSurface,
+    ) -> AgentRunResult:
         if record.terminal_artifact_id is None:
             raise ValueError("terminal run is missing its terminal artifact identity")
         journal_hash = self.journal.journal_hash(record.run_id)
@@ -867,6 +876,11 @@ class AgentEngine:
                 raise ValueError("terminal judgment start time does not match the run record")
             if judgment.finished_at != record.updated_at:
                 raise ValueError("terminal judgment finish time does not match the run record")
+            self._validate_completed_judgment(
+                judgment,
+                metrics=metrics,
+                surface=surface,
+            )
             return AgentRunResult(
                 run_id=record.run_id,
                 status=record.status,
@@ -887,6 +901,63 @@ class AgentEngine:
             terminal_store_hash=record.terminal_artifact_id,
             metrics=metrics,
         )
+
+    def _validate_completed_judgment(
+        self,
+        judgment: JudgmentArtifact,
+        *,
+        metrics: RunMetrics,
+        surface: _ExecutionSurface,
+    ) -> None:
+        if judgment.provider_id != self.config.provider_id or judgment.model != self.config.model:
+            raise ValueError("terminal judgment Provider identity differs from the active Provider")
+        events = self.journal.events(judgment.run_id)
+        if not events:
+            raise ValueError("completed judgment has no Run Journal events")
+        proposal_event = events[-1]
+        if (
+            proposal_event.event_id != f"{judgment.run_id}.proposal.validated"
+            or proposal_event.event_type != "judgment.validated"
+            or proposal_event.event_hash != judgment.journal_hash
+        ):
+            raise ValueError("terminal judgment is not bound to the validation event")
+        proposal_payload = proposal_event.payload
+        if set(proposal_payload) != {
+            "proposal_hash",
+            "transcript_hash",
+            "metrics_hash",
+            "metrics",
+        }:
+            raise ValueError("judgment validation event has an unexpected contract")
+        if _payload_string(proposal_payload, "proposal_hash") != canonical_hash(
+            judgment.proposal.to_dict()
+        ):
+            raise ValueError("terminal judgment proposal differs from the validation event")
+        if _payload_string(proposal_payload, "transcript_hash") != judgment.transcript_hash:
+            raise ValueError("terminal judgment transcript differs from the validation event")
+        transcript = self.artifact_store.read_json(judgment.transcript_hash)
+        if not isinstance(transcript, list):
+            raise TypeError("terminal judgment transcript artifact must be an array")
+        expected_metrics = metrics.to_dict()
+        if _payload_mapping(proposal_payload, "metrics") != expected_metrics:
+            raise ValueError("terminal judgment metrics differ from the Run Journal")
+        metrics_hash = _payload_string(proposal_payload, "metrics_hash")
+        if metrics_hash != canonical_hash(expected_metrics):
+            raise ValueError("terminal judgment metrics hash differs from the Run Journal")
+        if self.artifact_store.read_json(metrics_hash) != expected_metrics:
+            raise ValueError("terminal judgment metrics artifact differs from the Run Journal")
+        turn_events = tuple(item for item in events if item.event_type == "model.turn.completed")
+        if not turn_events:
+            raise ValueError("completed judgment has no model turn")
+        final_turn = self._load_turn(turn_events[-1], surface=surface)
+        if final_turn.tool_calls:
+            raise ValueError("terminal judgment cannot bind a tool-call turn")
+        if final_turn.model != self.config.model:
+            raise ValueError("terminal judgment model differs from the final model turn")
+        if final_turn.raw_response_hash != judgment.raw_response_hash:
+            raise ValueError("terminal judgment raw response differs from the final model turn")
+        if _proposal_from_assistant(final_turn).to_dict() != judgment.proposal.to_dict():
+            raise ValueError("terminal judgment proposal differs from the final model turn")
 
     def _metrics_from_journal(self, run_id: str) -> RunMetrics:
         metrics = _MutableMetrics()
@@ -956,6 +1027,13 @@ class AgentEngine:
     def _check_cancel(self, cancellation: CancellationToken) -> None:
         if cancellation.cancelled:
             raise _RunCancelled("run was cancelled by the Harness kill control")
+
+    def _validate_active_provider_identity(self) -> None:
+        if (
+            self.provider.provider_id != self.config.provider_id
+            or self.provider.model != self.config.model
+        ):
+            raise ValueError("active Model Provider identity drifted from RuntimeConfig")
 
     def _redacted_message(self, value: str) -> str:
         cleaned = value

@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 
+from market_impact_agent.agent_contracts import EvidencePack, EvidenceReference, canonical_hash
 from market_impact_agent.market_regimes import (
     MarketRegimeCase,
     RegimePanel,
@@ -14,6 +15,8 @@ from market_impact_agent.market_regimes import (
     RegimeTaxonomy,
     ValidatedRegimePanel,
 )
+from market_impact_agent.method_skills import MethodEvidenceBinding, MethodEvidenceDeclaration
+from market_impact_agent.paired_skill_ablation_contract import paired_skill_common_input_hash
 from market_impact_agent.regime_agent_experiment import (
     CompletedRegimeCheckpointExperiment,
     aggregate_checkpoint_arm,
@@ -21,10 +24,15 @@ from market_impact_agent.regime_agent_experiment import (
     build_regime_agent_experiment_report,
     evaluate_checkpoint_exposure_path,
     method_evidence_bindings,
+    validate_paired_experiment_identity,
     write_regime_agent_experiment_report,
 )
 from market_impact_agent.regime_evidence import RegimeCheckpoint
+from market_impact_agent.regime_modeled_pit import (
+    load_regime_modeled_pit_agent_validation_registration,
+)
 from market_impact_agent.regime_study import RegimeBaselineProtocol
+from market_impact_agent.research import EvidenceTier
 
 
 def _arm_report(*decisions: str, horizon: int = 2) -> dict[str, object]:
@@ -58,6 +66,149 @@ def _arm_report(*decisions: str, horizon: int = 2) -> dict[str, object]:
             }
         )
     return {"arm_id": "general_control", "runs": runs, "coverage": coverage}
+
+
+def _paired_artifacts(
+    *,
+    index: int,
+    day: date,
+    arms: list[dict[str, object]],
+    eligible_horizon_sessions: int,
+) -> tuple[
+    EvidencePack,
+    MethodEvidenceDeclaration,
+    dict[str, object],
+    dict[str, object],
+]:
+    as_of = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
+    evidence_pack = EvidencePack.build(
+        event_id=f"event-{index}",
+        as_of=as_of,
+        research_question="Should the broad market rise over the registered horizon?",
+        evidence=(
+            EvidenceReference(
+                evidence_id="market-context",
+                claim_id="market-context",
+                source_ref="test-source",
+                source_tier=EvidenceTier.REGULATED,
+                available_at=as_of,
+                content_hash=str(index + 1) * 64,
+                summary="Frozen market context.",
+            ),
+        ),
+        pattern_packs=(),
+        allowed_targets=("broad-market-a",),
+    )
+    declaration_core: dict[str, object] = {
+        "schema_version": "market-impact.method-evidence-declaration.v1",
+        "evidence_pack_id": evidence_pack.pack_id,
+        "evidence_pack_hash": canonical_hash(evidence_pack.to_dict()),
+        "evidence_types": [
+            {
+                "evidence_type": "price_or_market_context",
+                "evidence_refs": ["market-context"],
+                "pattern_pack_refs": [],
+            }
+        ],
+        "outcomes_opened": True,
+    }
+    declaration = MethodEvidenceDeclaration(
+        declaration_id=f"method-evidence-{canonical_hash(declaration_core)}",
+        evidence_pack_id=evidence_pack.pack_id,
+        evidence_pack_hash=canonical_hash(evidence_pack.to_dict()),
+        bindings=(
+            MethodEvidenceBinding(
+                evidence_type="price_or_market_context",
+                evidence_refs=("market-context",),
+                pattern_pack_refs=(),
+            ),
+        ),
+        outcomes_opened=True,
+    )
+    route_id = "method-skill-route-" + "6" * 64
+    common_input_hash = paired_skill_common_input_hash(
+        evidence_pack,
+        declaration,
+        eligible_horizon_sessions=eligible_horizon_sessions,
+    )
+    registration_core: dict[str, object] = {
+        "schema_version": "market-impact.method-skill-ablation.v2",
+        "experiment_id": f"experiment-{index}",
+        "registered_at": as_of.isoformat().replace("+00:00", "Z"),
+        "provider_profile_id": "model-provider-" + "1" * 64,
+        "provider_profile_hash": "2" * 64,
+        "method_catalog_id": "method-skill-catalog-" + "3" * 64,
+        "method_evidence_declaration_id": declaration.declaration_id,
+        "method_evidence_declaration_hash": declaration.declaration_hash,
+        "evidence_pack_id": evidence_pack.pack_id,
+        "evidence_pack_hash": canonical_hash(evidence_pack.to_dict()),
+        "control_skills": ["evidence-core"],
+        "treatment_skills": ["evidence-core", "narrative-diffusion-assessment"],
+        "control_manifest_hashes": ["4" * 64],
+        "treatment_manifest_hashes": ["4" * 64, "5" * 64],
+        "method_route_id": route_id,
+        "routing_context": {
+            "market_state": "unclassified",
+            "narrative_salience": "contested",
+            "analysis_needs": ["narrative_diffusion"],
+            "available_evidence": ["price_or_market_context"],
+            "outcomes_opened": True,
+        },
+        "replicate_count": 3,
+        "run_order": "interleaved_by_replicate_then_arm",
+        "common_input_hash": common_input_hash,
+        "cpa_pricing": {
+            "schema_version": "market-impact.cpa-pricing-snapshot.v1",
+            "keeper_version": "test",
+            "model": "test-model",
+            "captured_at": as_of.isoformat().replace("+00:00", "Z"),
+            "pricing_style": "openai",
+            "prompt_microusd_per_million_tokens": 1,
+            "completion_microusd_per_million_tokens": 1,
+            "cache_read_microusd_per_million_tokens": 0,
+            "cache_write_microusd_per_million_tokens": 0,
+            "price_multiplier": "1",
+            "rules": [],
+            "source_origin": "http://127.0.0.1:8080",
+        },
+        "cost_estimate": {
+            "agent_run_count": 6,
+            "provider_request_upper_bound": 6,
+            "raw_max_cost_microusd": 6,
+            "safety_multiplier": "1.25",
+            "guarded_max_cost_microusd": 8,
+            "hard_cap_microusd": 1000,
+            "within_budget": True,
+        },
+        "outcomes_opened": True,
+        "inference_eligible": False,
+        "execution_capability": "none",
+    }
+    registration = {
+        **registration_core,
+        "registration_id": f"method-skill-ablation-{canonical_hash(registration_core)}",
+    }
+    report_core: dict[str, object] = {
+        "schema_version": "market-impact.method-skill-ablation-report.v2",
+        "experiment_id": registration_core["experiment_id"],
+        "registration_id": registration["registration_id"],
+        "registration_hash": canonical_hash(registration_core),
+        "provider_profile_id": registration_core["provider_profile_id"],
+        "provider_profile_hash": registration_core["provider_profile_hash"],
+        "method_route": {"route_id": route_id},
+        "diagnostic_valid": True,
+        "replicate_count": 3,
+        "arms": arms,
+        "cost": {"ledger_actual_microusd": 100},
+        "only_treatment_difference": "narrative-diffusion-assessment",
+        "outcomes_visible_to_agent": False,
+        "execution_capability": "none",
+    }
+    report = {
+        **report_core,
+        "report_id": f"method-skill-ablation-report-{canonical_hash(report_core)}",
+    }
+    return evidence_pack, declaration, registration, report
 
 
 def test_checkpoint_arm_requires_a_valid_two_of_three_majority() -> None:
@@ -114,6 +265,7 @@ def test_checkpoint_exposure_path_switches_only_at_registered_opens() -> None:
 
 def test_checkpoint_qualification_gate_is_case_local_and_fail_closed() -> None:
     report = {
+        "schema_version": "market-impact.regime-evidence-qualification-report.v1",
         "manifest_id": "manifest-a",
         "cases": [
             {
@@ -150,6 +302,32 @@ def test_checkpoint_qualification_gate_is_case_local_and_fail_closed() -> None:
             session_date=date(2024, 9, 25),
             manifest_id="manifest-a",
         )
+
+    modeled = {
+        **report,
+        "schema_version": "market-impact.regime-modeled-pit-qualification-report.v1",
+    }
+    with pytest.raises(ValueError, match="strict PIT"):
+        assert_checkpoint_qualified(
+            modeled,
+            case_key="case-a",
+            session_date=date(2024, 9, 24),
+            manifest_id="manifest-a",
+        )
+
+
+def test_modeled_pit_agent_validation_registration_is_content_addressed() -> None:
+    registration = load_regime_modeled_pit_agent_validation_registration(
+        Path("examples/research/regime-modeled-pit-agent-validation-v1.json")
+    )
+
+    assert registration["validation_id"] == (
+        "regime-modeled-pit-agent-validation-"
+        "e43a3e221fdebb8a99189c7ed35e7977e7dba680d43cf093d7de9c712b14e91e"
+    )
+    assert registration["replicate_count"] == 3
+    assert registration["strict_pit_eligible"] is False
+    assert registration["execution_capability"] == "none"
 
 
 def test_method_evidence_bindings_follow_the_frozen_treatment_requirements() -> None:
@@ -255,23 +433,18 @@ def test_complete_regime_experiment_reports_skill_increment_and_quant_paths(
     treatments = ("propose", "propose", "abstain")
     completed: list[CompletedRegimeCheckpointExperiment] = []
     for index, day in enumerate(dates):
-        report = {
-            "report_id": "method-skill-ablation-report-" + str(index) * 64,
-            "registration_id": f"registration-{index}",
-            "diagnostic_valid": True,
-            "replicate_count": 3,
-            "arms": [
+        evidence_pack, declaration, registration, report = _paired_artifacts(
+            index=index,
+            day=day,
+            arms=[
                 _arm_report(*([controls[index]] * 3), horizon=1),
                 {
                     **_arm_report(*([treatments[index]] * 3), horizon=1),
                     "arm_id": "general_plus_narrative_diffusion_assessment",
                 },
             ],
-            "cost": {"ledger_actual_microusd": 100},
-            "only_treatment_difference": "narrative-diffusion-assessment",
-            "outcomes_visible_to_agent": False,
-            "execution_capability": "none",
-        }
+            eligible_horizon_sessions=1,
+        )
         completed.append(
             CompletedRegimeCheckpointExperiment(
                 checkpoint=RegimeCheckpoint(
@@ -280,13 +453,9 @@ def test_complete_regime_experiment_reports_skill_increment_and_quant_paths(
                     cutoff_at=datetime.combine(day, datetime.min.time(), tzinfo=UTC),
                 ),
                 eligible_horizon_sessions=1,
-                evidence_pack_id=f"evidence-pack-{index}",
-                registration={
-                    "registration_id": f"registration-{index}",
-                    "evidence_pack_id": f"evidence-pack-{index}",
-                    "provider_profile_id": "provider-a",
-                    "only_treatment_difference": "narrative-diffusion-assessment",
-                },
+                evidence_pack=evidence_pack,
+                method_evidence_declaration=declaration,
+                registration=registration,
                 report=report,
             )
         )
@@ -332,6 +501,54 @@ def test_complete_regime_experiment_reports_skill_increment_and_quant_paths(
     assert momentum_path["information_ratio_vs_primary"] is None
     assert result["inference_eligible"] is False
     assert result["execution_capability"] == "none"
+    checkpoint_results = cast(list[dict[str, object]], result["checkpoint_results"])
+    assert (
+        checkpoint_results[0]["common_input_hash"] == completed[0].registration["common_input_hash"]
+    )
     path = write_regime_agent_experiment_report(result, root=tmp_path)
     assert path.name == f"{result['report_id']}.json"
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_complete_regime_experiment_rejects_tampered_report_and_wrong_horizon() -> None:
+    day = date(2024, 1, 2)
+    evidence_pack, declaration, registration, report = _paired_artifacts(
+        index=0,
+        day=day,
+        arms=[
+            _arm_report("abstain", "abstain", "abstain", horizon=2),
+            {
+                **_arm_report("abstain", "abstain", "abstain", horizon=2),
+                "arm_id": "general_plus_narrative_diffusion_assessment",
+            },
+        ],
+        eligible_horizon_sessions=2,
+    )
+    checkpoint = RegimeCheckpoint(
+        case_key="case-a",
+        session_date=day,
+        cutoff_at=datetime.combine(day, datetime.min.time(), tzinfo=UTC),
+    )
+    tampered = dict(report)
+    tampered["diagnostic_valid"] = False
+    completed = CompletedRegimeCheckpointExperiment(
+        checkpoint=checkpoint,
+        eligible_horizon_sessions=2,
+        evidence_pack=evidence_pack,
+        method_evidence_declaration=declaration,
+        registration=registration,
+        report=tampered,
+    )
+    with pytest.raises(ValueError, match="not content-addressed"):
+        validate_paired_experiment_identity(completed)
+
+    wrong_horizon = CompletedRegimeCheckpointExperiment(
+        checkpoint=checkpoint,
+        eligible_horizon_sessions=1,
+        evidence_pack=evidence_pack,
+        method_evidence_declaration=declaration,
+        registration=registration,
+        report=report,
+    )
+    with pytest.raises(ValueError, match="registered horizon or common input drifted"):
+        validate_paired_experiment_identity(wrong_horizon)

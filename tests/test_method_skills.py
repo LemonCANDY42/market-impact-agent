@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
+import sqlite3
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -9,10 +12,24 @@ from typing import cast
 
 import pytest
 
-from market_impact_agent.agent_engine import AgentRunResult, RunMetrics
+from market_impact_agent.agent_contracts import (
+    CandidateDirection,
+    CandidateImpact,
+    JudgmentArtifact,
+    JudgmentDecision,
+    JudgmentProposal,
+    canonical_json_bytes,
+    judgment_artifact_from_dict,
+)
+from market_impact_agent.agent_engine import (
+    AgentExecutionBinding,
+    AgentRunResult,
+    RunMetrics,
+)
 from market_impact_agent.agent_runtime import (
     ModelProvider,
     ModelTurn,
+    ProviderUsage,
     RuntimeConfig,
     SkillRegistry,
 )
@@ -33,7 +50,12 @@ from market_impact_agent.paired_skill_ablation_runner import (
     prepare_paired_method_skill_ablation,
     run_paired_method_skill_ablation,
 )
-from market_impact_agent.runtime_store import RunJournal, RunStatus
+from market_impact_agent.paired_skill_execution_audit import (
+    audit_paired_execution_state,
+    validate_judgment_execution_binding,
+)
+from market_impact_agent.research import TransmissionDirectness
+from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
 
 CATALOG = Path("examples/research/famous-method-skill-catalog-v1.json")
@@ -491,6 +513,309 @@ def test_paired_runner_records_exactly_six_terminal_runs(tmp_path: Path) -> None
     assert cast(dict[str, object], result["cost"])["ledger_actual_microusd"] == 192
     ledger = UsageLedger(Path(cast(str, result["state_directory"])) / "usage.sqlite3")
     assert len(ledger.records()) == 6
+
+
+class _CompletedAvailableProvider:
+    def __init__(self) -> None:
+        self.available_checked = False
+        self.call_count = 0
+
+    @property
+    def provider_id(self) -> str:
+        return "cliproxyapi-openai-compatible"
+
+    @property
+    def model(self) -> str:
+        return "gpt-5.6-luna"
+
+    async def assert_model_available(self, *, timeout_seconds: float) -> None:
+        assert timeout_seconds == 30
+        self.available_checked = True
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        _ = (messages, tools, temperature, top_p, max_output_tokens, timeout_seconds)
+        self.call_count += 1
+        proposal = JudgmentProposal(
+            event_id="masked-physical-supply-case-a",
+            decision=JudgmentDecision.ABSTAIN,
+            summary="The frozen evidence does not establish a decision-ready target impact.",
+            transmission_steps=(),
+            candidates=(),
+            blockers=("decision-ready target impact is not established",),
+            unresolved_questions=("What executable target has a falsifiable transmission path?",),
+            stopped_reason="critical target mapping remains unresolved",
+        )
+        content = canonical_json_bytes(proposal.to_dict()).decode()
+        assistant: dict[str, object] = {"role": "assistant", "content": content}
+        return ModelTurn(
+            response_id=f"completed-response-{self.call_count}",
+            model=self.model,
+            assistant_message=assistant,
+            tool_calls=(),
+            finish_reason="stop",
+            usage=ProviderUsage(input_tokens=100, output_tokens=40),
+            raw_response={
+                "id": f"completed-response-{self.call_count}",
+                "model": self.model,
+                "message": assistant,
+            },
+            latency_ms=1,
+        )
+
+
+def test_completed_paired_execution_audit_binds_terminal_judgments(tmp_path: Path) -> None:
+    provider = _CompletedAvailableProvider()
+    result = asyncio.run(
+        run_paired_method_skill_ablation(
+            method_catalog_path=CATALOG,
+            method_evidence_declaration_path=DECLARATION,
+            provider_profile_path=PROFILE,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            experiment_id="completed-method-skill-ablation",
+            treatment_skill="expectations-base-rates",
+            routing_context=_routing_context(),
+            skill_root=Path("skills"),
+            state_root=tmp_path,
+            pricing=_cpa_pricing(),
+            provider=provider,
+            clock=lambda: datetime(2026, 8, 27, 10, 5, tzinfo=UTC),
+        )
+    )
+
+    assert provider.available_checked is True
+    assert provider.call_count == 6
+    assert result["diagnostic_valid"] is True
+    repository = FrozenResearchRepository.from_files(
+        evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+        evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+        pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+    )
+    experiment_root = Path(cast(str, result["state_directory"]))
+    registration = cast(
+        dict[str, object],
+        json.loads((experiment_root / "registration.json").read_text()),
+    )
+    bindings = audit_paired_execution_state(
+        expected_evidence_pack=repository.evidence_pack,
+        eligible_horizon_sessions=1,
+        registration=registration,
+        report=result,
+        experiment_root=experiment_root,
+        evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+        evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+        pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+        provider_profile_path=PROFILE,
+        skill_root=Path("skills"),
+    )
+    assert set(bindings) == {"general_control", "general_plus_expectations_base_rates"}
+
+    with pytest.raises(ValueError, match="differs from expected prompt"):
+        audit_paired_execution_state(
+            expected_evidence_pack=repository.evidence_pack,
+            eligible_horizon_sessions=2,
+            registration=registration,
+            report=result,
+            experiment_root=experiment_root,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            provider_profile_path=PROFILE,
+            skill_root=Path("skills"),
+        )
+
+    forged_decision = copy.deepcopy(result)
+    forged_arms = cast(list[dict[str, object]], forged_decision["arms"])
+    forged_runs = cast(list[dict[str, object]], forged_arms[0]["runs"])
+    forged_runs[0]["decision"] = "propose"
+    with pytest.raises(ValueError, match="differs from terminal run evidence"):
+        audit_paired_execution_state(
+            expected_evidence_pack=repository.evidence_pack,
+            eligible_horizon_sessions=1,
+            registration=registration,
+            report=forged_decision,
+            experiment_root=experiment_root,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            provider_profile_path=PROFILE,
+            skill_root=Path("skills"),
+        )
+
+    forged_identity = copy.deepcopy(result)
+    forged_identity_arms = cast(list[dict[str, object]], forged_identity["arms"])
+    forged_identity_runs = cast(list[dict[str, object]], forged_identity_arms[0]["runs"])
+    forged_identity_runs[0]["run_id"] = "forged-run-id"
+    with pytest.raises(ValueError, match="run identity drifted"):
+        audit_paired_execution_state(
+            expected_evidence_pack=repository.evidence_pack,
+            eligible_horizon_sessions=1,
+            registration=registration,
+            report=forged_identity,
+            experiment_root=experiment_root,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            provider_profile_path=PROFILE,
+            skill_root=Path("skills"),
+        )
+
+    tampered = copy.deepcopy(result)
+    tampered_arms = cast(list[dict[str, object]], tampered["arms"])
+    tampered_arms[0]["execution_binding_hash"] = "f" * 64
+    with pytest.raises(ValueError, match="differs from expected prompt"):
+        audit_paired_execution_state(
+            expected_evidence_pack=repository.evidence_pack,
+            eligible_horizon_sessions=1,
+            registration=registration,
+            report=tampered,
+            experiment_root=experiment_root,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            provider_profile_path=PROFILE,
+            skill_root=Path("skills"),
+        )
+
+    first_arm = cast(list[dict[str, object]], result["arms"])[0]
+    first_run = cast(list[dict[str, object]], first_arm["runs"])[0]
+    first_run_id = cast(str, first_run["run_id"])
+    ledger = UsageLedger(experiment_root / "usage.sqlite3")
+    usage_record = next(
+        item.record for item in ledger.records() if item.record.run_id == first_run_id
+    )
+    run_artifacts = ArtifactStore(
+        experiment_root / "runs" / "general_control" / "replicate-1" / "artifacts"
+    )
+    terminal_payload = run_artifacts.read_json(cast(str, usage_record.terminal_artifact_hash))
+    judgment = judgment_artifact_from_dict(terminal_payload)
+    binding_payload = ArtifactStore(experiment_root / "artifacts").read_json(
+        cast(str, first_arm["execution_binding_hash"])
+    )
+    binding_mapping = cast(dict[str, object], binding_payload)
+    binding = AgentExecutionBinding(
+        runtime_ref=cast(str, binding_mapping["runtime_ref"]),
+        runtime_config_hash=cast(str, binding_mapping["runtime_config_hash"]),
+        prompt_hash=cast(str, binding_mapping["prompt_hash"]),
+        skill_hashes=tuple(cast(list[str], binding_mapping["skill_hashes"])),
+        tool_manifest_hashes=tuple(cast(list[str], binding_mapping["tool_manifest_hashes"])),
+        tool_surface_hash=cast(str, binding_mapping["tool_surface_hash"]),
+        mcp_server_hashes=tuple(cast(list[str], binding_mapping["mcp_server_hashes"])),
+        context_estimator_id=cast(str, binding_mapping["context_estimator_id"]),
+        compactor_id=cast(str, binding_mapping["compactor_id"]),
+    )
+    validate_judgment_execution_binding(
+        judgment,
+        run_id=first_run_id,
+        repository=repository,
+        provider_id=provider.provider_id,
+        model=provider.model,
+        expected_binding=binding,
+        artifact_store=run_artifacts,
+    )
+    forged_judgment = JudgmentArtifact.build(
+        run_id=judgment.run_id,
+        evidence_pack_id=judgment.evidence_pack_id,
+        provider_id=judgment.provider_id,
+        model=judgment.model,
+        runtime_config_hash=judgment.runtime_config_hash,
+        prompt_hash="f" * 64,
+        skill_hashes=judgment.skill_hashes,
+        tool_manifest_hashes=judgment.tool_manifest_hashes,
+        tool_surface_hash=judgment.tool_surface_hash,
+        mcp_server_hashes=judgment.mcp_server_hashes,
+        context_estimator_id=judgment.context_estimator_id,
+        compactor_id=judgment.compactor_id,
+        journal_hash=judgment.journal_hash,
+        transcript_hash=judgment.transcript_hash,
+        raw_response_hash=judgment.raw_response_hash,
+        started_at=judgment.started_at,
+        finished_at=judgment.finished_at,
+        proposal=judgment.proposal,
+    )
+    with pytest.raises(ValueError, match="Judgment Artifact binding drifted"):
+        validate_judgment_execution_binding(
+            forged_judgment,
+            run_id=first_run_id,
+            repository=repository,
+            provider_id=provider.provider_id,
+            model=provider.model,
+            expected_binding=binding,
+            artifact_store=run_artifacts,
+        )
+
+    forged_proposal = JudgmentProposal(
+        event_id=judgment.proposal.event_id,
+        decision=JudgmentDecision.PROPOSE,
+        summary="A forged but contract-valid proposal.",
+        transmission_steps=(),
+        candidates=(
+            CandidateImpact(
+                target_id="integrated-upstream-a",
+                direction=CandidateDirection.DOWN,
+                horizon_sessions=1,
+                directness=TransmissionDirectness.DIRECT,
+                confidence=0.7,
+                thesis="A forged target thesis.",
+                evidence_refs=("physical-loss",),
+                counterevidence_refs=("shipment-mitigation",),
+                invalidation_conditions=("physical supply is restored",),
+            ),
+        ),
+        blockers=(),
+        unresolved_questions=(),
+        stopped_reason="forged proposal claims completion",
+    )
+    forged_terminal_judgment = JudgmentArtifact.build(
+        run_id=judgment.run_id,
+        evidence_pack_id=judgment.evidence_pack_id,
+        provider_id=judgment.provider_id,
+        model=judgment.model,
+        runtime_config_hash=judgment.runtime_config_hash,
+        prompt_hash=judgment.prompt_hash,
+        skill_hashes=judgment.skill_hashes,
+        tool_manifest_hashes=judgment.tool_manifest_hashes,
+        tool_surface_hash=judgment.tool_surface_hash,
+        mcp_server_hashes=judgment.mcp_server_hashes,
+        context_estimator_id=judgment.context_estimator_id,
+        compactor_id=judgment.compactor_id,
+        journal_hash=judgment.journal_hash,
+        transcript_hash=judgment.transcript_hash,
+        raw_response_hash=judgment.raw_response_hash,
+        started_at=judgment.started_at,
+        finished_at=judgment.finished_at,
+        proposal=forged_proposal,
+    )
+    forged_terminal = run_artifacts.put_json(forged_terminal_judgment.to_dict())
+    run_database = experiment_root / "runs" / "general_control" / "replicate-1" / "run.sqlite3"
+    with sqlite3.connect(run_database) as connection:
+        connection.execute(
+            "UPDATE runs SET terminal_artifact_id = ? WHERE run_id = ?",
+            (forged_terminal.content_hash, first_run_id),
+        )
+    with pytest.raises(ValueError, match="proposal differs from the validation event"):
+        audit_paired_execution_state(
+            expected_evidence_pack=repository.evidence_pack,
+            eligible_horizon_sessions=1,
+            registration=registration,
+            report=result,
+            experiment_root=experiment_root,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            provider_profile_path=PROFILE,
+            skill_root=Path("skills"),
+        )
 
 
 def test_preparation_rejects_caller_evidence_labels_not_bound_to_the_bundle() -> None:

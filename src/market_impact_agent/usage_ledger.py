@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -98,6 +99,39 @@ class StoredUsageRecord:
     payload_hash: str
     previous_hash: str | None
     record_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class UsageLedgerUnion:
+    ledger_count: int
+    duplicate_record_count: int
+    records: tuple[UsageRecord, ...]
+    union_hash: str
+
+    @property
+    def unique_run_count(self) -> int:
+        return len(self.records)
+
+    @property
+    def completed_run_count(self) -> int:
+        return sum(item.status is RunStatus.COMPLETED for item in self.records)
+
+    @property
+    def failed_run_count(self) -> int:
+        return sum(item.status is RunStatus.FAILED for item in self.records)
+
+    @property
+    def total_estimated_cost_microusd(self) -> int:
+        return sum(item.metrics.estimated_cost_microusd for item in self.records)
+
+    @property
+    def record_by_run_id(self) -> dict[str, UsageRecord]:
+        return {item.run_id: item for item in self.records}
+
+    @property
+    def status_counts(self) -> dict[str, int]:
+        counts = Counter(item.status.value for item in self.records)
+        return dict(sorted(counts.items()))
 
 
 class UsageLedger:
@@ -197,6 +231,46 @@ class UsageLedger:
                 "record_hashes": [item.record_hash for item in records],
             }
         )
+
+
+def reconcile_usage_ledgers(paths: tuple[Path, ...]) -> UsageLedgerUnion:
+    if not paths:
+        raise ValueError("Usage Ledger reconciliation requires at least one ledger")
+    if any(path.is_symlink() for path in paths):
+        raise ValueError("Usage Ledger reconciliation requires real ledger files")
+    resolved = tuple(path.resolve() for path in paths)
+    if len(resolved) != len(set(resolved)):
+        raise ValueError("Usage Ledger reconciliation paths must be unique")
+    by_run_id: dict[str, tuple[UsageRecord, str]] = {}
+    duplicate_record_count = 0
+    for path in resolved:
+        if not path.is_file():
+            raise ValueError("Usage Ledger reconciliation requires real ledger files")
+        for stored in UsageLedger(path).records():
+            payload_hash = canonical_hash(stored.record.to_dict())
+            existing = by_run_id.get(stored.record.run_id)
+            if existing is None:
+                by_run_id[stored.record.run_id] = (stored.record, payload_hash)
+                continue
+            duplicate_record_count += 1
+            if existing[1] != payload_hash:
+                raise ValueError("Usage Ledger run_id has conflicting content across ledgers")
+    ordered = tuple(by_run_id[run_id][0] for run_id in sorted(by_run_id))
+    union_hash = canonical_hash(
+        {
+            "schema_version": "market-impact.usage-ledger-union.v1",
+            "records": [
+                {"run_id": run_id, "payload_hash": by_run_id[run_id][1]}
+                for run_id in sorted(by_run_id)
+            ],
+        }
+    )
+    return UsageLedgerUnion(
+        ledger_count=len(resolved),
+        duplicate_record_count=duplicate_record_count,
+        records=ordered,
+        union_hash=union_hash,
+    )
 
 
 def _stored(row: sqlite3.Row) -> StoredUsageRecord:

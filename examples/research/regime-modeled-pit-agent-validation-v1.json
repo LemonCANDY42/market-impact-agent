@@ -1,0 +1,92 @@
+{
+  "broker_reachability": false,
+  "cases": [
+    {
+      "case_key": "cn-2018-bear-market",
+      "checkpoints": [
+        "2018-01-25",
+        "2018-07-02",
+        "2019-01-02"
+      ],
+      "treatment_skill": "second-level-cycle-context",
+      "window_end": "2019-01-03",
+      "window_start": "2018-01-25"
+    },
+    {
+      "case_key": "cn-2019-q1-fast-rebound",
+      "checkpoints": [
+        "2019-01-07",
+        "2019-02-25",
+        "2019-04-08"
+      ],
+      "treatment_skill": "second-level-cycle-context",
+      "window_end": "2019-04-08",
+      "window_start": "2019-01-07"
+    },
+    {
+      "case_key": "cn-2020-covid-closure-shock",
+      "checkpoints": [
+        "2020-02-03",
+        "2020-03-02",
+        "2020-03-23"
+      ],
+      "treatment_skill": "expectations-base-rates",
+      "window_end": "2020-03-23",
+      "window_start": "2020-02-03"
+    },
+    {
+      "case_key": "cn-2021-index-flat-sector-rotation",
+      "checkpoints": [
+        "2021-02-19",
+        "2021-07-01",
+        "2021-12-01"
+      ],
+      "treatment_skill": "second-level-cycle-context",
+      "window_end": "2021-12-13",
+      "window_start": "2021-02-19"
+    },
+    {
+      "case_key": "cn-2024-policy-melt-up",
+      "checkpoints": [
+        "2024-09-24",
+        "2024-09-30",
+        "2024-10-08"
+      ],
+      "treatment_skill": "narrative-diffusion-assessment",
+      "window_end": "2024-10-08",
+      "window_start": "2024-09-24"
+    },
+    {
+      "case_key": "cn-2024-post-rally-whipsaw",
+      "checkpoints": [
+        "2024-10-09",
+        "2024-11-18",
+        "2024-12-30"
+      ],
+      "treatment_skill": "second-level-cycle-context",
+      "window_end": "2024-12-31",
+      "window_start": "2024-10-09"
+    }
+  ],
+  "claim_scope": "opened_modeled_pit_process_diagnostic_only",
+  "dataset_hash": "5c7e9826138ad0cb8f68f0e2d3c48fed2118712ad5b0d3bf94dc5483e801eca7",
+  "dataset_id": "market-regime-dataset-5c7e9826138ad0cb8f68f0e2d3c48fed2118712ad5b0d3bf94dc5483e801eca7",
+  "execution_capability": "none",
+  "inference_eligible": false,
+  "manifest_id": "regime-evidence-manifest-af6c3d0739bcc61ddd0cbdbdac7bfe41ca8badbb4766866168dd95c12c680344",
+  "modeled_qualification_report_id": "regime-modeled-pit-qualification-report-396748a622b5d23e410926917e364860f76ed370cc9798498b29e9b23b519aa0",
+  "outcomes_opened": true,
+  "panel_id": "regime-panel-e0817b85d8fc33478a1fdf530d159e2f5173769b83f2639456c9e7d2c2c78c8b",
+  "policy_id": "regime-modeled-pit-policy-b3959de39c87b4abe47a8e6543448cd2958280735389615363ccc3bd61eeb7c8",
+  "provider_profile_id": "model-provider-52b4bf4a43f9acedeca767f9cce37a732856bf52b0e9da07665d88ffe8ce79b3",
+  "replicate_count": 3,
+  "schema_version": "market-impact.regime-modeled-pit-agent-validation-registration.v1",
+  "selection_rule": "registered_window_first_middle_last",
+  "strict_pit_eligible": false,
+  "strict_qualification_report_id": "regime-evidence-qualification-report-6e163ecb607a803d06cc1775b68845674747296b535543a6e153e53006c5eca9",
+  "study_registration_hash": "8e1646164d2c624d1d785df03dce97eed7ec401de58407dcf42af28570fb4405",
+  "study_registration_id": "regime-study-registration-8e1646164d2c624d1d785df03dce97eed7ec401de58407dcf42af28570fb4405",
+  "total_cost_cap_microusd": 20000000,
+  "validation_id": "regime-modeled-pit-agent-validation-e43a3e221fdebb8a99189c7ed35e7977e7dba680d43cf093d7de9c712b14e91e",
+  "version": "a-share-regime-modeled-pit-agent-validation-v1"
+}

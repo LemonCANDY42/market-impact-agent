@@ -105,6 +105,30 @@ it checked authority kind but omitted the authority-time comparison. The whole 1
 still not source-complete, and Bloomberg/Reuters entitlement routes were not silently replaced by
 free sources.
 
+The bounded publisher-archive recovery path is now implemented. It locates exact Xinhua/SCMP URL
+captures before each checkpoint, distinguishes `not_found` from `source_error`, and treats a found
+locator as candidate-only until its replay body, publisher identity, publication/update time, and
+cutoff all verify. The first managed-environment audit for the 2021 sector-rotation case covered 11
+checkpoints and retained all 32 attempted lookups as `source_error` because the archive index was
+unreachable; it does not establish zero coverage. The recovery contract, licensed fallback trial,
+prospective receipt path, and price-basis rules are in `PIT_EVIDENCE_RECOVERY.md`.
+
+The later full-access audit completed all 230 exact-URL lookups across the six selected cases with
+162 found candidates, 68 genuine `not_found` results, and zero source errors. Replay verified 115 of
+120 unique original-record/archive-version pairs. Five stayed rejected by timestamp invariants.
+Replacing 98 current snapshots with 100 canonical historical versions produced Manifest
+`af6c3d...0344`; strict Qualification Report `6e163e...eca9` raises established-news readiness to
+8/61 six-case checkpoints and 2/18 frozen validation checkpoints. The complete frozen checkpoint
+gate is still 0/18: market, industry, and positioning authority remain 0/18, macro is 16/18, and the
+first 2024 policy checkpoint still lacks a pre-cutoff event revelation.
+
+A later document-recovery pass replayed the 115 accepted archive versions so the Agent could read
+the exact registered article payload rather than only metadata or a publisher excerpt. One hundred
+replays succeeded with matching content hashes; 15 remained network failures, with no digest or
+publisher-verification mismatch. The rebuilt validation inputs contain every exact news payload at
+13/18 checkpoints and six of eight at the remaining five. These bodies improve the model-visible
+corpus; they do not change the strict authority result.
+
 ## Frozen return windows
 
 Every covered market index and industry proxy reports the same three price-return windows:
@@ -123,6 +147,12 @@ provenance, so a sector mapping cannot be relabelled without invalidating the pa
 bottom, dispersion, and positive fraction are explicitly
 `hindsight_only` opportunity bounds. They answer whether sector choice mattered in that interval;
 they do not show that an Agent could select the winner.
+
+These are price-index returns, not stock-style adjusted prices or investor total returns. A future
+wealth/performance claim must use a historically versioned total-return index or a tradable ETF
+path with distributions, costs, and corporate actions. Cases predating the current classification
+also require the industry taxonomy effective at their checkpoint; authenticated SW2021 backcasts
+remain descriptive hindsight bounds.
 
 Future executed comparisons must add the same-window static market, equal-sector, lagged sector
 momentum, lagged inverse-volatility, event-only, and cash/abstain baselines. Accepted rotation
@@ -180,9 +210,10 @@ lagged-momentum returns are +1.84%, +6.38%, and +3.76%. Holding cash beats those
 4/6, 2/6, and 2/6 cases respectively. In particular, cash misses the 2019 and 2024 broad rallies
 and the positive industry paths during the 2020 and 2021 rotation windows.
 
-The attempted six-case calls cost $1.028187. Including every invalid or superseded diagnostic,
-total actual model cost is $2.436518 under the single shared $20 cap. Cost reconciliation now derives
-prior diagnostic spend from every exact case report; callers cannot supply a lower scalar. The old
+The attempted six-case calls cost $1.028187. The $2.436518 all-diagnostic total recorded after this
+run was later found to omit 166 terminal Usage Ledger records. The Usage Ledger Union in the
+Modeled-PIT section supersedes that number. Cost reconciliation for this invalidated validation
+still derives its case totals from exact reports. The old
 private aggregate report
 `regime-agent-validation-report-20a1b4f3c042041d9499a4a584f8678b28729fd9468b74cb016131f9f8fa8202`
 is invalidated and must not be used as acceptance evidence.
@@ -193,6 +224,77 @@ Manifest, and qualification identities are now bound into the validation registr
 against every case report. No paper or live authority follows. The next model call must wait for
 source versions whose archive/provider authority actually predates each cutoff; rerunning the same
 inputs or merely adding personas is not evidence-bearing.
+
+## Opened-outcome Modeled-PIT process diagnostic
+
+The separate Modeled-PIT lane tests whether the Harness and Agent can use the available historical
+content when immutable historical authority is unavailable. Policy
+`regime-modeled-pit-policy-b3959de39c87b4abe47a8e6543448cd2958280735389615363ccc3bd61eeb7c8`
+uses the prior-session panel snapshot for price context and source availability plus a frozen safety
+delay for other categories. Qualification
+`regime-modeled-pit-qualification-report-396748a622b5d23e410926917e364860f76ed370cc9798498b29e9b23b519aa0`
+admits exactly the registered first/middle/last 18-checkpoint selection. It reports every authority
+gap and remains strict-PIT-ineligible.
+
+The first real run exposed a Harness defect: the CLI did not pass the registered eligible horizon,
+so the paired runner defaulted to one session while the Evidence Pack declared 102. That six-run
+diagnostic cost $0.053516 and is excluded from the formal result. The CLI now requires the horizon
+explicitly. The corrected registration
+`regime-modeled-pit-agent-validation-e43a3e221fdebb8a99189c7ed35e7977e7dba680d43cf093d7de9c712b14e91e`
+completed all 18 checkpoints with three replicates per arm: 108/108 runs completed, every run
+abstained, and the routed Skills changed 0/18 majority decisions.
+
+| Opened case | Eligible horizons | Control / routed directional hits | Formal cost |
+| --- | --- | ---: | ---: |
+| 2018 bear | 102 / 124 / 2 | 3 / 3 | $0.148491 |
+| 2019 Q1 rebound | 30 / 29 / 1 | 1 / 1 | $0.146611 |
+| 2020 closure shock | 20 / 15 / 1 | 2 / 2 | $0.165758 |
+| 2021 sector rotation | 89 / 102 / 9 | 2 / 2 | $0.181482 |
+| 2024 policy rally | 4 / 1 / 1 | 1 / 1 | $0.187605 |
+| 2024 whipsaw | 28 / 30 / 2 | 3 / 3 | $0.161389 |
+
+The 12/18 aggregate directional-hit count is again the sign score for staying in cash, not market
+timing skill. It misses the two positive 2019 checkpoint horizons, the first 2020 rebound horizon,
+the final 2021 rotation horizon, and the first two 2024 rally horizons. Both arms retain zero return,
+turnover, and drawdown, while the same-window primary/equal-sector/momentum baselines remain those in
+the invalidated diagnostic table above.
+
+The 108 judgments contain 493 blocker statements. A run-level text audit found:
+
+- horizon persistence unresolved in 108/108 runs;
+- event identity or event-to-target attribution unresolved in 106/108;
+- expectation delta or a defensible prior baseline unresolved in 105/108;
+- strict authority or modeled-delay limitations cited in 95/108;
+- executable target/proxy mapping unresolved in 79/108.
+
+Every full-body checkpoint still produced six abstentions, as did the five checkpoints with two
+missing bodies. Restoring article text was useful and necessary, but article retrieval alone does
+not fix the current decision contract. The masked pack hides too much of the observed event fact,
+the positioning corpus does not state a cited expectation delta, long case-remainder horizons often
+exceed what the event evidence can support, and the action space permits only a non-executable broad-
+market proxy. This also censors the Skill comparison: a treatment cannot show an incremental
+decision when the common input contract blocks both arms before the routed method matters.
+
+The next diagnostic should freeze an event-revelation record that states the newly observed fact,
+its timestamp and sources, a prior expectation or explicit unknown, a falsifiable transmission path,
+and a mechanism-appropriate horizon chosen from a registered set. It should also bind executable
+index/ETF and sector targets under the effective taxonomy. Two or three representative checkpoints
+are enough for the first rerun. Further 18-checkpoint spending should wait until those blocker rates
+change materially.
+
+Final report
+`regime-modeled-pit-agent-validation-report-317f79ea1602e7d381eba01f9522123116033bdbbc179180dfa71f46f895f380`
+binds the registration, strict and modeled qualifications, Provider, panel, Manifest, every
+canonical paired registration/report, every recomputed frozen-input/horizon hash, baseline paths,
+all 36 reconstructed arm execution bindings and their local ledgers, and the Usage Ledger Union.
+The 108 formal report rows are also rebuilt from ledger-bound terminal Judgment Artifacts and Run
+Journals before their decisions enter the aggregate. Terminal replay reparses the final assistant
+payload and requires the proposal, raw response, transcript, and metrics to match the hash-chained
+validation event. The union covers 70 ledgers, 528 unique terminal runs, zero duplicates or
+conflicts, 526 completed and two failed runs. Costs are $3.883472
+preexisting, $0.053516 invalid horizon, and $0.991336 formal Modeled-PIT, totaling $4.928324 under
+the shared $20 cap. This report is process evidence only: strict PIT, effectiveness, inference,
+paper, and live gates remain closed.
 
 ## Private data and commands
 

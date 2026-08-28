@@ -102,6 +102,13 @@ from market_impact_agent.prediction_markets import (
     world_monitor_provider_manifest,
 )
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
+from market_impact_agent.regime_archive_recovery import (
+    audit_publisher_archive_recovery,
+    load_qualification_report,
+    recover_publisher_archive_snapshot,
+    write_publisher_archive_recovery_report,
+    write_publisher_archive_research_document,
+)
 from market_impact_agent.regime_evidence import (
     RegimeEvidenceManifest,
     load_regime_evidence_manifest,
@@ -110,6 +117,11 @@ from market_impact_agent.regime_evidence import (
     write_regime_evidence_manifest,
     write_regime_evidence_qualification_report,
     write_regime_evidence_record,
+)
+from market_impact_agent.regime_modeled_pit import (
+    load_regime_modeled_pit_policy,
+    qualify_regime_evidence_modeled_pit,
+    write_regime_modeled_pit_qualification_report,
 )
 from market_impact_agent.regime_study import (
     assess_regime_study_readiness,
@@ -312,6 +324,41 @@ def build_parser() -> argparse.ArgumentParser:
     regime_evidence_qualify_parser.add_argument("--registration", required=True, type=Path)
     regime_evidence_qualify_parser.add_argument("--panel", required=True, type=Path)
     regime_evidence_qualify_parser.add_argument("--manifest", required=True, type=Path)
+    regime_modeled_qualify_parser = regime_subparsers.add_parser(
+        "evidence-qualify-modeled",
+        help="Evaluate exploratory modeled-PIT visibility without promoting strict authority",
+    )
+    regime_modeled_qualify_parser.add_argument("--dataset", required=True, type=Path)
+    regime_modeled_qualify_parser.add_argument("--method-catalog", required=True, type=Path)
+    regime_modeled_qualify_parser.add_argument("--registration", required=True, type=Path)
+    regime_modeled_qualify_parser.add_argument("--panel", required=True, type=Path)
+    regime_modeled_qualify_parser.add_argument("--manifest", required=True, type=Path)
+    regime_modeled_qualify_parser.add_argument("--strict-qualification", required=True, type=Path)
+    regime_modeled_qualify_parser.add_argument("--policy", required=True, type=Path)
+    regime_archive_audit_parser = regime_subparsers.add_parser(
+        "evidence-audit-publisher-archives",
+        help="Locate exact pre-cutoff publisher captures without promoting their content",
+    )
+    regime_archive_audit_parser.add_argument("--dataset", required=True, type=Path)
+    regime_archive_audit_parser.add_argument("--method-catalog", required=True, type=Path)
+    regime_archive_audit_parser.add_argument("--registration", required=True, type=Path)
+    regime_archive_audit_parser.add_argument("--panel", required=True, type=Path)
+    regime_archive_audit_parser.add_argument("--manifest", required=True, type=Path)
+    regime_archive_audit_parser.add_argument("--qualification", required=True, type=Path)
+    regime_archive_audit_parser.add_argument("--case-key", action="append")
+    regime_archive_audit_parser.add_argument("--max-lookups", type=int, default=500)
+    regime_archive_capture_parser = regime_subparsers.add_parser(
+        "evidence-capture-publisher-archive",
+        help="Verify one exact publisher archive and write a PIT evidence record",
+    )
+    regime_archive_capture_parser.add_argument("--record", required=True, type=Path)
+    regime_archive_capture_parser.add_argument("--locator", required=True, type=Path)
+    regime_archive_capture_parser.add_argument("--not-after", required=True, type=_aware_timestamp)
+    regime_archive_capture_parser.add_argument(
+        "--supersedes-record",
+        type=Path,
+        help="Link a later archived publisher version to a verified prior record",
+    )
 
     backtest_parser = subparsers.add_parser("backtest", help="Run deterministic backtests")
     backtest_subparsers = backtest_parser.add_subparsers(dest="backtest_command", required=True)
@@ -442,6 +489,12 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         action="append",
         dest="analysis_needs",
+    )
+    method_skill_ablation_parser.add_argument(
+        "--eligible-horizon-sessions",
+        required=True,
+        type=int,
+        help="Exact registered forward horizon for the only eligible candidate",
     )
     method_skill_ablation_parser.add_argument("--outcomes-opened", action="store_true")
     method_skill_ablation_parser.add_argument(
@@ -1954,6 +2007,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "regime" and args.regime_command in {
         "evidence-manifest",
         "evidence-qualify",
+        "evidence-qualify-modeled",
     }:
         try:
             dataset = load_market_regime_dataset(args.dataset)
@@ -1984,7 +2038,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "path": manifest_path.as_posix(),
                     "execution_capability": "none",
                 }
-            else:
+            elif args.regime_command == "evidence-qualify":
                 manifest = load_regime_evidence_manifest(
                     args.manifest,
                     dataset=dataset,
@@ -2005,10 +2059,124 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "path": report_path.as_posix(),
                     "execution_capability": "none",
                 }
+            else:
+                manifest = load_regime_evidence_manifest(
+                    args.manifest,
+                    dataset=dataset,
+                    validated_panel=panel,
+                    registration=registration,
+                )
+                strict_qualification = load_qualification_report(args.strict_qualification)
+                policy = load_regime_modeled_pit_policy(args.policy)
+                report = qualify_regime_evidence_modeled_pit(
+                    dataset,
+                    panel,
+                    registration,
+                    manifest,
+                    strict_qualification,
+                    policy,
+                )
+                report_path = write_regime_modeled_pit_qualification_report(report)
+                result = {
+                    "valid": True,
+                    "report_id": report["report_id"],
+                    "policy_id": report["policy_id"],
+                    "checkpoint_count": report["checkpoint_count"],
+                    "eligible_checkpoint_count": report["eligible_checkpoint_count"],
+                    "all_checkpoints_modeled_ready": report["all_checkpoints_modeled_ready"],
+                    "strict_pit_eligible": False,
+                    "inference_eligible": False,
+                    "path": report_path.as_posix(),
+                    "execution_capability": "none",
+                }
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "regime" and args.regime_command == "evidence-audit-publisher-archives":
+        try:
+            dataset = load_market_regime_dataset(args.dataset)
+            method_catalog = load_method_skill_catalog(args.method_catalog)
+            registration = load_regime_study_registration(
+                args.registration,
+                dataset=dataset,
+                method_catalog=method_catalog,
+            )
+            panel = validate_regime_panel(args.panel)
+            manifest = load_regime_evidence_manifest(
+                args.manifest,
+                dataset=dataset,
+                validated_panel=panel,
+                registration=registration,
+            )
+            qualification = load_qualification_report(args.qualification)
+            report = audit_publisher_archive_recovery(
+                manifest,
+                registration,
+                qualification,
+                case_keys=None if args.case_key is None else tuple(args.case_key),
+                max_lookups=args.max_lookups,
+            )
+            path = write_publisher_archive_recovery_report(report)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"audited": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "audited": True,
+                    "report_id": report["report_id"],
+                    "checkpoint_count": report["checkpoint_count"],
+                    "found_count": report["found_count"],
+                    "not_found_count": report["not_found_count"],
+                    "source_error_count": report["source_error_count"],
+                    "path": path.as_posix(),
+                    "candidate_only": True,
+                    "execution_capability": "none",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "regime" and args.regime_command == "evidence-capture-publisher-archive":
+        try:
+            original = load_regime_evidence_record(args.record)
+            locator = load_internet_archive_locator(args.locator)
+            supersedes = (
+                None
+                if args.supersedes_record is None
+                else load_regime_evidence_record(args.supersedes_record)
+            )
+            snapshot = recover_publisher_archive_snapshot(
+                original,
+                locator,
+                not_after=args.not_after,
+                supersedes=supersedes,
+            )
+            record = snapshot.record
+            path = write_regime_evidence_record(record)
+            document_path = write_publisher_archive_research_document(snapshot)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "captured": True,
+                    "record_id": record.record_id,
+                    "authority_kind": record.authority_kind.value,
+                    "authority_at": record.to_dict()["authority_at"],
+                    "path": path.as_posix(),
+                    "research_document_path": document_path.as_posix(),
+                    "licensed_payload_committed": False,
+                    "execution_capability": "none",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
     if args.command == "agent" and args.agent_command == "validate":
         try:
@@ -2147,6 +2315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     skill_root=args.skill_root,
                     state_root=args.state_root,
                     max_total_cost_microusd=int(requested_microusd),
+                    eligible_horizon_sessions=args.eligible_horizon_sessions,
                 )
             )
         except ModuleNotFoundError as exc:

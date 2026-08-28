@@ -45,11 +45,17 @@ from market_impact_agent.model_provider import (
     load_model_provider_profile,
 )
 from market_impact_agent.openai_chat_provider import PinnedUrllibJsonTransport
+from market_impact_agent.paired_skill_ablation_contract import (
+    ALLOWED_CAPABILITIES,
+    ALLOWED_TOOLS,
+    RUNTIME_REF,
+    paired_skill_common_input_hash,
+    paired_skill_research_instruction,
+)
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
 CPA_USAGE_KEEPER_ORIGIN = "http://127.0.0.1:8080"
-RUNTIME_REF = "market-impact.agent-runtime.local-research.v2"
 REPLICATE_COUNT = 3
 SAFETY_MULTIPLIER = Decimal("1.25")
 CONTROL_SKILLS = (
@@ -60,8 +66,6 @@ CONTROL_SKILLS = (
     "adversarial-risk",
     "pattern-review",
 )
-ALLOWED_CAPABILITIES = frozenset({"evidence.read", "pattern.read"})
-ALLOWED_TOOLS = frozenset({"read_evidence", "read_pattern_pack"})
 
 
 class AvailableModelProvider(ModelProvider, Protocol):
@@ -210,20 +214,14 @@ def prepare_paired_method_skill_ablation(
         safety_multiplier=SAFETY_MULTIPLIER,
         max_total_cost_microusd=max_total_cost_microusd,
     )
-    instruction = _common_research_instruction(
-        repository,
+    instruction = paired_skill_research_instruction(
+        repository.evidence_pack,
         eligible_horizon_sessions=eligible_horizon_sessions,
     )
-    common_input_hash = canonical_hash(
-        {
-            "runtime_ref": RUNTIME_REF,
-            "evidence_pack": repository.evidence_pack.to_dict(),
-            "research_instruction": instruction,
-            "method_evidence_declaration": evidence_declaration.to_dict(),
-            "allowed_capabilities": sorted(ALLOWED_CAPABILITIES),
-            "allowed_side_effects": [ToolSideEffect.READ_ONLY.value],
-            "allowed_tools": sorted(ALLOWED_TOOLS),
-        }
+    common_input_hash = paired_skill_common_input_hash(
+        repository.evidence_pack,
+        evidence_declaration,
+        eligible_horizon_sessions=eligible_horizon_sessions,
     )
     registration = PairedSkillAblationRegistration.build(
         experiment_id=experiment_id,
@@ -364,7 +362,7 @@ async def run_paired_method_skill_ablation(
                 )
             )
     arm_reports = [
-        _arm_report(
+        build_paired_arm_report(
             arm=arm,
             binding=bindings[arm.arm_id],
             results=tuple(results[arm.arm_id]),
@@ -571,37 +569,7 @@ def _request(
     )
 
 
-def _common_research_instruction(
-    repository: FrozenResearchRepository,
-    *,
-    eligible_horizon_sessions: int = 1,
-) -> str:
-    if eligible_horizon_sessions < 1:
-        raise ValueError("eligible_horizon_sessions must be positive")
-    targets = ", ".join(repository.evidence_pack.allowed_targets)
-    event_id = repository.evidence_pack.event_id
-    horizon_label = (
-        "one trading session"
-        if eligible_horizon_sessions == 1
-        else f"{eligible_horizon_sessions} trading sessions"
-    )
-    return (
-        "Assess this identity-masked, opened development information state without using "
-        "information outside the Evidence Pack. Read every Evidence Item and the complete "
-        "Pattern Pack before deciding. Use only the registered read-only tools and selected "
-        "research methods. Test material counterevidence and abstain when the event-to-target "
-        "link or persistence over the registered horizon is unresolved. Do not infer the "
-        "historical identity "
-        "or use memorized outcomes. The only eligible targets are "
-        f"[{targets}], the only direction is up, and the only horizon is {horizon_label}. "
-        f"The proposal event_id is [{event_id}]; copy that exact event_id into the output and "
-        "never replace it with an inferred identity or description. "
-        "A candidate requires confidence at least 0.5. Return exactly one eligible candidate "
-        "or abstain."
-    )
-
-
-def _arm_report(
+def build_paired_arm_report(
     *,
     arm: SkillAblationArm,
     binding: AgentExecutionBinding,

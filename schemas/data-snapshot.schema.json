@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/data-snapshot.schema.json",
+  "title": "Market Impact Data Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "query",
+    "attempts",
+    "observations",
+    "coverage_complete",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.data-snapshot.v1"},
+    "snapshot_id": {"type": "string", "pattern": "^data-snapshot-[0-9a-f]{64}$"},
+    "query": {"$ref": "https://schemas.market-impact-agent.local/data-query.schema.json"},
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/attempt"}
+    },
+    "observations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "coverage_complete": {"type": "boolean"},
+    "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableString": {
+      "oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]
+    },
+    "nullableTimestamp": {
+      "oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_version",
+        "upstream_source",
+        "required",
+        "status",
+        "retrieved_at",
+        "raw_response_hash",
+        "received_count",
+        "accepted_count",
+        "rejected_missing_availability",
+        "rejected_after_cutoff",
+        "rejected_missing_authority",
+        "rejected_authority_after_cutoff",
+        "rejected_lane_mismatch",
+        "error_kind"
+      ],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "upstream_source": {"type": "string", "minLength": 1},
+        "required": {"type": "boolean"},
+        "status": {"enum": ["data", "no_data", "not_configured", "rate_limited", "error"]},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "raw_response_hash": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "received_count": {"type": "integer", "minimum": 0},
+        "accepted_count": {"type": "integer", "minimum": 0},
+        "rejected_missing_availability": {"type": "integer", "minimum": 0},
+        "rejected_after_cutoff": {"type": "integer", "minimum": 0},
+        "rejected_missing_authority": {"type": "integer", "minimum": 0},
+        "rejected_authority_after_cutoff": {"type": "integer", "minimum": 0},
+        "rejected_lane_mismatch": {"type": "integer", "minimum": 0},
+        "error_kind": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "latencyModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_class", "model_id", "model_version", "calibration_ref"],
+      "properties": {
+        "source_class": {"type": "string", "minLength": 1},
+        "model_id": {"type": "string", "minLength": 1},
+        "model_version": {"type": "string", "minLength": 1},
+        "calibration_ref": {"type": "string", "minLength": 1}
+      }
+    },
+    "times": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "occurred_at",
+        "published_at",
+        "available_at",
+        "source_updated_at",
+        "aggregator_fetched_at",
+        "retrieved_at",
+        "occurrence_basis",
+        "availability_basis",
+        "latency_model",
+        "evidence_ready"
+      ],
+      "properties": {
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "published_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "available_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "source_updated_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "aggregator_fetched_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "occurrence_basis": {
+          "enum": [
+            "source_reported",
+            "aggregator_snapshot",
+            "retrieval_observed",
+            "retrospective_series"
+          ]
+        },
+        "availability_basis": {
+          "enum": ["actual_receipt", "source_reported", "modeled_latency", "unknown"]
+        },
+        "latency_model": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/latencyModel"}]
+        },
+        "evidence_ready": {"type": "boolean"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "capability",
+        "provider_id",
+        "provider_version",
+        "upstream_source",
+        "upstream_record_id",
+        "source_ref",
+        "lineage_id",
+        "times",
+        "authority_at",
+        "authority_kind",
+        "raw_content_hash",
+        "normalized_payload",
+        "license_scope"
+      ],
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "pattern": "^source-observation-[0-9a-f]{64}$"
+        },
+        "capability": {"type": "string", "minLength": 1},
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "upstream_source": {"type": "string", "minLength": 1},
+        "upstream_record_id": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "lineage_id": {"type": "string", "minLength": 1},
+        "times": {"$ref": "#/$defs/times"},
+        "authority_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "authority_kind": {"$ref": "#/$defs/nullableString"},
+        "raw_content_hash": {"$ref": "#/$defs/sha256"},
+        "normalized_payload": {"type": "object"},
+        "license_scope": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

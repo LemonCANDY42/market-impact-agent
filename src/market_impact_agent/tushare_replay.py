@@ -311,7 +311,11 @@ def load_validated_tushare_adjusted_closes(
     *,
     visible_at: datetime,
 ) -> tuple[tuple[datetime, Decimal], ...]:
-    """Return source-bound adjusted closes visible by the registered cutoff."""
+    """Return cutoff-normalized research closes for sessions ending by the cutoff.
+
+    This is a retrospective source reconstruction, not proof that the factor rows were
+    historically received by ``visible_at``. Execution continues to use raw daily prices.
+    """
     bundle = validate_tushare_data_bundle(bundle_path)
     manifest = bundle.manifest
     if manifest.get("schema_version") != "market-impact.tushare-data-bundle.v2":
@@ -338,13 +342,22 @@ def load_validated_tushare_adjusted_closes(
     }
     if {_date(row, "trade_date") for row in daily_rows} != set(factors):
         raise ValueError("adjustment-factor history does not match daily sessions")
-    adjusted: list[tuple[datetime, Decimal]] = []
+    visible: list[tuple[datetime, Decimal, Decimal]] = []
     for row in daily_rows:
         trade_date = _date(row, "trade_date")
         close_at = datetime.combine(trade_date, time(15), tzinfo=_SHANGHAI)
         if close_at <= visible_at:
-            adjusted.append((close_at, _decimal(row, "close", positive=True) * factors[trade_date]))
-    return tuple(adjusted)
+            visible.append(
+                (
+                    close_at,
+                    _decimal(row, "close", positive=True),
+                    factors[trade_date],
+                )
+            )
+    if not visible:
+        return ()
+    cutoff_factor = visible[-1][2]
+    return tuple((close_at, close * factor / cutoff_factor) for close_at, close, factor in visible)
 
 
 def _adapter_output_hash(

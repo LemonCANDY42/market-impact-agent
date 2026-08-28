@@ -29,7 +29,8 @@ before capture. The admissible sequence is therefore:
 
 1. commit this public cohort and rule registration;
 2. capture source-bound private market observations without opening post-event returns;
-3. derive the momentum decisions from only pre-cutoff adjusted closes;
+3. derive the momentum decisions only from cutoff-normalized adjusted closes, while retaining the
+   later-retrieved factor table's retrospective-source limitation;
 4. write and hash a private execution plan binding every case and decision to exact Data
    Snapshot and request identities;
 5. run the same requests twice; then open outcomes and run the gate.

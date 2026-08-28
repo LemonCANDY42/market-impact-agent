@@ -5,6 +5,11 @@ designed to turn point-in-time evidence into layered market-impact reasoning,
 versioned signal intents, and policy-gated actions executed by replaceable
 backtest engines and paper-trading or broker providers.
 
+The eventual product goal is Agent-directed automated trading in both paper and
+live environments. The repository is currently building and validating the
+evidence, policy, model-runtime, reconciliation, and execution infrastructure
+required to reach that goal safely.
+
 > [!WARNING]
 > This repository is an early executable skeleton. It has no verified broker
 > connection, cannot submit live orders, and must not be used with real capital.
@@ -33,6 +38,11 @@ The bootstrap implements:
   Kalshi snapshot adapters, an authenticated World Monitor discovery adapter, and private
   content-addressed raw/normalized JSON bundles with explicit occurrence, publication,
   update, availability, aggregator-fetch, and retrieval semantics;
+- a Provider-neutral [Data Input Harness](docs/DATA_INPUT_HARNESS.md) with content-identified
+  semantic queries, strict/modeled/prospective PIT lanes, frozen Provider-manifest/source routes,
+  concurrent reads, typed degradation, raw-response retention, cutoff filtering, immutable
+  Data Snapshots, persistent complete-snapshot caching, and bound read-only Agent tools; the
+  framework is fixture-accepted but has no newly enabled historical or live vendor adapter;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
@@ -204,6 +214,39 @@ sector-momentum baselines expose missed rallies and rotations. Exact lineage and
 now fail closed. This is not Agent effectiveness, alpha, paper trading, or live authority. See
 [docs/MARKET_REGIME_RESEARCH.md](docs/MARKET_REGIME_RESEARCH.md).
 
+The later full-access publisher-archive pass verified 115 of 120 unique archive candidates and
+replaced 98 current snapshots with 100 canonical historical versions. Strict requalification
+improves established-news readiness to 2/18 frozen validation checkpoints, but the complete gate
+remains 0/18 because market, industry, positioning, macro, additional-news, and event-revelation
+authority gaps remain. A second replay recovered exact article bodies for 100 of the 115 accepted
+versions; the rebuilt Agent inputs contain every exact news payload at 13/18 checkpoints and six of
+eight at the other five.
+
+A separate opened-outcome Modeled-PIT diagnostic admitted the frozen 18-checkpoint selection under
+content-identified safety delays without changing strict PIT. It completed 108 Luna xhigh calls:
+all runs completed, both arms abstained at all 18 checkpoints, and the routed Skills changed no
+majority decision. Horizon persistence was a blocker in 108/108 runs, event identity or attribution
+in 106/108, and expectation delta in 105/108. The result points to three input-contract gaps before
+another model run: expose the observed event fact without future outcome leakage, bind a defensible
+prior expectation, and register mechanism-appropriate horizons plus executable index/ETF targets.
+It does not establish Agent effectiveness or alpha. The report is
+`regime-modeled-pit-agent-validation-report-317f79ea1602e7d381eba01f9522123116033bdbbc179180dfa71f46f895f380`.
+The aggregate rehashes every paired registration and report, then recomputes each
+`common_input_hash` from the frozen Evidence Pack, Method Evidence Declaration, and registered
+horizon. It also reconstructs both arm execution bindings from that instruction and matches all 36
+binding hashes against the report artifacts and six-record local Usage Ledgers; all 18 formal
+checkpoints passed that execution audit. The audit also rebuilds every run summary and coverage row
+from the terminal Judgment Artifact, Run Journal, and ledger metrics, so report decisions cannot be
+rewritten independently of the 108 recorded runs. Terminal replay additionally reparses the final
+model-turn assistant payload and matches the Judgment proposal, raw response, transcript, and
+metrics to the hash-chained `judgment.validated` event.
+
+The report also reconciles every current append-only Usage Ledger by Run ID. The 70-ledger union has
+528 unique terminal runs, zero duplicate or conflicting records, and $4.928324 total estimated
+model cost under the shared $20 cap. This corrects the earlier incomplete $2.436518 total; the new
+Modeled-PIT experiment contributed $0.991336 and one invalid-horizon diagnostic contributed
+$0.053516.
+
 The first archive-capture adapter is now reproducible through `market-impact archive
 common-crawl-verify`. It verifies a fixed Common Crawl byte range, one complete gzip/WARC member,
 capture metadata, target/status, and payload/block digests; redirects, widened origins, changed
@@ -211,6 +254,9 @@ locators, truncated records, and digest mismatches fail closed. A passing archiv
 only that exact content existed by the archive capture time. It does not supply or authenticate the
 publisher's original `published_at`, so it cannot yet admit a method-quality historical case. See
 [docs/ARCHIVE_AUTHORITY.md](docs/ARCHIVE_AUTHORITY.md).
+The historical recovery ladder, publisher archive audit/materialization commands, remaining PIT
+gaps, and stock-versus-index price basis are in
+[docs/PIT_EVIDENCE_RECOVERY.md](docs/PIT_EVIDENCE_RECOVERY.md).
 
 The research reset is now frozen in
 [docs/PHASE2_AGENT_PREREGISTRATION.md](docs/PHASE2_AGENT_PREREGISTRATION.md). Accrual starts

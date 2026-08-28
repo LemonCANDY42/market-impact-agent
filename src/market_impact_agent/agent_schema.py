@@ -10,6 +10,8 @@ from referencing import Registry
 from referencing.jsonschema import DRAFT202012, Schema
 
 AGENT_SCHEMA_FILES = (
+    "data-query.schema.json",
+    "data-snapshot.schema.json",
     "pattern-pack.schema.json",
     "evidence-pack.schema.json",
     "judgment-proposal.schema.json",
@@ -43,9 +45,14 @@ AGENT_SCHEMA_FILES = (
     "method-evidence-declaration.schema.json",
     "method-skill-ablation-registration.schema.json",
     "method-skill-ablation-audit-correction.schema.json",
+    "regime-modeled-pit-policy.schema.json",
+    "regime-modeled-pit-qualification-report.schema.json",
+    "regime-modeled-pit-agent-validation-registration.schema.json",
+    "regime-modeled-pit-agent-validation-report.schema.json",
     "regime-agent-experiment-report.schema.json",
     "regime-agent-validation-registration.schema.json",
     "regime-agent-validation-report.schema.json",
+    "regime-publisher-archive-recovery-report.schema.json",
 )
 
 

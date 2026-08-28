@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
+from market_impact_agent.accrual import OccurrenceSourceObservation
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.market_regimes import (
     MarketRegimeCase,
@@ -385,6 +386,74 @@ def write_regime_evidence_record(
     destination = root / f"{record.record_id}.json"
     _write_private_json(destination, record.to_dict())
     return destination
+
+
+def regime_evidence_from_actual_receipt(
+    observation: OccurrenceSourceObservation,
+    *,
+    case_keys: tuple[str, ...],
+    category: str,
+    source_id: str,
+    publisher_id: str,
+    claim_id: str,
+    lineage_id: str,
+    title: str,
+    license_scope: str,
+    supersedes: RegimeEvidenceRecord | None = None,
+) -> RegimeEvidenceRecord:
+    """Map one immutable prospective receipt into the canonical regime evidence contract."""
+    if observation.availability_basis.value != RegimeEvidenceAvailabilityBasis.ACTUAL_RECEIPT:
+        raise ValueError("regime prospective evidence requires actual-receipt availability")
+    if observation.available_at != observation.retrieved_at:
+        raise ValueError("regime prospective receipt must bind availability to retrieval")
+    if supersedes is not None and (
+        supersedes.category != category
+        or supersedes.source_id != source_id
+        or supersedes.provider_id != observation.provider_id
+        or supersedes.publisher_id != publisher_id
+        or supersedes.claim_id != claim_id
+        or supersedes.lineage_id != lineage_id
+    ):
+        raise ValueError("regime prospective revision changes source or lineage identity")
+    authority_hash = canonical_hash(
+        {
+            "provider_id": observation.provider_id,
+            "upstream_source": observation.upstream_source,
+            "upstream_record_id": observation.upstream_record_id,
+            "source_ref": observation.source_ref,
+            "retrieved_at": _timestamp(observation.retrieved_at),
+            "raw_content_hash": observation.raw_content_hash,
+            "claim_hash": observation.claim_hash,
+        }
+    )
+    return RegimeEvidenceRecord.build(
+        case_keys=case_keys,
+        category=category,
+        source_id=source_id,
+        provider_id=observation.provider_id,
+        publisher_id=publisher_id,
+        source_ref=observation.source_ref,
+        claim_id=claim_id,
+        lineage_id=lineage_id,
+        title=title,
+        occurred_at=observation.occurred_at,
+        published_at=observation.published_at,
+        source_updated_at=observation.source_updated_at,
+        available_at=observation.retrieved_at,
+        availability_basis=RegimeEvidenceAvailabilityBasis.ACTUAL_RECEIPT,
+        latency_model_id=None,
+        latency_model_hash=None,
+        authority_kind=RegimeEvidenceAuthorityKind.ACTUAL_RECEIPT,
+        authority_id=(
+            f"{observation.provider_id}:{observation.upstream_source}:"
+            f"{observation.upstream_record_id}"
+        ),
+        authority_at=observation.retrieved_at,
+        authority_hash=authority_hash,
+        content_hash=observation.raw_content_hash,
+        supersedes_id=None if supersedes is None else supersedes.record_id,
+        license_scope=license_scope,
+    )
 
 
 def write_regime_evidence_manifest(

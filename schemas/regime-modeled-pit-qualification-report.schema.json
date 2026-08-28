@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-modeled-pit-qualification-report.schema.json",
+  "title": "Market Regime Modeled PIT Qualification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "policy_id",
+    "strict_qualification_report_id",
+    "dataset_id",
+    "registration_id",
+    "panel_id",
+    "manifest_id",
+    "outcomes_opened",
+    "case_count",
+    "checkpoint_count",
+    "eligible_checkpoint_count",
+    "all_checkpoints_modeled_ready",
+    "exploratory_agent_run_eligible",
+    "strict_pit_eligible",
+    "agent_effectiveness_claim_eligible",
+    "inference_eligible",
+    "claim_scope",
+    "cases",
+    "limitations",
+    "broker_reachability",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.regime-modeled-pit-qualification-report.v1"},
+    "report_id": {
+      "type": "string",
+      "pattern": "^regime-modeled-pit-qualification-report-[0-9a-f]{64}$"
+    },
+    "policy_id": {
+      "type": "string",
+      "pattern": "^regime-modeled-pit-policy-[0-9a-f]{64}$"
+    },
+    "strict_qualification_report_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-qualification-report-[0-9a-f]{64}$"
+    },
+    "dataset_id": {"type": "string", "pattern": "^market-regime-dataset-[0-9a-f]{64}$"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^regime-study-registration-[0-9a-f]{64}$"
+    },
+    "panel_id": {"type": "string", "pattern": "^regime-panel-[0-9a-f]{64}$"},
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-manifest-[0-9a-f]{64}$"
+    },
+    "outcomes_opened": {"const": true},
+    "case_count": {"type": "integer", "minimum": 1},
+    "checkpoint_count": {"type": "integer", "minimum": 0},
+    "eligible_checkpoint_count": {"type": "integer", "minimum": 0},
+    "all_checkpoints_modeled_ready": {"type": "boolean"},
+    "exploratory_agent_run_eligible": {"type": "boolean"},
+    "strict_pit_eligible": {"const": false},
+    "agent_effectiveness_claim_eligible": {"const": false},
+    "inference_eligible": {"const": false},
+    "claim_scope": {"const": "opened_modeled_pit_process_diagnostic_only"},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "broker_reachability": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_key", "checkpoint_count", "eligible_checkpoint_count", "all_checkpoints_modeled_ready", "checkpoints"],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "checkpoint_count": {"type": "integer", "minimum": 0},
+        "eligible_checkpoint_count": {"type": "integer", "minimum": 0},
+        "all_checkpoints_modeled_ready": {"type": "boolean"},
+        "checkpoints": {"type": "array", "items": {"$ref": "#/$defs/checkpoint"}}
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_date", "cutoff_at", "ready", "strict_ready", "event_revelation", "requirements"],
+      "properties": {
+        "session_date": {"type": "string", "format": "date"},
+        "cutoff_at": {"type": "string", "format": "date-time"},
+        "ready": {"type": "boolean"},
+        "strict_ready": {"type": "boolean"},
+        "event_revelation": {"$ref": "#/$defs/event_revelation"},
+        "requirements": {"type": "array", "items": {"$ref": "#/$defs/requirement"}}
+      }
+    },
+    "event_revelation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "modeled_ready", "strict_ready", "record_ids", "blockers"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "modeled_ready": {"type": "boolean"},
+        "strict_ready": {"type": "boolean"},
+        "record_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^regime-evidence-record-[0-9a-f]{64}$"}
+        },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["missing_modeled_event_revelation"]}
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "record_count",
+        "modeled_record_count",
+        "authority_record_count",
+        "distinct_source_count",
+        "minimum_records",
+        "minimum_distinct_sources",
+        "content_complete",
+        "modeled_visibility",
+        "point_in_time_authority",
+        "authority_gap",
+        "ready",
+        "record_ids",
+        "blockers"
+      ],
+      "properties": {
+        "category": {"type": "string", "minLength": 1},
+        "record_count": {"type": "integer", "minimum": 0},
+        "modeled_record_count": {"type": "integer", "minimum": 0},
+        "authority_record_count": {"type": "integer", "minimum": 0},
+        "distinct_source_count": {"type": "integer", "minimum": 0},
+        "minimum_records": {"type": "integer", "minimum": 1},
+        "minimum_distinct_sources": {"type": "integer", "minimum": 1},
+        "content_complete": {"type": "boolean"},
+        "modeled_visibility": {"type": "boolean"},
+        "point_in_time_authority": {"type": "boolean"},
+        "authority_gap": {"type": "boolean"},
+        "ready": {"type": "boolean"},
+        "record_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^regime-evidence-record-[0-9a-f]{64}$"}
+        },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["insufficient_records", "insufficient_distinct_sources", "no_modeled_visibility"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ from typing import cast
 
 import pytest
 
-from market_impact_agent.cli import main, status_payload
+from market_impact_agent.cli import build_parser, main, status_payload
 from market_impact_agent.energy_monitor import EnergyMonitorCycle, EnergySourceMonitor
 from tests.test_energy_monitor import build_monitor
 
@@ -36,6 +36,41 @@ def test_status_is_fail_closed() -> None:
         "world-monitor-predictions",
     }
     assert all(manifest["enabled"] is False for manifest in observation_manifests)
+
+
+def test_method_skill_ablation_cli_requires_the_registered_horizon() -> None:
+    args = build_parser().parse_args(
+        [
+            "agent",
+            "method-skill-ablation-run",
+            "--method-catalog",
+            "catalog.json",
+            "--method-evidence-declaration",
+            "declaration.json",
+            "--provider-profile",
+            "provider.json",
+            "--evidence-pack",
+            "pack.json",
+            "--evidence-documents",
+            "documents.json",
+            "--pattern-pack",
+            "patterns.json",
+            "--experiment-id",
+            "experiment-a",
+            "--treatment-skill",
+            "method-a",
+            "--market-state",
+            "down_mild",
+            "--narrative-salience",
+            "diffuse",
+            "--analysis-need",
+            "cycle_position",
+            "--eligible-horizon-sessions",
+            "102",
+        ]
+    )
+
+    assert args.eligible_horizon_sessions == 102
 
 
 def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dependency() -> None:

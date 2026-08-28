@@ -1,0 +1,55 @@
+{
+  "schema_version": "market-impact.regime-modeled-pit-policy.v1",
+  "version": "a-share-opened-modeled-pit-v1",
+  "description": "Exploratory reconstruction using prior-session prices and frozen uncalibrated safety delays; historical authority gaps remain explicit.",
+  "category_rules": [
+    {
+      "category": "market_price",
+      "visibility_basis": "prior_session_panel_snapshot",
+      "allowed_availability_bases": ["actual_receipt", "modeled_latency"],
+      "safety_delay_seconds": 0
+    },
+    {
+      "category": "industry_price",
+      "visibility_basis": "prior_session_panel_snapshot",
+      "allowed_availability_bases": ["actual_receipt", "modeled_latency"],
+      "safety_delay_seconds": 0
+    },
+    {
+      "category": "official_context",
+      "visibility_basis": "record_available_at_plus_safety_delay",
+      "allowed_availability_bases": ["actual_receipt", "source_reported"],
+      "safety_delay_seconds": 300
+    },
+    {
+      "category": "macro_vintage",
+      "visibility_basis": "record_available_at_plus_safety_delay",
+      "allowed_availability_bases": ["actual_receipt", "source_reported"],
+      "safety_delay_seconds": 3600
+    },
+    {
+      "category": "established_news",
+      "visibility_basis": "record_available_at_plus_safety_delay",
+      "allowed_availability_bases": ["actual_receipt", "modeled_latency"],
+      "safety_delay_seconds": 300
+    },
+    {
+      "category": "positioning_or_expectations",
+      "visibility_basis": "record_available_at_plus_safety_delay",
+      "allowed_availability_bases": ["actual_receipt", "modeled_latency"],
+      "safety_delay_seconds": 1800
+    },
+    {
+      "category": "issuer_or_sector_fundamentals",
+      "visibility_basis": "record_available_at_plus_safety_delay",
+      "allowed_availability_bases": ["actual_receipt", "source_reported"],
+      "safety_delay_seconds": 21600
+    }
+  ],
+  "authority_treatment": "reported_as_gap_not_required_for_exploratory_replay",
+  "latency_assumptions_calibrated": false,
+  "inference_eligible": false,
+  "broker_reachability": false,
+  "execution_capability": "none",
+  "policy_id": "regime-modeled-pit-policy-b3959de39c87b4abe47a8e6543448cd2958280735389615363ccc3bd61eeb7c8"
+}

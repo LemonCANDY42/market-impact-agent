@@ -62,10 +62,17 @@ class ProviderFailure(RuntimeError):
 
 
 class FixtureProvider(ModelProvider):
-    def __init__(self, responses: Sequence[ModelTurn | BaseException]) -> None:
+    def __init__(
+        self,
+        responses: Sequence[ModelTurn | BaseException],
+        *,
+        adopt_response_model: bool = False,
+    ) -> None:
         self.responses = list(responses)
         self.requests: list[tuple[dict[str, object], ...]] = []
         self.request_tools: list[tuple[dict[str, object], ...]] = []
+        self._model = "fixture-model"
+        self._adopt_response_model = adopt_response_model
 
     @property
     def provider_id(self) -> str:
@@ -73,7 +80,7 @@ class FixtureProvider(ModelProvider):
 
     @property
     def model(self) -> str:
-        return "fixture-model"
+        return self._model
 
     async def complete(
         self,
@@ -91,6 +98,8 @@ class FixtureProvider(ModelProvider):
         response = self.responses.pop(0)
         if isinstance(response, BaseException):
             raise response
+        if self._adopt_response_model:
+            self._model = response.model
         return response
 
 
@@ -894,6 +903,49 @@ def test_budget_cancel_malformed_output_and_secret_exfiltration_fail_closed(
     )
     malformed = asyncio.run(malformed_engine.run(request("malformed-run")))
     assert malformed.status is RunStatus.FAILED
+
+    substituted_assistant: dict[str, object] = {
+        "role": "assistant",
+        "content": canonical_json_bytes(proposal().to_dict()).decode(),
+    }
+    substituted_turn = ModelTurn(
+        response_id="substituted",
+        model="substituted-model",
+        assistant_message=substituted_assistant,
+        tool_calls=(),
+        finish_reason="stop",
+        usage=ProviderUsage(10, 5),
+        raw_response={
+            "id": "substituted",
+            "model": "substituted-model",
+            "message": substituted_assistant,
+        },
+    )
+    substituted_root = tmp_path / "substituted-model"
+    substituted_engine = make_engine(
+        substituted_root,
+        FixtureProvider([substituted_turn]),
+        handler_calls=[],
+    )
+    substituted = asyncio.run(substituted_engine.run(request("substituted-model-run")))
+    assert substituted.status is RunStatus.FAILED
+    assert substituted.metrics is not None
+    assert substituted.metrics.provider_attempts == 1
+    substituted_replay = asyncio.run(substituted_engine.run(request("substituted-model-run")))
+    assert substituted_replay == substituted
+
+    mutating_root = tmp_path / "mutating-model"
+    mutating_engine = make_engine(
+        mutating_root,
+        FixtureProvider([substituted_turn], adopt_response_model=True),
+        handler_calls=[],
+    )
+    mutated = asyncio.run(mutating_engine.run(request("mutating-model-run")))
+    assert mutated.status is RunStatus.FAILED
+    assert mutated.metrics is not None
+    assert mutated.metrics.provider_attempts == 1
+    mutated_replay = asyncio.run(mutating_engine.run(request("mutating-model-run")))
+    assert mutated_replay == mutated
 
     secret_assistant: dict[str, object] = {
         "role": "assistant",

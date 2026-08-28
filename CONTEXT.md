@@ -17,6 +17,13 @@ Evidence. It retains original upstream identity, aggregator identity when presen
 publication/update times, strategy availability, local retrieval, and completeness gaps.
 _Avoid_: API response, trusted fact
 
+**Data Query**:
+A content-identified request for one read-only Observation capability at one UTC cutoff, binding
+immutable parameters, a versioned source policy, an exact ordered Provider/version/upstream-source
+set, and explicit coverage requirements. Agent arguments may refine domain parameters but cannot
+change its cutoff, sources, credentials, or cache policy.
+_Avoid_: Search prompt, Provider fallback, live model request
+
 **News Observation Batch**:
 A content-identified result of one historical or masked-replay news query over an exact ordered
 Provider/source chain. It preserves typed fetch outcomes, raw hashes, publication/update/availability
@@ -133,10 +140,32 @@ A content-identified per-case, per-checkpoint evaluation of registered record mi
 source diversity, lookback freshness, and point-in-time authority. It reports content completeness
 and authenticated availability separately. The first checkpoint of an event-timed case additionally
 requires a verified event-revelation record published between the registered event observation and
-decision cutoff; older background documents cannot satisfy that semantic gate. Only a fully passing
-report may open the diagnostic Agent comparison; an outcome-opened registration can never support
-an effectiveness claim.
+decision cutoff; older background documents cannot satisfy that semantic gate. This is the strict
+PIT admission report: only a fully passing report may support a historically authenticated Agent
+comparison. An outcome-opened registration can never support an effectiveness claim.
 _Avoid_: Model evaluation, source plan, successful backtest
+
+**Modeled-PIT Policy**:
+A content-identified, category-specific exploratory visibility policy. It freezes whether a source
+uses the previous-session panel snapshot or `available_at` plus an explicit safety delay, while
+preserving every unresolved `authority_at` gap. It cannot rewrite a Regime Evidence Record, satisfy
+strict PIT, calibrate its own latency assumptions, or authorize inference or execution.
+_Avoid_: Historical receipt, strict qualification, timestamp correction
+
+**Modeled-PIT Qualification Report**:
+A separate, content-identified process-diagnostic admission report that applies one Modeled-PIT
+Policy to the same dataset, panel, Manifest, and strict qualification lineage. It identifies which
+opened checkpoints can be replayed under frozen visibility assumptions and reports strict authority
+failures alongside them. Strict and modeled qualification reports are not interchangeable.
+_Avoid_: Relaxed strict report, alpha evidence, execution gate
+
+**Prospective Actual Receipt**:
+A future Source Observation whose immutable local retrieval is the strategy's first proven receipt,
+so `available_at` and `authority_at` both equal `retrieved_at`. The existing source/provider/version,
+raw hash, and revision lineage are adapted into the canonical Regime Evidence Record; no second
+receipt authority is introduced. Future receipts may calibrate future latency treatment but never
+backdate historical evidence.
+_Avoid_: Current-page backfill, inferred historical availability, modeled delay
 
 **Regime Agent Experiment Report**:
 A private, content-identified development diagnostic binding qualified checkpoint Evidence Packs,
@@ -145,6 +174,13 @@ path metrics, market/industry comparators, and the complete model-cost ledger. I
 Skill's incremental decisions inside the opened case, but one retrospective case is not a general
 effectiveness, alpha, paper, or live-execution claim.
 _Avoid_: Strategy acceptance, holdout result, deployable signal
+
+**Modeled-PIT Agent Validation Report**:
+A private, content-identified aggregation of the exact Modeled-PIT registration, paired checkpoint
+reports, majority decisions, realized opened-case paths, baselines, and the union model-cost ledger.
+It may expose input or orchestration defects and compare decision behavior under frozen assumptions,
+but it is always strict-PIT-ineligible, inference-ineligible, broker-unreachable, and execution-free.
+_Avoid_: Strict PIT result, method promotion, alpha report, paper/live acceptance
 
 **Regime Study Baseline Report**:
 A private, panel-bound evaluator result comparing cash, the primary market index, an equal-sector
@@ -194,9 +230,10 @@ unchanged at an earlier date.
 _Avoid_: Security master, historical truth
 
 **Data Snapshot**:
-An immutable, content-identified bundle of Provider observations and provenance
-that a Backtest Request can cite exactly. It is replay input, not proof of
-historical completeness, executable liquidity, or source infallibility.
+An immutable, content-identified bundle binding one Data Query to ordered Provider attempts,
+accepted Source Observations, cutoff rejections, degradation, and provenance that a Backtest
+Request or read-only Agent tool can cite exactly. It is replay input, not proof of historical
+completeness, executable liquidity, source infallibility, or Evidence admission.
 _Avoid_: Cache, market-data dump
 
 **Pre-event Universe**:
@@ -451,6 +488,12 @@ _Avoid_: Environment variables, fallback chain, model alias
 An append-only account of model and tool consumption for completed and incomplete Judgment
 Runs, linked to their Provider Profile, experiment, Method Arm, and execution identity.
 _Avoid_: Billing invoice, transient metrics, usage dashboard
+
+**Usage Ledger Union**:
+A content-identified reconciliation over one or more Usage Ledgers. It deduplicates exact Run IDs,
+fails on conflicting payloads, and reports terminal status counts plus total estimated cost. An
+experiment aggregate binds this union instead of accepting an unverified prior-cost scalar.
+_Avoid_: Summed dashboard number, caller-supplied historical cost, billing invoice
 
 **Execution Event**:
 A provider-observed state change for an order, fill, position, balance, or

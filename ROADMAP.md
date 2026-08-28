@@ -19,6 +19,11 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 - [x] Capture and validate current public Polymarket and Kalshi snapshots through real
   endpoints; add a disabled World Monitor discovery adapter with explicit unavailable-cache
   behavior and no false empty-data claim.
+- [x] Add the Provider-neutral Data Input Harness skeleton: content-identified semantic queries,
+  fixed Provider/version/source bindings, concurrent reads, typed degradation, cutoff filtering,
+  immutable Data Snapshots, persistent complete-snapshot cache, and bound read-only Agent tools.
+  This is framework acceptance with fixture Providers, not acceptance of a historical or live
+  vendor adapter.
 - [ ] Extend source-specific historical publication/vintage and revision adapters plus frozen
   latency models calibrated from prospective real-time receipts. The CSRC HTML/archive path proves
   one official source class; current snapshots and unadapted sources remain non-authoritative.
@@ -215,16 +220,56 @@ inputs and accepted Method Quality scoring until this gate opens.
   `authority_at <= cutoff`. Correct replay qualifies 0/18 selected checkpoints, so the runs are
   descriptive invalid/superseded diagnostics, not formal experiments. They show both arms always
   abstaining and missing positive broad/sector baselines, but cannot support a pipeline or Skill
-  claim. Attempted calls cost $1.028187; all actual diagnostic spend is $2.436518 under the shared
-  $20 cap. Aggregate lineage and costs now bind exact Provider/panel/Manifest/qualification IDs and
-  reconcile from case reports rather than caller assertions. No paper/live authority follows.
+  claim. Attempted calls cost $1.028187. Aggregate lineage and costs bind exact
+  Provider/panel/Manifest/qualification IDs and reconcile from case reports rather than caller
+  assertions. The later Usage Ledger Union below supersedes the incomplete $2.436518 all-diagnostic
+  total that was recorded at this point. No paper/live authority follows.
+- [x] Add exact-URL publisher archive recovery without weakening the PIT gate. The audit separates
+  found-but-unverified captures, genuine no-capture responses, and source errors; materialization
+  requires digest replay plus publisher publication/update and cutoff checks before minting a
+  `verified_archive` record. The first 2021-sector audit retained 32 archive-index failures as
+  `source_error`, proving failure semantics only. A later full-access six-case audit completed 230
+  lookups with 162 found, 68 not found, and zero source errors; 115 of 120 unique candidates replayed
+  successfully. The replacement Manifest preserves two real revision chains. Strict requalification
+  raises established-news readiness to 2/18 frozen validation checkpoints but leaves the complete
+  gate at 0/18. Licensed market/industry/positioning versions, missing macro authorities, 16 news
+  windows, and the first 2024 policy event revelation remain open.
+- [x] Split historical evidence into strict PIT, opened-outcome Modeled-PIT, and prospective actual
+  receipt without creating another evidence-record or orchestration authority. The frozen Modeled-
+  PIT policy applies prior-session price snapshots or source availability plus content-identified
+  safety delays, reports every historical authority gap, and cannot enter strict qualification,
+  inference, broker, paper, or live paths. Prospective receipts map into the same evidence record
+  with `available_at == authority_at == retrieved_at` and never backdate historical cases.
+- [x] Run the frozen six-case, 18-checkpoint Modeled-PIT process diagnostic after recovering article
+  bodies. All 108 Luna xhigh calls completed; both arms abstained at every checkpoint and routed
+  Skills changed 0/18 decisions. Thirteen checkpoints had every exact registered news payload and
+  five had six of eight, so missing article bodies are not the sole active blocker. Across runs,
+  horizon persistence was unresolved in 108/108, event identity or attribution in 106/108, and
+  expectation delta in 105/108. The content-identified report is
+  `regime-modeled-pit-agent-validation-report-317f79ea1602e7d381eba01f9522123116033bdbbc179180dfa71f46f895f380`.
+  The aggregate rehashes each paired registration/report and recomputes the frozen-input/horizon
+  binding, reconstructs both arm execution bindings, and matches all 36 hashes to their artifacts
+  and local Usage Ledgers. All 18 formal checkpoints match, while the earlier one-session default
+  run remains an excluded invalid diagnostic. All 108 run summaries, decisions, metrics, and
+  coverage rows are also rebuilt from terminal artifacts and Run Journals before aggregation;
+  terminal replay reparses the final assistant payload and matches proposal, raw response,
+  transcript, and metrics to the hash-chained validation event.
+  Its Usage Ledger Union covers 70 ledgers and 528 unique runs with zero duplicates or conflicts:
+  $3.883472 preexisting, $0.053516 invalid-horizon diagnostic, and $0.991336 formal Modeled-PIT,
+  totaling $4.928324 under the shared $20 cap. This corrects the earlier incomplete total.
+- [ ] Register the next small process diagnostic around the observed event fact, cited prior
+  expectation, falsifiable transmission path, mechanism-appropriate horizon set, and executable
+  index/ETF target universe. Acquire each input through a fixed Data Query and expose only its
+  frozen Data Snapshot to the Agent. Keep future outcomes hidden. Run only two or three
+  representative checkpoints first; stop if the same blockers remain before spending across all
+  18 again.
 - [ ] Complete source-specific historical capture for exchange official material, additional macro
   vintages, positioning, filings, Bloomberg, and Reuters. Add a defensible original-vintage
   or explicitly bounded price-history treatment. Bind every checkpoint to accepted source versions
   and latency authority before any masked method-Skill model run. Qualify additional quiet,
   slow-trend, revision, and black-swan cases without outcome-based replacement. Keep three paired
   replicates and the shared $20 CPA cap; do not spend model budget on a case whose source or
-  event-revelation gate fails, and do not rerun the unchanged always-abstain decision surface.
+  event-revelation gate fails, and do not rerun the unchanged always-abstain input contract.
 - Promote the prospective physical-energy family only if its frozen Agent Phase 2 holdout
   passes; the registration and committed synthetic slice are not acceptance evidence.
 - Research broader single-event and cumulative-narrative families, including

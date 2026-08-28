@@ -21,6 +21,8 @@ class Validator(Protocol):
 @pytest.mark.parametrize(
     "schema_name",
     [
+        "data-query.schema.json",
+        "data-snapshot.schema.json",
         "event-transmission.schema.json",
         "backtest-request.schema.json",
         "backtest-result.schema.json",
@@ -56,6 +58,11 @@ class Validator(Protocol):
         "regime-study-baseline-report.schema.json",
         "regime-evidence-manifest.schema.json",
         "regime-evidence-qualification-report.schema.json",
+        "regime-modeled-pit-policy.schema.json",
+        "regime-modeled-pit-qualification-report.schema.json",
+        "regime-modeled-pit-agent-validation-registration.schema.json",
+        "regime-modeled-pit-agent-validation-report.schema.json",
+        "regime-publisher-archive-recovery-report.schema.json",
         "regime-agent-experiment-report.schema.json",
         "regime-agent-validation-registration.schema.json",
         "regime-agent-validation-report.schema.json",
@@ -99,6 +106,8 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/abqaiq-recovery-method-evidence-v1.json",
         "examples/research/market-regime-study-registration-v1.json",
         "examples/research/regime-agent-validation-v1.json",
+        "examples/research/regime-modeled-pit-policy-v1.json",
+        "examples/research/regime-modeled-pit-agent-validation-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -151,6 +160,10 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "method-evidence-declaration.schema.json"
     elif example_path.endswith("market-regime-study-registration-v1.json"):
         schema_name = "regime-study-registration.schema.json"
+    elif example_path.endswith("regime-modeled-pit-policy-v1.json"):
+        schema_name = "regime-modeled-pit-policy.schema.json"
+    elif example_path.endswith("regime-modeled-pit-agent-validation-v1.json"):
+        schema_name = "regime-modeled-pit-agent-validation-registration.schema.json"
     elif example_path.endswith("regime-agent-validation-v1.json"):
         schema_name = "regime-agent-validation-registration.schema.json"
     else:

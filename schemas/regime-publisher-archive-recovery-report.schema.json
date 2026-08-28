@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact-agent.local/schemas/regime-publisher-archive-recovery-report.schema.json",
+  "title": "Regime Publisher Archive Recovery Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "manifest_id",
+    "registration_id",
+    "qualification_report_id",
+    "case_keys",
+    "checkpoint_count",
+    "lookup_count",
+    "found_count",
+    "not_found_count",
+    "source_error_count",
+    "news_ready_if_found_captures_verify_count",
+    "checkpoints",
+    "candidate_only",
+    "licensed_payloads_committed",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.regime-publisher-archive-recovery-report.v1"
+    },
+    "report_id": {
+      "type": "string",
+      "pattern": "^regime-publisher-archive-recovery-report-[0-9a-f]{64}$"
+    },
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-manifest-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^regime-study-registration-[0-9a-f]{64}$"
+    },
+    "qualification_report_id": {
+      "type": "string",
+      "pattern": "^regime-evidence-qualification-report-[0-9a-f]{64}$"
+    },
+    "case_keys": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checkpoint_count": {"type": "integer", "minimum": 0},
+    "lookup_count": {"type": "integer", "minimum": 0},
+    "found_count": {"type": "integer", "minimum": 0},
+    "not_found_count": {"type": "integer", "minimum": 0},
+    "source_error_count": {"type": "integer", "minimum": 0},
+    "news_ready_if_found_captures_verify_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/checkpoint"}
+    },
+    "candidate_only": {"const": true},
+    "licensed_payloads_committed": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_key",
+        "session_date",
+        "cutoff_at",
+        "minimum_records",
+        "minimum_distinct_publishers",
+        "current_authority_record_count",
+        "current_distinct_publisher_count",
+        "found_unverified_record_count",
+        "news_ready_if_found_captures_verify",
+        "candidates"
+      ],
+      "properties": {
+        "case_key": {"type": "string", "minLength": 1},
+        "session_date": {"type": "string", "format": "date"},
+        "cutoff_at": {"type": "string", "format": "date-time"},
+        "minimum_records": {"type": "integer", "minimum": 1},
+        "minimum_distinct_publishers": {"type": "integer", "minimum": 1},
+        "current_authority_record_count": {"type": "integer", "minimum": 0},
+        "current_distinct_publisher_count": {"type": "integer", "minimum": 0},
+        "found_unverified_record_count": {"type": "integer", "minimum": 0},
+        "news_ready_if_found_captures_verify": {"type": "boolean"},
+        "candidates": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/candidate"}
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "publisher_id",
+        "source_ref",
+        "status",
+        "locator",
+        "error_type"
+      ],
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "pattern": "^regime-evidence-record-[0-9a-f]{64}$"
+        },
+        "publisher_id": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "format": "uri"},
+        "status": {
+          "enum": ["capture_found_unverified", "not_found", "source_error"]
+        },
+        "locator": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/locator"}
+          ]
+        },
+        "error_type": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        }
+      }
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "target_url",
+        "timestamp",
+        "digest",
+        "http_status",
+        "media_type",
+        "source_version_id"
+      ],
+      "properties": {
+        "schema_version": {"const": "market-impact.internet-archive-locator.v1"},
+        "target_url": {"type": "string", "format": "uri"},
+        "timestamp": {"type": "string", "pattern": "^[0-9]{14}$"},
+        "digest": {"type": "string", "pattern": "^sha1:[A-Z2-7]{32}$"},
+        "http_status": {"const": 200},
+        "media_type": {"enum": ["text/html", "application/xhtml+xml"]},
+        "source_version_id": {
+          "type": "string",
+          "pattern": "^internet-archive-record-[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
