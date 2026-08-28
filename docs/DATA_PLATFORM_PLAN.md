@@ -128,30 +128,41 @@ sequenceDiagram
 ```
 
 The Agent may propose what to follow, but the Harness owns approval, scheduling, canonical state,
-and wake-up. A Watch Policy should content-bind:
+and wake-up. The accepted minimum Watch Policy content-binds:
 
 - the originating event or Judgment ID and canonical event-cluster key;
 - authorized semantic query, source routes, optional search terms, and target entities;
-- fixed or adaptive cadence, start time, expiry/TTL, maximum polls, bytes, source spend, and model
-  wake-up spend;
-- deterministic triggers such as a new lineage/version, a named publisher, two-source
-  corroboration, material numeric change, contradiction, resolution, or source staleness;
-- cooldown, duplicate-alert key, priority, and a private delivery destination owned by the Harness;
+- one existing Prospective Collection Policy, whose fixed cadence remains the single cadence
+  authority, plus start time, expiry/TTL, maximum polls, captured bytes, and Agent wake count;
+- the deterministic `new_observation_version` trigger;
+- wake-only cooldown and an internal duplicate key;
   and
 - the prior Snapshot/Judgment lineage that a triggered run must cite.
 
-The lightweight scheduler reads due policies from durable local state, invokes only registered
-Providers, and writes through the same Prospective Receipt Journal. Conditional HTTP requests,
-per-source jitter/backoff, and event-cluster coalescing reduce duplicate traffic. A deterministic
-trigger evaluator runs before any model call. When nothing material changed, no Agent run is
-created. When a trigger fires, an idempotent notification outbox records one wake-up, freezes the
-new Snapshot, and launches a fresh bounded Judgment run; it never mutates the previous run or sends
-an order directly.
+`AttentionWatchService.create` accepts only a complete Journal-frozen aggregate covering the full
+Collection Policy window, with no receipts after Watch creation, so every version already present
+at that baseline is seeded into the durable seen set. `run_due`
+atomically claims eligible work with an expiring SQLite lease before calling a collector bound to
+the stored Prospective Collection Policy. This prevents concurrent supervisors from advancing
+poll/byte/wake state or the outbox twice while still allowing recovery after a crashed worker.
+Every attempt writes through the same Prospective Receipt Journal. A complete collection is frozen
+through the existing Snapshot path before version comparison. When nothing changed, no wake is
+created. When a new version appears outside cooldown, one content-identified pending wake binds the
+prior and new complete Snapshot IDs. A separate Harness-owned consumer may start a fresh bounded
+Judgment run and acknowledge delivery; the Watch does not mutate the previous run or send an order
+directly.
 
-Watch states should be `active`, `backing_off`, `triggered`, `expired`, `cancelled`, or `failed`.
-Restart recovery recomputes `next_due_at` from durable state and never hides missed intervals.
-Acceptance requires tests for duplicate suppression, restart recovery, expiry, late revisions,
-source failure/rate limit, stale feeds, cooldown, trigger idempotency, and budget exhaustion.
+Implemented states are `active`, `backing_off`, `triggered`, `expired`, and `cancelled`.
+Typed source failures and raised collector exceptions back off without terminally disabling the
+Watch, while explicit cancellation revokes any outstanding lease. A receipt gap remains
+fail-closed: later successful polls do not rewrite history, and wake eligibility resumes only from
+an explicitly approved new complete baseline/policy. Tests cover aggregate-baseline admission,
+no-change, revision trigger, restart/repeat deduplication, concurrent and expired leases, expiry,
+poll budget, source/collector failure, cancellation, cooldown that continues receipt cadence,
+complete-Snapshot gating, and idempotent delivery acknowledgement. The current runtime is an
+in-process `run_due` component for an external supervisor; it does not install a daemon, launch a
+model, or provide adaptive cadence, corroboration/materiality triggers, conditional HTTP, jitter,
+or event-cluster coalescing yet.
 
 For latency-critical prices and order books, use licensed streaming market data and sequence-gap
 recovery rather than webpage/RSS polling. Attention Watch is best for news, announcements,
@@ -246,7 +257,7 @@ practical research connector, but an old date returned today does not itself pro
 | --- | --- | --- |
 | Provider gate | One frozen sample passes rights, transport, completeness, time/version, semantics, and deterministic replay | Implement that source's production adapter |
 | Dataset gate | Sustained polling proves cadence, typed failure recovery, version capture, storage growth, and restore | Run an externally supervised prospective collector |
-| Watch gate | Durable policy state, TTL/budget enforcement, deterministic triggers, duplicate suppression, restart recovery, and idempotent wake-up outbox pass | Let an Agent propose bounded Attention Watches |
+| Watch gate | The fixed-cadence/new-version core has durable policy state, TTL/budget enforcement, duplicate suppression, restart recovery, complete-Snapshot gating, and an idempotent wake-up outbox; supervisor and richer-trigger acceptance remain | Let the Harness persist bounded Watch policies; defer automatic Agent proposal/dispatch |
 | Query gate | Representative event/expectation/market/universe Snapshots are complete and useful to the Agent | Run the two-to-three-checkpoint paired experiment |
 | Paper-data gate | Prospective decision inputs and execution-grade market data remain synchronized through replay and reconciliation | Connect the separate paper execution outbox |
 | Scale gate | Measured write contention, data volume, query latency, or multi-host consumers exceed local limits | Evaluate PostgreSQL, object storage, stream log, or lakehouse catalog |
@@ -266,6 +277,9 @@ practical research connector, but an old date returned today does not itself pro
 - The continuous CLI is a foreground collector. Process restart supervision, durable scheduler
   misfires, conditional HTTP caching, per-source jittered backoff, and source-specific stream gap
   recovery remain Provider/operations gates, not implied capabilities.
+- Attention Watch provides durable `run_due` state and a local pending/delivered outbox, but no
+  installed scheduler or Agent-run dispatcher. An external supervisor must call it, and only the
+  new-observation-version trigger is accepted.
 - One A-share official-event route is accepted for prospective private research. It is not a
   complete A-share decision feed: market/index, effective-dated industry, positioning, macro
   vintage, expectation, and tradable-universe routes are still unaccepted.

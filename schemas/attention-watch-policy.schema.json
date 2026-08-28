@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/attention-watch-policy.schema.json",
+  "title": "Market Impact Attention Watch Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "watch_id",
+    "origin_ref",
+    "event_cluster_key",
+    "collection_policy_id",
+    "initial_data_snapshot_id",
+    "starts_at",
+    "expires_at",
+    "maximum_polls",
+    "maximum_bytes",
+    "maximum_wakes",
+    "cooldown_seconds",
+    "trigger_kind"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.attention-watch-policy.v1"},
+    "watch_id": {"type": "string", "pattern": "^attention-watch-[0-9a-f]{64}$"},
+    "origin_ref": {"type": "string", "minLength": 1},
+    "event_cluster_key": {"type": "string", "minLength": 1},
+    "collection_policy_id": {
+      "type": "string",
+      "pattern": "^prospective-collection-policy-[0-9a-f]{64}$"
+    },
+    "initial_data_snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "starts_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "maximum_polls": {"type": "integer", "minimum": 0},
+    "maximum_bytes": {"type": "integer", "minimum": 0},
+    "maximum_wakes": {"type": "integer", "minimum": 0},
+    "cooldown_seconds": {"type": "integer", "minimum": 0},
+    "trigger_kind": {"const": "new_observation_version"}
+  }
+}

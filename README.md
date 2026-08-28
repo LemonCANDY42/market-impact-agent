@@ -52,6 +52,10 @@ The bootstrap implements:
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
+- a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
+  poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
+  due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,
+  and an idempotent local wake-up outbox that always binds a complete frozen Snapshot;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic

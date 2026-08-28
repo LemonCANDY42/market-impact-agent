@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/attention-watch-wake.schema.json",
+  "title": "Market Impact Attention Wake",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "wake_id",
+    "watch_id",
+    "trigger_kind",
+    "data_snapshot_id",
+    "prior_data_snapshot_id",
+    "new_version_ids",
+    "created_at",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.attention-watch-wake.v1"},
+    "wake_id": {"type": "string", "pattern": "^attention-wake-[0-9a-f]{64}$"},
+    "watch_id": {"type": "string", "pattern": "^attention-watch-[0-9a-f]{64}$"},
+    "trigger_kind": {"const": "new_observation_version"},
+    "data_snapshot_id": {"type": "string", "pattern": "^data-snapshot-[0-9a-f]{64}$"},
+    "prior_data_snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "new_version_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "execution_capability": {"const": false}
+  }
+}

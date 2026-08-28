@@ -331,5 +331,38 @@ content-addressed artifact store.
 The projection is created only for a complete Snapshot and binds that exact Snapshot ID and window;
 an incomplete cadence audit produces no standalone dataset manifest.
 
+## Bounded Attention Watch runtime
+
+`src/market_impact_agent/attention_watch.py` adds scheduling state without adding another receipt or
+Snapshot authority. A Harness-approved `AttentionWatchPolicy` binds one existing Prospective
+Collection Policy and initial complete Journal-frozen aggregate to an event/Judgment reference,
+cluster key, start, expiry, cooldown, and poll/byte/wake budgets. The bound Collection Policy is the
+only fixed-cadence authority. The model does not receive a URL, Provider selector, filesystem path,
+notification destination, or execution capability.
+
+The initial aggregate must cover the Collection Policy's full window and cannot include receipts
+after Watch creation. This prevents old versions omitted by a shortened baseline from later being
+misclassified as new information.
+
+An external process supervisor calls `AttentionWatchService.run_due` with a collector already bound
+to the stored collection policy. An atomic expiring lease admits only one logical due run, preventing
+concurrent supervisors from double-spending state budgets or adding duplicate outbox work while
+allowing crash recovery. Every actual attempt still enters `ProspectiveDataJournal`. Typed source
+failures and raised collector exceptions produce durable non-terminal backoff and no wake. A
+successful poll freezes a standard complete Data Snapshot, compares immutable observation-version
+IDs with the Watch's durable seen set, and creates at most one pending `AttentionWake` for a new
+version. The wake binds both the prior and new Snapshot IDs and explicitly has no execution
+capability. Identical sightings, restarts, and duplicate trigger evaluation cannot add a second
+outbox row.
+
+Cooldown suppresses Agent wake-up only; polling continues at the registered cadence so the Harness
+does not manufacture a receipt gap. A Harness-owned consumer can read `pending_wakes()` and call
+`mark_wake_delivered()` after it has started a fresh bounded Agent run. This slice does not itself
+install a scheduler, keep a model resident, dispatch an Agent, promote Evidence, or submit an order.
+Adaptive cadence and corroboration/materiality/contradiction triggers remain later Watch gates.
+If a real receipt gap occurs, later polls remain append-only and cannot make the affected aggregate
+complete; an operator must explicitly approve a new complete baseline/policy before wake eligibility
+resumes.
+
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.

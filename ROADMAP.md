@@ -43,6 +43,13 @@ not begin because an earlier API exists; its acceptance evidence must exist.
   triggers, durable restart state, duplicate suppression, and an idempotent wake-up outbox that
   freezes a new Data Snapshot before starting a fresh Agent run. Watches remain read-only and cannot
   submit paper or live orders.
+  - [x] Add the minimum fixed-cadence/new-version slice: immutable Watch Policy and Wake contracts,
+    Journal-frozen aggregate baseline, shared SQLite/CAS state, atomic expiring due lease, TTL and
+    poll/byte/wake budgets, non-terminal source/collector backoff, cancellation, wake-only cooldown,
+    restart-safe seen-version state, complete-Snapshot gating, and a pending/delivered idempotent
+    outbox. The bound Collection Policy remains the sole cadence authority. Adaptive cadence,
+    corroboration/materiality triggers, an external process supervisor, and fresh Agent-run dispatch
+    remain open.
 - [ ] Extend source-specific historical publication/vintage and revision adapters plus frozen
   latency models calibrated from prospective real-time receipts. The CSRC HTML/archive path proves
   one official source class; current snapshots and unadapted sources remain non-authoritative.

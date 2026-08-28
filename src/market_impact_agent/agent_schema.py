@@ -15,6 +15,8 @@ AGENT_SCHEMA_FILES = (
     "syndication-feed-source.schema.json",
     "csrc-news-source.schema.json",
     "source-route-acceptance-report.schema.json",
+    "attention-watch-policy.schema.json",
+    "attention-watch-wake.schema.json",
     "prospective-collection-policy.schema.json",
     "prospective-dataset-manifest.schema.json",
     "pattern-pack.schema.json",

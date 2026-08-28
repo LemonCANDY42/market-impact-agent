@@ -431,7 +431,7 @@ class ProspectiveDataJournal:
                 )
                 version_core = _observation_version_core(observation)
                 version_core_json = canonical_json_bytes(version_core).decode()
-                version_id = f"prospective-observation-version-{canonical_hash(version_core)}"
+                version_id = prospective_observation_version_id(observation)
                 available_at = observation.times.available_at
                 if available_at is None:
                     raise ValueError("prospective journal observations require availability")
@@ -668,6 +668,45 @@ class ProspectiveDataJournal:
         )
         self.store.put(snapshot)
         return snapshot
+
+    def assert_frozen_snapshot(self, snapshot: DataSnapshot) -> None:
+        """Require a complete aggregate produced from this journal's receipt selections."""
+
+        if not snapshot.coverage_complete:
+            raise ValueError("prospective journal baseline requires complete coverage")
+        if snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
+            raise ValueError("prospective journal baseline requires the prospective PIT lane")
+        if snapshot.query.window_start is None:
+            raise ValueError("prospective journal baseline requires a bounded window")
+        policy = self.policy(snapshot.query.source_policy_id)
+        if snapshot.query.window_start != policy.window_start:
+            raise ValueError("prospective journal baseline window does not match policy")
+        if snapshot.query.capability is not policy.capability:
+            raise ValueError("prospective journal baseline capability does not match policy")
+        if snapshot.query.sources != policy.sources:
+            raise ValueError("prospective journal baseline sources do not match policy")
+        parameters = snapshot.query.parameters
+        if parameters.get("collection_policy_id") != policy.policy_id:
+            raise ValueError("prospective journal baseline is not a Journal freeze")
+        requested_not_after = parameters.get("requested_not_after")
+        if not isinstance(requested_not_after, str) or not requested_not_after.endswith("Z"):
+            raise ValueError("prospective journal baseline cutoff is missing")
+        collection_snapshot_ids = self._selection_collection_snapshot_ids(snapshot)
+        if not collection_snapshot_ids:
+            raise ValueError("prospective journal baseline has no receipt selections")
+        placeholders = ",".join("?" for _ in collection_snapshot_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT snapshot_id FROM prospective_collection_snapshots
+                WHERE policy_id = ? AND snapshot_id IN ({placeholders})
+                """,
+                (policy.policy_id, *collection_snapshot_ids),
+            ).fetchall()
+        if {cast(str, row["snapshot_id"]) for row in rows} != set(collection_snapshot_ids):
+            raise ValueError("prospective journal baseline receipts do not match policy")
+        if snapshot.observations:
+            self._dataset_rows_for_snapshot(snapshot)
 
     def materialize_snapshot_parquet(
         self,
@@ -975,8 +1014,7 @@ class ProspectiveDataJournal:
         snapshot: DataSnapshot,
     ) -> tuple[sqlite3.Row, ...]:
         version_ids = tuple(
-            f"prospective-observation-version-{canonical_hash(_observation_version_core(item))}"
-            for item in snapshot.observations
+            prospective_observation_version_id(item) for item in snapshot.observations
         )
         placeholders = ",".join("?" for _ in version_ids)
         with self._connect() as connection:
@@ -1073,6 +1111,11 @@ def _observation_version_core(observation: SourceObservation) -> dict[str, objec
         "normalized_payload": observation.normalized_payload,
         "license_scope": observation.license_scope,
     }
+
+
+def prospective_observation_version_id(observation: SourceObservation) -> str:
+    content_hash = canonical_hash(_observation_version_core(observation))
+    return f"prospective-observation-version-{content_hash}"
 
 
 def _observation_from_json(value: str) -> SourceObservation:
