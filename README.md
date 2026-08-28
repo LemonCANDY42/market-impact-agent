@@ -45,7 +45,9 @@ The bootstrap implements:
 - a Provider-neutral [Data Input Harness](docs/DATA_INPUT_HARNESS.md) with content-identified
   semantic queries, strict/modeled/prospective PIT lanes, frozen Provider-manifest/source routes,
   concurrent reads, typed degradation, raw-response retention, cutoff filtering, immutable
-  Data Snapshots, persistent complete-snapshot caching, and bound read-only Agent tools; the
+  Data Snapshots, persistent complete-snapshot caching, and bound read-only Agent tools whose
+  checkpoint results are content-identified Provider-neutral decision inputs with explicit source,
+  time, authority, price-basis, and completeness-gap fields; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte
   retention, and records actual receipt without claiming historical PIT or article-body rights;
@@ -63,7 +65,8 @@ The bootstrap implements:
 - a Harness-owned one-shot collection worker with content-identified Jobs, unique logical due
   opportunities, expiring leases, bounded jitter/backoff, misfire and cancellation classification,
   restart-safe staged Snapshot recovery, and machine-readable health; a real CSRC-plus-Tushare
-  market tracer has passed, while host service installation remains a separate gate;
+  market tracer and the authorized host process-supervisor acceptance have passed, while complete
+  multi-policy operations, retention, and restore acceptance remains a separate gate;
 - a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
   poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
   due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,

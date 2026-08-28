@@ -1,0 +1,318 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from typing import cast
+
+import pytest
+
+from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_schema import validate_agent_contract
+from market_impact_agent.checkpoint_decision_inputs import (
+    checkpoint_decision_input_from_dict,
+    project_checkpoint_observation,
+)
+from market_impact_agent.data_inputs import SourceObservation
+from market_impact_agent.observations import (
+    AvailabilityBasis,
+    ObservationCapability,
+    ObservationTimes,
+    OccurrenceBasis,
+)
+
+BARRIER = datetime(2026, 8, 28, 8, 0, tzinfo=UTC)
+RECEIVED = BARRIER - timedelta(minutes=30)
+
+
+def _observation(
+    capability: ObservationCapability,
+    payload: dict[str, object],
+) -> SourceObservation:
+    return SourceObservation.build(
+        capability=capability,
+        provider_id="fixture-provider",
+        provider_version="1",
+        upstream_source="fixture-source",
+        upstream_record_id="fixture-record",
+        source_ref="https://fixture.example/record",
+        lineage_id="fixture-source:fixture-record",
+        times=ObservationTimes(
+            occurred_at=RECEIVED - timedelta(minutes=2),
+            published_at=RECEIVED - timedelta(minutes=2),
+            available_at=RECEIVED,
+            source_updated_at=RECEIVED - timedelta(minutes=2),
+            aggregator_fetched_at=None,
+            retrieved_at=RECEIVED,
+            occurrence_basis=OccurrenceBasis.SOURCE_REPORTED,
+            availability_basis=AvailabilityBasis.ACTUAL_RECEIPT,
+        ),
+        authority_at=RECEIVED,
+        authority_kind="actual_receipt",
+        raw_content_hash=sha256(b"fixture").hexdigest(),
+        normalized_payload=payload,
+        license_scope="private_research_no_redistribution",
+    )
+
+
+def _project(observation: SourceObservation) -> dict[str, object]:
+    return project_checkpoint_observation(
+        checkpoint_snapshot_set_id=("prospective-checkpoint-snapshot-set-" + "a" * 64),
+        checkpoint_key="policy-event",
+        barrier_at=BARRIER,
+        snapshot_id="data-snapshot-" + "b" * 64,
+        route_kinds=("official_event",),
+        observation=observation,
+    )
+
+
+def _validate_schema(projected: dict[str, object]) -> None:
+    assert validate_agent_contract(projected, "checkpoint-decision-input.schema.json") == ()
+
+
+def test_checkpoint_decision_input_round_trip_rejects_content_drift() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.EVENT_REVELATION,
+            {
+                "publisher": "Official publisher",
+                "headline": "Policy event",
+                "summary": "A prospectively received official event fact.",
+            },
+        )
+    )
+
+    assert checkpoint_decision_input_from_dict(projected) == projected
+
+    changed = deepcopy(projected)
+    data = cast(dict[str, object], changed["data"])
+    data["headline"] = "Changed after identity was frozen"
+    with pytest.raises(ValueError, match="record_id does not match content"):
+        checkpoint_decision_input_from_dict(changed)
+
+
+def test_checkpoint_decision_input_rejects_reidentified_schema_drift() -> None:
+    changed = _project(
+        _observation(
+            ObservationCapability.EVENT_REVELATION,
+            {"publisher": "Official publisher", "headline": "Policy event"},
+        )
+    )
+    data = cast(dict[str, object], changed["data"])
+    data["provider_sentiment"] = "bullish"
+    core = {key: value for key, value in changed.items() if key != "record_id"}
+    changed["record_id"] = f"checkpoint-decision-input-{canonical_hash(core)}"
+
+    with pytest.raises(ValueError, match="does not conform to its schema"):
+        checkpoint_decision_input_from_dict(changed)
+
+
+@pytest.mark.parametrize(
+    ("capability", "payload", "expected_type", "expected_gaps"),
+    (
+        (
+            ObservationCapability.PRIOR_EXPECTATION,
+            {
+                "api_name": "report_rc",
+                "upstream_publisher": "Tushare Pro",
+                "record": {
+                    "ts_code": "600000.SH",
+                    "report_date": "20260828",
+                    "org_name": "Fixture Research",
+                    "author_name": "Fixture Analyst",
+                    "quarter": "2026Q3",
+                    "eps": 1.25,
+                    "tp": 12.5,
+                },
+            },
+            "forecast_observation",
+            ["consensus_not_derived", "reported_metric_units_unverified"],
+        ),
+        (
+            ObservationCapability.MARKET_CONTEXT,
+            {
+                "api_name": "index_daily",
+                "upstream_publisher": "Tushare Pro",
+                "record": {
+                    "ts_code": "000300.SH",
+                    "trade_date": "20260828",
+                    "open": 4100.0,
+                    "high": 4120.0,
+                    "low": 4090.0,
+                    "close": 4110.0,
+                },
+            },
+            "index_price_bar",
+            ["total_return_series_missing"],
+        ),
+        (
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            {
+                "api_name": "index_member_all",
+                "upstream_publisher": "Shenwan Hongyuan Research",
+                "record": {
+                    "l1_code": "801010.SI",
+                    "l1_name": "Agriculture",
+                    "ts_code": "600000.SH",
+                    "in_date": "20260101",
+                    "out_date": "20261231",
+                },
+            },
+            "industry_membership",
+            ["industry_to_tradable_mapping_missing", "taxonomy_version_unverified"],
+        ),
+        (
+            ObservationCapability.POSITIONING,
+            {
+                "api_name": "margin",
+                "upstream_publisher": "Tushare Pro",
+                "record": {
+                    "exchange_id": "SSE",
+                    "trade_date": "20260828",
+                    "rzye": 10.0,
+                    "rqye": 2.0,
+                    "rzrqye": 12.0,
+                },
+            },
+            "margin_financing_snapshot",
+            [
+                "publication_cadence_unverified",
+                "reported_units_unverified",
+                "revision_policy_unverified",
+            ],
+        ),
+        (
+            ObservationCapability.MACRO_VINTAGE,
+            {
+                "api_name": "cn_schedule",
+                "upstream_publisher": "Tushare Pro",
+                "record": {
+                    "month": "202607",
+                    "publish_date": "20260809",
+                    "title": "National CPI release",
+                    "issuing_org": "NBS",
+                    "data_api": "cn_cpi",
+                },
+            },
+            "macro_release_schedule",
+            ["original_release_missing", "revision_lineage_missing"],
+        ),
+    ),
+)
+def test_provider_specific_rows_project_to_fail_closed_decision_inputs(
+    capability: ObservationCapability,
+    payload: dict[str, object],
+    expected_type: str,
+    expected_gaps: list[str],
+) -> None:
+    projected = _project(_observation(capability, payload))
+
+    assert projected["record_type"] == expected_type
+    assert projected["completeness_gaps"] == expected_gaps
+    assert projected["historical_pit_claim"] is False
+    assert projected["evidence_promoted"] is False
+    assert projected["execution_capability"] is False
+    assert checkpoint_decision_input_from_dict(projected) == projected
+    _validate_schema(projected)
+    data = cast(dict[str, object], projected["data"])
+    assert "expectation_delta" not in data
+    assert "consensus_value" not in data
+
+
+def test_projected_decision_input_conforms_to_public_schema() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.EVENT_REVELATION,
+            {
+                "publisher": "Official publisher",
+                "headline": "Policy event",
+                "summary": "A prospectively received official event fact.",
+            },
+        )
+    )
+    _validate_schema(projected)
+
+
+def test_fund_price_projection_does_not_fabricate_an_index_code() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.MARKET_CONTEXT,
+            {
+                "api_name": "fund_daily",
+                "upstream_publisher": "Tushare Pro",
+                "record": {
+                    "ts_code": "510300.SH",
+                    "trade_date": "20260828",
+                    "close": 4.25,
+                },
+            },
+        )
+    )
+
+    assert projected["record_type"] == "fund_price_bar"
+    data = cast(dict[str, object], projected["data"])
+    assert data["instrument_code"] == "510300.SH"
+    assert data["index_code"] is None
+    _validate_schema(projected)
+
+
+def test_index_member_sparse_taxonomy_does_not_mix_incomplete_levels() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            {
+                "api_name": "index_member_all",
+                "upstream_publisher": "Shenwan Hongyuan Research",
+                "record": {
+                    "l3_code": "850111.SI",
+                    "l3_name": None,
+                    "l2_code": None,
+                    "l2_name": "Incomplete level two",
+                    "l1_code": "801010.SI",
+                    "l1_name": None,
+                    "ts_code": "600000.SH",
+                    "in_date": "20260101",
+                },
+            },
+        )
+    )
+
+    data = cast(dict[str, object], projected["data"])
+    assert data["industry_code"] is None
+    assert data["industry_name"] is None
+    assert data["taxonomy_level"] is None
+    assert projected["completeness_gaps"] == [
+        "industry_taxonomy_pair_incomplete",
+        "industry_to_tradable_mapping_missing",
+        "taxonomy_version_unverified",
+    ]
+    _validate_schema(projected)
+
+
+def test_index_member_uses_deepest_complete_taxonomy_tuple() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            {
+                "api_name": "index_member_all",
+                "record": {
+                    "l3_code": "850111.SI",
+                    "l3_name": None,
+                    "l2_code": "850100.SI",
+                    "l2_name": "Crop farming",
+                    "l1_code": "801010.SI",
+                    "l1_name": "Agriculture",
+                    "ts_code": "600000.SH",
+                },
+            },
+        )
+    )
+
+    data = cast(dict[str, object], projected["data"])
+    assert data["industry_code"] == "850100.SI"
+    assert data["industry_name"] == "Crop farming"
+    assert data["taxonomy_level"] == "l2"
+    assert "industry_taxonomy_pair_incomplete" not in cast(
+        list[str], projected["completeness_gaps"]
+    )
+    _validate_schema(projected)

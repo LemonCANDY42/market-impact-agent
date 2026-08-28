@@ -18,7 +18,12 @@
     "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-checkpoint-snapshot-set.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.prospective-checkpoint-snapshot-set.v1",
+        "market-impact.prospective-checkpoint-snapshot-set.v2"
+      ]
+    },
     "snapshot_set_id": {
       "type": "string",
       "pattern": "^prospective-checkpoint-snapshot-set-[0-9a-f]{64}$"
@@ -117,7 +122,7 @@
             "lookup_macro_vintage"
           ]
         },
-        "version": {"const": "1"},
+        "version": {"enum": ["1", "2"]},
         "snapshot_ids": {
           "type": "array",
           "minItems": 1,
@@ -152,5 +157,67 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-checkpoint-snapshot-set.v1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "capability_bindings": {
+            "items": {
+              "properties": {
+                "tool_manifest": {
+                  "oneOf": [
+                    {"type": "null"},
+                    {
+                      "allOf": [
+                        {"$ref": "#/$defs/tool_manifest"},
+                        {"properties": {"version": {"const": "1"}}}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-checkpoint-snapshot-set.v2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "capability_bindings": {
+            "items": {
+              "properties": {
+                "tool_manifest": {
+                  "oneOf": [
+                    {"type": "null"},
+                    {
+                      "allOf": [
+                        {"$ref": "#/$defs/tool_manifest"},
+                        {"properties": {"version": {"const": "2"}}}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -35,6 +35,7 @@ class Validator(Protocol):
         "prospective-dataset-manifest.schema.json",
         "prospective-diagnostic-registration.schema.json",
         "prospective-checkpoint-snapshot-set.schema.json",
+        "checkpoint-decision-input.schema.json",
         "event-transmission.schema.json",
         "backtest-request.schema.json",
         "backtest-result.schema.json",

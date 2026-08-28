@@ -7,11 +7,13 @@ from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_runtime import ToolDescriptor, ToolSideEffect
+from market_impact_agent.checkpoint_decision_inputs import project_checkpoint_observation
 from market_impact_agent.data_inputs import (
     DataPITLane,
     DataSourceBinding,
     FrozenDataSnapshotInput,
     LocalDataSnapshotStore,
+    SourceObservation,
 )
 from market_impact_agent.domain import require_aware
 from market_impact_agent.observations import ObservationCapability
@@ -26,7 +28,7 @@ from market_impact_agent.prospective_diagnostic import (
 )
 from market_impact_agent.source_acceptance import SourceRouteAcceptanceReport
 
-PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = "market-impact.prospective-checkpoint-snapshot-set.v1"
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = "market-impact.prospective-checkpoint-snapshot-set.v2"
 
 _TOOL_NAMES = {
     ObservationCapability.EVENT_REVELATION: "lookup_event_revelation",
@@ -452,7 +454,7 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 routes=tuple(sorted(reconciled_routes, key=lambda item: item.route_kind)),
                 tool_manifest=CheckpointToolManifest(
                     name=_TOOL_NAMES[capability],
-                    version="1",
+                    version="2",
                     snapshot_ids=snapshot_ids,
                     allowed_filter_fields=_FILTER_FIELDS[capability],
                 ),
@@ -506,12 +508,16 @@ def build_checkpoint_tool_descriptors(
             raise ValueError("checkpoint tool requires complete frozen Snapshots")
         if any(item.query.capability is not binding.capability for item in snapshots):
             raise ValueError("checkpoint tool Snapshot capability mismatch")
-        route_kinds_by_snapshot: dict[str, tuple[str, ...]] = {}
-        for snapshot_id in manifest.snapshot_ids:
-            route_kinds_by_snapshot[snapshot_id] = tuple(
-                sorted(
-                    item.route_kind for item in binding.routes if item.snapshot_id == snapshot_id
-                )
+        route_kinds_by_source: dict[tuple[str, str, str, str], tuple[str, ...]] = {}
+        for route in binding.routes:
+            key = (
+                route.snapshot_id,
+                route.provider_id,
+                route.provider_version,
+                route.upstream_source,
+            )
+            route_kinds_by_source[key] = tuple(
+                sorted({*route_kinds_by_source.get(key, ()), route.route_kind})
             )
 
         async def handler(
@@ -519,7 +525,9 @@ def build_checkpoint_tool_descriptors(
             *,
             bound_manifest: CheckpointToolManifest = manifest,
             bound_snapshots: tuple[object, ...] = snapshots,
-            bound_route_kinds: dict[str, tuple[str, ...]] = route_kinds_by_snapshot,
+            bound_route_kinds: dict[
+                tuple[str, str, str, str], tuple[str, ...]
+            ] = route_kinds_by_source,
             bound_capability: ObservationCapability = binding.capability,
         ) -> object:
             return _handle_checkpoint_tool(
@@ -527,7 +535,7 @@ def build_checkpoint_tool_descriptors(
                 snapshot_set=snapshot_set,
                 manifest=bound_manifest,
                 snapshots=bound_snapshots,
-                route_kinds_by_snapshot=bound_route_kinds,
+                route_kinds_by_source=bound_route_kinds,
                 capability=bound_capability,
             )
 
@@ -536,9 +544,9 @@ def build_checkpoint_tool_descriptors(
                 name=manifest.name,
                 version=f"{manifest.version}+{snapshot_set.snapshot_set_id}",
                 description=(
-                    f"Read-only {binding.capability.value} observations frozen for "
-                    f"checkpoint {snapshot_set.checkpoint_key}. Arguments cannot change the "
-                    "cutoff, sources, policies, or Provider versions."
+                    f"Read-only {binding.capability.value} decision inputs projected from "
+                    f"observations frozen for checkpoint {snapshot_set.checkpoint_key}. "
+                    "Arguments cannot change the cutoff, sources, policies, or Provider versions."
                 ),
                 input_schema={
                     "type": "object",
@@ -573,7 +581,7 @@ def _handle_checkpoint_tool(
     snapshot_set: ProspectiveCheckpointSnapshotSet,
     manifest: CheckpointToolManifest,
     snapshots: tuple[object, ...],
-    route_kinds_by_snapshot: Mapping[str, tuple[str, ...]],
+    route_kinds_by_source: Mapping[tuple[str, str, str, str], tuple[str, ...]],
     capability: ObservationCapability,
 ) -> dict[str, object]:
     from market_impact_agent.data_inputs import DataSnapshot
@@ -608,32 +616,43 @@ def _handle_checkpoint_tool(
         for observation in snapshot.observations:
             if observation.observation_id in seen:
                 continue
-            payload = observation.normalized_payload
-            searchable_payload = canonical_json_bytes(payload).decode().casefold()
+            route_kinds = route_kinds_by_source.get(
+                _observation_route_key(snapshot.snapshot_id, observation)
+            )
+            if route_kinds is None:
+                raise ValueError("checkpoint observation source has no selected route")
+            projected = project_checkpoint_observation(
+                checkpoint_snapshot_set_id=snapshot_set.snapshot_set_id,
+                checkpoint_key=snapshot_set.checkpoint_key,
+                barrier_at=snapshot_set.barrier_at,
+                snapshot_id=snapshot.snapshot_id,
+                route_kinds=route_kinds,
+                observation=observation,
+            )
+            searchable_payload = canonical_json_bytes(projected["data"]).decode().casefold()
             if query is not None and query.casefold() not in searchable_payload:
                 continue
             if publisher is not None:
-                payload_publisher = _payload_field(payload, "publisher")
+                payload_publisher = _payload_field(
+                    cast(Mapping[str, object], projected["data"]), "publisher"
+                )
                 if not isinstance(payload_publisher, str) or (
                     payload_publisher.casefold() != publisher.casefold()
                 ):
                     continue
-            if any(_payload_field(payload, key) != value for key, value in filters.items()):
+            if any(
+                _payload_field(cast(Mapping[str, object], projected["data"]), key) != value
+                for key, value in filters.items()
+            ):
                 continue
             seen.add(observation.observation_id)
-            rows.append(
-                {
-                    "snapshot_id": snapshot.snapshot_id,
-                    "route_kinds": list(route_kinds_by_snapshot[snapshot.snapshot_id]),
-                    "observation": observation.to_dict(),
-                }
-            )
+            rows.append(projected)
             if len(rows) >= limit_value:
                 break
         if len(rows) >= limit_value:
             break
-    return {
-        "schema_version": "market-impact.checkpoint-data-tool-result.v1",
+    core = {
+        "schema_version": "market-impact.checkpoint-data-tool-result.v2",
         "checkpoint_snapshot_set_id": snapshot_set.snapshot_set_id,
         "registration_id": snapshot_set.registration_id,
         "checkpoint_key": snapshot_set.checkpoint_key,
@@ -646,8 +665,9 @@ def _handle_checkpoint_tool(
             "filters": filters,
             "limit": limit_value,
         },
-        "observations": rows,
+        "records": rows,
     }
+    return {**core, "result_id": f"checkpoint-data-tool-result-{canonical_hash(core)}"}
 
 
 def _optional_trimmed(value: object, name: str) -> str | None:
@@ -679,6 +699,18 @@ def _source_identity(source: DataSourceBinding) -> tuple[str, ...]:
         source.upstream_source,
         source.manifest_hash,
         cast(str, source.source_config_hash),
+    )
+
+
+def _observation_route_key(
+    snapshot_id: str,
+    observation: SourceObservation,
+) -> tuple[str, str, str, str]:
+    return (
+        snapshot_id,
+        observation.provider_id,
+        observation.provider_version,
+        observation.upstream_source,
     )
 
 

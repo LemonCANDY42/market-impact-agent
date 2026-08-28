@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -9,6 +10,8 @@ import pytest
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_runtime import ToolSideEffect
+from market_impact_agent.agent_schema import validate_agent_contract
+from market_impact_agent.checkpoint_decision_inputs import project_checkpoint_observation
 from market_impact_agent.data_inputs import (
     DataFetchStatus,
     DataPITLane,
@@ -392,10 +395,39 @@ def test_reconcile_builds_non_authoritative_snapshot_set_and_read_only_tool(
     )
 
     assert snapshot_set.complete is True
+    assert snapshot_set.schema_version == "market-impact.prospective-checkpoint-snapshot-set.v2"
     assert snapshot_set.historical_pit_claim is False
     assert snapshot_set.execution_capability is False
     assert snapshot_set.frozen_input == FrozenDataSnapshotInput(
         authorized_snapshot_ids=frozenset({frozen.snapshot_id})
+    )
+    assert (
+        validate_agent_contract(
+            snapshot_set.to_dict(),
+            "prospective-checkpoint-snapshot-set.schema.json",
+        )
+        == ()
+    )
+    legacy_payload = deepcopy(snapshot_set.to_dict())
+    legacy_payload["schema_version"] = "market-impact.prospective-checkpoint-snapshot-set.v1"
+    for binding in cast(list[dict[str, object]], legacy_payload["capability_bindings"]):
+        manifest = binding["tool_manifest"]
+        if isinstance(manifest, dict):
+            cast(dict[str, object], manifest)["version"] = "1"
+    assert (
+        validate_agent_contract(
+            legacy_payload,
+            "prospective-checkpoint-snapshot-set.schema.json",
+        )
+        == ()
+    )
+    cast(
+        dict[str, object],
+        cast(list[dict[str, object]], legacy_payload["capability_bindings"])[0]["tool_manifest"],
+    )["version"] = "2"
+    assert validate_agent_contract(
+        legacy_payload,
+        "prospective-checkpoint-snapshot-set.schema.json",
     )
     descriptors = build_checkpoint_tool_descriptors(
         snapshot_set,
@@ -405,6 +437,7 @@ def test_reconcile_builds_non_authoritative_snapshot_set_and_read_only_tool(
     )
     assert [item.name for item in descriptors] == ["lookup_event_revelation"]
     assert descriptors[0].side_effect is ToolSideEffect.READ_ONLY
+    assert descriptors[0].version.startswith("2+")
 
     async def invoke_tool() -> object:
         return await descriptors[0].handler(
@@ -414,10 +447,28 @@ def test_reconcile_builds_non_authoritative_snapshot_set_and_read_only_tool(
     result_value = asyncio.run(invoke_tool())
     assert isinstance(result_value, dict)
     result = cast(dict[str, object], result_value)
+    assert result["schema_version"] == "market-impact.checkpoint-data-tool-result.v2"
+    assert cast(str, result["result_id"]).startswith("checkpoint-data-tool-result-")
     assert result["checkpoint_snapshot_set_id"] == snapshot_set.snapshot_set_id
-    observations = cast(list[dict[str, object]], result["observations"])
-    assert len(observations) == 1
-    assert observations[0]["route_kinds"] == ["official_event"]
+    assert "observations" not in result
+    records = cast(list[dict[str, object]], result["records"])
+    assert len(records) == 1
+    assert records[0]["route_kinds"] == ["official_event"]
+    assert records[0]["capability"] == "event_revelation"
+    assert records[0]["record_type"] == "event_fact"
+    assert records[0]["data"] == {
+        "event_type": None,
+        "headline": "Policy event",
+        "industry": None,
+        "instrument_code": None,
+        "publisher": "Official",
+        "source_url": "https://official.example/events/1",
+        "statement": None,
+    }
+    assert records[0]["price_basis"] is None
+    assert records[0]["completeness_gaps"] == []
+    assert "normalized_payload" not in records[0]
+    assert "observation" not in records[0]
 
 
 def test_reconcile_rejects_missing_registered_route(tmp_path: Path) -> None:
@@ -694,13 +745,92 @@ def test_reconcile_requires_freshness_for_each_selected_route(tmp_path: Path) ->
         )
 
 
+def test_checkpoint_tool_binds_route_kinds_to_each_observation_source(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    official_source = _source("official-event")
+    secondary_source = _source("secondary-event")
+    policy = _policy(sources=(official_source, secondary_source))
+    receipt = _receipt_snapshot(store, policy)
+    journal.record_snapshot(receipt, policy=policy)
+    frozen = journal.freeze_snapshot(
+        policy_id=policy.policy_id,
+        not_after=BARRIER,
+        window_start=policy.window_start,
+        minimum_data_sources=2,
+        frozen_at=BARRIER + timedelta(seconds=1),
+    )
+    reports: dict[str, SourceRouteAcceptanceReport] = {}
+    selections: list[CheckpointRouteSelection] = []
+    for route_kind, source in (
+        ("official_event", official_source),
+        ("secondary_event", secondary_source),
+    ):
+        report = _accepted_report(receipt.snapshot_id, source=source)
+        reports[report.report_id] = report
+        selections.append(
+            CheckpointRouteSelection(
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind=route_kind,
+                snapshot_id=frozen.snapshot_id,
+                collection_policy_id=policy.policy_id,
+                source_acceptance_report_id=report.report_id,
+            )
+        )
+    snapshot_set = reconcile_prospective_checkpoint_snapshot_set(
+        registration=_registration(
+            required_route_kinds=("official_event", "secondary_event"),
+        ),
+        checkpoint_key="policy-event",
+        barrier_at=BARRIER,
+        selections=tuple(selections),
+        store=store,
+        journal=journal,
+        policies={policy.policy_id: policy},
+        acceptance_reports=reports,
+        reconciled_at=BARRIER + timedelta(seconds=2),
+    )
+    descriptor = build_checkpoint_tool_descriptors(
+        snapshot_set,
+        store=store,
+        frozen_input=snapshot_set.frozen_input,
+        required_capability="data.snapshot.read",
+    )[0]
+
+    async def invoke_tool() -> object:
+        return await descriptor.handler({"limit": 10})
+
+    result_value = asyncio.run(invoke_tool())
+
+    assert isinstance(result_value, dict)
+    records = cast(list[dict[str, object]], result_value["records"])
+    route_kinds_by_source = {
+        cast(dict[str, object], record["source"])["upstream_source"]: record["route_kinds"]
+        for record in records
+    }
+    assert route_kinds_by_source == {
+        "official-event": ["official_event"],
+        "secondary-event": ["secondary_event"],
+    }
+
+
 @pytest.mark.parametrize(
     ("capability", "record", "filters"),
     (
         (
             ObservationCapability.EVENT_REVELATION,
-            {"title": "Policy impact", "channels": "policy"},
-            {"headline": "Policy impact", "event_type": "policy"},
+            {
+                "title": "Policy impact",
+                "channels": "policy",
+                "industry_name": "Banks",
+                "ts_code": "600000.SH",
+            },
+            {
+                "headline": "Policy impact",
+                "event_type": "policy",
+                "industry": "Banks",
+                "instrument_code": "600000.SH",
+            },
         ),
         (
             ObservationCapability.PRIOR_EXPECTATION,
@@ -718,7 +848,11 @@ def test_reconcile_requires_freshness_for_each_selected_route(tmp_path: Path) ->
         ),
         (
             ObservationCapability.MARKET_CONTEXT,
-            {"ts_code": "000300.SH", "trade_date": "20260828"},
+            {
+                "api_name": "index_daily",
+                "ts_code": "000300.SH",
+                "trade_date": "20260828",
+            },
             {"index_code": "000300.SH", "trade_date": "20260828"},
         ),
         (
@@ -816,5 +950,167 @@ def test_checkpoint_tool_filters_tushare_record_fields_and_semantic_aliases(
 
     assert isinstance(result_value, dict)
     result = cast(dict[str, object], result_value)
-    observations = cast(list[dict[str, object]], result["observations"])
-    assert len(observations) == 1
+    records = cast(list[dict[str, object]], result["records"])
+    assert len(records) == 1
+
+
+def test_industry_membership_projection_is_effective_dated_without_backfill(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    source = _source("tushare-index-member-all")
+    policy = _policy(
+        capability=ObservationCapability.EXPOSURE_CANDIDATES,
+        sources=(source,),
+    )
+    snapshot = _receipt_snapshot(
+        store,
+        policy,
+        normalized_payload={
+            "aggregator": "Tushare Pro",
+            "api_name": "index_member_all",
+            "upstream_publisher": "Shenwan Hongyuan Research",
+            "record": {
+                "l1_code": "801010.SI",
+                "l1_name": "Agriculture",
+                "l2_code": None,
+                "l2_name": None,
+                "l3_code": None,
+                "l3_name": None,
+                "ts_code": "600000.SH",
+                "name": "Synthetic issuer",
+                "in_date": "20260101",
+                "out_date": "20261231",
+            },
+        },
+    )
+
+    projected = project_checkpoint_observation(
+        checkpoint_snapshot_set_id=("prospective-checkpoint-snapshot-set-" + "1" * 64),
+        checkpoint_key="policy-event",
+        barrier_at=BARRIER,
+        snapshot_id=snapshot.snapshot_id,
+        route_kinds=("effective_industry_membership",),
+        observation=snapshot.observations[0],
+    )
+
+    assert projected["record_type"] == "industry_membership"
+    data = cast(dict[str, object], projected["data"])
+    assert data["industry_code"] == "801010.SI"
+    assert data["industry_name"] == "Agriculture"
+    assert data["taxonomy_level"] == "l1"
+    assert data["instrument_code"] == "600000.SH"
+    assert data["effective_from"] == "20260101"
+    assert data["effective_to"] == "20261231"
+    assert data["effective_at_barrier"] is True
+    assert projected["completeness_gaps"] == [
+        "industry_to_tradable_mapping_missing",
+        "taxonomy_version_unverified",
+    ]
+
+
+def test_daily_tradability_limit_projection_binds_date_and_raw_limits(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    policy = _policy(
+        capability=ObservationCapability.EXPOSURE_CANDIDATES,
+        sources=(_source("tushare-stk-limit"),),
+    )
+    snapshot = _receipt_snapshot(
+        store,
+        policy,
+        normalized_payload={
+            "aggregator": "Tushare Pro",
+            "api_name": "stk_limit",
+            "upstream_publisher": "Tushare Pro",
+            "record": {
+                "ts_code": "600000.SH",
+                "trade_date": "20260828",
+                "pre_close": 10.0,
+                "up_limit": 11.0,
+                "down_limit": 9.0,
+            },
+        },
+    )
+
+    projected = project_checkpoint_observation(
+        checkpoint_snapshot_set_id=("prospective-checkpoint-snapshot-set-" + "3" * 64),
+        checkpoint_key="policy-event",
+        barrier_at=BARRIER,
+        snapshot_id=snapshot.snapshot_id,
+        route_kinds=("daily_tradability_limit",),
+        observation=snapshot.observations[0],
+    )
+
+    assert projected["record_type"] == "daily_tradability_limit"
+    data = cast(dict[str, object], projected["data"])
+    assert data["effective_from"] == "20260828"
+    assert data["effective_to"] == "20260828"
+    assert data["effective_at_barrier"] is True
+    assert data["previous_close"] == 10.0
+    assert data["upper_price_limit"] == 11.0
+    assert data["lower_price_limit"] == 9.0
+
+
+def test_index_projection_keeps_research_and_execution_price_bases_separate(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    policy = _policy(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        sources=(_source("tushare-index-daily"),),
+    )
+    snapshot = _receipt_snapshot(
+        store,
+        policy,
+        normalized_payload={
+            "aggregator": "Tushare Pro",
+            "api_name": "index_daily",
+            "upstream_publisher": "Tushare Pro",
+            "record": {
+                "ts_code": "000300.SH",
+                "trade_date": "20260828",
+                "open": 4100.0,
+                "high": 4120.0,
+                "low": 4090.0,
+                "close": 4110.0,
+                "pre_close": 4080.0,
+                "vol": 12345.0,
+                "amount": 67890.0,
+            },
+        },
+    )
+    projected = project_checkpoint_observation(
+        checkpoint_snapshot_set_id=("prospective-checkpoint-snapshot-set-" + "2" * 64),
+        checkpoint_key="policy-event",
+        barrier_at=BARRIER,
+        snapshot_id=snapshot.snapshot_id,
+        route_kinds=("market_index_price",),
+        observation=snapshot.observations[0],
+    )
+
+    assert projected == project_checkpoint_observation(
+        checkpoint_snapshot_set_id=("prospective-checkpoint-snapshot-set-" + "2" * 64),
+        checkpoint_key="policy-event",
+        barrier_at=BARRIER,
+        snapshot_id=snapshot.snapshot_id,
+        route_kinds=("market_index_price",),
+        observation=snapshot.observations[0],
+    )
+    assert cast(str, projected["record_id"]).startswith("checkpoint-decision-input-")
+    assert projected["record_type"] == "index_price_bar"
+    assert projected["price_basis"] == {
+        "as_of_adjusted": False,
+        "execution_basis": None,
+        "execution_eligible": False,
+        "instrument_type": "price_index",
+        "research_basis": "price_index",
+        "total_return": False,
+    }
+    assert projected["completeness_gaps"] == ["total_return_series_missing"]
+    assert projected["execution_capability"] is False
+    times = cast(dict[str, object], projected["times"])
+    assert times["published_at"] == "2026-08-28T05:25:00Z"
+    assert times["source_updated_at"] == "2026-08-28T05:25:00Z"
+    assert times["available_at"] == "2026-08-28T05:30:00Z"
+    assert times["authority_at"] == "2026-08-28T05:30:00Z"
+    assert times["retrieved_at"] == "2026-08-28T05:30:00Z"

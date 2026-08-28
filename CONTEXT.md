@@ -223,6 +223,15 @@ data authority. A missing, stale, unaccepted, or post-hoc `not_applicable` slot 
 ineligible.
 _Avoid_: Composite Data Snapshot, Evidence Pack, Provider fallback, execution approval
 
+**Checkpoint Decision Input**:
+A deterministic, content-identified, Provider-neutral read-only projection of one Source Observation
+already bound to a Prospective Checkpoint Snapshot Set. It preserves the observation and Snapshot
+identities, source and lineage, occurred/published/source-updated/available/authority times, explicit
+price basis, and unresolved completeness gaps while normalizing capability-specific field names. It
+does not create another Snapshot, infer consensus or causality, promote Evidence, prove historical
+PIT, or grant execution authority.
+_Avoid_: Provider row, normalized conclusion, composite Snapshot, fill price
+
 **Attention Watch**:
 A Harness-approved, content-identified, expiring read-only policy that periodically reuses registered
 Data Queries and Providers for one event or entity, evaluates deterministic new-information

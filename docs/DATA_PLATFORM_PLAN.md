@@ -46,7 +46,7 @@ retention, or multi-host operation exceeds the local design's gates below.
 | Collection runtime | Content-identified Jobs, logical due opportunities, expiring leases, misfires, bounded jitter/backoff, cancellation, and health | Harness-owned SQLite due state plus an externally invoked one-shot worker | Provider selection by cron, model scheduling, host service installation |
 | Analytical storage | Columnar scans, compression, partition pruning, and reproducible exports | PyArrow Parquet, ZSTD, partitioned by capability and first-available date | Receipt authority, transactions, source admission |
 | Snapshot qualification | Cutoff, source set, cadence, gap/failure checks, exact version selection, and completeness | Standard content-identified Data Snapshot | Model inference, Evidence promotion, execution acceptance |
-| Query/tool layer | Domain filters over an already frozen and run-authorized Snapshot ID | `FrozenDataSnapshotToolBinding` | Arbitrary URL, source, cutoff, path, credentials, or cache-mode selection by the Agent |
+| Query/tool layer | Domain filters and Provider-neutral decision-input projection over an already frozen and run-authorized Snapshot ID | `FrozenDataSnapshotToolBinding` plus content-identified Checkpoint Decision Inputs | Arbitrary URL, source, cutoff, path, credentials, cache-mode selection, inference, or authority promotion by the Agent |
 | Research/execution adapters | Feature views, backtest inputs, and raw tradable market-data export | Harness contracts and Nautilus adapter | A second orchestration authority or adjusted-price fills |
 
 ## Keep the data families distinct
@@ -560,8 +560,14 @@ ineligible. `not_applicable` is allowed only when frozen in PDI-01, never invent
 The contract implementation now validates the immutable barrier, Journal provenance, route report
 identity, source configuration and Provider hashes, cadence/gap/freshness minima, observation/source
 coverage, raw response hashes, and the exact `FrozenDataSnapshotInput`. It emits one read-only
-capability tool per required slot. This is implementation evidence only: PDI-17 remains open until
-the registered future events occur and every required route has produced accepted post-registration
+capability tool per required slot. New Snapshot Set schema v2 artifacts use tool manifest v2 to
+deterministically project each bound Source Observation into a content-identified Provider-neutral
+Checkpoint Decision Input; the schema still validates legacy schema-v1/manifest-v1 artifacts as
+their original contract. The projection
+preserves source/time/authority identity, separates research and execution price bases, and carries
+unresolved unit, consensus, revision, taxonomy, total-return, and tradability gaps without inventing
+an inference or new authority. This is implementation evidence only: PDI-17 remains open until the
+registered future events occur and every required route has produced accepted post-registration
 actual receipts at the same checkpoint barrier.
 
 ### Stage 3 — Operate continuous collection safely
@@ -797,15 +803,19 @@ larger prospective study is justified; a pass authorizes that next research regi
 
 ## Current limitations
 
-- The continuous CLI is a foreground collector. Process restart supervision, durable scheduler
-  misfires, conditional HTTP caching, per-source jittered backoff, and source-specific stream gap
-  recovery remain Provider/operations gates, not implied capabilities.
+- The authorized host process supervisor invokes the Harness-owned one-shot collection worker, and
+  durable due leases, misfires, bounded jitter/backoff, cancellation, and restart recovery are
+  accepted for the current tracer slice. Complete multi-policy operation, conditional HTTP caching,
+  source-specific stream gap recovery, bounded retention, and the PDI-22 soak/fault matrix remain
+  open.
 - Attention Watch provides durable `run_due` state and a local pending/delivered outbox, but no
   installed scheduler or Agent-run dispatcher. An external supervisor must call it, and only the
   new-observation-version trigger is accepted.
-- One A-share official-event route is accepted for prospective private research. It is not a
-  complete A-share decision feed: market/index, effective-dated industry, positioning, macro
-  vintage, expectation, and tradable-universe routes are still unaccepted.
+- CSRC and twelve Tushare route-level contracts are accepted for prospective private research, but
+  this is not a capability-complete A-share decision feed. Registered direct-publisher coverage,
+  total-return/as-of price semantics, then-effective taxonomy and tradability, positioning units and
+  cadence, original macro releases and revision lineage, prior-expectation population/units/
+  consensus, and a complete checkpoint-barrier reconciliation remain open.
 - Strict historical qualification remains unchanged until new historically authoritative records
   are materialized and requalified.
 - No model experiment, paper order, or live order is authorized by this data-platform slice.

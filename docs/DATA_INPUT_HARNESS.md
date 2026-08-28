@@ -106,7 +106,7 @@ The intended semantic tools are:
 | Tool | Returns | Does not return |
 | --- | --- | --- |
 | `lookup_event_revelation` | Newly available official/news facts and their versions | A conclusion that an event is bullish or bearish |
-| `lookup_prior_expectation` | Cited consensus, forecast, positioning, or market-implied baselines | An invented expectation delta |
+| `lookup_prior_expectation` | Cited forecast observations or explicitly derived and identified baselines | An invented consensus or expectation delta |
 | `lookup_market_context` | PIT prices, breadth, volatility, liquidity, and relevant market state | Adjusted execution prices or a trade |
 | `lookup_exposure_candidates` | Effective-dated industry/index/ETF/stock mappings and tradability fields | A stock pick or approved universe |
 | `lookup_positioning` | PIT holdings, flows, financing, shorting, or related positioning observations | A causal explanation |
@@ -123,6 +123,17 @@ selection and a result limit. Descriptor creation requires the enclosing run's e
 create another Data Query or move the cutoff. The binding is ready for a registered diagnostic, but
 the generic Agent CLI does not add it implicitly; an undeclared complete snapshot cannot become a
 source of Agent context.
+
+New `ProspectiveCheckpointSnapshotSet` artifacts use schema v2 with tool manifest v2 and return
+Checkpoint Decision Inputs rather than exposing Provider-specific `normalized_payload` rows as the
+Agent contract. The published schema continues to validate legacy schema-v1/manifest-v1 artifacts
+without reinterpreting them as v2 output. Each new record has a content ID and keeps its Observation
+ID, Snapshot ID, source-specific route kinds, source/lineage,
+occurred/published/source-updated/available/authority times, and explicit price-basis and
+completeness-gap fields. The projection normalizes names only: it does not infer consensus,
+expectation surprise, causal direction, then-effective taxonomy when the source interval is absent,
+total return, or execution eligibility. The enclosing tool result is also content-identified and
+remains bound to the immutable checkpoint barrier and authorized Snapshot set.
 
 A Transmission Path remains a cited Judgment output assembled from facts and exposure evidence. A
 mechanism-appropriate horizon set remains a versioned research-method input. Treating either as a
@@ -141,8 +152,9 @@ required slot it requires accepted route identity, the exact Collection Policy, 
 Journal-frozen prospective Snapshot, raw response hashes, source diversity, observation minima, and
 freshness at one immutable barrier. It then authorizes the exact Snapshot ID set through
 `FrozenDataSnapshotInput` and materializes the six capability-specific read-only tools. It never
-combines the underlying observations into a new data authority. A missing, stale, unaccepted, or
-post-hoc `not_applicable` slot makes the checkpoint ineligible.
+combines the underlying observations or their Checkpoint Decision Input projections into a new data
+authority. A missing, stale, unaccepted, or post-hoc `not_applicable` slot makes the checkpoint
+ineligible.
 
 For frozen historical experiments the tool mode is `cache_only`. A scheduler or Harness operation
 must acquire and freeze the snapshot before the Judgment Run. Prospective collectors first freeze

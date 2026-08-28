@@ -1,0 +1,420 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/checkpoint-decision-input.schema.json",
+  "title": "Market Impact Checkpoint Decision Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_id",
+    "checkpoint_snapshot_set_id",
+    "checkpoint_key",
+    "barrier_at",
+    "snapshot_id",
+    "route_kinds",
+    "capability",
+    "record_type",
+    "observation_id",
+    "source",
+    "times",
+    "data",
+    "price_basis",
+    "completeness_gaps",
+    "historical_pit_claim",
+    "evidence_promoted",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.checkpoint-decision-input.v1"},
+    "record_id": {
+      "type": "string",
+      "pattern": "^checkpoint-decision-input-[0-9a-f]{64}$"
+    },
+    "checkpoint_snapshot_set_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-snapshot-set-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "barrier_at": {"type": "string", "format": "date-time"},
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "route_kinds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "capability": {
+      "enum": [
+        "event_revelation",
+        "prior_expectation",
+        "market_context",
+        "exposure_candidates",
+        "positioning",
+        "macro_vintage"
+      ]
+    },
+    "record_type": {"type": "string", "minLength": 1},
+    "observation_id": {
+      "type": "string",
+      "pattern": "^source-observation-[0-9a-f]{64}$"
+    },
+    "source": {"$ref": "#/$defs/source"},
+    "times": {"$ref": "#/$defs/times"},
+    "data": {"type": "object"},
+    "price_basis": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/price_basis"}]
+    },
+    "completeness_gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "historical_pit_claim": {"const": false},
+    "evidence_promoted": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"capability": {"const": "event_revelation"}}},
+      "then": {
+        "properties": {
+          "record_type": {"const": "event_fact"},
+          "price_basis": {"type": "null"},
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "event_type", "headline", "industry", "instrument_code", "publisher",
+              "source_url", "statement"
+            ],
+            "properties": {
+              "event_type": {"$ref": "#/$defs/nullable_scalar"},
+              "headline": {"$ref": "#/$defs/nullable_scalar"},
+              "industry": {"$ref": "#/$defs/nullable_scalar"},
+              "instrument_code": {"$ref": "#/$defs/nullable_scalar"},
+              "publisher": {"$ref": "#/$defs/nullable_scalar"},
+              "source_url": {"$ref": "#/$defs/nullable_scalar"},
+              "statement": {"$ref": "#/$defs/nullable_scalar"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"capability": {"const": "prior_expectation"}}},
+      "then": {
+        "properties": {
+          "record_type": {"const": "forecast_observation"},
+          "price_basis": {"type": "null"},
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "analyst",
+              "forecast_institution",
+              "forecast_period",
+              "instrument_code",
+              "issuer_name",
+              "publisher",
+              "rating",
+              "report_date",
+              "report_title",
+              "report_type",
+              "reported_metrics"
+            ],
+            "properties": {
+              "analyst": {"$ref": "#/$defs/nullable_scalar"},
+              "forecast_institution": {"$ref": "#/$defs/nullable_scalar"},
+              "forecast_period": {"$ref": "#/$defs/nullable_scalar"},
+              "instrument_code": {"$ref": "#/$defs/nullable_scalar"},
+              "issuer_name": {"$ref": "#/$defs/nullable_scalar"},
+              "publisher": {"$ref": "#/$defs/nullable_scalar"},
+              "rating": {"$ref": "#/$defs/nullable_scalar"},
+              "report_date": {"$ref": "#/$defs/nullable_scalar"},
+              "report_title": {"$ref": "#/$defs/nullable_scalar"},
+              "report_type": {"$ref": "#/$defs/nullable_scalar"},
+              "reported_metrics": {
+                "type": "object",
+                "additionalProperties": {"$ref": "#/$defs/scalar"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"capability": {"const": "market_context"}}},
+      "then": {
+        "properties": {
+          "record_type": {
+            "enum": [
+              "trading_calendar_session",
+              "index_price_bar",
+              "fund_price_bar",
+              "market_price_bar"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"record_type": {"const": "trading_calendar_session"}}},
+            "then": {
+              "properties": {
+                "data": {"$ref": "#/$defs/trading_calendar_data"},
+                "price_basis": {"type": "null"}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "enum": ["index_price_bar", "fund_price_bar", "market_price_bar"]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "data": {"$ref": "#/$defs/market_price_bar_data"},
+                "price_basis": {"$ref": "#/$defs/price_basis"}
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"capability": {"const": "exposure_candidates"}}},
+      "then": {
+        "properties": {
+          "record_type": {
+            "enum": [
+              "tradable_instrument_mapping",
+              "tradable_instrument",
+              "industry_taxonomy",
+              "industry_membership",
+              "daily_tradability_limit",
+              "instrument_reference"
+            ]
+          },
+          "data": {"$ref": "#/$defs/exposure_data"},
+          "price_basis": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"capability": {"const": "positioning"}}},
+      "then": {
+        "properties": {
+          "record_type": {"const": "margin_financing_snapshot"},
+          "data": {"$ref": "#/$defs/positioning_data"},
+          "price_basis": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"capability": {"const": "macro_vintage"}}},
+      "then": {
+        "properties": {
+          "record_type": {"const": "macro_release_schedule"},
+          "data": {"$ref": "#/$defs/macro_release_data"},
+          "price_basis": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "scalar": {"type": ["string", "number", "integer", "boolean", "null"]},
+    "nullable_scalar": {"$ref": "#/$defs/scalar"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_version",
+        "upstream_source",
+        "upstream_record_id",
+        "source_ref",
+        "lineage_id",
+        "raw_content_hash",
+        "license_scope"
+      ],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "upstream_source": {"type": "string", "minLength": 1},
+        "upstream_record_id": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "lineage_id": {"type": "string", "minLength": 1},
+        "raw_content_hash": {"$ref": "#/$defs/sha256"},
+        "license_scope": {"type": "string", "minLength": 1}
+      }
+    },
+    "times": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "occurred_at",
+        "published_at",
+        "available_at",
+        "source_updated_at",
+        "aggregator_fetched_at",
+        "retrieved_at",
+        "occurrence_basis",
+        "availability_basis",
+        "latency_model",
+        "evidence_ready",
+        "authority_at",
+        "authority_kind"
+      ],
+      "properties": {
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "published_at": {"type": ["string", "null"], "format": "date-time"},
+        "available_at": {"type": "string", "format": "date-time"},
+        "source_updated_at": {"type": ["string", "null"], "format": "date-time"},
+        "aggregator_fetched_at": {"type": ["string", "null"], "format": "date-time"},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "occurrence_basis": {"type": "string", "minLength": 1},
+        "availability_basis": {"type": "string", "minLength": 1},
+        "latency_model": {"type": ["object", "null"]},
+        "evidence_ready": {"type": "boolean"},
+        "authority_at": {"type": "string", "format": "date-time"},
+        "authority_kind": {"type": "string", "minLength": 1}
+      }
+    },
+    "price_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as_of_adjusted",
+        "execution_basis",
+        "execution_eligible",
+        "instrument_type",
+        "research_basis",
+        "total_return"
+      ],
+      "properties": {
+        "as_of_adjusted": {"type": "boolean"},
+        "execution_basis": {"type": ["string", "null"]},
+        "execution_eligible": {"const": false},
+        "instrument_type": {"type": "string", "minLength": 1},
+        "research_basis": {"type": "string", "minLength": 1},
+        "total_return": {"type": "boolean"}
+      }
+    },
+    "trading_calendar_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_open", "market", "pretrade_date", "publisher", "trade_date"],
+      "properties": {
+        "is_open": {"$ref": "#/$defs/nullable_scalar"},
+        "market": {"$ref": "#/$defs/nullable_scalar"},
+        "pretrade_date": {"$ref": "#/$defs/nullable_scalar"},
+        "publisher": {"$ref": "#/$defs/nullable_scalar"},
+        "trade_date": {"$ref": "#/$defs/nullable_scalar"}
+      }
+    },
+    "market_price_bar_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount", "change", "close", "high", "index_code", "instrument_code", "low",
+        "market", "open", "pct_change", "pre_close", "publisher", "trade_date", "volume"
+      ],
+      "properties": {
+        "amount": {"$ref": "#/$defs/nullable_scalar"},
+        "change": {"$ref": "#/$defs/nullable_scalar"},
+        "close": {"$ref": "#/$defs/nullable_scalar"},
+        "high": {"$ref": "#/$defs/nullable_scalar"},
+        "index_code": {"$ref": "#/$defs/nullable_scalar"},
+        "instrument_code": {"$ref": "#/$defs/nullable_scalar"},
+        "low": {"$ref": "#/$defs/nullable_scalar"},
+        "market": {"$ref": "#/$defs/nullable_scalar"},
+        "open": {"$ref": "#/$defs/nullable_scalar"},
+        "pct_change": {"$ref": "#/$defs/nullable_scalar"},
+        "pre_close": {"$ref": "#/$defs/nullable_scalar"},
+        "publisher": {"$ref": "#/$defs/nullable_scalar"},
+        "trade_date": {"$ref": "#/$defs/nullable_scalar"},
+        "volume": {"$ref": "#/$defs/nullable_scalar"}
+      }
+    },
+    "exposure_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effective_at_barrier", "effective_from", "effective_to", "index_code",
+        "industry_code", "industry_name", "instrument_class", "instrument_code",
+        "instrument_name", "list_status", "lower_price_limit", "previous_close", "publisher",
+        "taxonomy_level", "taxonomy_source", "trade_date", "upper_price_limit", "venue"
+      ],
+      "properties": {
+        "effective_at_barrier": {"type": ["boolean", "null"]},
+        "effective_from": {"$ref": "#/$defs/nullable_scalar"},
+        "effective_to": {"$ref": "#/$defs/nullable_scalar"},
+        "index_code": {"$ref": "#/$defs/nullable_scalar"},
+        "industry_code": {"$ref": "#/$defs/nullable_scalar"},
+        "industry_name": {"$ref": "#/$defs/nullable_scalar"},
+        "instrument_class": {"$ref": "#/$defs/nullable_scalar"},
+        "instrument_code": {"$ref": "#/$defs/nullable_scalar"},
+        "instrument_name": {"$ref": "#/$defs/nullable_scalar"},
+        "list_status": {"$ref": "#/$defs/nullable_scalar"},
+        "lower_price_limit": {"$ref": "#/$defs/nullable_scalar"},
+        "previous_close": {"$ref": "#/$defs/nullable_scalar"},
+        "publisher": {"$ref": "#/$defs/nullable_scalar"},
+        "taxonomy_level": {"$ref": "#/$defs/nullable_scalar"},
+        "taxonomy_source": {"$ref": "#/$defs/nullable_scalar"},
+        "trade_date": {"$ref": "#/$defs/nullable_scalar"},
+        "upper_price_limit": {"$ref": "#/$defs/nullable_scalar"},
+        "venue": {"$ref": "#/$defs/nullable_scalar"}
+      }
+    },
+    "positioning_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "financing_balance", "financing_purchases", "financing_repayments", "instrument_code",
+        "market", "publisher", "securities_lending_balance", "securities_lending_sales",
+        "total_margin_balance", "trade_date", "unit"
+      ],
+      "properties": {
+        "financing_balance": {"$ref": "#/$defs/nullable_scalar"},
+        "financing_purchases": {"$ref": "#/$defs/nullable_scalar"},
+        "financing_repayments": {"$ref": "#/$defs/nullable_scalar"},
+        "instrument_code": {"$ref": "#/$defs/nullable_scalar"},
+        "market": {"$ref": "#/$defs/nullable_scalar"},
+        "publisher": {"$ref": "#/$defs/nullable_scalar"},
+        "securities_lending_balance": {"$ref": "#/$defs/nullable_scalar"},
+        "securities_lending_sales": {"$ref": "#/$defs/nullable_scalar"},
+        "total_margin_balance": {"$ref": "#/$defs/nullable_scalar"},
+        "trade_date": {"$ref": "#/$defs/nullable_scalar"},
+        "unit": {"$ref": "#/$defs/nullable_scalar"}
+      }
+    },
+    "macro_release_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "indicator", "issuing_organization", "original_release_observation_id", "publisher",
+        "reference_period", "release_date", "release_title", "revision_lineage"
+      ],
+      "properties": {
+        "indicator": {"$ref": "#/$defs/nullable_scalar"},
+        "issuing_organization": {"$ref": "#/$defs/nullable_scalar"},
+        "original_release_observation_id": {"$ref": "#/$defs/nullable_scalar"},
+        "publisher": {"$ref": "#/$defs/nullable_scalar"},
+        "reference_period": {"$ref": "#/$defs/nullable_scalar"},
+        "release_date": {"$ref": "#/$defs/nullable_scalar"},
+        "release_title": {"$ref": "#/$defs/nullable_scalar"},
+        "revision_lineage": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

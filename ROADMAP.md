@@ -114,8 +114,11 @@ Stage 2 — accept capability-complete data slices:
 - [ ] `PDI-17` Freeze and reconcile the complete multi-Snapshot checkpoint input sets.
   - [x] Implement the non-authoritative reconciliation contract and capability-specific read-only
     tools: accepted routes, Collection Policies, Journal-frozen Snapshots, raw hashes, a shared
-    barrier, freshness/coverage, and `FrozenDataSnapshotInput` must reconcile. The evidence gate
-    remains open until the registered future checkpoint receipts exist.
+    barrier, freshness/coverage, and `FrozenDataSnapshotInput` must reconcile. Tool manifest v2
+    projects each bound Source Observation into a content-identified Provider-neutral Checkpoint
+    Decision Input while preserving source/time/authority identity, price basis, and fail-closed
+    completeness gaps. The evidence gate remains open until the registered future checkpoint
+    receipts exist.
 
 Stage 3 — operate continuous collection:
 
