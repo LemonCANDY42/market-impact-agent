@@ -377,6 +377,17 @@ model, or execution authority. Its writer canonicalizes the authoritative state 
 symlinked state, parent, or final receipt path, and enforces owner-private `0600` permissions even
 when identical content already exists.
 
+The authorized host accepted PDI-21 on 2026-08-28 with private receipt
+`prospective-supervisor-receipt-84aaffced904893571f51a7a680c453ee4bc71c2718ba8589f06e68e061a2e70`,
+binding source commit `6518ff34989769e6119566603ac66de4f9fdd0a0` and v3 plan
+`prospective-supervisor-plan-3194dc9ac937da8d19a59176314b30feeec943506d9b907a6303bef5bf19ea65`.
+Acceptance observed 16 successful one-shot runs, an explicit stop/reload cycle, bounded failure then
+next-interval recovery, complete rollback/reinstallation, visible health, and zero secret-value
+matches across 5,246 scanned plist/log/state files. The host itself was not rebooted; the recorded
+lifecycle evidence is launchd bootout/bootstrap/reload. The installed service remains enabled, but
+the current root has no registered collection Jobs, so each run is a no-op until accepted routes are
+registered.
+
 Rollback is ordered and exact: `launchctl bootout gui/UID PLIST`, then
 `launchctl disable gui/UID/LABEL` to clear any persistent enable override, then
 `/bin/rm -- PLIST`. A later reinstall therefore starts from the plist's disabled state.

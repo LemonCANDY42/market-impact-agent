@@ -631,7 +631,7 @@ authorization, register the service in the machine's canonical local-service inv
 start, stop, boot/restart, crash recovery, misfire classification, health visibility, log redaction,
 disabled-state behavior, and clean removal. A generated service file alone is not runtime evidence.
 
-**Repository pre-install status, 2026-08-28:** `ProspectiveSupervisorPlan` now content-identifies the
+**Repository installation contract, 2026-08-28:** `ProspectiveSupervisorPlan` content-identifies the
 exact host/UID, launchd label and definition path, executable, working and state roots, private
 environment file, logs, invocation interval, notification policy, disabled installation command,
 separate ordered activation commands, and rollback commands. The generated plist sets
@@ -640,9 +640,8 @@ separate ordered activation commands, and rollback commands. The generated plist
 `launchctl bootstrap`, and the plist invokes only
 `collection-service-run`; that worker reads an owner-private `0600` environment file, passes the
 Tushare token directly to the registered Provider, and never prints or persists it. The plist
-contains no credential. This is a
-reviewable installation package, not PDI-21 acceptance: the host definition, secret file, and log
-directory remain absent until the owner approves the exact plan. Rollback runs `bootout`, then
+contains no credential. The plan itself is a reviewable installation package rather than runtime
+evidence; the host receipt below records the separately authorized installation. Rollback runs `bootout`, then
 `launchctl disable gui/UID/LABEL` to remove the persistent enable override, then removes the plist;
 reinstallation therefore remains disabled until the separate activation commands are approved again.
 The v3 launch payload executes through `/usr/bin/env -i` and the worker rejects any process
@@ -650,6 +649,17 @@ environment beyond the explicit runtime allowlist and macOS's non-secret locale/
 keys. The content-identified supervisor receipt binds the accepted plan, committed source revision,
 plist hash, private runtime-evidence hash, machine-registry hash, successful run count, and eight
 ordered gates; it cannot grant PIT, model, or trading authority.
+
+**Host acceptance, 2026-08-28:** PDI-21 passed under private receipt
+`prospective-supervisor-receipt-84aaffced904893571f51a7a680c453ee4bc71c2718ba8589f06e68e061a2e70`.
+It binds source commit `6518ff34989769e6119566603ac66de4f9fdd0a0`, v3 plan
+`prospective-supervisor-plan-3194dc9ac937da8d19a59176314b30feeec943506d9b907a6303bef5bf19ea65`,
+the installed plist and private runtime evidence, and the refreshed machine-service registry.
+Observed acceptance covered disabled materialization, clean activation, 16 successful one-shot
+runs, stop/reload, a typed startup failure followed by next-interval recovery, health visibility,
+zero secret-value matches across 5,246 scanned files, and full rollback/reinstallation. The Mac was
+not rebooted; the lifecycle evidence is launchd bootout/bootstrap/reload. This receipt does not
+change historical-PIT, model, paper, or live gates.
 
 #### PDI-22 — Pass multi-policy operations, retention, and restore
 
@@ -677,6 +687,13 @@ The backup path uses SQLite's online backup API, copies immutable CAS and projec
 every file hash and relationship count, rejects corruption or any unmanifested regular file, and
 restores only manifested files into a new root outside the backup. PDI-22 remains open until PDI-21
 and PDI-17 supply their accepted identities and the registered multi-policy soak/fault report passes.
+
+After PDI-21 acceptance, the full current host state (about 105 MiB) was frozen as private manifest
+`prospective-backup-manifest-b9eb5131246d9a7cdc5ed1875faa11dee2789c14f13b9065d44d5c07e5e725db`.
+All 5,133 manifested files, SQLite integrity and foreign keys, content identities, relationships,
+and dataset row counts verified before and after a clean-root restore. This exercises the PDI-22
+recovery path with current state, but is not the required multi-policy soak: the authoritative root
+still has no registered Jobs or complete PDI-17 checkpoint Snapshot sets.
 
 ### Stage 4 — Prove complete Judgment inputs before automating model dispatch
 

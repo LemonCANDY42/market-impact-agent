@@ -126,18 +126,27 @@ Stage 3 — operate continuous collection:
   gates in report
   `prospective-collection-tracer-report-4859c478c9d778bf912f038cc37a9d068db23e3cbe2098e0dac3663c73b59454`.
   This is repository/runtime acceptance only; no host supervisor is installed.
-- [ ] `PDI-21` Install and accept the authorized host process supervisor.
+- [x] `PDI-21` Install and accept the authorized host process supervisor.
   - [x] Freeze a content-identified, secret-free launchd pre-install plan and a private
-    environment-file boundary. The service definition remains absent and disabled pending the
-    required host-install approval.
+    environment-file boundary, then install and explicitly enable the authorized v3 plan on the
+    registered host.
   - [x] Add a fail-closed clean-process environment and a content-identified supervisor acceptance
     receipt binding the plan, source commit, runtime evidence, service definition, and machine
     registry.
+  - [x] Accept private receipt
+    `prospective-supervisor-receipt-84aaffced904893571f51a7a680c453ee4bc71c2718ba8589f06e68e061a2e70`.
+    It records 16 successful one-shot runs, lifecycle/reload and failure-recovery tests, zero secret
+    matches across 5,246 scanned files, complete rollback/reinstallation, and no trading authority.
+    A full Mac reboot was intentionally not performed; the tested lifecycle was launchd
+    bootout/bootstrap/reload.
 - [ ] `PDI-22` Pass multi-policy health, retention, compression, backup, and restore acceptance.
   - [x] Add content-identified operations thresholds, state metrics and disk-budget enforcement,
     SQLite online backup, CAS/Parquet hash inventory, corruption rejection, and clean-root restore.
-  - [ ] Bind the final registration to the accepted supervisor receipt and complete PDI-17
-    checkpoint Snapshot sets, then run the registered soak and fault matrix.
+  - [x] Back up and clean-root restore the current 105 MiB host state, including the PDI-21 receipt:
+    5,133 manifested files passed hash, SQLite, foreign-key, identity, and row-count verification in
+    `prospective-backup-manifest-b9eb5131246d9a7cdc5ed1875faa11dee2789c14f13b9065d44d5c07e5e725db`.
+  - [ ] Complete PDI-17 checkpoint Snapshot sets, bind the final registration to them and the
+    accepted supervisor receipt, then run the registered multi-policy soak and fault matrix.
 
 Stage 4 — prove complete Judgment inputs before automatic dispatch:
 
