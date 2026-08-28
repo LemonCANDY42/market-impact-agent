@@ -1,23 +1,23 @@
 from __future__ import annotations
 
+import os
 import re
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Protocol, cast
 
+from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.domain import (
-    ApprovalMode,
     ExecutionReceipt,
     ExecutionStatus,
-    HardPolicyOutcome,
     OrderIntent,
     TradingEnvironment,
-    TradingMandate,
+    require_aware,
 )
-from market_impact_agent.policy import HardPolicyEvaluator
 
 
 class Capability(StrEnum):
@@ -217,20 +217,148 @@ def _string_array(
 _SUBMISSION_SEAL = object()
 
 
-def _missing_reference_price(_order: OrderIntent) -> Decimal | None:
-    return None
-
-
 @dataclass(frozen=True, slots=True)
 class SubmissionCapability:
     """A provider input issued only after the harness approves an exact intent."""
 
     order: OrderIntent
+    submission_id: str
+    order_hash: str
+    mandate_hash: str
+    price_basis_hash: str
+    policy_evaluation_hash: str
+    approval_hash: str
     _seal: object
 
     def __post_init__(self) -> None:
         if self._seal is not _SUBMISSION_SEAL:
             raise TypeError("submission capability must be issued by the execution harness")
+
+
+def _issue_submission_capability(  # pyright: ignore[reportUnusedFunction]
+    *,
+    order: OrderIntent,
+    submission_id: str,
+    order_hash: str,
+    mandate_hash: str,
+    price_basis_hash: str,
+    policy_evaluation_hash: str,
+    approval_hash: str,
+) -> SubmissionCapability:
+    """Issue an exact-binding capability from trusted harness composition code."""
+
+    if not submission_id or submission_id != submission_id.strip():
+        raise ValueError("submission_id must be non-empty")
+    hashes = (
+        order_hash,
+        mandate_hash,
+        price_basis_hash,
+        policy_evaluation_hash,
+        approval_hash,
+    )
+    if any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in hashes):
+        raise ValueError("submission capability bindings must be SHA-256 hashes")
+    return SubmissionCapability(
+        order=order,
+        submission_id=submission_id,
+        order_hash=order_hash,
+        mandate_hash=mandate_hash,
+        price_basis_hash=price_basis_hash,
+        policy_evaluation_hash=policy_evaluation_hash,
+        approval_hash=approval_hash,
+        _seal=_SUBMISSION_SEAL,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ReconciliationSnapshot:
+    provider_id: str
+    snapshot_id: str
+    observed_at: datetime
+    complete: bool
+    receipts: tuple[ExecutionReceipt, ...]
+    gaps: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        require_aware(self.observed_at, "observed_at")
+        if self.snapshot_id != f"provider-reconciliation-{canonical_hash(self.core_dict())}":
+            raise ValueError("provider reconciliation snapshot_id does not match content")
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "provider_id": self.provider_id,
+            "observed_at": self.observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "complete": self.complete,
+            "receipts": [
+                {
+                    "client_order_id": receipt.client_order_id,
+                    "provider_order_id": receipt.provider_order_id,
+                    "status": receipt.status.value,
+                    "observed_at": receipt.observed_at.astimezone(UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+                for receipt in self.receipts
+            ],
+            "gaps": list(self.gaps),
+        }
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        provider_id: str,
+        observed_at: datetime,
+        complete: bool,
+        receipts: tuple[ExecutionReceipt, ...],
+        gaps: tuple[str, ...] = (),
+    ) -> ReconciliationSnapshot:
+        core = {
+            "provider_id": provider_id,
+            "observed_at": observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "complete": complete,
+            "receipts": [
+                {
+                    "client_order_id": receipt.client_order_id,
+                    "provider_order_id": receipt.provider_order_id,
+                    "status": receipt.status.value,
+                    "observed_at": receipt.observed_at.astimezone(UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+                for receipt in receipts
+            ],
+            "gaps": list(gaps),
+        }
+        return cls(
+            provider_id=provider_id,
+            snapshot_id=f"provider-reconciliation-{canonical_hash(core)}",
+            observed_at=observed_at,
+            complete=complete,
+            receipts=receipts,
+            gaps=gaps,
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.provider-reconciliation-snapshot.v1",
+            "provider_id": self.provider_id,
+            "snapshot_id": self.snapshot_id,
+            "observed_at": self.observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "complete": self.complete,
+            "receipts": [
+                {
+                    "client_order_id": receipt.client_order_id,
+                    "provider_order_id": receipt.provider_order_id,
+                    "status": receipt.status.value,
+                    "observed_at": receipt.observed_at.astimezone(UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+                for receipt in self.receipts
+            ],
+            "gaps": list(self.gaps),
+        }
 
 
 class ExecutionProvider(Protocol):
@@ -239,16 +367,43 @@ class ExecutionProvider(Protocol):
 
     def submit(self, capability: SubmissionCapability) -> ExecutionReceipt: ...
 
-    def cancel(self, client_order_id: str) -> ExecutionReceipt: ...
+    def reconcile(self) -> ReconciliationSnapshot: ...
 
-    def reconcile(self) -> tuple[ExecutionReceipt, ...]: ...
+    def bind_submission_validator(
+        self,
+        validator: Callable[[SubmissionCapability], bool],
+    ) -> None: ...
 
 
 class MockExecutionProvider:
     """An idempotent paper-only provider used to verify the harness boundary."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        state_path: Path | None = None,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
         self._receipts: dict[str, ExecutionReceipt] = {}
+        self._order_hashes: dict[str, str] = {}
+        self._submission_validator: Callable[[SubmissionCapability], bool] | None = None
+        self._state_path = state_path.resolve() if state_path is not None else None
+        self._clock = clock or (lambda: datetime.now(UTC))
+        if self._state_path is not None:
+            self._state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS mock_execution_receipts (
+                        client_order_id TEXT PRIMARY KEY,
+                        order_hash TEXT NOT NULL,
+                        provider_order_id TEXT NOT NULL UNIQUE,
+                        status TEXT NOT NULL,
+                        observed_at TEXT NOT NULL
+                    )
+                    """
+                )
+            os.chmod(self._state_path, 0o600)
 
     @property
     def manifest(self) -> ProviderManifest:
@@ -258,8 +413,8 @@ class MockExecutionProvider:
             provider_version="0.1.0",
             transport=ProviderTransport.NATIVE,
             environments=frozenset({TradingEnvironment.PAPER}),
-            declared_capabilities=frozenset({Capability.PAPER_EXECUTION, Capability.ACCOUNT}),
-            verified_capabilities=frozenset({Capability.PAPER_EXECUTION, Capability.ACCOUNT}),
+            declared_capabilities=frozenset({Capability.PAPER_EXECUTION}),
+            verified_capabilities=frozenset({Capability.PAPER_EXECUTION}),
             markets=("SYNTHETIC",),
             order_types=("market", "limit"),
             supports_streaming=False,
@@ -271,11 +426,19 @@ class MockExecutionProvider:
     def submit(self, capability: object) -> ExecutionReceipt:
         if not isinstance(capability, SubmissionCapability):
             raise TypeError("provider submission requires a harness-issued capability")
+        if self._submission_validator is None or not self._submission_validator(capability):
+            raise PermissionError(
+                "provider submission is not bound to an active durable outbox lease"
+            )
         order = capability.order
         if order.environment is not TradingEnvironment.PAPER:
             raise ValueError("mock execution accepts paper orders only")
+        if self._state_path is not None:
+            return self._submit_durable(capability)
         existing = self._receipts.get(order.client_order_id)
         if existing is not None:
+            if self._order_hashes[order.client_order_id] != capability.order_hash:
+                raise ValueError("mock provider order identity conflict")
             return existing
         receipt = ExecutionReceipt(
             client_order_id=order.client_order_id,
@@ -284,70 +447,96 @@ class MockExecutionProvider:
             observed_at=order.created_at,
         )
         self._receipts[order.client_order_id] = receipt
+        self._order_hashes[order.client_order_id] = capability.order_hash
         return receipt
 
-    def cancel(self, client_order_id: str) -> ExecutionReceipt:
-        existing = self._receipts.get(client_order_id)
-        if existing is None:
-            raise KeyError(client_order_id)
-        canceled = ExecutionReceipt(
-            client_order_id=existing.client_order_id,
-            provider_order_id=existing.provider_order_id,
-            status=ExecutionStatus.CANCELED,
-            observed_at=existing.observed_at,
+    def reconcile(self) -> ReconciliationSnapshot:
+        if self._state_path is None:
+            receipts = tuple(self._receipts[key] for key in sorted(self._receipts))
+        else:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    "SELECT * FROM mock_execution_receipts ORDER BY client_order_id"
+                ).fetchall()
+            receipts = tuple(
+                ExecutionReceipt(
+                    client_order_id=cast(str, row["client_order_id"]),
+                    provider_order_id=cast(str, row["provider_order_id"]),
+                    status=ExecutionStatus(cast(str, row["status"])),
+                    observed_at=_provider_datetime(cast(str, row["observed_at"])),
+                )
+                for row in rows
+            )
+        observed_at = self._clock()
+        require_aware(observed_at, "observed_at")
+        return ReconciliationSnapshot.build(
+            provider_id=self.manifest.provider_id,
+            observed_at=observed_at,
+            complete=True,
+            receipts=receipts,
         )
-        self._receipts[client_order_id] = canceled
-        return canceled
 
-    def reconcile(self) -> tuple[ExecutionReceipt, ...]:
-        return tuple(self._receipts[key] for key in sorted(self._receipts))
-
-
-class PaperExecutionGateway:
-    """The only submission path: hard-policy-gated and deliberately paper-only."""
-
-    def __init__(
+    def bind_submission_validator(
         self,
-        provider: ExecutionProvider,
-        mandate: TradingMandate,
-        *,
-        policy: HardPolicyEvaluator | None = None,
-        clock: Callable[[], datetime] | None = None,
-        price_source: Callable[[OrderIntent], Decimal | None] | None = None,
+        validator: Callable[[SubmissionCapability], bool],
     ) -> None:
-        provider.manifest.assert_valid()
-        self._provider = provider
-        self._mandate = mandate
-        self._policy = policy or HardPolicyEvaluator()
-        self._clock = clock or (lambda: datetime.now(UTC))
-        self._price_source = price_source or _missing_reference_price
+        if self._submission_validator is None:
+            self._submission_validator = validator
 
-    def submit(
-        self,
-        order: OrderIntent,
-    ) -> ExecutionReceipt:
-        manifest = self._provider.manifest
-        if (
-            not manifest.enabled
-            or Capability.PAPER_EXECUTION not in manifest.verified_capabilities
-            or TradingEnvironment.PAPER not in manifest.environments
-        ):
-            raise PermissionError("provider is not enabled for verified paper execution")
-        if order.environment is not TradingEnvironment.PAPER:
-            raise PermissionError("execution gateway is paper-only")
+    def _submit_durable(self, capability: SubmissionCapability) -> ExecutionReceipt:
+        order = capability.order
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT * FROM mock_execution_receipts WHERE client_order_id = ?",
+                (order.client_order_id,),
+            ).fetchone()
+            if existing is not None:
+                if cast(str, existing["order_hash"]) != capability.order_hash:
+                    raise ValueError("mock provider order identity conflict")
+                return ExecutionReceipt(
+                    client_order_id=cast(str, existing["client_order_id"]),
+                    provider_order_id=cast(str, existing["provider_order_id"]),
+                    status=ExecutionStatus(cast(str, existing["status"])),
+                    observed_at=_provider_datetime(cast(str, existing["observed_at"])),
+                )
+            count = cast(
+                int,
+                connection.execute("SELECT COUNT(*) FROM mock_execution_receipts").fetchone()[0],
+            )
+            receipt = ExecutionReceipt(
+                client_order_id=order.client_order_id,
+                provider_order_id=f"mock-{count + 1:06d}",
+                status=ExecutionStatus.ACCEPTED,
+                observed_at=order.created_at,
+            )
+            connection.execute(
+                """
+                INSERT INTO mock_execution_receipts (
+                    client_order_id, order_hash, provider_order_id, status, observed_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    order.client_order_id,
+                    capability.order_hash,
+                    receipt.provider_order_id,
+                    receipt.status.value,
+                    receipt.observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                ),
+            )
+            return receipt
 
-        now = self._clock()
-        decision = self._policy.evaluate(
-            order,
-            self._mandate,
-            now=now,
-            reference_price=self._price_source(order),
-        )
-        if decision.outcome is not HardPolicyOutcome.ELIGIBLE:
-            reasons = ", ".join(decision.reasons)
-            raise PermissionError(f"order intent was not approved: {reasons}")
-        if self._mandate.approval_mode is ApprovalMode.POLICY_AUTO:
-            raise PermissionError("semantic auto approval is not implemented")
+    def _connect(self) -> sqlite3.Connection:
+        if self._state_path is None:
+            raise RuntimeError("durable mock state path is not configured")
+        connection = sqlite3.connect(self._state_path, timeout=30)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=FULL")
+        return connection
 
-        capability = SubmissionCapability(order=order, _seal=_SUBMISSION_SEAL)
-        return self._provider.submit(capability)
+
+def _provider_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    require_aware(parsed, "observed_at")
+    return parsed

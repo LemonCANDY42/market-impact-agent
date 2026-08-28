@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/execution-receipt.schema.json",
+  "title": "Market Impact Provider Execution Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "client_order_id", "provider_order_id", "status", "observed_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.execution-receipt.v1"},
+    "client_order_id": {"type": "string", "minLength": 1},
+    "provider_order_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["accepted", "canceled", "unknown"]},
+    "observed_at": {"type": "string", "format": "date-time"}
+  }
+}

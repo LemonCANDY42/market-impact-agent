@@ -32,6 +32,10 @@ capabilities, approval policy, and an auditable intent boundary.
 The bootstrap implements:
 
 - canonical domain contracts for signals, order intents, mandates, and approval;
+- a Harness-owned durable paper-execution contract slice that freezes exact intent/mandate/price/
+  policy/approval identities, atomically queues approved mock intents, treats lost acknowledgements
+  and expired leases as `unknown`, and requires complete reconciliation before continuing; it has
+  no Agent tool, account capability, broker connection, or live path;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
 - a separate read-only Observation Provider contract plus current public Polymarket and

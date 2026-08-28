@@ -5,18 +5,14 @@ from typing import Any, cast
 import pytest
 
 from market_impact_agent.domain import (
-    ApprovalMode,
-    ExecutionStatus,
     OrderIntent,
     OrderKind,
     Side,
     TradingEnvironment,
-    TradingMandate,
 )
 from market_impact_agent.providers import (
     Capability,
     MockExecutionProvider,
-    PaperExecutionGateway,
     ProviderManifest,
     ProviderTransport,
     TrustTier,
@@ -25,102 +21,10 @@ from market_impact_agent.providers import (
 NOW = datetime(2026, 8, 25, 12, tzinfo=UTC)
 
 
-def test_approved_mock_submission_is_idempotent_and_reconcilable() -> None:
-    provider = MockExecutionProvider()
-    order = make_order()
-    gateway = PaperExecutionGateway(
-        provider,
-        make_mandate(),
-        clock=lambda: NOW,
-        price_source=lambda _order: Decimal("10"),
-    )
-
-    first = gateway.submit(order)
-    second = gateway.submit(order)
-
-    assert second == first
-    assert provider.reconcile() == (first,)
-    assert provider.cancel(order.client_order_id).status is ExecutionStatus.CANCELED
-
-
 def test_mock_rejects_direct_raw_order_submission() -> None:
     provider = MockExecutionProvider()
     with pytest.raises(TypeError, match="harness-issued capability"):
         provider.submit(cast(Any, make_order()))
-
-
-@pytest.mark.parametrize(
-    ("mode", "account_id", "instrument_id", "quantity", "environment"),
-    [
-        (
-            ApprovalMode.DISABLED,
-            "paper-account",
-            "TEST",
-            Decimal("10"),
-            TradingEnvironment.PAPER,
-        ),
-        (
-            ApprovalMode.TIMEBOXED,
-            "wrong-account",
-            "TEST",
-            Decimal("10"),
-            TradingEnvironment.PAPER,
-        ),
-        (
-            ApprovalMode.TIMEBOXED,
-            "paper-account",
-            "OTHER",
-            Decimal("10"),
-            TradingEnvironment.PAPER,
-        ),
-        (
-            ApprovalMode.TIMEBOXED,
-            "paper-account",
-            "TEST",
-            Decimal("101"),
-            TradingEnvironment.PAPER,
-        ),
-        (
-            ApprovalMode.TIMEBOXED,
-            "paper-account",
-            "TEST",
-            Decimal("10"),
-            TradingEnvironment.LIVE,
-        ),
-        (
-            ApprovalMode.POLICY_AUTO,
-            "paper-account",
-            "TEST",
-            Decimal("10"),
-            TradingEnvironment.PAPER,
-        ),
-    ],
-)
-def test_gateway_blocks_unapproved_intent_before_provider(
-    mode: ApprovalMode,
-    account_id: str,
-    instrument_id: str,
-    quantity: Decimal,
-    environment: TradingEnvironment,
-) -> None:
-    provider = MockExecutionProvider()
-    gateway = PaperExecutionGateway(
-        provider,
-        make_mandate(mode=mode),
-        clock=lambda: NOW,
-        price_source=lambda _order: Decimal("10"),
-    )
-    order = make_order(
-        account_id=account_id,
-        instrument_id=instrument_id,
-        quantity=quantity,
-        environment=environment,
-    )
-
-    with pytest.raises(PermissionError):
-        gateway.submit(order)
-
-    assert provider.reconcile() == ()
 
 
 @pytest.mark.parametrize(
@@ -213,18 +117,4 @@ def make_order(
         order_kind=OrderKind.MARKET,
         created_at=NOW,
         expires_at=NOW + timedelta(minutes=5),
-    )
-
-
-def make_mandate(*, mode: ApprovalMode = ApprovalMode.TIMEBOXED) -> TradingMandate:
-    return TradingMandate(
-        mandate_id="mandate-1",
-        account_id="paper-account",
-        environment=TradingEnvironment.PAPER,
-        approval_mode=mode,
-        valid_from=NOW - timedelta(minutes=1),
-        expires_at=NOW + timedelta(hours=1),
-        allowed_instruments=frozenset({"TEST"}),
-        allowed_sides=frozenset({Side.BUY}),
-        max_order_notional=Decimal("1000"),
     )

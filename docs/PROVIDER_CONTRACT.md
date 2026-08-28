@@ -28,12 +28,13 @@ Unknown, disabled, or unverified providers are never eligible for live execution
 ## Execution boundary
 
 Agents and ordinary callers may propose a typed `OrderIntent`; they cannot submit it to a
-provider. The composition root binds a trusted Trading Mandate, clock, and reference-price
-source into the paper execution gateway; callers supply none of that policy context. The
-gateway evaluates the exact intent, checks the provider's enabled and verified paper
-capability, and issues a sealed submission capability only when hard policy is `ELIGIBLE`
-and no separate approval remains pending. The provider contract accepts that capability
-rather than a raw intent. No live gateway exists in the bootstrap.
+provider. The composition root binds a trusted Trading Mandate, clock, Price Basis source,
+durable execution store, and provider into the paper execution service; callers supply none
+of that policy context. The service freezes the exact intent, mandate, price, policy
+evaluation, and approval, then atomically queues an eligible intent. Only its durable dispatch
+path can issue a sealed submission capability containing those hashes and a unique submission
+attempt identity. The provider contract accepts that capability rather than a raw intent. No
+live gateway exists in the bootstrap.
 
 The provider owns broker-specific translation and execution facts. The harness owns
 policy, approval, evidence, and the immutable decision trail.
@@ -41,7 +42,9 @@ policy, approval, evidence, and the immutable decision trail.
 A production-grade execution provider must preserve the caller's `client_order_id`,
 return a stable provider order identifier, stream order-state changes, and reconcile
 open orders, fills, positions, and cash after reconnects. Submission must be idempotent.
-An MCP tool can be the invocation surface, but it does not replace these requirements.
+Reconciliation returns an identified snapshot with observation time, completeness, receipts,
+and explicit gaps; a bare receipt list cannot prove that a missing order is absent. An MCP tool
+can be the invocation surface, but it does not replace these requirements.
 
 ## Capability trust
 
@@ -62,7 +65,10 @@ Paper validation never upgrades a provider to live validation.
 
 ## Initial adapters
 
-- `mock-execution` is the only enabled implementation in the bootstrap.
+- `mock-execution` is the only enabled implementation in the bootstrap. It is paper-only,
+  declares no account capability, and can retain its order truth in a separate SQLite file so
+  crash/ambiguous-submit/reconciliation tests cross a real restart boundary. This is a local
+  contract test double, not an accepted paper venue.
 - `NautilusBacktestBridge` is the accepted reference implementation of the engine-neutral
   backtest port for the bounded synthetic XSHG cash-equity fixture. A separate versioned
   modeled-open adapter can feed it from any fully validated `600028.SH`/SSE bundle matching
@@ -102,7 +108,8 @@ types.
 
 ## Failure behavior
 
-Invalid or missing price references, inactive or expired order intents, expired mandates,
-mismatched accounts or environments, unknown order state, provider disconnects, and
-reconciliation gaps fail closed. A semantic agent cannot turn an infrastructure
-uncertainty into approval.
+Invalid, missing, future-dated, or stale Price Bases; inactive or expired order intents;
+expired mandates; mismatched accounts or environments; unknown order state; provider
+disconnects; external orders; and reconciliation gaps fail closed. An expired submission
+lease becomes `unknown` and is never returned to the queue. A semantic agent cannot turn an
+infrastructure uncertainty into approval.

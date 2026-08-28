@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/price-basis.schema.json",
+  "title": "Market Impact Price Basis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "instrument_id", "currency", "unit", "basis_kind", "price", "source_id", "source_version", "observed_at", "valid_until"],
+  "properties": {
+    "schema_version": {"const": "market-impact.price-basis.v1"},
+    "instrument_id": {"type": "string", "minLength": 1},
+    "currency": {"type": "string", "minLength": 1},
+    "unit": {"type": "string", "minLength": 1},
+    "basis_kind": {"enum": ["reference_quote", "limit_price"]},
+    "price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+    "source_id": {"type": "string", "minLength": 1},
+    "source_version": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"}
+  }
+}

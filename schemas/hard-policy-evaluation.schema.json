@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/hard-policy-evaluation.schema.json",
+  "title": "Market Impact Hard Policy Evaluation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "outcome", "reasons", "evaluated_at", "evaluator_version"],
+  "properties": {
+    "schema_version": {"const": "market-impact.hard-policy-evaluation.v1"},
+    "outcome": {"enum": ["deny", "require_manual", "eligible"]},
+    "reasons": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "evaluator_version": {"type": "string", "minLength": 1}
+  }
+}

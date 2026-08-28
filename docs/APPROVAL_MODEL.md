@@ -19,19 +19,37 @@ Approval is a policy state machine, not a conversational promise.
 2. Evaluate non-overridable hard rules.
 3. Return `DENY`, `REQUIRE_MANUAL`, or `ELIGIBLE`.
 4. Only an `ELIGIBLE` intent may reach a configured semantic auto approver.
-5. Record the approval, provider submission, execution events, and reconciliation result.
+5. Atomically queue an approved intent in the durable paper outbox.
+6. Record every submission attempt, provider acknowledgement, execution event, and
+   reconciliation result without inferring a fill from acknowledgement.
 
 Hard rules include order-intent and mandate time bounds, account and environment matching,
 instrument and side allowlists, positive finite price references, order-notional limits,
 provider capability/trust, stale-data thresholds, and kill switches. The semantic approver
 can choose a stricter result; it cannot override `DENY` or `REQUIRE_MANUAL`.
 
-Only the paper execution gateway can turn an `ELIGIBLE` result into the sealed capability
-accepted by a provider. Its Trading Mandate, clock, and price source are bound by the
-trusted composition root, not supplied by the order caller. `policy_auto` remains
-fail-closed because the bootstrap has no semantic approver. Direct submission of an
-`OrderIntent` is outside the provider contract, and the bootstrap has no live submission
+Only the Harness-owned `PaperExecutionService` can turn an approved durable outbox row into
+the sealed capability accepted by a provider. Its Trading Mandate, clock, Price Basis source,
+and provider are bound by the trusted composition root, not supplied by the order caller.
+The capability binds exact hashes for the intent, mandate, price, policy evaluation, and
+approval. `policy_auto` remains fail-closed because the bootstrap has no semantic approver;
+`autonomous` also remains fail-closed until its kill-switch gate exists. Direct submission of
+an `OrderIntent` is outside the provider contract, and the bootstrap has no live submission
 path.
+
+## Durable paper state
+
+Approval and execution are separate state machines. Hard denial and manual rejection are
+terminal approval results. Approval atomically creates a queued outbox row. Dispatch claims
+that row with an expiring lease; an exception, lost acknowledgement, process crash, or expired
+lease produces `unknown`, never an automatic retry. Provider `accepted` is an acknowledgement,
+not a fill. `unknown` and `accepted` block further admission and dispatch until a complete
+provider reconciliation snapshot accounts for every known and external order without gaps.
+
+Immutable contracts live in a content-addressed store. SQLite owns the current approval,
+outbox, attempt, event, reconciliation, and global-gate state with WAL, full synchronous
+writes, and immediate transactions around claims and transitions. The data-input receipt
+journal and Attention Watch outbox are deliberately not execution authorities.
 
 ## Notifications
 
@@ -41,6 +59,9 @@ expiry, mandate, and actor. Editing an intent invalidates its approval.
 
 ## Initial safety state
 
-The bootstrap contains no live provider, credential loader, autonomous approver, or
-notification click-to-trade path. The only executable provider is an in-memory paper
-mock. These omissions are acceptance criteria, not unfinished shortcuts.
+The bootstrap contains no live provider, credential loader, autonomous approver, Agent-facing
+execution tool, or notification click-to-trade path. The only executable provider is a
+paper-only mock whose optional SQLite truth survives restart for contract tests and exposes no
+account capability. Local mock acceptance does not admit Agent-directed paper dispatch or
+upgrade any external provider. These omissions are acceptance criteria, not unfinished
+shortcuts.

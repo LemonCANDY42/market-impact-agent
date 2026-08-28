@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/provider-reconciliation-snapshot.schema.json",
+  "title": "Market Impact Provider Reconciliation Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "provider_id", "snapshot_id", "observed_at", "complete", "receipts", "gaps"],
+  "properties": {
+    "schema_version": {"const": "market-impact.provider-reconciliation-snapshot.v1"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "complete": {"type": "boolean"},
+    "receipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["client_order_id", "provider_order_id", "status", "observed_at"],
+        "properties": {
+          "client_order_id": {"type": "string", "minLength": 1},
+          "provider_order_id": {"type": "string", "minLength": 1},
+          "status": {"enum": ["accepted", "canceled", "unknown"]},
+          "observed_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "gaps": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

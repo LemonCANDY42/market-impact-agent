@@ -520,9 +520,22 @@ A versioned, expiring grant that defines the accounts, environments,
 instruments, directions, and risk envelope in which Order Intents may proceed.
 _Avoid_: Permission flag, auto-trade switch
 
+**Price Basis**:
+A source-identified, time-bounded price observation used to evaluate one Order
+Intent. It binds instrument, units, source version, observation time, and expiry;
+it is neither an adjusted research price nor proof of an executable fill price.
+_Avoid_: Current price, model price
+
+**Hard Policy Evaluation**:
+An immutable result of applying one evaluator version to an exact Order Intent,
+Trading Mandate, Price Basis, and evaluation time. It may deny, require manual
+approval, or establish eligibility; it cannot establish broker acceptance.
+_Avoid_: Risk score, Agent approval
+
 **Approval Decision**:
-An auditable deny, manual-review, approve, or reject result tied to one Order
-Intent and one Trading Mandate version.
+An auditable deny, manual-review, approve, or reject result tied to the exact
+Order Intent, Trading Mandate, Price Basis, Hard Policy Evaluation, actor, and
+decision time.
 _Avoid_: Confirmation, model confidence
 
 ## Providers and execution
@@ -570,5 +583,7 @@ _Avoid_: Unknown order, manual order
 
 **Reconciliation**:
 The fail-closed process of comparing provider truth with the harness ledger
-before accepting new Order Intents.
+before accepting new Order Intents. A complete reconciliation snapshot must state
+its cutoff/completeness and gaps; the absence of a record is authoritative only
+inside such a complete snapshot.
 _Avoid_: Sync, refresh

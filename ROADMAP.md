@@ -190,8 +190,10 @@ broker or backtest mutation is reachable from the research skill.
 ## Phase 2 — Historical replay and calibration
 
 Status: blocked by a valid negative result. Deterministic replay works, but the first
-pre-registered real calibration cohort failed its exit gate. Phase 3 and paper execution
-remain closed; the opened cohort cannot be retuned and relabeled as unseen evidence.
+pre-registered real calibration cohort failed its exit gate. Phase 3 strategy promotion and
+Agent-directed paper dispatch remain closed; the opened cohort cannot be retuned and relabeled
+as unseen evidence. Provider-neutral mock execution infrastructure may proceed independently,
+but it grants neither strategy admission nor paper-provider authority.
 
 - [x] Compare stable Nautilus `1.231.0` with `2.0.0rc3` on Python 3.13/3.14;
   select `1.231.0` as the first implementation candidate and keep the RC comparison-only.
@@ -435,14 +437,21 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
 
 ## Phase 4 — Paper execution
 
-- Add durable intent/outbox and approval records.
+- [x] Add the provider-neutral durable intent/approval/outbox contract slice. Exact Order Intent,
+  Trading Mandate, Price Basis, hard-policy, and approval hashes survive restart; atomic leases,
+  ambiguous-submit `unknown`, provider acknowledgement without fill inference, mock-provider
+  durability, global reconciliation blocking, duplicate identity rejection, and complete-snapshot
+  recovery pass locally. This is mock contract acceptance only: it exposes no Agent execution tool,
+  account capability, IBKR route, or paper admission.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
   engine and official IB adapter; create a direct IBKR Provider only if that path cannot
   pass lifecycle and reconciliation acceptance.
 - Add CLI, MCP approval tools, generic webhook, and macOS notifications.
 - Pass crash/restart/reconciliation and duplicate-order acceptance.
 
-Exit gate: paper state reconciles with IBKR after every injected failure.
+Exit gate: the prospective Query/strategy gates admit Agent-directed paper operation and paper
+state reconciles with IBKR after every injected failure. Mock contract acceptance does not satisfy
+this gate.
 
 IBKR Paper acceptance covers Harness-to-Nautilus-to-IB order identity, ambiguous submit
 outcomes, partial and duplicate fills, disconnects, gateway and process restart, external

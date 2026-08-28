@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/approval-decision.schema.json",
+  "title": "Market Impact Approval Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision", "order_intent_hash", "mandate_hash", "price_basis_hash", "policy_evaluation_hash", "actor_kind", "actor_ref", "decided_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.approval-decision.v1"},
+    "decision": {"enum": ["approve", "reject"]},
+    "order_intent_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mandate_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "price_basis_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_evaluation_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "actor_kind": {"enum": ["human", "harness_policy"]},
+    "actor_ref": {"type": "string", "minLength": 1},
+    "decided_at": {"type": "string", "format": "date-time"}
+  }
+}
