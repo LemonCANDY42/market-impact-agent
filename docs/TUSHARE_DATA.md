@@ -4,6 +4,14 @@ The first Tushare slice is a read-only, language-neutral HTTPS adapter. It mater
 deterministic tables and a fixed SSE/SZSE universe without making Tushare, its Python SDK,
 or a data vendor the orchestration owner.
 
+Tushare is fully usable as an upstream source under this project's deployment entitlement: the
+owner supplies their purchased token, uses it only inside the private Harness, and does not resell
+or redistribute the data. That fact authorizes Provider integration; it does not make any route
+Agent-visible by itself. The current `tushare-http` market-data Provider Manifest remains
+`disabled`/`unverified` until the specific route and claimed capabilities pass Harness acceptance.
+Optional APIs are tested independently because the current token may enable different products and
+freshness tiers.
+
 Official contract references: [`stock_basic`](https://tushare.pro/document/1?doc_id=25),
 [`trade_cal`](https://tushare.pro/document/2?doc_id=26), and
 [`daily`](https://tushare.pro/document/2?doc_id=27). The hardened v2 bundle additionally
@@ -165,9 +173,10 @@ daily rows. Directory/file modes, Git exclusion, closed-manifest semantics, and 
 token bytes in every artifact were checked separately.
 
 This proves one real read/capture/validate path and the account permissions needed by that
-window. It does not establish general quota behavior, historical completeness, source
-correctness, or licensed replay validity. The Provider therefore remains `enabled: false`,
-with no verified capabilities and trust tier `unverified`.
+window. It does not establish behavior for every optional API, historical completeness, source
+correctness, historical PIT authority, or execution-grade replay validity. The narrow historical
+market-data Provider Manifest therefore remains `enabled: false`, with no verified capabilities and
+trust tier `unverified`; this does not revoke or question the project's Tushare entitlement.
 
 The separate `tushare-xshg-modeled-open.v1` replay gate validates a bounded
 `600028.SH`/SSE bundle, then consumes hash-bound daily/calendar Parquet bytes in memory

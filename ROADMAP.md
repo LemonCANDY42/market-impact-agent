@@ -50,6 +50,64 @@ not begin because an earlier API exists; its acceptance evidence must exist.
     outbox. The bound Collection Policy remains the sole cadence authority. Adaptive cadence,
     corroboration/materiality triggers, an external process supervisor, and fresh Agent-run dispatch
     remain open.
+
+### Prospective decision-input delivery program
+
+Detailed requirements, boundaries, dependencies, and acceptance logic are canonical in
+`docs/DATA_PLATFORM_PLAN.md`. These checkboxes record accepted Task status, not code presence.
+
+Stage 0 — resolve high-impact uncertainty:
+
+- [x] `PDI-00` Freeze source, framework, storage, supervision, and multi-Snapshot dispatch
+  decisions from official contracts and bounded real probes. Tushare is fully usable as an upstream
+  source for the owner's private deployment, while every Agent-visible route remains fail-closed
+  until its Harness acceptance passes. Private report
+  `pdi00-source-probe-report-dde5120eca6b259116e72ab7d15a8a80352635c6467c3f7f4e7b00733df18864`
+  records the secret-free query identities, statuses, fields, row counts, and response hashes: its
+  EOD/index, margin, effective industry membership, ETF mapping, news, macro-schedule, and
+  analyst-forecast interfaces responded successfully under the current token, while the probed
+  real-time minute interfaces require additional entitlement. Keep
+  SQLite/CAS/Parquet and a Harness-owned due state, use `launchd` only as a later authorized process
+  supervisor, and do not add OpenBB core, APScheduler, Kafka, a lakehouse, or a feature store without
+  the documented evolution evidence. The non-production barrier prototype is retained on local
+  branch `prototype/pdi-00-snapshot-barrier-20260828` at `e00f3fa`; it is not merged.
+
+Stage 1 — freeze requirements:
+
+- [ ] `PDI-01` Freeze the two-to-three-checkpoint prospective diagnostic registration before new
+  acquisition, model calls, or outcome opening.
+
+Stage 2 — accept capability-complete data slices:
+
+- [ ] `PDI-10` Accept checkpoint-relevant official-event and established-news routes.
+- [ ] `PDI-11` Accept the registered A-share market/index/ETF context route.
+- [ ] `PDI-12` Accept an effective-dated tradable instrument and universe route.
+- [ ] `PDI-13` Accept an effective-dated industry taxonomy, membership, and exposure route.
+- [ ] `PDI-14` Accept the registered positioning route.
+- [ ] `PDI-15` Accept the registered macro release-and-revision route.
+- [ ] `PDI-16` Accept the registered prior-expectation route.
+- [ ] `PDI-17` Freeze and reconcile the complete multi-Snapshot checkpoint input sets.
+
+Stage 3 — operate continuous collection:
+
+- [ ] `PDI-20` Pass one supervised CSRC-plus-market collection tracer bullet.
+- [ ] `PDI-21` Install and accept the authorized host process supervisor.
+- [ ] `PDI-22` Pass multi-policy health, retention, compression, backup, and restore acceptance.
+
+Stage 4 — prove complete Judgment inputs before automatic dispatch:
+
+- [ ] `PDI-30` Assemble one complete prospective Event Envelope/Evidence Pack and frozen tool set.
+- [ ] `PDI-31` Pass Query Gate preflight for two or three registered checkpoints.
+- [ ] `PDI-32` Run three paired replicates per checkpoint under the frozen stop and cost rules.
+
+Stage 5 — automate bounded follow-up and open registered outcomes:
+
+- [ ] `PDI-40` Admit bounded Agent-proposed Watches without arbitrary network or execution access.
+- [ ] `PDI-41` Dispatch a claimed Wake idempotently into one fresh bounded Judgment Run.
+- [ ] `PDI-42` Open outcomes after the registered horizon and issue the next-research go/no-go.
+
+### Remaining Phase 1 research work
+
 - [ ] Extend source-specific historical publication/vintage and revision adapters plus frozen
   latency models calibrated from prospective real-time receipts. The CSRC HTML/archive path proves
   one official source class; current snapshots and unadapted sources remain non-authoritative.

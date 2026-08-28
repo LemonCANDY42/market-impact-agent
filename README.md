@@ -130,11 +130,14 @@ optional, exact dependency and grants backtest capability only.
 The first official token-backed local Tushare capture and validation completed on 2026-08-25
 for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily window.
 It proves the language-neutral HTTPS adapter/capture/validation path and that the local
-credential worked for that account, target, and window. It does not prove general
-quota/permissions, completeness, historical truth, full-universe prices, actual liquidity or
-fillability, alpha, or paper/live readiness. The Tushare Provider therefore remains disabled
-and unverified. The modeled-open replay implementation is a separate deterministic
-simulation gate, not a Provider or source-truth claim. See
+credential worked for that account, target, and window. Tushare is fully usable as an upstream
+source under the owner's purchased, private, non-redistributed deployment. This authorizes its
+integration; it does not bypass Harness admission. The current `tushare-http` market-data Provider
+Manifest remains `disabled`/`unverified` until its claimed route and capabilities pass their gates,
+and that one capture does not prove every optional API is enabled, historical PIT authority,
+full-universe completeness, actual liquidity or fillability, alpha, or paper/live readiness. The
+modeled-open replay is a separate deterministic simulation gate, not a Provider or source-truth
+claim. See
 [docs/TUSHARE_DATA.md](docs/TUSHARE_DATA.md).
 
 The first pre-registered real cohort completed on 2026-08-26: two train and five later test

@@ -215,8 +215,12 @@ The first useful A-share implementation batch should stay narrow and checkpoint-
 
 Public exchange pages can be prospective inputs only after route and rights acceptance. Licensed
 SZSE market feeds, CSI/CNI taxonomy data, Wind, Bloomberg, LSEG, or similar products require a
-version/timestamp and retention trial; a vendor name alone is not acceptance. Tushare remains a
-practical research connector, but an old date returned today does not itself prove old visibility.
+version/timestamp and retention trial; a vendor name alone is not acceptance. Tushare is an
+authorized, fully usable source for this personal deployment: the owner supplies their purchased
+token, the Harness keeps the data private, and nothing is resold or shared. Each Tushare API still
+needs its own capability, freshness, completeness, and replay acceptance; an old date returned
+today does not itself prove old visibility, and one enabled API does not imply a different real-time
+API is enabled.
 
 ## Adopted and deferred infrastructure
 
@@ -229,7 +233,11 @@ practical research connector, but an old date returned today does not itself pro
 | Polars | Optional transformation adapter | Add for measured transformation bottlenecks, not as a catalog or PIT authority |
 | Nautilus `ParquetDataCatalog` | Adopt only for accepted execution-grade instruments/bars/ticks | Keeps replay and paper/live market semantics aligned without storing news or Evidence there |
 | `asyncio` | Adopt inside Provider collection for concurrent registered sources | Add bounded jitter/backoff and conditional HTTP per Provider as acceptance requires |
-| APScheduler | Defer | Add only when durable persisted schedules and misfire recovery are required beyond an external process supervisor |
+| macOS `launchd` | Adopt only as the authorized host process supervisor | It starts or restarts the Harness worker; Collection Policy and durable due/misfire state remain Harness-owned |
+| APScheduler | Defer | Its persistent schedules would duplicate Harness cadence/due authority; reconsider only for a non-macOS deployment that cannot use a thin process supervisor |
+| OpenBB provider framework | Reference, do not integrate its core | Its connector pattern is useful, but the existing Harness owns stronger route, cutoff, authority, Snapshot, and tool contracts |
+| AKShare | Discovery/diagnostic fallback only | Endpoint stability and use constraints do not meet the formal source-route gate; it cannot silently replace Tushare or an official route |
+| VeighNa datafeed adapters | Defer to the execution-facing integration phase | Useful adapter boundary for execution data, but not a receipt/PIT authority and not needed for the first prospective input set |
 | Kafka/Redpanda | Defer | Add only for measured high-rate streams, multiple consumers, replay partitions, and operational ownership |
 | Iceberg/Delta/Hudi | Defer | Add only after object-storage scale requires catalog commits, schema evolution, compaction, and multi-writer table transactions |
 | Feast or another feature store | Defer | Add after stable features need repeated offline/online PIT retrieval; source Snapshots remain the authority |
@@ -262,6 +270,381 @@ practical research connector, but an old date returned today does not itself pro
 | Paper-data gate | Prospective decision inputs and execution-grade market data remain synchronized through replay and reconciliation | Connect the separate paper execution outbox |
 | Scale gate | Measured write contention, data volume, query latency, or multi-host consumers exceed local limits | Evaluate PostgreSQL, object storage, stream log, or lakehouse catalog |
 | Live gate | Versioned mandate, idempotent order identity, limits, reconciliation, kill switch, and explicit acceptance evidence | Enable a reviewed live adapter; never unlocked by data readiness alone |
+
+## Prospective decision-input delivery program
+
+This program is the dependency-closed path from the accepted receipt plane to continuously
+collected, Agent-usable prospective decision inputs. It is deliberately separate from strict
+historical PIT recovery and from paper/live execution. Detailed requirements and dependencies live
+here; `ROADMAP.md` owns Task status only.
+
+### Stage 0 — PDI-00 research decision gate (completed 2026-08-28)
+
+**Question:** can the uncertain source, infrastructure, supervision, and multi-Snapshot dispatch
+choices be narrowed with official contracts and minimal real probes before implementation?
+
+**Result:** yes. The existing Provider/Journal/Snapshot/tool boundaries are sufficient. The first
+implementation should add small Provider-specific Tushare and direct-official vertical slices, not
+another data framework or orchestration owner. Network success below establishes reachability and
+current account capability only; a route becomes accepted after actual-receipt capture, typed
+normalization, complete Snapshot freeze, deterministic replay, and its Source Route Acceptance
+Report all pass.
+
+The current deployment entitlement is a fixed premise, not an open vendor-selection question:
+Tushare is purchased by and used for the owner inside their private Harness, with no redistribution.
+The token remains a process-bound credential reference and never enters configuration identities,
+logs, datasets, Git, or Agent-visible tools. Tushare is therefore fully usable as an upstream source
+for this project. That authorizes integration, not Agent or trading admission: the current
+`tushare-http` market-data Provider Manifest remains disabled/unverified, and each API route must
+pass its engineering acceptance before the Harness may expose it. The only remaining source-side
+question is whether the current account enables an optional freshness/product tier required by a
+registration.
+
+#### Source and capability findings
+
+| Decision input | Minimal evidence on 2026-08-28 | Implementation decision |
+| --- | --- | --- |
+| Official event fact | The CSRC route already has three actual receipts and deterministic replay | Keep direct CSRC as the first accepted event route; add only checkpoint-relevant official routes |
+| Established news | The current Tushare token returned eight bounded `news` rows; `major_news` returned API success with an explicit empty result for the registered day; direct Xinhua RSS also responded, while a public Bloomberg RSS URL was technically reachable but its public terms do not authorize the planned automated database | Implement Tushare news as the first broad private route with upstream `src` identity and receipt time preserved; preserve no-data distinctly from failure; use direct/licensed publisher routes only where their retention terms pass; do not persist Bloomberg's public RSS |
+| Market/index context | `index_daily` returned the requested three sessions; prior token-backed daily/adjustment/limit bundles already replay deterministically | Implement the Tushare EOD/index route first; keep raw executable prices separate from as-of adjusted research views |
+| Low-latency market context | `rt_min_daily` and `rt_sw_k` returned explicit permission errors for the current token | Record these two capabilities as not enabled now; enable the relevant Tushare real-time product or a later licensed execution feed before a registration requires intraday freshness |
+| Tradable universe and exposure | `etf_basic` returned 30 listed CSI 300-linked ETFs; effective index/industry membership interfaces expose listing or `in_date`/`out_date` fields | Build effective-dated ETF/instrument and exposure dimensions from Tushare; reject mappings with missing lifecycle or taxonomy version |
+| Industry context | `index_member_all` returned 78 members for the selected SW2021 Level-1 industry; the current account's `rt_sw_k` is not enabled | Accept effective-dated taxonomy/membership independently of EOD or real-time price cadence; never back-apply current membership |
+| Positioning | `margin` returned all three requested exchange summary rows, and the SSE public endpoint independently returned the same bounded date shape | Make Tushare the structured primary route and retain the official exchange route as a source-specific corroboration/continuity option |
+| Macro release | `cn_schedule` returned 14 September 2026 release-schedule rows; NBS publishes an official release calendar and later revises some database series | Capture the timestamped official release page as the primary release receipt; store Tushare schedule/structured observations and later NBS revisions as distinct lineages |
+| Prior expectation | `report_rc` returned 4,802 forecast rows for the bounded 2026-08-25 through 2026-08-27 window with institution, author, forecast period, estimate, rating, target, and Tushare update time | Use rows as cited forecast observations; derive a registered as-of consensus from a fixed population/window, never treat a single row as consensus or a Tushare update time as publisher time |
+
+The ignored private report
+`pdi00-source-probe-report-dde5120eca6b259116e72ab7d15a8a80352635c6467c3f7f4e7b00733df18864`
+records the exact 2026-08-28 probe time and ten query identities, parameters, requested/returned
+field names, HTTP/API status, typed success or permission denial, row count, and exact response
+SHA-256. Its content identity was independently recomputed with the Harness `canonical_hash`. It
+contains neither the token nor any
+source row; licensed payloads remain private and uncommitted.
+
+The `report_rc` response exceeded its documentation's stated 3,000-row single-call limit. That
+runtime/documentation divergence is an acceptance test requirement: the adapter must send explicit
+pagination/row bounds, detect truncation or overflow, and prove complete retrieval for its registered
+window rather than assuming the documented limit is enforced.
+
+Primary references used by this gate are the official Tushare contracts for
+[`report_rc`](https://tushare.pro/document/2?doc_id=292),
+[`cn_schedule`](https://tushare.pro/document/2?doc_id=461),
+[`index_member_all`](https://tushare.pro/document/2?doc_id=335),
+[`etf_basic`](https://tushare.pro/document/2?doc_id=385),
+[`news`](https://tushare.pro/document/2?doc_id=143), and the separately entitled
+[`rt_min_daily`](https://tushare.pro/document/2?doc_id=457); the
+[SSE market-data product boundary](https://english.sse.com.cn/markets/dataservice/products/),
+[NBS release calendar](https://www.stats.gov.cn/xxgk/sjfb/fbrcb/), and
+[NBS revision timing note](https://www.stats.gov.cn/zs/tjws/jbtjzswd/tjzn/202412/t20241216_1957774.html);
+and the public [Bloomberg terms](https://www.bloomberg.com/tos) used to reject persistent automated
+use of its public RSS route. These links document product semantics; the private no-payload probe
+report documents the current deployment's actual reachability.
+
+#### Framework and operating decisions
+
+| Question | Frozen decision | Revisit only when |
+| --- | --- | --- |
+| Add OpenBB as the data framework? | No. Borrow its Provider-extension pattern where useful, but keep the Harness as the sole route/Snapshot/tool authority | A unique accepted source is available only through an OpenBB connector and wrapping it does not create ambiguous identity or fallback |
+| Add a database server, Kafka, lakehouse, or feature store? | No. Keep SQLite WAL plus content-addressed raw receipts and Arrow Parquet/ZSTD projections | Measured contention, volume, multi-host consumption, or stable repeated online/offline features cross a frozen threshold |
+| Add DuckDB? | Optional read adapter only | A benchmark shows materially better multi-partition analytical queries without moving receipt authority |
+| Use APScheduler for continuous collection? | No. Durable cadence, leases, misfires, and budgets stay in the Harness; `launchd` only invokes/restarts the worker after explicit host-install approval | A future non-macOS deployment needs a different thin supervisor; it still may not own business cadence |
+| Put market data under Nautilus/IBKR/VeighNa now? | Not for PDI-10 through PDI-17. Export accepted execution-grade data to Nautilus and add broker/data adapters in the later paper/live phase | Paper-data synchronization and execution acceptance become the active gate |
+| Use public aggregator feeds as publisher authority? | No. They may be independent sources or discovery routes according to their contract, but provider/source identity and actual receipt stay explicit | A licensed product supplies the required publisher/version/timestamp and retention contract |
+
+The framework decisions were checked against the official
+[OpenBB Provider-extension model](https://docs.openbb.co/odp/python/extensions/providers),
+[PyArrow Parquet controls](https://arrow.apache.org/docs/python/parquet.html),
+[DuckDB Parquet pushdown](https://duckdb.org/docs/current/data/parquet/overview),
+[Nautilus data catalog](https://nautilustrader.io/docs/latest/concepts/data/),
+[APScheduler persistence model](https://apscheduler.readthedocs.io/en/master/userguide.html), and
+Apple's [`launchd` lifecycle guidance](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
+
+#### Multi-Snapshot dispatch decision
+
+A throwaway state-machine prototype is retained on local branch
+`prototype/pdi-00-snapshot-barrier-20260828` at commit `e00f3fa`. It exercised a happy path,
+incomplete companion Snapshot, crash before and after durable run creation, duplicate consumption,
+and cutoff drift. The decision is to reuse `FrozenDataSnapshotInput` as a set of independent,
+immutable Snapshot IDs and add one immutable barrier cutoff; no composite data authority is needed.
+The dispatch key is derived from the Wake and frozen runtime registration, durable run creation is
+unique on that key, and a Wake is acknowledged only after the run record exists. The prototype is
+decision evidence only and is not merged into production.
+
+**PDI-00 acceptance:** official contracts and the content-identified private probe report cover
+every Stage 2 capability class at the reachability/entitlement level; adopt/defer decisions have one
+owner and an evolution trigger; the prototype resolved the only cross-Snapshot state question. No
+route acceptance, model call, new purchase, host-service installation, or paper/live authority was
+claimed. Remaining completeness, freshness, lineage, and replay work is explicitly owned by PDI-01
+and PDI-10 through PDI-16 rather than hidden by the completed research gate.
+
+### Scope and change control
+
+The program is complete only when it closes all current prospective research gaps:
+
+- checkpoint-relevant event/news, market, tradable-universe, effective industry, positioning,
+  macro-release/revision, and prior-expectation routes;
+- durable collection supervision, health, retention, compression, and restore;
+- Harness admission of a bounded Agent-proposed Watch and idempotent Wake-to-Judgment dispatch; and
+- a pre-registered two-to-three-checkpoint paired diagnostic followed by outcome opening only after
+  its registered horizon.
+
+The program does **not** recover historical authority, lower the strict PIT gate, grant Evidence
+authority to a Provider, submit a Signal or Order Intent, or unlock paper/live. The existing Harness,
+Prospective Receipt Journal, Data Snapshot, Event Envelope/Evidence Pack, Agent Runtime, Usage
+Ledger, and trading-engine contracts remain the only owners of their respective state.
+
+Requirements are controlled as follows:
+
+1. `ROADMAP.md` marks a Task complete only after its acceptance artifacts exist; merged code or a
+   successful HTTP response is insufficient.
+2. The first Task freezes checkpoint selection, capability minima, source diversity, cadence,
+   freshness, allowed targets, horizon candidates, model budget, and stop rules before collection
+   or model calls. Any material change creates a new registration identity rather than mutating the
+   old one.
+3. Every source Task is a vertical slice: Source Route Configuration, Provider normalization,
+   actual-receipt capture, typed degradation, Journal append, complete Snapshot freeze, semantic
+   tool exposure, deterministic replay, rights evidence, and a passing Source Route Acceptance
+   Report. A connector without that chain remains unaccepted.
+4. Provider-specific fields never become conclusions. Transmission Paths remain Agent Judgment;
+   horizon candidates remain versioned method input; raw executable prices remain separate from
+   adjusted research series.
+5. Missing receipts, source drift, sequence gaps, restore mismatches, and ambiguous dispatch remain
+   visible and fail closed. Later data cannot silently heal an earlier gap.
+6. No model diagnostic begins until every registered input slot passes PDI-31 Query Gate preflight.
+   A failed preflight consumes no model budget.
+
+### Dependency map
+
+```mermaid
+flowchart LR
+    Z[PDI-00 research decision gate] --> R[PDI-01 freeze registration]
+    R --> M[PDI-11 accept market route]
+    R --> D[PDI-10 and PDI-12..16 accept other routes]
+    R --> O[PDI-20 collection supervisor]
+    M --> O
+    M --> F[PDI-17 freeze checkpoint Snapshot sets]
+    D --> F[PDI-17 freeze checkpoint Snapshot sets]
+    O --> I[PDI-21 install host supervisor]
+    I --> H[PDI-22 operations and restore gate]
+    F --> H
+    F --> J[PDI-30 assemble Judgment inputs]
+    J --> Q[PDI-31 Query Gate preflight]
+    Q --> E[PDI-32 paired process diagnostic]
+    F --> W[PDI-40 admit bounded Watch proposals]
+    H --> W
+    J --> X[PDI-41 dispatch Wake to fresh Judgment]
+    W --> X
+    E --> X
+    E --> Y[PDI-42 registered outcome opening]
+```
+
+### Stage 1 — Freeze requirements before acquisition
+
+#### PDI-01 — Freeze the prospective diagnostic registration
+
+**What it delivers:** one content-identified registration for two or three checkpoints with
+different event mechanisms. It fixes the decision cutoff construction, capability matrix, route and
+source-diversity minima, cadence/gap/freshness rules, target venue and allowed instrument classes,
+candidate horizon set, paired arms, three replicates per arm, aggregate model-cost ceiling, hidden-
+outcome rule, and exact stop/go criteria.
+
+**Blocked by:** PDI-00.
+
+**Acceptance:** schema and canonical round-trip pass; every checkpoint has an explicit event fact,
+prior expectation, market context, exposure/universe, positioning, macro applicability, and horizon
+requirement or a registered `not_applicable` reason; the registration is frozen before any new model
+call or outcome opening.
+
+**Boundary:** it selects requirements, not Providers or conclusions, and grants no data, model, or
+execution authority.
+
+### Stage 2 — Accept capability-complete prospective data slices
+
+The route Tasks may proceed independently after PDI-01. A checkpoint may bind more than one route,
+but an implicit Provider fallback is never allowed.
+
+#### PDI-10 — Accept checkpoint-relevant event and established-news routes
+
+Build on the accepted CSRC official-event route with the direct official/publisher coverage and
+revision semantics required by the registration. Acceptance requires actual receipt, publisher
+identity, publication/update separation, lineage, body-retention rights or an explicit metadata-only
+scope, complete pagination/window behavior, and deterministic replay. Aggregator discovery cannot
+stand in for publisher authority.
+
+#### PDI-11 — Accept an A-share market-context route
+
+Deliver the registered market/index/ETF prices, calendar, breadth, volatility, liquidity, and data-
+quality flags through `lookup_market_context`. Acceptance separates price indices, adjusted or
+total-return research series, and raw executable prices; proves calendar/sequence completeness and
+corporate-action treatment; and makes no fill or return claim from adjusted bars.
+
+#### PDI-12 — Accept an effective-dated tradable-universe route
+
+Deliver instrument identity, venue, listing lifecycle, ETF/index relationship, lot/tick/limit fields,
+and decision-time tradability through `lookup_exposure_candidates`. Acceptance rejects current
+instrument masters mislabeled as historical membership and binds every mapping to its effective
+interval and source version.
+
+#### PDI-13 — Accept an effective-dated industry route
+
+Deliver the then-effective taxonomy version, hierarchy, constituent membership, and index/ETF
+mapping through `lookup_exposure_candidates`. Acceptance prevents a current SW/CSI taxonomy from
+being back-applied, distinguishes research opportunity bounds from tradable exposures, and records
+rebalances and classification revisions.
+
+#### PDI-14 — Accept a positioning route
+
+Deliver the registered financing/margin, holdings, flow, shorting, or market-implied positioning
+observations through `lookup_positioning`. Acceptance fixes publication and availability semantics,
+unit/scaling rules, revision behavior, market calendar alignment, and explicit no-data versus
+unavailable outcomes.
+
+#### PDI-15 — Accept a macro release-and-revision route
+
+Deliver original releases, release calendars, and revision lineage through `lookup_macro_vintage`.
+Acceptance retains the first actual receipt separately from release/reference periods and later
+revisions; a current revised series cannot satisfy the original-release slot.
+
+#### PDI-16 — Accept a prior-expectation route
+
+Deliver a cited consensus, forecast, positioning, survey, or market-implied baseline through
+`lookup_prior_expectation`. Acceptance fixes population/method, observation and publication window,
+units, revision policy, and source diversity. The Provider supplies the baseline observations; only
+the Agent may form an evidence-linked Expectation Delta.
+
+#### PDI-17 — Freeze complete checkpoint Snapshot sets
+
+**Blocked by:** PDI-10 through PDI-16 as required by PDI-01.
+
+**Acceptance:** each registered capability has a complete prospective Data Snapshot with actual-
+receipt authority at the checkpoint cutoff; all route acceptance IDs, Snapshot IDs, source-policy
+IDs, raw hashes, coverage results, and semantic tool manifests reconcile. The existing
+`FrozenDataSnapshotInput` binds the exact set without creating a composite data authority.
+
+**Stage exit — Capability Coverage Gate:** every registered slot passes, or the checkpoint remains
+ineligible. `not_applicable` is allowed only when frozen in PDI-01, never invented after collection.
+
+### Stage 3 — Operate continuous collection safely
+
+#### PDI-20 — Run one supervised collection tracer bullet
+
+**What it delivers:** a smallest complete scheduled path for the accepted CSRC route plus one
+accepted market route. A Harness-owned one-shot due worker derives cadence from Collection Policy;
+an external process supervisor invokes it. Durable due claims, bounded jitter/backoff, timeout,
+graceful cancellation, missed-run classification, health output, and restart recovery are tested.
+
+**Blocked by:** PDI-01 and one accepted non-CSRC route.
+
+**Acceptance:** deterministic fault tests plus a real bounded run prove that restart or concurrent
+workers cannot double-advance logical state, every scheduled opportunity has a typed outcome, and a
+missed receipt creates an observable incomplete interval. Repository acceptance and installation on
+a real host are reported separately; installing a host service requires explicit authorization.
+
+#### PDI-21 — Install and accept the host process supervisor
+
+**What it delivers:** an explicitly authorized host installation that invokes only the Harness
+one-shot due worker from PDI-20. The OS process supervisor owns process restart only; Collection
+Policy cadence, due state, Provider selection, Watch state, and wake state remain Harness-owned.
+Secrets are injected at the process boundary and never copied into service definitions or artifacts.
+
+**Blocked by:** PDI-20.
+
+**Acceptance:** before installation, report the exact host, service definition, working/state paths,
+environment source, notification policy, enablement state, and rollback command for approval. After
+authorization, register the service in the machine's canonical local-service inventory; verify
+start, stop, boot/restart, crash recovery, misfire classification, health visibility, log redaction,
+disabled-state behavior, and clean removal. A generated service file alone is not runtime evidence.
+
+#### PDI-22 — Pass multi-policy operations, retention, and restore
+
+**What it delivers:** supervised operation for all PDI-01 policies, health/lag/usage reporting,
+content-addressed deduplication, Parquet/ZSTD projection, bounded retention, backup, and verified
+restore. SQLite/CAS remains authoritative until measured contention or latency crosses a frozen
+scale threshold.
+
+**Blocked by:** PDI-21 and the required Stage 2 routes.
+
+**Acceptance:** a pre-registered soak and fault matrix covers restart, rate limit, corrupted backup,
+stale source, disk-budget pressure, and restore. Every due opportunity is reconciled; storage growth,
+freeze latency, query latency, and compression are measured; restored hashes, relationships,
+Snapshot reconstruction, and dataset row counts match exactly.
+
+**Stage exit — Operations Gate:** continuous collection is demonstrably recoverable and observable;
+an installed process alone is not acceptance.
+
+### Stage 4 — Prove complete Judgment inputs before automating model dispatch
+
+#### PDI-30 — Assemble complete prospective Judgment inputs
+
+Promote only policy-admitted observations into the existing Event Envelope/Evidence Pack, bind all
+authorized Snapshot IDs through `FrozenDataSnapshotInput`, and construct the semantic tools and
+Agent Execution Binding for one checkpoint. Tests reject cutoff drift, undeclared Snapshots,
+Provider-selected targets, missing capability slots, future evidence, and mismatched tool hashes.
+
+**Blocked by:** PDI-17.
+
+#### PDI-31 — Qualify two or three registered checkpoints
+
+Recompute PDI-01 requirements from immutable artifacts. All capability, cutoff, source diversity,
+Snapshot completeness, tool binding, event revelation, expectation baseline, horizon, target, model
+profile, cost, and future-outcome gates must pass before a model process starts.
+
+**Blocked by:** PDI-30.
+
+#### PDI-32 — Run three paired replicates per checkpoint
+
+Execute the frozen arms under one Provider Profile and shared cost ceiling. Report terminal status,
+tool use, citations, abstention, candidates, event-identity/expectation/horizon blockers, decision
+agreement, latency, and the reconciled Usage Ledger. Apply the PDI-01 stop rule immediately; do not
+expand to more checkpoints when the same input blockers persist.
+
+**Blocked by:** PDI-31.
+
+**Stage exit — Query Gate:** determine whether data/tool blockers were removed and whether
+abstention is now evidence-based rather than an input-contract failure. Failure returns work to the
+specific data or input Task and keeps automatic model dispatch closed.
+
+### Stage 5 — Automate bounded follow-up and open registered outcomes
+
+#### PDI-40 — Admit a bounded Agent-proposed Watch
+
+Add a closed Watch-request contract that lets an Agent name only an approved event/entity, semantic
+query template, trigger, TTL, and budget. Harness policy resolves the registered Collection Policy,
+sources, cadence, credentials, destination, and limits before creating an `AttentionWatchPolicy`.
+Tests reject arbitrary URLs, Provider IDs, destinations, execution capabilities, budget expansion,
+and unregistered event clusters.
+
+**Blocked by:** PDI-17 and PDI-22.
+
+#### PDI-41 — Dispatch one claimed Wake to a fresh Judgment Run
+
+Add a durable claim/lease around pending Wakes and derive an idempotent dispatch identity from the
+immutable Wake and runtime registration. Before starting a model, the dispatcher invokes the
+registered checkpoint coordinator to collect/freeze every other required capability at the wake
+barrier cutoff; an incomplete companion Snapshot defers or rejects dispatch rather than giving the
+Agent a partial context. It then starts one fresh bounded Agent Run with the complete Snapshot set
+and acknowledges only after durable run creation. Crash-before-create, crash-after-create,
+concurrent consumers, cancellation, budget exhaustion, invalid or incomplete Snapshots, cutoff
+drift, and terminal replay are accepted. The dispatcher exposes research capabilities only and
+cannot form or submit an order.
+
+**Blocked by:** PDI-30, PDI-32, and PDI-40.
+
+#### PDI-42 — Open outcomes only after the registered horizon
+
+Seal decisions before outcomes, then evaluate the registered market/industry/ETF comparators and
+raw-price Nautilus replay after the horizon closes. Report turnover/cost, drawdown, Sharpe, CVaR,
+information ratio, upside capture, and downside participation only where the registered sample and
+horizon support them. Small-sample results remain diagnostic and cannot claim alpha or unlock
+paper/live.
+
+**Blocked by:** PDI-32 and the registered horizon ending.
+
+**Stage exit — Automated Judgment and Outcome Gate:** an accepted new observation can produce at
+most one logical fresh Judgment Run with complete lineage and Usage Ledger accounting; no model
+remains resident and no execution surface is reachable. Outcome opening determines whether a later
+larger prospective study is justified; a pass authorizes that next research registration only.
 
 ## Evidence, finding, and implementation path
 
