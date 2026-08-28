@@ -130,6 +130,9 @@ Stage 3 — operate continuous collection:
   - [x] Freeze a content-identified, secret-free launchd pre-install plan and a private
     environment-file boundary. The service definition remains absent and disabled pending the
     required host-install approval.
+  - [x] Add a fail-closed clean-process environment and a content-identified supervisor acceptance
+    receipt binding the plan, source commit, runtime evidence, service definition, and machine
+    registry.
 - [ ] `PDI-22` Pass multi-policy health, retention, compression, backup, and restore acceptance.
   - [x] Add content-identified operations thresholds, state metrics and disk-budget enforcement,
     SQLite online backup, CAS/Parquet hash inventory, corruption rejection, and clean-root restore.

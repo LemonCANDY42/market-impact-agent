@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-supervisor-receipt.schema.json",
+  "title": "Market Impact Prospective Supervisor Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "accepted_at",
+    "supervisor_plan_id",
+    "source_commit",
+    "host_name",
+    "host_uid",
+    "launchd_label",
+    "service_definition_hash",
+    "runtime_evidence_hash",
+    "machine_registry_hash",
+    "observed_successful_run_count",
+    "gates",
+    "accepted",
+    "historical_pit_claim",
+    "model_authority",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-supervisor-receipt.v1"},
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^prospective-supervisor-receipt-[0-9a-f]{64}$"
+    },
+    "accepted_at": {"type": "string", "format": "date-time"},
+    "supervisor_plan_id": {
+      "type": "string",
+      "pattern": "^prospective-supervisor-plan-[0-9a-f]{64}$"
+    },
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "host_name": {"type": "string", "minLength": 1},
+    "host_uid": {"type": "integer", "minimum": 1},
+    "launchd_label": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]+$"
+    },
+    "service_definition_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "runtime_evidence_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "machine_registry_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observed_successful_run_count": {"type": "integer", "minimum": 1},
+    "gates": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"$ref": "#/$defs/disabled_install"},
+        {"$ref": "#/$defs/environment_isolation"},
+        {"$ref": "#/$defs/service_lifecycle"},
+        {"$ref": "#/$defs/failure_recovery"},
+        {"$ref": "#/$defs/health_visibility"},
+        {"$ref": "#/$defs/log_redaction"},
+        {"$ref": "#/$defs/rollback_reinstall"},
+        {"$ref": "#/$defs/machine_registry"}
+      ],
+      "items": false
+    },
+    "accepted": {"type": "boolean"},
+    "historical_pit_claim": {"const": false},
+    "model_authority": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "passed", "reasons"],
+      "properties": {
+        "gate": {"type": "string"},
+        "passed": {"type": "boolean"},
+        "reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "disabled_install": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "disabled_install"}}}]
+    },
+    "environment_isolation": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "environment_isolation"}}}]
+    },
+    "service_lifecycle": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "service_lifecycle"}}}]
+    },
+    "failure_recovery": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "failure_recovery"}}}]
+    },
+    "health_visibility": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "health_visibility"}}}]
+    },
+    "log_redaction": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "log_redaction"}}}]
+    },
+    "rollback_reinstall": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "rollback_reinstall"}}}]
+    },
+    "machine_registry": {
+      "allOf": [{"$ref": "#/$defs/gate"}, {"properties": {"gate": {"const": "machine_registry"}}}]
+    }
+  }
+}

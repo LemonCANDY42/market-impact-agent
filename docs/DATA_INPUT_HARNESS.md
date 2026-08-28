@@ -357,13 +357,25 @@ market-impact data collection-supervisor-plan \
   --maximum-state-bytes 10000000000
 ```
 
-The plan is disabled and secret-free. Its plist carries `Disabled=true`: the reported install
-command registers that disabled job, while the separate enable command is the only planned action
-that permits interval collection. `collection-service-run` accepts only an owner-private
-environment file containing `TUSHARE_TOKEN`; both it and the state root use canonical absolute
+The plan is disabled and secret-free. Its plist carries `Disabled=true`. Disabled installation
+means materializing that reviewed plist and applying the reported `launchctl disable` command; it
+does not bootstrap a launchd job. Activation is a separate ordered pair: `launchctl enable`, then
+`launchctl bootstrap`. `collection-service-run` accepts only an owner-private environment file
+containing `TUSHARE_TOKEN`, either directly or in the registered shell `export` form; both it and the state root use canonical absolute
 paths, must remain disjoint, and reject symlinked files or ancestors. The value is passed to the
 Provider process and is not written to a Job, Snapshot, report, plist, or command output. Generating
 this plan does not install or enable launchd.
+
+The v3 plist launches through `/usr/bin/env -i`, explicitly restores only `PATH` and
+`PYTHONUNBUFFERED`, and requires the worker to verify that no other host environment keys reached
+Python apart from macOS's two non-secret locale/text-encoding keys. A non-isolated process fails
+before the private Tushare file is read. PDI-21 acceptance is recorded only by a private,
+content-identified `ProspectiveSupervisorReceipt` whose ordered gates bind disabled installation,
+environment isolation, lifecycle, bounded failure recovery, health visibility, log redaction,
+rollback/reinstallation, and the canonical machine registry. The receipt grants no historical-PIT,
+model, or execution authority. Its writer canonicalizes the authoritative state root, rejects any
+symlinked state, parent, or final receipt path, and enforces owner-private `0600` permissions even
+when identical content already exists.
 
 Rollback is ordered and exact: `launchctl bootout gui/UID PLIST`, then
 `launchctl disable gui/UID/LABEL` to clear any persistent enable override, then

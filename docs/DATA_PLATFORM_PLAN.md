@@ -633,16 +633,23 @@ disabled-state behavior, and clean removal. A generated service file alone is no
 
 **Repository pre-install status, 2026-08-28:** `ProspectiveSupervisorPlan` now content-identifies the
 exact host/UID, launchd label and definition path, executable, working and state roots, private
-environment file, logs, invocation interval, notification policy, disabled initial state, install
-command, separate enable command, and rollback commands. The generated plist sets `Disabled=true`
-so installation cannot begin interval collection before explicit enablement, and invokes only
+environment file, logs, invocation interval, notification policy, disabled installation command,
+separate ordered activation commands, and rollback commands. The generated plist sets
+`Disabled=true`; disabled installation materializes the reviewed file and applies
+`launchctl disable` without bootstrapping. Activation explicitly runs `launchctl enable` before
+`launchctl bootstrap`, and the plist invokes only
 `collection-service-run`; that worker reads an owner-private `0600` environment file, passes the
 Tushare token directly to the registered Provider, and never prints or persists it. The plist
 contains no credential. This is a
 reviewable installation package, not PDI-21 acceptance: the host definition, secret file, and log
 directory remain absent until the owner approves the exact plan. Rollback runs `bootout`, then
 `launchctl disable gui/UID/LABEL` to remove the persistent enable override, then removes the plist;
-reinstallation therefore remains disabled until the separate enable command is approved again.
+reinstallation therefore remains disabled until the separate activation commands are approved again.
+The v3 launch payload executes through `/usr/bin/env -i` and the worker rejects any process
+environment beyond the explicit runtime allowlist and macOS's non-secret locale/text-encoding
+keys. The content-identified supervisor receipt binds the accepted plan, committed source revision,
+plist hash, private runtime-evidence hash, machine-registry hash, successful run count, and eight
+ordered gates; it cannot grant PIT, model, or trading authority.
 
 #### PDI-22 — Pass multi-policy operations, retention, and restore
 

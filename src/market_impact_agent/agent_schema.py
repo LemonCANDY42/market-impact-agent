@@ -22,6 +22,7 @@ AGENT_SCHEMA_FILES = (
     "prospective-collection-job.schema.json",
     "prospective-collection-tracer-report.schema.json",
     "prospective-supervisor-plan.schema.json",
+    "prospective-supervisor-receipt.schema.json",
     "prospective-operations-registration.schema.json",
     "prospective-backup-manifest.schema.json",
     "prospective-dataset-manifest.schema.json",

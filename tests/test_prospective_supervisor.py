@@ -1,12 +1,19 @@
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.prospective_supervisor import (
+    ProspectiveSupervisorGate,
+    ProspectiveSupervisorGateResult,
     ProspectiveSupervisorPlan,
+    ProspectiveSupervisorReceipt,
+    assert_clean_supervisor_environment,
     load_supervisor_environment,
     render_launchd_plist,
+    write_supervisor_receipt,
 )
 
 
@@ -41,6 +48,10 @@ def test_supervisor_plan_is_content_identified_schema_valid_and_secret_free(
     plist = render_launchd_plist(plan)
     assert plist["Label"] == plan.launchd_label
     assert plist["ProgramArguments"] == [
+        "/usr/bin/env",
+        "-i",
+        "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONUNBUFFERED=1",
         plan.executable_path.as_posix(),
         "data",
         "collection-service-run",
@@ -50,24 +61,39 @@ def test_supervisor_plan_is_content_identified_schema_valid_and_secret_free(
         plan.environment_file.as_posix(),
         "--maximum-state-bytes",
         "10000000000",
+        "--require-clean-environment",
     ]
     assert plist["StartInterval"] == 60
     assert plist["RunAtLoad"] is False
     assert plist["Disabled"] is True
     assert plist["ProcessType"] == "Background"
-    assert plist["EnvironmentVariables"] == {"PYTHONUNBUFFERED": "1"}
+    assert "EnvironmentVariables" not in plist
+    assert plan.process_environment_isolation == "clear_then_allowlist"
+    assert plan.process_environment == {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONUNBUFFERED": "1",
+    }
     assert "TUSHARE_TOKEN" not in repr(plist)
     assert plan.execution_capability is False
-    assert plan.install_command == (
-        "launchctl",
-        "bootstrap",
-        "gui/501",
-        plan.service_definition_path.as_posix(),
+    assert plan.disabled_install_commands == (
+        (
+            "launchctl",
+            "disable",
+            "gui/501/com.lemoncandy42.market-impact-agent.collection",
+        ),
     )
-    assert plan.enable_command == (
-        "launchctl",
-        "enable",
-        "gui/501/com.lemoncandy42.market-impact-agent.collection",
+    assert plan.activation_commands == (
+        (
+            "launchctl",
+            "enable",
+            "gui/501/com.lemoncandy42.market-impact-agent.collection",
+        ),
+        (
+            "launchctl",
+            "bootstrap",
+            "gui/501",
+            plan.service_definition_path.as_posix(),
+        ),
     )
     assert plan.rollback_commands == (
         (
@@ -142,6 +168,108 @@ def test_supervisor_environment_requires_private_permissions_and_known_keys(
     path.write_text("TUSHARE_TOKEN=secret-value\nUNEXPECTED=value\n", encoding="utf-8")
     with pytest.raises(ValueError, match="unsupported"):
         load_supervisor_environment(path, state_root=tmp_path / "state")
+
+
+def test_supervisor_environment_accepts_registered_shell_export_format(tmp_path: Path) -> None:
+    path = tmp_path / "secrets.env"
+    path.write_text("export TUSHARE_TOKEN=secret-value\n", encoding="utf-8")
+    path.chmod(0o600)
+
+    assert load_supervisor_environment(path, state_root=tmp_path / "state") == {
+        "TUSHARE_TOKEN": "secret-value"
+    }
+
+
+def test_supervisor_process_environment_must_be_clean_and_allowlisted() -> None:
+    assert_clean_supervisor_environment(
+        {
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONUNBUFFERED": "1",
+            "LC_CTYPE": "UTF-8",
+            "__CF_USER_TEXT_ENCODING": "0x1F7:0x0:0x0",
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="not isolated"):
+        assert_clean_supervisor_environment(
+            {
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "PYTHONUNBUFFERED": "1",
+                "UNRELATED_SECRET": "must-not-be-visible",
+            }
+        )
+
+
+@pytest.mark.parametrize("reason", ("", " leading", "trailing ", "nul\x00reason"))
+def test_supervisor_gate_reasons_must_be_nonempty_trimmed_and_nul_free(reason: str) -> None:
+    with pytest.raises(ValueError, match="reason"):
+        ProspectiveSupervisorGateResult(
+            gate=ProspectiveSupervisorGate.DISABLED_INSTALL,
+            passed=False,
+            reasons=(reason,),
+        )
+
+
+def test_supervisor_receipt_is_content_identified_schema_valid_and_private(
+    tmp_path: Path,
+) -> None:
+    gates = tuple(
+        ProspectiveSupervisorGateResult(gate=gate, passed=True, reasons=())
+        for gate in ProspectiveSupervisorGate
+    )
+    receipt = ProspectiveSupervisorReceipt.build(
+        accepted_at=datetime(2026, 8, 28, 14, 30, tzinfo=UTC),
+        supervisor_plan_id="prospective-supervisor-plan-" + "a" * 64,
+        source_commit="b" * 40,
+        host_name="research-mac",
+        host_uid=501,
+        launchd_label="com.lemoncandy42.market-impact-agent.collection",
+        service_definition_hash="c" * 64,
+        runtime_evidence_hash="d" * 64,
+        machine_registry_hash="e" * 64,
+        observed_successful_run_count=4,
+        gates=gates,
+    )
+
+    assert receipt.receipt_id == receipt.expected_receipt_id
+    assert receipt.accepted is True
+    assert (
+        validate_agent_contract(receipt.to_dict(), "prospective-supervisor-receipt.schema.json")
+        == ()
+    )
+    path = write_supervisor_receipt(receipt, state_root=tmp_path / "state")
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert json.loads(path.read_text(encoding="utf-8")) == receipt.to_dict()
+    assert "secret" not in path.read_text(encoding="utf-8").lower()
+
+    path.chmod(0o644)
+    assert write_supervisor_receipt(receipt, state_root=tmp_path / "state") == path
+    assert path.stat().st_mode & 0o777 == 0o600
+
+    authoritative_state = tmp_path / "authoritative-state"
+    authoritative_state.mkdir()
+    linked_state = tmp_path / "linked-state"
+    linked_state.symlink_to(authoritative_state, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        write_supervisor_receipt(receipt, state_root=linked_state)
+
+    state_with_linked_parent = tmp_path / "state-with-linked-parent"
+    state_with_linked_parent.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (state_with_linked_parent / "operations").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        write_supervisor_receipt(receipt, state_root=state_with_linked_parent)
+
+    state_with_linked_receipt = tmp_path / "state-with-linked-receipt"
+    receipt_root = state_with_linked_receipt / "operations" / "supervisor-receipts"
+    receipt_root.mkdir(parents=True)
+    outside_receipt = outside / "receipt.json"
+    outside_receipt.write_bytes(path.read_bytes())
+    linked_receipt = receipt_root / f"{receipt.receipt_id}.json"
+    linked_receipt.symlink_to(outside_receipt)
+    with pytest.raises(ValueError, match="symlink"):
+        write_supervisor_receipt(receipt, state_root=state_with_linked_receipt)
 
 
 def test_supervisor_rejects_environment_paths_resolving_inside_state_root(

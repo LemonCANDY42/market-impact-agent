@@ -153,6 +153,7 @@ from market_impact_agent.prospective_operations import (
 )
 from market_impact_agent.prospective_supervisor import (
     ProspectiveSupervisorPlan,
+    assert_clean_supervisor_environment,
     load_supervisor_environment,
     render_launchd_plist,
 )
@@ -440,6 +441,7 @@ def build_parser() -> argparse.ArgumentParser:
     collection_service_parser.add_argument("--job-id", action="append", default=[])
     collection_service_parser.add_argument("--limit", type=int, default=100)
     collection_service_parser.add_argument("--maximum-state-bytes", required=True, type=int)
+    collection_service_parser.add_argument("--require-clean-environment", action="store_true")
     collection_service_parser.add_argument("--now", type=_aware_timestamp)
     collection_service_parser.add_argument(
         "--state-root",
@@ -2941,6 +2943,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if report["accepted"] is True else 1
     if args.command == "data" and args.data_command == "collection-service-run":
         try:
+            if args.require_clean_environment:
+                assert_clean_supervisor_environment(os.environ)
             secrets = load_supervisor_environment(
                 args.environment_file,
                 state_root=args.state_root,

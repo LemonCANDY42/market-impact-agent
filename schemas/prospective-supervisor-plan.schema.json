@@ -20,14 +20,16 @@
     "invocation_interval_seconds",
     "maximum_state_bytes",
     "notification_policy",
+    "process_environment_isolation",
+    "process_environment",
     "enabled_after_install",
     "execution_capability",
-    "install_command",
-    "enable_command",
+    "disabled_install_commands",
+    "activation_commands",
     "rollback_commands"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-supervisor-plan.v1"},
+    "schema_version": {"const": "market-impact.prospective-supervisor-plan.v3"},
     "plan_id": {
       "type": "string",
       "pattern": "^prospective-supervisor-plan-[0-9a-f]{64}$"
@@ -48,17 +50,35 @@
     "invocation_interval_seconds": {"type": "integer", "minimum": 10},
     "maximum_state_bytes": {"type": "integer", "minimum": 1},
     "notification_policy": {"enum": ["health_log_only", "failed_runs_only"]},
+    "process_environment_isolation": {"const": "clear_then_allowlist"},
+    "process_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["PATH", "PYTHONUNBUFFERED"],
+      "properties": {
+        "PATH": {"const": "/usr/bin:/bin:/usr/sbin:/sbin"},
+        "PYTHONUNBUFFERED": {"const": "1"}
+      }
+    },
     "enabled_after_install": {"const": false},
     "execution_capability": {"const": false},
-    "install_command": {
+    "disabled_install_commands": {
       "type": "array",
-      "minItems": 4,
-      "items": {"type": "string", "minLength": 1}
+      "minItems": 1,
+      "items": {
+        "type": "array",
+        "minItems": 3,
+        "items": {"type": "string", "minLength": 1}
+      }
     },
-    "enable_command": {
+    "activation_commands": {
       "type": "array",
-      "minItems": 3,
-      "items": {"type": "string", "minLength": 1}
+      "minItems": 2,
+      "items": {
+        "type": "array",
+        "minItems": 3,
+        "items": {"type": "string", "minLength": 1}
+      }
     },
     "rollback_commands": {
       "type": "array",
