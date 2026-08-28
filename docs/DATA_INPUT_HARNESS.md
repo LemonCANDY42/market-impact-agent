@@ -385,8 +385,14 @@ Acceptance observed 16 successful one-shot runs, an explicit stop/reload cycle, 
 next-interval recovery, complete rollback/reinstallation, visible health, and zero secret-value
 matches across 5,246 scanned plist/log/state files. The host itself was not rebooted; the recorded
 lifecycle evidence is launchd bootout/bootstrap/reload. The installed service remains enabled, but
-the current root has no registered collection Jobs, so each run is a no-op until accepted routes are
-registered.
+the current root is no longer a no-op. On 2026-08-28 UTC, the accepted CSRC event route and Tushare
+`index_daily` market route were registered as active Jobs. CSRC polls every 300 seconds and its first
+two formal opportunities completed successfully with complete two-observation actual-receipt
+Snapshots; the second unchanged capture added later sightings without adding duplicate content
+versions. The Tushare Job is aligned to 18:00 Asia/Shanghai and remains pending until its first
+scheduled opportunity. Both policies use frozen finite windows for pre-registration accrual. This
+is not the registered PDI-22 soak, and it proves neither an indefinite rolling-window contract nor
+complete PDI-17/PDI-22 acceptance.
 
 Rollback is ordered and exact: `launchctl bootout gui/UID PLIST`, then
 `launchctl disable gui/UID/LABEL` to clear any persistent enable override, then

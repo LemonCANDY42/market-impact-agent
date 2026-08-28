@@ -692,8 +692,26 @@ After PDI-21 acceptance, the full current host state (about 105 MiB) was frozen 
 `prospective-backup-manifest-b9eb5131246d9a7cdc5ed1875faa11dee2789c14f13b9065d44d5c07e5e725db`.
 All 5,133 manifested files, SQLite integrity and foreign keys, content identities, relationships,
 and dataset row counts verified before and after a clean-root restore. This exercises the PDI-22
-recovery path with current state, but is not the required multi-policy soak: the authoritative root
-still has no registered Jobs or complete PDI-17 checkpoint Snapshot sets.
+recovery path with the pre-Job state, but is not the required multi-policy soak.
+
+**Pre-registration accrual start, 2026-08-28 UTC:** the authoritative root now contains active CSRC
+and Tushare `index_daily` Jobs
+`prospective-collection-job-ff06ba788efbf292f725bed5e282b58cce3316375b58fd085c759b4d2a1eead6`
+and
+`prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193`.
+The first two CSRC opportunities completed successfully at the 300-second cadence with complete
+Snapshots
+`data-snapshot-4d4046e25898c9108749e5c068be6f3fcbefcfb7e1c8a95f764f169134c73d09`
+and `data-snapshot-2e410bd6bf783a5726af4b33227d5387e2fa1c76bd044ffe524af1926b5893b5`.
+The second unchanged capture added two later sightings without adding observation content versions;
+the first Tushare opportunity is scheduled for 18:00 Asia/Shanghai. Backup manifest
+`prospective-backup-manifest-172375b9a0b045f0300dc26e323e15fac48a5d6b0ac5eeee5bafec3b63395e14`
+verifies 5,143 files, both Jobs, the first successful opportunity, all relationships, and SQLite
+integrity. A separate transient clean-root restore reproduced both Jobs and that opportunity, but
+no persistent restore receipt is bound to this manifest; the restore is runtime evidence only.
+These are bounded finite-window policies, not an accepted indefinite rolling-date design or the
+registered PDI-22 soak. PDI-22 remains open pending the Tushare receipt, the registered soak and
+fault matrix, and complete PDI-17 checkpoint Snapshot sets.
 
 ### Stage 4 — Prove complete Judgment inputs before automating model dispatch
 

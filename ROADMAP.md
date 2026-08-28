@@ -145,6 +145,15 @@ Stage 3 — operate continuous collection:
   - [x] Back up and clean-root restore the current 105 MiB host state, including the PDI-21 receipt:
     5,133 manifested files passed hash, SQLite, foreign-key, identity, and row-count verification in
     `prospective-backup-manifest-b9eb5131246d9a7cdc5ed1875faa11dee2789c14f13b9065d44d5c07e5e725db`.
+  - [x] Start bounded pre-registration accrual with active CSRC and Tushare `index_daily` Jobs. The
+    first two CSRC opportunities produced complete two-observation actual-receipt Snapshots with no
+    miss or failure; the repeated unchanged capture added sightings without duplicating content
+    versions. The 18:00 Asia/Shanghai Tushare opportunity remains scheduled. A second backup retains
+    both Jobs and the first successful opportunity in
+    `prospective-backup-manifest-172375b9a0b045f0300dc26e323e15fac48a5d6b0ac5eeee5bafec3b63395e14`.
+    Its backup verification passed; an unpersisted clean-root restore reproduced the state but is
+    runtime evidence only. These finite-window Jobs are not the registered PDI-22 soak and do not
+    prove an indefinite rolling-date contract.
   - [ ] Complete PDI-17 checkpoint Snapshot sets, bind the final registration to them and the
     accepted supervisor receipt, then run the registered multi-policy soak and fault matrix.
 
