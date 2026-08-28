@@ -43,6 +43,7 @@ retention, or multi-host operation exceeds the local design's gates below.
 | Raw receipt | Exact accepted response and selected record bytes with SHA-256 identity | Private content-addressed artifact store | Normalized truth, mutable cache eviction by default |
 | Normalization | Provider-specific parsing into canonical Source Observations | Provider adapter plus shared observation contract | Cross-source causal inference, overwrite of earlier revisions |
 | Receipt journal | Every collection snapshot, source attempt, observation version, first actual receipt, and repeat sighting | SQLite WAL with foreign keys, full synchronous commits, and one logical writer | Article search engine, analytical warehouse, broker state |
+| Collection runtime | Content-identified Jobs, logical due opportunities, expiring leases, misfires, bounded jitter/backoff, cancellation, and health | Harness-owned SQLite due state plus an externally invoked one-shot worker | Provider selection by cron, model scheduling, host service installation |
 | Analytical storage | Columnar scans, compression, partition pruning, and reproducible exports | PyArrow Parquet, ZSTD, partitioned by capability and first-available date | Receipt authority, transactions, source admission |
 | Snapshot qualification | Cutoff, source set, cadence, gap/failure checks, exact version selection, and completeness | Standard content-identified Data Snapshot | Model inference, Evidence promotion, execution acceptance |
 | Query/tool layer | Domain filters over an already frozen and run-authorized Snapshot ID | `FrozenDataSnapshotToolBinding` | Arbitrary URL, source, cutoff, path, credentials, or cache-mode selection by the Agent |
@@ -578,6 +579,42 @@ graceful cancellation, missed-run classification, health output, and restart rec
 workers cannot double-advance logical state, every scheduled opportunity has a typed outcome, and a
 missed receipt creates an observable incomplete interval. Repository acceptance and installation on
 a real host are reported separately; installing a host service requires explicit authorization.
+
+**Accepted in the repository on 2026-08-28:** the one-shot worker now persists content-identified
+Jobs and unique logical opportunities, uses expiring leases, resumes a staged Snapshot after a
+Journal interruption without refetching, classifies misses/failures/cancellation, applies bounded
+jitter/backoff, exposes machine-readable health, and checks `SIGINT`/`SIGTERM` cancellation before
+Provider collection and again before the Journal commit. In-flight Provider requests remain bounded
+by their configured timeout. Deterministic tests cover concurrent workers, expired leases, restart
+recovery, misfires, backoff, mid-collection cancellation, finish-time recording, tracer evaluation
+cutoffs, and staged-write recovery.
+
+A real isolated run bound the accepted CSRC route and accepted Tushare `index_daily` route. It
+captured 2 official-event observations and 20 CSI 300 market observations into two complete
+actual-receipt Snapshots with no miss or failure. All six tracer gates passed in private report
+`prospective-collection-tracer-report-4859c478c9d778bf912f038cc37a9d068db23e3cbe2098e0dac3663c73b59454`.
+This accepts PDI-20 at repository/runtime level only. No host service was installed, so PDI-21
+remains closed; the report explicitly carries no historical-PIT, model, or execution authority.
+
+Register and invoke Jobs through the same Harness surface:
+
+```bash
+market-impact data collection-register \
+  --adapter-kind tushare_observation \
+  --source-config examples/providers/tushare-observation-index-daily-v1.json \
+  --acceptance-report PRIVATE_ACCEPTANCE_REPORT.json \
+  --parameters-json '{"ts_code":"000300.SH","start_date":"20260801","end_date":"20270828"}' \
+  --window-start 2026-08-27T12:26:00Z \
+  --starts-at 2026-08-28T12:26:00Z \
+  --poll-interval-seconds 86400 \
+  --maximum-gap-seconds 172800 \
+  --misfire-grace-seconds 300
+market-impact data collection-run-due
+market-impact data collection-health
+market-impact data collection-qualify-tracer \
+  --job-id prospective-collection-job-<csrc-sha256> \
+  --job-id prospective-collection-job-<market-sha256>
+```
 
 #### PDI-21 — Install and accept the host process supervisor
 

@@ -501,6 +501,13 @@ class ProspectiveDataJournal:
             receipt_count=len(snapshot.attempts),
         )
 
+    def register_policy(self, policy: ProspectiveCollectionPolicy) -> None:
+        """Persist a collection policy before its first scheduled receipt."""
+
+        policy_artifact = self.store.artifacts.put_json(policy.to_dict())
+        with self._connect() as connection:
+            self._record_policy(connection, policy, policy_artifact.content_hash)
+
     def policy(self, policy_id: str) -> ProspectiveCollectionPolicy:
         with self._connect() as connection:
             row = connection.execute(

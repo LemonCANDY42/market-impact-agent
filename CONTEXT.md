@@ -188,6 +188,23 @@ Data Snapshot and emit a compressed analytical projection, but it is not a Sourc
 Evidence authority, feature store, scheduler, or execution ledger.
 _Avoid_: Latest-value cache, historical archive, data warehouse, broker journal
 
+**Prospective Collection Job**:
+A content-identified Harness schedule binding exactly one accepted Source Route report, Source
+Configuration, Prospective Collection Policy, adapter kind, first due time, jitter bound, misfire
+grace, and Provider timeout. The durable runtime creates one uniquely identified Collection
+Opportunity per logical due time, uses expiring leases for concurrency and crash recovery, and gives
+every opportunity a typed terminal or recoverable state. An OS supervisor may invoke the one-shot
+worker, but it does not own cadence or Provider selection.
+_Avoid_: Cron-owned business schedule, daemon authority, Agent-selected URL, execution job
+
+**Prospective Collection Tracer Report**:
+A private, content-identified acceptance report for one bounded CSRC official-event Job and one
+Tushare market-context Job. It binds their accepted route reports, Collection Policies, logical
+opportunities, actual-receipt Data Snapshots, interval health, and isolation gates. Passing proves
+the repository's smallest real scheduled collection path; it does not install a host supervisor,
+authenticate historical PIT, authorize a model call, promote Evidence, or open paper/live trading.
+_Avoid_: Historical qualification, service-install receipt, Query Gate, execution acceptance
+
 **Prospective Diagnostic Registration**:
 A content-identified requirements freeze for two or three first-eligible future checkpoints with
 different event mechanisms. It fixes each checkpoint's end-of-day cutoff construction, explicit

@@ -5,13 +5,17 @@ import asyncio
 import json
 import os
 import platform
+import signal
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
+from threading import Event, current_thread, main_thread
+from types import FrameType
 from typing import Protocol, cast
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -122,6 +126,17 @@ from market_impact_agent.prediction_markets import (
     polymarket_provider_manifest,
     world_monitor_provider_manifest,
 )
+from market_impact_agent.prospective_collection_runtime import (
+    ProspectiveCollectionAdapterKind,
+    ProspectiveCollectionJob,
+    ProspectiveCollectionRuntime,
+    ScheduledCollector,
+)
+from market_impact_agent.prospective_collection_tracer import (
+    qualify_prospective_collection_tracer,
+    write_prospective_collection_tracer_report,
+)
+from market_impact_agent.prospective_collectors import collect_prospective_source_snapshot
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
@@ -165,6 +180,7 @@ from market_impact_agent.source_acceptance import (
     SourceRouteAcceptanceDeclaration,
     SourceRouteReplayRequest,
     SourceRouteReplayResult,
+    load_source_route_acceptance_report,
     qualify_source_route,
     write_source_route_acceptance_report,
 )
@@ -199,6 +215,27 @@ class EventTransmissionValidator(Protocol):
 
 class AvailableModelProvider(ModelProvider, Protocol):
     async def assert_model_available(self, *, timeout_seconds: float) -> None: ...
+
+
+@contextmanager
+def _collection_cancellation_signal() -> Generator[Callable[[], bool]]:
+    requested = Event()
+    if current_thread() is not main_thread():
+        yield requested.is_set
+        return
+
+    def request_cancellation(_signum: int, _frame: FrameType | None) -> None:
+        requested.set()
+
+    signals = (signal.SIGINT, signal.SIGTERM)
+    previous = {item: signal.getsignal(item) for item in signals}
+    try:
+        for item in signals:
+            signal.signal(item, request_cancellation)
+        yield requested.is_set
+    finally:
+        for item, handler in previous.items():
+            signal.signal(item, handler)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -315,6 +352,69 @@ def build_parser() -> argparse.ArgumentParser:
         "--provider-timeout-seconds", type=float, default=30.0
     )
     tushare_observation_accept_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    collection_register_parser = data_subparsers.add_parser(
+        "collection-register",
+        help="Register one accepted route for Harness-owned prospective scheduling",
+    )
+    collection_register_parser.add_argument(
+        "--adapter-kind",
+        required=True,
+        choices=tuple(item.value for item in ProspectiveCollectionAdapterKind),
+    )
+    collection_register_parser.add_argument("--source-config", required=True, type=Path)
+    collection_register_parser.add_argument("--acceptance-report", required=True, type=Path)
+    collection_register_parser.add_argument("--parameters-json", required=True)
+    collection_register_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
+    collection_register_parser.add_argument("--starts-at", required=True, type=_aware_timestamp)
+    collection_register_parser.add_argument("--poll-interval-seconds", required=True, type=int)
+    collection_register_parser.add_argument("--maximum-gap-seconds", required=True, type=int)
+    collection_register_parser.add_argument("--misfire-grace-seconds", required=True, type=int)
+    collection_register_parser.add_argument("--maximum-jitter-seconds", type=int, default=0)
+    collection_register_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
+    collection_register_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    collection_run_parser = data_subparsers.add_parser(
+        "collection-run-due",
+        help="Run each currently due prospective collection job once",
+    )
+    collection_run_parser.add_argument("--job-id", action="append", default=[])
+    collection_run_parser.add_argument("--limit", type=int, default=100)
+    collection_run_parser.add_argument(
+        "--now",
+        type=_aware_timestamp,
+        help="Override logical due and scheduling time, not actual completion time",
+    )
+    collection_run_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    collection_health_parser = data_subparsers.add_parser(
+        "collection-health",
+        help="Read durable prospective collection health without contacting a Provider",
+    )
+    collection_health_parser.add_argument("--job-id", action="append", default=[])
+    collection_health_parser.add_argument("--limit", type=int, default=100)
+    collection_health_parser.add_argument("--now", type=_aware_timestamp)
+    collection_health_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    collection_tracer_parser = data_subparsers.add_parser(
+        "collection-qualify-tracer",
+        help="Qualify one bounded CSRC-plus-market prospective collection tracer",
+    )
+    collection_tracer_parser.add_argument("--job-id", action="append", required=True)
+    collection_tracer_parser.add_argument("--evaluated-at", type=_aware_timestamp)
+    collection_tracer_parser.add_argument(
         "--state-root",
         type=Path,
         default=Path(".market-impact/data-inputs"),
@@ -1535,6 +1635,219 @@ def accept_tushare_observation_source(
     }
 
 
+def register_prospective_collection_job(
+    *,
+    adapter_kind: ProspectiveCollectionAdapterKind,
+    source_config_path: Path,
+    acceptance_report_path: Path,
+    parameters: Mapping[str, object],
+    window_start: datetime,
+    starts_at: datetime,
+    poll_interval_seconds: int,
+    maximum_gap_seconds: int,
+    misfire_grace_seconds: int,
+    maximum_jitter_seconds: int,
+    provider_timeout_seconds: float,
+    state_root: Path,
+    registered_at: datetime | None = None,
+) -> dict[str, object]:
+    source_config, provider_manifest, capability, source_id, source_config_hash = (
+        _prospective_collection_source_binding(adapter_kind, source_config_path)
+    )
+    source = DataSourceBinding(
+        provider_id=provider_manifest.provider_id,
+        provider_version=provider_manifest.provider_version,
+        upstream_source=source_id,
+        manifest_hash=canonical_hash(provider_manifest.to_dict()),
+        source_config_hash=source_config_hash,
+        required=True,
+    )
+    policy = ProspectiveCollectionPolicy.build(
+        capability=capability,
+        sources=(source,),
+        window_start=window_start.astimezone(UTC),
+        parameters=parameters,
+        poll_interval_seconds=poll_interval_seconds,
+        maximum_gap_seconds=maximum_gap_seconds,
+    )
+    report = load_source_route_acceptance_report(acceptance_report_path)
+    job = ProspectiveCollectionJob.build(
+        adapter_kind=adapter_kind,
+        collection_policy=policy,
+        source_acceptance_report=report,
+        source_config=source_config,
+        starts_at=starts_at.astimezone(UTC),
+        misfire_grace_seconds=misfire_grace_seconds,
+        maximum_jitter_seconds=maximum_jitter_seconds,
+        provider_timeout_seconds=provider_timeout_seconds,
+    )
+    store = LocalDataSnapshotStore(state_root)
+    runtime = ProspectiveCollectionRuntime(store)
+    registration_time = (
+        datetime.now(UTC) if registered_at is None else registered_at.astimezone(UTC)
+    )
+    runtime.register(
+        job,
+        collection_policy=policy,
+        source_acceptance_report=report,
+        source_config=source_config,
+        registered_at=registration_time,
+    )
+    return {
+        "registered": True,
+        "job": job.to_dict(),
+        "collection_policy": policy.to_dict(),
+        "health": runtime.health(job.job_id, now=registration_time).to_dict(),
+        "historical_pit_claim": False,
+        "evidence_promoted": False,
+        "execution_capability": False,
+    }
+
+
+def run_due_prospective_collection_jobs(
+    *,
+    state_root: Path,
+    now: datetime | None = None,
+    job_ids: tuple[str, ...] = (),
+    limit: int = 100,
+    tushare_token: str | None = None,
+    collector_factory: Callable[
+        [ProspectiveCollectionJob, LocalDataSnapshotStore], ScheduledCollector
+    ]
+    | None = None,
+    cancelled: Callable[[], bool] | None = None,
+) -> dict[str, object]:
+    run_at = datetime.now(UTC) if now is None else now.astimezone(UTC)
+    store = LocalDataSnapshotStore(state_root)
+    runtime = ProspectiveCollectionRuntime(store)
+    selected_job_ids = job_ids if job_ids else runtime.due_job_ids(now=run_at, limit=limit)
+    results: list[dict[str, object]] = []
+    for job_id in selected_job_ids:
+        job = runtime.job(job_id)
+        if collector_factory is None:
+            collector = _bound_prospective_collector(
+                job=job,
+                store=store,
+                tushare_token=tushare_token,
+            )
+        else:
+            collector = collector_factory(job, store)
+        results.append(
+            runtime.run_due(
+                job_id,
+                now=run_at,
+                collector=collector,
+                cancelled=cancelled,
+            ).to_dict()
+        )
+    health = [runtime.health(job_id, now=run_at).to_dict() for job_id in selected_job_ids]
+    return {
+        "completed": True,
+        "run_at": _utc_timestamp(run_at),
+        "job_count": len(selected_job_ids),
+        "results": results,
+        "health": health,
+        "historical_pit_claim": False,
+        "evidence_promoted": False,
+        "execution_capability": False,
+    }
+
+
+def _bound_prospective_collector(
+    *,
+    job: ProspectiveCollectionJob,
+    store: LocalDataSnapshotStore,
+    tushare_token: str | None,
+) -> ScheduledCollector:
+    def collector(
+        policy: ProspectiveCollectionPolicy,
+        source_config: dict[str, object],
+    ) -> DataSnapshot:
+        return collect_prospective_source_snapshot(
+            job=job,
+            policy=policy,
+            source_config=source_config,
+            store=store,
+            tushare_token=tushare_token,
+        )
+
+    return collector
+
+
+def prospective_collection_health(
+    *,
+    state_root: Path,
+    now: datetime | None = None,
+    job_ids: tuple[str, ...] = (),
+    limit: int = 100,
+) -> dict[str, object]:
+    observed_at = datetime.now(UTC) if now is None else now.astimezone(UTC)
+    runtime = ProspectiveCollectionRuntime(LocalDataSnapshotStore(state_root))
+    selected_job_ids = job_ids if job_ids else runtime.job_ids(limit=limit)
+    return {
+        "observed_at": _utc_timestamp(observed_at),
+        "job_count": len(selected_job_ids),
+        "health": [
+            runtime.health(job_id, now=observed_at).to_dict() for job_id in selected_job_ids
+        ],
+        "historical_pit_claim": False,
+        "execution_capability": False,
+    }
+
+
+def qualify_prospective_collection_tracer_jobs(
+    *,
+    state_root: Path,
+    job_ids: tuple[str, ...],
+    evaluated_at: datetime | None = None,
+) -> tuple[dict[str, object], Path]:
+    evaluation_time = datetime.now(UTC) if evaluated_at is None else evaluated_at.astimezone(UTC)
+    runtime = ProspectiveCollectionRuntime(LocalDataSnapshotStore(state_root))
+    report = qualify_prospective_collection_tracer(
+        runtime=runtime,
+        job_ids=job_ids,
+        evaluated_at=evaluation_time,
+    )
+    report_path = write_prospective_collection_tracer_report(
+        report,
+        state_root=state_root,
+    )
+    return report.to_dict(), report_path
+
+
+def _prospective_collection_source_binding(
+    adapter_kind: ProspectiveCollectionAdapterKind,
+    source_config_path: Path,
+) -> tuple[
+    dict[str, object],
+    ObservationProviderManifest,
+    ObservationCapability,
+    str,
+    str,
+]:
+    if adapter_kind is ProspectiveCollectionAdapterKind.CSRC_NEWS:
+        config = load_csrc_news_source(source_config_path)
+        provider = CsrcNewsProvider((config,))
+        return (
+            config.to_dict(),
+            provider.manifest,
+            ObservationCapability.EVENT_REVELATION,
+            config.source_id,
+            config.artifact_hash,
+        )
+    if adapter_kind is ProspectiveCollectionAdapterKind.TUSHARE_OBSERVATION:
+        config = load_tushare_observation_source(source_config_path)
+        provider = TushareObservationProvider("manifest-construction-only", (config,))
+        return (
+            config.to_dict(),
+            provider.manifest,
+            config.capability,
+            config.source_id,
+            config.artifact_hash,
+        )
+    raise ValueError("unsupported prospective collection adapter kind")
+
+
 def _syndication_source_bindings(
     manifest: ObservationProviderManifest,
     configs: tuple[SyndicationFeedSourceConfig, ...],
@@ -2439,6 +2752,95 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["accepted"] is True else 1
+    if args.command == "data" and args.data_command == "collection-register":
+        try:
+            result = register_prospective_collection_job(
+                adapter_kind=ProspectiveCollectionAdapterKind(args.adapter_kind),
+                source_config_path=args.source_config,
+                acceptance_report_path=args.acceptance_report,
+                parameters=_json_object_argument(args.parameters_json),
+                window_start=args.window_start,
+                starts_at=args.starts_at,
+                poll_interval_seconds=args.poll_interval_seconds,
+                maximum_gap_seconds=args.maximum_gap_seconds,
+                misfire_grace_seconds=args.misfire_grace_seconds,
+                maximum_jitter_seconds=args.maximum_jitter_seconds,
+                provider_timeout_seconds=args.provider_timeout_seconds,
+                state_root=args.state_root,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"registered": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "data" and args.data_command == "collection-run-due":
+        try:
+            with _collection_cancellation_signal() as cancelled:
+                result = run_due_prospective_collection_jobs(
+                    state_root=args.state_root,
+                    now=args.now,
+                    job_ids=tuple(args.job_id),
+                    limit=args.limit,
+                    tushare_token=os.environ.get("TUSHARE_TOKEN"),
+                    cancelled=cancelled,
+                )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        successful_outcomes = {"success", "not_due", "in_progress", "backing_off"}
+        raw_results = result.get("results")
+        result_items = cast(list[object], raw_results) if isinstance(raw_results, list) else []
+
+        def succeeded(item: object) -> bool:
+            if not isinstance(item, dict):
+                return False
+            return cast(dict[object, object], item).get("outcome") in successful_outcomes
+
+        return 0 if all(succeeded(item) for item in result_items) else 1
+    if args.command == "data" and args.data_command == "collection-health":
+        try:
+            result = prospective_collection_health(
+                state_root=args.state_root,
+                now=args.now,
+                job_ids=tuple(args.job_id),
+                limit=args.limit,
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "data" and args.data_command == "collection-qualify-tracer":
+        try:
+            report, report_path = qualify_prospective_collection_tracer_jobs(
+                state_root=args.state_root,
+                job_ids=tuple(args.job_id),
+                evaluated_at=args.evaluated_at,
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(
+                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {**report, "report_path": report_path.as_posix()},
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0 if report["accepted"] is True else 1
     if args.command == "archive" and args.archive_command == "common-crawl-verify":
         try:
             result = verify_common_crawl_archive(args.locator)

@@ -19,6 +19,8 @@ AGENT_SCHEMA_FILES = (
     "attention-watch-policy.schema.json",
     "attention-watch-wake.schema.json",
     "prospective-collection-policy.schema.json",
+    "prospective-collection-job.schema.json",
+    "prospective-collection-tracer-report.schema.json",
     "prospective-dataset-manifest.schema.json",
     "prospective-diagnostic-registration.schema.json",
     "prospective-checkpoint-snapshot-set.schema.json",

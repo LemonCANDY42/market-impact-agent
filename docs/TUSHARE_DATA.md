@@ -89,6 +89,14 @@ unless the registered population/window/method derives one. Listing, ETF, limit,
 also do not by themselves prove lot/tick size, decision-time tradability, full market completeness,
 or an effective industry-to-tradable-ETF mapping.
 
+The accepted `index_daily` route also participates in the first PDI-20 scheduled collection tracer.
+On 2026-08-28 the Harness-owned one-shot worker captured 20 CSI 300 observations into complete
+prospective Snapshot
+`data-snapshot-a4323eb473a4a36b4cc127b5ed80c0d5f7de76ff44fdda4800dcfe74b4c4a50b`
+without persisting the purchased token. That proves the real scheduled acquisition path and actual
+receipt semantics. It does not by itself satisfy PDI-11 breadth, volatility, liquidity,
+corporate-action, or checkpoint-barrier requirements.
+
 ## Accepted contract surface
 
 The adapter calls the fixed official JSON-over-HTTPS endpoint with an explicitly supplied

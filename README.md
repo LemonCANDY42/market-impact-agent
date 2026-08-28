@@ -56,6 +56,10 @@ The bootstrap implements:
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
+- a Harness-owned one-shot collection worker with content-identified Jobs, unique logical due
+  opportunities, expiring leases, bounded jitter/backoff, misfire and cancellation classification,
+  restart-safe staged Snapshot recovery, and machine-readable health; a real CSRC-plus-Tushare
+  market tracer has passed, while host service installation remains a separate gate;
 - a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
   poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
   due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,
@@ -379,6 +383,8 @@ uv run market-impact data accept-tushare-observation \
   --window-start 2026-08-28T11:17:00Z \
   --poll-interval-seconds 300 \
   --maximum-gap-seconds 1800
+uv run market-impact data collection-run-due
+uv run market-impact data collection-health
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright

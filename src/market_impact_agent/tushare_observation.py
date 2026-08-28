@@ -707,6 +707,10 @@ class _CapturedTushareObservationProvider(DataProvider):
 
 def load_tushare_observation_source(path: Path) -> TushareObservationSourceConfig:
     payload: object = json.loads(path.read_text(encoding="utf-8"))
+    return tushare_observation_source_from_dict(payload)
+
+
+def tushare_observation_source_from_dict(payload: object) -> TushareObservationSourceConfig:
     errors = _source_schema_errors(payload)
     if errors:
         raise ValueError("; ".join(errors))

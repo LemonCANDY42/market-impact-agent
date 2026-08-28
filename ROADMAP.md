@@ -119,7 +119,13 @@ Stage 2 — accept capability-complete data slices:
 
 Stage 3 — operate continuous collection:
 
-- [ ] `PDI-20` Pass one supervised CSRC-plus-market collection tracer bullet.
+- [x] `PDI-20` Pass one supervised CSRC-plus-market collection tracer bullet. Durable Jobs,
+  opportunities, leases, jitter/backoff, misfires, cancellation, health, concurrent-worker safety,
+  and staged-Snapshot recovery are covered by deterministic tests. A real isolated CSRC plus
+  Tushare `index_daily` run captured 2 plus 20 observations with no miss/failure and passed all six
+  gates in report
+  `prospective-collection-tracer-report-4859c478c9d778bf912f038cc37a9d068db23e3cbe2098e0dac3663c73b59454`.
+  This is repository/runtime acceptance only; no host supervisor is installed.
 - [ ] `PDI-21` Install and accept the authorized host process supervisor.
 - [ ] `PDI-22` Pass multi-policy health, retention, compression, backup, and restore acceptance.
 

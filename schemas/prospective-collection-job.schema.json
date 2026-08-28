@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-collection-job.schema.json",
+  "title": "Market Impact Prospective Collection Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "adapter_kind",
+    "collection_policy_id",
+    "source_acceptance_report_id",
+    "source_acceptance_report_hash",
+    "source_config_hash",
+    "starts_at",
+    "misfire_grace_seconds",
+    "maximum_jitter_seconds",
+    "provider_timeout_seconds",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-collection-job.v1"},
+    "job_id": {
+      "type": "string",
+      "pattern": "^prospective-collection-job-[0-9a-f]{64}$"
+    },
+    "adapter_kind": {"enum": ["csrc_news", "tushare_observation"]},
+    "collection_policy_id": {
+      "type": "string",
+      "pattern": "^prospective-collection-policy-[0-9a-f]{64}$"
+    },
+    "source_acceptance_report_id": {
+      "type": "string",
+      "pattern": "^source-route-acceptance-report-[0-9a-f]{64}$"
+    },
+    "source_acceptance_report_hash": {"$ref": "#/$defs/sha256"},
+    "source_config_hash": {"$ref": "#/$defs/sha256"},
+    "starts_at": {"type": "string", "format": "date-time"},
+    "misfire_grace_seconds": {"type": "integer", "minimum": 0},
+    "maximum_jitter_seconds": {"type": "integer", "minimum": 0},
+    "provider_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

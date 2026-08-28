@@ -608,6 +608,10 @@ class _CapturedCsrcNewsProvider(DataProvider):
 
 def load_csrc_news_source(path: Path) -> CsrcNewsSourceConfig:
     payload: object = json.loads(path.read_text(encoding="utf-8"))
+    return csrc_news_source_from_dict(payload)
+
+
+def csrc_news_source_from_dict(payload: object) -> CsrcNewsSourceConfig:
     errors = validate_agent_contract(payload, "csrc-news-source.schema.json")
     if errors:
         raise ValueError("; ".join(errors))

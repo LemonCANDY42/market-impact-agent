@@ -321,6 +321,24 @@ families.
 For future PIT evidence, repeat the one-shot capture under a content-identified collection policy
 and append every result to the local Prospective Receipt Journal:
 
+Accepted CSRC and Tushare routes can also be registered as content-identified Collection Jobs. The
+Harness, rather than an OS scheduler, owns cadence, due time, retry/misfire semantics, Provider
+binding, and logical opportunity identity. `collection-run-due` is deliberately one-shot so a later
+authorized host supervisor only starts or restarts a bounded process. Concurrent invocations share
+an expiring lease; restart resumes staged data, and every due opportunity remains inspectable via
+`collection-health`. `SIGINT` or `SIGTERM` requests are checked before Provider collection and
+again before the Journal commit. An in-flight Provider request is still bounded by its timeout; a
+crash still relies on lease expiry and restart recovery. `--now` controls logical due, misfire,
+backoff, and scheduling decisions only; actual opportunity completion uses the runtime UTC clock
+and cannot precede its bound Snapshot receipt.
+
+The content-identified tracer report accepts exactly one CSRC event Job and one Tushare market Job
+only when both latest opportunities end in complete prospective actual-receipt Snapshots, their
+route reports still match, and no miss/failure/cancellation makes the interval incomplete. Its
+explicit evaluation cutoff rejects opportunities, Snapshots, or receipts completed later than the
+cutoff, and rejects a next due opportunity that remains unmaterialized beyond its misfire grace. It
+does not qualify a full checkpoint or install a service.
+
 ```bash
 market-impact data collect-feed \
   --source-config examples/providers/federal-reserve-press-feed-v1.json \

@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-collection-tracer-report.schema.json",
+  "title": "Market Impact Prospective Collection Tracer Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "evaluated_at",
+    "routes",
+    "gates",
+    "accepted",
+    "historical_pit_claim",
+    "model_authority",
+    "host_supervisor_installed",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.prospective-collection-tracer-report.v1"
+    },
+    "report_id": {
+      "type": "string",
+      "pattern": "^prospective-collection-tracer-report-[0-9a-f]{64}$"
+    },
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "routes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/route"}
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {"$ref": "#/$defs/required_route_set_gate"},
+        {"$ref": "#/$defs/accepted_route_binding_gate"},
+        {"$ref": "#/$defs/typed_opportunities_gate"},
+        {"$ref": "#/$defs/actual_receipt_snapshots_gate"},
+        {"$ref": "#/$defs/interval_completeness_gate"},
+        {"$ref": "#/$defs/authority_isolation_gate"}
+      ],
+      "items": false
+    },
+    "accepted": {"type": "boolean"},
+    "historical_pit_claim": {"const": false},
+    "model_authority": {"const": false},
+    "host_supervisor_installed": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "nullable_timestamp": {
+      "oneOf": [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"}
+      ]
+    },
+    "nullable_string": {
+      "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "adapter_kind",
+        "capability",
+        "collection_policy_id",
+        "source_acceptance_report_id",
+        "opportunity_id",
+        "scheduled_for",
+        "completed_at",
+        "outcome",
+        "data_snapshot_id"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "pattern": "^prospective-collection-job-[0-9a-f]{64}$"
+        },
+        "adapter_kind": {"enum": ["csrc_news", "tushare_observation"]},
+        "capability": {"enum": ["event_revelation", "market_context"]},
+        "collection_policy_id": {
+          "type": "string",
+          "pattern": "^prospective-collection-policy-[0-9a-f]{64}$"
+        },
+        "source_acceptance_report_id": {
+          "type": "string",
+          "pattern": "^source-route-acceptance-report-[0-9a-f]{64}$"
+        },
+        "opportunity_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^collection-opportunity-[0-9a-f]{64}$"
+            },
+            {"type": "null"}
+          ]
+        },
+        "scheduled_for": {"$ref": "#/$defs/nullable_timestamp"},
+        "completed_at": {"$ref": "#/$defs/nullable_timestamp"},
+        "outcome": {
+          "oneOf": [
+            {
+              "enum": [
+                "success",
+                "source_failure",
+                "collector_failure",
+                "cancelled",
+                "missed"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "data_snapshot_id": {
+          "oneOf": [
+            {"type": "string", "pattern": "^data-snapshot-[0-9a-f]{64}$"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "passed", "reasons"],
+      "properties": {
+        "gate": {"type": "string"},
+        "passed": {"type": "boolean"},
+        "reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "required_route_set_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "required_route_set"}}}
+      ]
+    },
+    "accepted_route_binding_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "accepted_route_binding"}}}
+      ]
+    },
+    "typed_opportunities_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "typed_opportunities"}}}
+      ]
+    },
+    "actual_receipt_snapshots_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "actual_receipt_snapshots"}}}
+      ]
+    },
+    "interval_completeness_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "interval_completeness"}}}
+      ]
+    },
+    "authority_isolation_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "authority_isolation"}}}
+      ]
+    }
+  }
+}
