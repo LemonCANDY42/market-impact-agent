@@ -42,7 +42,9 @@ The bootstrap implements:
   semantic queries, strict/modeled/prospective PIT lanes, frozen Provider-manifest/source routes,
   concurrent reads, typed degradation, raw-response retention, cutoff filtering, immutable
   Data Snapshots, persistent complete-snapshot caching, and bound read-only Agent tools; the
-  framework is fixture-accepted but has no newly enabled historical or live vendor adapter;
+  framework also has a prospective RSS/Atom Provider that freezes a secret-free source
+  configuration, validates redirect identity, rejects full-content feed elements before raw-byte
+  retention, and records actual receipt without claiming historical PIT or article-body rights;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic

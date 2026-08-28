@@ -23,7 +23,7 @@ dependencies = ["jsonschema>=4.25,<5"]
 
 [project.optional-dependencies]
 agent = ["mcp>=2,<3"]
-data = ["pyarrow==25.0.1"]
+data = ["feedparser>=6.0.14,<7", "pyarrow==25.0.1"]
 nautilus = ["nautilus-trader==1.231.0"]
 
 [project.scripts]
@@ -36,6 +36,7 @@ Issues = "https://github.com/LemonCANDY42/market-impact-agent/issues"
 
 [dependency-groups]
 dev = [
+  "feedparser>=6.0.14,<7",
   "mcp>=2,<3",
   "pyarrow==25.0.1",
   "pyright>=1.1.400,<2",
@@ -49,6 +50,7 @@ packages = ["src/market_impact_agent"]
 [tool.hatch.build.targets.wheel.force-include]
 "schemas/data-query.schema.json" = "market_impact_agent/schemas/data-query.schema.json"
 "schemas/data-snapshot.schema.json" = "market_impact_agent/schemas/data-snapshot.schema.json"
+"schemas/syndication-feed-source.schema.json" = "market_impact_agent/schemas/syndication-feed-source.schema.json"
 "schemas/event-transmission.schema.json" = "market_impact_agent/schemas/event-transmission.schema.json"
 "schemas/signal-intent.schema.json" = "market_impact_agent/schemas/signal-intent.schema.json"
 "schemas/backtest-request.schema.json" = "market_impact_agent/schemas/backtest-request.schema.json"

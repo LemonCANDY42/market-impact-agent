@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -23,6 +24,8 @@ from market_impact_agent.data_inputs import (
     DataQueryMode,
     DataSourceBinding,
     DataToolBinding,
+    FrozenDataSnapshotInput,
+    FrozenDataSnapshotToolBinding,
     LocalDataSnapshotStore,
     ProviderDataResponse,
     SourceObservation,
@@ -52,6 +55,11 @@ class FixtureProvider:
     response: ProviderDataResponse
     calls: int = 0
     delay_seconds: float = 0.0
+
+    def public_source_config(self, upstream_source: str) -> dict[str, object]:
+        if upstream_source not in self.manifest.upstream_sources:
+            raise KeyError(upstream_source)
+        return {"upstream_source": upstream_source}
 
     async def fetch(
         self,
@@ -103,6 +111,7 @@ def _source(
         provider_version=version,
         upstream_source=upstream,
         manifest_hash=canonical_hash(manifest.to_dict()),
+        source_config_hash=canonical_hash({"upstream_source": upstream}),
         required=required,
     )
 
@@ -135,7 +144,11 @@ def _observation(
         authority_at=authority_at,
         authority_kind=None if authority_at is None else "verified_archive",
         raw_content_hash=sha256_bytes(b"source-body"),
-        normalized_payload={"headline": "Policy release", "affected_market": "CN"},
+        normalized_payload={
+            "headline": "Policy release",
+            "affected_market": "CN",
+            "publisher": "Official Example",
+        },
         license_scope="private_research",
     )
 
@@ -217,6 +230,50 @@ def test_harness_fetches_persists_and_reuses_complete_snapshot(tmp_path: Path) -
     assert raw_hash is not None
     assert store.artifacts.get(raw_hash, media_type="application/octet-stream").size_bytes == 12
     assert provider.calls == 1
+
+
+def test_v1_snapshot_remains_readable_for_cache_only_replay(tmp_path: Path) -> None:
+    provider = FixtureProvider(_manifest(), _response(_observation()))
+    store = LocalDataSnapshotStore(tmp_path / "data")
+    harness = DataInputHarness(store)
+    harness.register(provider)
+    current = asyncio.run(harness.execute(_query(), mode=DataQueryMode.FETCH_IF_MISSING))
+    payload = current.to_dict()
+    query = cast(dict[str, object], payload["query"])
+    query["schema_version"] = "market-impact.data-query.v1"
+    sources = cast(list[dict[str, object]], query["sources"])
+    for source in sources:
+        del source["source_config_hash"]
+    query_core = {key: value for key, value in query.items() if key != "query_id"}
+    query["query_id"] = f"data-query-{canonical_hash(query_core)}"
+    payload["schema_version"] = "market-impact.data-snapshot.v1"
+    payload["snapshot_id"] = (
+        "data-snapshot-"
+        f"{canonical_hash({key: value for key, value in payload.items() if key != 'snapshot_id'})}"
+    )
+
+    legacy = data_snapshot_from_dict(payload)
+    replay_store = LocalDataSnapshotStore(tmp_path / "legacy-data")
+    replay_store.put(legacy)
+    replayed = asyncio.run(
+        DataInputHarness(replay_store).execute(
+            legacy.query,
+            mode=DataQueryMode.CACHE_ONLY,
+        )
+    )
+
+    assert legacy.to_dict() == payload
+    assert replayed == legacy
+    assert legacy.query.schema_version == "market-impact.data-query.v1"
+    assert legacy.schema_version == "market-impact.data-snapshot.v1"
+    assert all(item.source_config_hash is None for item in legacy.query.sources)
+    with pytest.raises(ValueError, match="legacy Data Query is replay-only"):
+        asyncio.run(
+            DataInputHarness(replay_store).execute(
+                legacy.query,
+                mode=DataQueryMode.FETCH_IF_MISSING,
+            )
+        )
 
 
 def test_harness_verifies_and_persists_each_observation_raw_record(tmp_path: Path) -> None:
@@ -417,6 +474,7 @@ def test_harness_binds_full_manifest_and_times_out_provider_calls(tmp_path: Path
         provider_version="2024-09",
         upstream_source="official.example",
         manifest_hash="0" * 64,
+        source_config_hash=canonical_hash({"upstream_source": "official.example"}),
         required=True,
     )
     provider = FixtureProvider(_manifest(), _response(_observation()), delay_seconds=0.02)
@@ -494,7 +552,7 @@ def test_strict_modeled_and_prospective_lanes_are_distinct(tmp_path: Path) -> No
         prospective_harness.execute(
             _query(
                 pit_lane=DataPITLane.PROSPECTIVE,
-                as_of=datetime(2026, 8, 28, 2, 1, tzinfo=UTC),
+                as_of=RETRIEVED,
             ),
             mode=DataQueryMode.FETCH_IF_MISSING,
         )
@@ -505,6 +563,49 @@ def test_strict_modeled_and_prospective_lanes_are_distinct(tmp_path: Path) -> No
     assert modeled.coverage_complete is True
     assert prospective.coverage_complete is True
     assert prospective.observations == (actual,)
+
+
+def test_prospective_snapshot_before_cutoff_is_incomplete_and_not_cached(tmp_path: Path) -> None:
+    actual_times = ObservationTimes(
+        occurred_at=RETRIEVED,
+        published_at=datetime(2026, 8, 28, 1, 55, tzinfo=UTC),
+        available_at=RETRIEVED,
+        source_updated_at=datetime(2026, 8, 28, 1, 55, tzinfo=UTC),
+        aggregator_fetched_at=None,
+        retrieved_at=RETRIEVED,
+        occurrence_basis=OccurrenceBasis.RETRIEVAL_OBSERVED,
+        availability_basis=AvailabilityBasis.ACTUAL_RECEIPT,
+    )
+    actual = SourceObservation.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="official-feed",
+        provider_version="2024-09",
+        upstream_source="official.example",
+        upstream_record_id="release-live",
+        source_ref="https://official.example/releases/live",
+        lineage_id="release-live",
+        times=actual_times,
+        authority_at=RETRIEVED,
+        authority_kind="actual_receipt",
+        raw_content_hash=sha256_bytes(b"live-body"),
+        normalized_payload={"headline": "Live release"},
+        license_scope="private_research",
+    )
+    store = LocalDataSnapshotStore(tmp_path / "prospective")
+    harness = DataInputHarness(store)
+    harness.register(FixtureProvider(_manifest(), _response(actual, raw_body=b"live-body")))
+    query = _query(
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=datetime(2026, 8, 28, 2, 1, tzinfo=UTC),
+    )
+
+    snapshot = asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
+
+    assert snapshot.coverage_complete is False
+    assert snapshot.observations == (actual,)
+    assert store.latest_complete(query.query_id) is None
+    with pytest.raises(LookupError, match="no complete cached Data Snapshot"):
+        asyncio.run(harness.execute(query, mode=DataQueryMode.CACHE_ONLY))
 
 
 def test_concurrent_identical_queries_share_one_provider_fetch(tmp_path: Path) -> None:
@@ -585,4 +686,53 @@ def test_agent_tool_uses_bound_cutoff_sources_and_cache_only_mode(tmp_path: Path
                 ),
                 access=access,
             )
+        )
+
+
+def test_frozen_snapshot_tool_filters_without_changing_snapshot_identity(tmp_path: Path) -> None:
+    provider = FixtureProvider(_manifest(), _response(_observation()))
+    store = LocalDataSnapshotStore(tmp_path / "data")
+    harness = DataInputHarness(store)
+    harness.register(provider)
+    snapshot = asyncio.run(harness.execute(_query(), mode=DataQueryMode.FETCH_IF_MISSING))
+    binding = FrozenDataSnapshotToolBinding(
+        name="search_frozen_event_revelation",
+        version="1.0.0",
+        description="Search admitted observations inside one frozen snapshot.",
+        snapshot_id=snapshot.snapshot_id,
+        required_capability="news.read",
+    )
+    declared_input = FrozenDataSnapshotInput(
+        authorized_snapshot_ids=frozenset({snapshot.snapshot_id})
+    )
+    descriptor = binding.descriptor(store, frozen_input=declared_input)
+    registry = ToolRegistry(ArtifactStore(tmp_path / "tool-artifacts"))
+    registry.register(descriptor)
+    access = ToolAccessContext(
+        allowed_capabilities=frozenset({"news.read"}),
+        allowed_side_effects=frozenset({ToolSideEffect.READ_ONLY}),
+        allowed_tools=frozenset({"search_frozen_event_revelation"}),
+    )
+
+    result = asyncio.run(
+        registry.execute(
+            ToolCall(
+                call_id="call-frozen-event-1",
+                name="search_frozen_event_revelation",
+                arguments={"query": "policy", "publisher": "official example", "limit": 5},
+            ),
+            access=access,
+        )
+    )
+
+    assert snapshot.snapshot_id in descriptor.version
+    assert snapshot.snapshot_id in result.model_content
+    assert snapshot.query.query_id in result.model_content
+    assert "Policy release" in result.model_content
+    with pytest.raises(ValueError, match="not declared by the enclosing run input"):
+        binding.descriptor(
+            store,
+            frozen_input=FrozenDataSnapshotInput(
+                authorized_snapshot_ids=frozenset({"data-snapshot-other"})
+            ),
         )

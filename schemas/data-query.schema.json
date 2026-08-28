@@ -17,7 +17,7 @@
     "minimum_data_sources"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.data-query.v1"},
+    "schema_version": {"const": "market-impact.data-query.v2"},
     "query_id": {"type": "string", "pattern": "^data-query-[0-9a-f]{64}$"},
     "capability": {
       "enum": [
@@ -50,6 +50,7 @@
           "provider_version",
           "upstream_source",
           "manifest_hash",
+          "source_config_hash",
           "required"
         ],
         "properties": {
@@ -60,6 +61,7 @@
           "provider_version": {"type": "string", "minLength": 1},
           "upstream_source": {"type": "string", "minLength": 1},
           "manifest_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "source_config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
           "required": {"type": "boolean"}
         }
       }

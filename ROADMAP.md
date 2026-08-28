@@ -257,6 +257,12 @@ inputs and accepted Method Quality scoring until this gate opens.
   Its Usage Ledger Union covers 70 ledgers and 528 unique runs with zero duplicates or conflicts:
   $3.883472 preexisting, $0.053516 invalid-horizon diagnostic, and $0.991336 formal Modeled-PIT,
   totaling $4.928324 under the shared $20 cap. This corrects the earlier incomplete total.
+- [x] Add the first concrete Data Input Provider for prospective RSS/Atom receipts. The route binds
+  a secret-free Source Route Configuration hash, rejects redirect/configuration drift, retains the
+  exact response and selected XML item bytes, and exposes a Snapshot-bound read-only tool primitive.
+  A real Federal Reserve press-feed capture completed with one accepted actual-receipt observation.
+  Bloomberg feed URLs remain discovery-only pending license review and provide no historical PIT.
+  No Agent experiment or execution capability follows from this connector acceptance.
 - [ ] Register the next small process diagnostic around the observed event fact, cited prior
   expectation, falsifiable transmission path, mechanism-appropriate horizon set, and executable
   index/ETF target universe. Acquire each input through a fixed Data Query and expose only its

@@ -51,6 +51,15 @@ from market_impact_agent.calibration import (
     load_phase2_calibration_evidence,
     phase2_calibration_gate_result_to_dict,
 )
+from market_impact_agent.data_inputs import (
+    DataInputHarness,
+    DataPITLane,
+    DataQuery,
+    DataQueryMode,
+    DataSnapshot,
+    DataSourceBinding,
+    LocalDataSnapshotStore,
+)
 from market_impact_agent.energy_monitor import EnergySourceMonitor
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.evidence_freeze import freeze_due_evidence_packs
@@ -83,6 +92,7 @@ from market_impact_agent.model_provider import (
     load_model_provider_profile,
 )
 from market_impact_agent.observations import (
+    ObservationCapability,
     ValidatedObservationBundle,
     validate_prediction_market_batch,
     write_prediction_market_batch,
@@ -136,6 +146,10 @@ from market_impact_agent.source_coverage import (
     coverage_receipt_from_dict,
     load_source_coverage_registration,
 )
+from market_impact_agent.syndication_feed import (
+    SyndicationFeedProvider,
+    load_syndication_feed_source,
+)
 from market_impact_agent.tushare import TushareHttpAdapter
 from market_impact_agent.tushare_bundle import (
     TushareDataRequest,
@@ -165,6 +179,31 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Validate a provider manifest"
     )
     validate_parser.add_argument("path", type=Path)
+
+    data_parser = subparsers.add_parser("data", help="Capture immutable read-only Data Snapshots")
+    data_subparsers = data_parser.add_subparsers(dest="data_command", required=True)
+    feed_capture_parser = data_subparsers.add_parser(
+        "capture-feed",
+        help="Capture prospective actual receipts from registered RSS or Atom sources",
+    )
+    feed_capture_parser.add_argument(
+        "--source-config",
+        required=True,
+        action="append",
+        type=Path,
+        dest="source_configs",
+    )
+    feed_capture_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
+    feed_capture_parser.add_argument("--source-policy-id", required=True)
+    feed_capture_parser.add_argument("--keyword", action="append", default=[])
+    feed_capture_parser.add_argument("--max-items", type=int, default=50)
+    feed_capture_parser.add_argument("--minimum-data-sources", type=int)
+    feed_capture_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
+    feed_capture_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
 
     event_parser = subparsers.add_parser(
         "event", help="Validate point-in-time event transmission records"
@@ -915,6 +954,54 @@ def capture_prediction_markets(
     return write_prediction_market_batch(batch, output_root)
 
 
+def capture_syndication_data_snapshot(
+    *,
+    source_config_paths: tuple[Path, ...],
+    window_start: datetime,
+    source_policy_id: str,
+    keywords: tuple[str, ...],
+    max_items: int,
+    minimum_data_sources: int | None,
+    state_root: Path,
+    provider_timeout_seconds: float,
+) -> DataSnapshot:
+    configs = tuple(load_syndication_feed_source(path) for path in source_config_paths)
+    provider = SyndicationFeedProvider(configs)
+    captures = asyncio.run(provider.collect())
+    as_of = max(item.retrieved_at for item in captures)
+    replay_provider = provider.replay(captures)
+    store = LocalDataSnapshotStore(state_root)
+    harness = DataInputHarness(
+        store,
+        provider_timeout_seconds=provider_timeout_seconds,
+    )
+    harness.register(replay_provider)
+    manifest_hash = canonical_hash(replay_provider.manifest.to_dict())
+    sources = tuple(
+        DataSourceBinding(
+            provider_id=replay_provider.manifest.provider_id,
+            provider_version=replay_provider.manifest.provider_version,
+            upstream_source=config.source_id,
+            manifest_hash=manifest_hash,
+            source_config_hash=config.artifact_hash,
+            required=True,
+        )
+        for config in configs
+    )
+    minimum = len(sources) if minimum_data_sources is None else minimum_data_sources
+    query = DataQuery.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=as_of,
+        window_start=window_start.astimezone(UTC),
+        source_policy_id=source_policy_id,
+        parameters={"keywords": list(keywords), "max_items": max_items},
+        sources=sources,
+        minimum_data_sources=minimum,
+    )
+    return asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
+
+
 def validate_agent_bundle(
     *,
     evidence_pack_path: Path,
@@ -1621,6 +1708,40 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "data" and args.data_command == "capture-feed":
+        try:
+            snapshot = capture_syndication_data_snapshot(
+                source_config_paths=tuple(args.source_configs),
+                window_start=args.window_start,
+                source_policy_id=args.source_policy_id,
+                keywords=tuple(args.keyword),
+                max_items=args.max_items,
+                minimum_data_sources=args.minimum_data_sources,
+                state_root=args.state_root,
+                provider_timeout_seconds=args.provider_timeout_seconds,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"captured": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        result = {
+            "captured": True,
+            "coverage_complete": snapshot.coverage_complete,
+            "capture_cutoff_at": snapshot.query.as_of.isoformat().replace("+00:00", "Z"),
+            "data_query_id": snapshot.query.query_id,
+            "data_snapshot_id": snapshot.snapshot_id,
+            "evidence_promoted": False,
+            "execution_capability": False,
+            "historical_pit_claim": False,
+            "observation_count": len(snapshot.observations),
+            "pit_lane": snapshot.query.pit_lane.value,
+            "source_attempts": [item.to_dict() for item in snapshot.attempts],
+            "state_root": args.state_root.resolve().as_posix(),
+        }
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if snapshot.coverage_complete else 1
     if args.command == "archive" and args.archive_command == "common-crawl-verify":
         try:
             result = verify_common_crawl_archive(args.locator)

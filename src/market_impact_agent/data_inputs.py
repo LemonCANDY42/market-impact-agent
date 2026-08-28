@@ -26,8 +26,10 @@ from market_impact_agent.observations import (
 )
 from market_impact_agent.runtime_store import ArtifactStore
 
-DATA_QUERY_SCHEMA = "market-impact.data-query.v1"
-DATA_SNAPSHOT_SCHEMA = "market-impact.data-snapshot.v1"
+DATA_QUERY_SCHEMA_V1 = "market-impact.data-query.v1"
+DATA_QUERY_SCHEMA = "market-impact.data-query.v2"
+DATA_SNAPSHOT_SCHEMA_V1 = "market-impact.data-snapshot.v1"
+DATA_SNAPSHOT_SCHEMA = "market-impact.data-snapshot.v2"
 
 
 class DataFetchStatus(StrEnum):
@@ -59,6 +61,7 @@ class DataSourceBinding:
     provider_version: str
     upstream_source: str
     manifest_hash: str
+    source_config_hash: str | None
     required: bool
 
     def __post_init__(self) -> None:
@@ -66,19 +69,24 @@ class DataSourceBinding:
         _nonempty(self.provider_version, "data source provider_version")
         _nonempty(self.upstream_source, "data source upstream_source")
         _sha256(self.manifest_hash, "data source manifest_hash")
+        if self.source_config_hash is not None:
+            _sha256(self.source_config_hash, "data source source_config_hash")
 
     @property
     def source_key(self) -> str:
         return f"{self.provider_id}:{self.upstream_source}"
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "provider_id": self.provider_id,
             "provider_version": self.provider_version,
             "upstream_source": self.upstream_source,
             "manifest_hash": self.manifest_hash,
             "required": self.required,
         }
+        if self.source_config_hash is not None:
+            result["source_config_hash"] = self.source_config_hash
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +103,7 @@ class DataQuery:
     schema_version: str = DATA_QUERY_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != DATA_QUERY_SCHEMA:
+        if self.schema_version not in {DATA_QUERY_SCHEMA_V1, DATA_QUERY_SCHEMA}:
             raise ValueError("unsupported data query schema_version")
         _strict_utc(self.as_of, "data query as_of")
         if self.window_start is not None:
@@ -109,6 +117,14 @@ class DataQuery:
             raise ValueError("data query parameters_json must use canonical JSON")
         if not self.sources:
             raise ValueError("data query requires at least one source")
+        if self.schema_version == DATA_QUERY_SCHEMA and any(
+            item.source_config_hash is None for item in self.sources
+        ):
+            raise ValueError("v2 data query source bindings require source_config_hash")
+        if self.schema_version == DATA_QUERY_SCHEMA_V1 and any(
+            item.source_config_hash is not None for item in self.sources
+        ):
+            raise ValueError("v1 data query source bindings cannot carry source_config_hash")
         keys = tuple(item.source_key for item in self.sources)
         if len(keys) != len(set(keys)):
             raise ValueError("data query source bindings must be unique")
@@ -367,6 +383,8 @@ class DataProvider(Protocol):
     @property
     def manifest(self) -> ObservationProviderManifest: ...
 
+    def public_source_config(self, upstream_source: str) -> Mapping[str, object]: ...
+
     async def fetch(
         self,
         *,
@@ -467,8 +485,15 @@ class DataSnapshot:
     schema_version: str = DATA_SNAPSHOT_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != DATA_SNAPSHOT_SCHEMA:
+        if self.schema_version not in {DATA_SNAPSHOT_SCHEMA_V1, DATA_SNAPSHOT_SCHEMA}:
             raise ValueError("unsupported data snapshot schema_version")
+        expected_query_schema = (
+            DATA_QUERY_SCHEMA_V1
+            if self.schema_version == DATA_SNAPSHOT_SCHEMA_V1
+            else DATA_QUERY_SCHEMA
+        )
+        if self.query.schema_version != expected_query_schema:
+            raise ValueError("data snapshot and query schema_version must match")
         _strict_utc(self.completed_at, "data snapshot completed_at")
         if len(self.attempts) != len(self.query.sources):
             raise ValueError("data snapshot attempts must match the query source set")
@@ -601,6 +626,17 @@ class LocalDataSnapshotStore:
             media_type="application/octet-stream",
         ).content_hash
 
+    def put_source_config(
+        self,
+        payload: Mapping[str, object],
+        *,
+        expected_hash: str,
+    ) -> None:
+        _sha256(expected_hash, "source config expected_hash")
+        artifact = self.artifacts.put_json(dict(payload))
+        if artifact.content_hash != expected_hash:
+            raise ValueError("public source config hash mismatch")
+
     def get(self, snapshot_id: str) -> DataSnapshot:
         with self._connect() as connection:
             row = connection.execute(
@@ -647,6 +683,12 @@ class DataInputHarness:
         manifest.assert_valid()
         if manifest.provider_id in self._providers:
             raise ValueError(f"duplicate data provider: {manifest.provider_id}")
+        for upstream_source in manifest.upstream_sources:
+            public_config = provider.public_source_config(upstream_source)
+            self.store.put_source_config(
+                public_config,
+                expected_hash=canonical_hash(public_config),
+            )
         self._providers[manifest.provider_id] = provider
 
     async def execute(
@@ -655,6 +697,8 @@ class DataInputHarness:
         *,
         mode: DataQueryMode,
     ) -> DataSnapshot:
+        if query.schema_version != DATA_QUERY_SCHEMA and mode is not DataQueryMode.CACHE_ONLY:
+            raise ValueError("legacy Data Query is replay-only")
         cached = await asyncio.to_thread(self.store.latest_complete, query.query_id)
         if cached is not None:
             return cached
@@ -781,6 +825,29 @@ class DataInputHarness:
                 DataFetchStatus.NOT_CONFIGURED,
                 "provider_manifest_mismatch",
             )
+        if source.source_config_hash is None:
+            return _failed_response(
+                source,
+                now,
+                DataFetchStatus.NOT_CONFIGURED,
+                "provider_source_config_required",
+            )
+        try:
+            public_source_config = provider.public_source_config(source.upstream_source)
+        except (KeyError, TypeError, ValueError):
+            return _failed_response(
+                source,
+                now,
+                DataFetchStatus.NOT_CONFIGURED,
+                "provider_source_config_missing",
+            )
+        if canonical_hash(public_source_config) != source.source_config_hash:
+            return _failed_response(
+                source,
+                now,
+                DataFetchStatus.NOT_CONFIGURED,
+                "provider_source_config_mismatch",
+            )
         if (
             not manifest.enabled
             or query.capability not in manifest.verified_capabilities
@@ -896,6 +963,93 @@ class DataToolBinding:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class FrozenDataSnapshotToolBinding:
+    name: str
+    version: str
+    description: str
+    snapshot_id: str
+    required_capability: str
+    timeout_seconds: float = 5.0
+    max_result_bytes: int = 100_000
+
+    def descriptor(
+        self,
+        store: LocalDataSnapshotStore,
+        *,
+        frozen_input: FrozenDataSnapshotInput,
+    ) -> ToolDescriptor:
+        if self.snapshot_id not in frozen_input.authorized_snapshot_ids:
+            raise ValueError("frozen Data Snapshot is not declared by the enclosing run input")
+        snapshot = store.get(self.snapshot_id)
+        if not snapshot.coverage_complete:
+            raise ValueError("frozen Data Snapshot tool requires complete source coverage")
+
+        async def handler(arguments: dict[str, object]) -> object:
+            query_text = _optional_argument_string(arguments, "query")
+            publisher = _optional_argument_string(arguments, "publisher")
+            limit = _optional_argument_integer(arguments, "limit", default=20)
+            observations = tuple(
+                item
+                for item in snapshot.observations
+                if _snapshot_observation_matches(
+                    item,
+                    query_text=query_text,
+                    publisher=publisher,
+                )
+            )[:limit]
+            return {
+                "schema_version": "market-impact.frozen-data-tool-result.v1",
+                "snapshot_id": snapshot.snapshot_id,
+                "query_id": snapshot.query.query_id,
+                "capability": snapshot.query.capability.value,
+                "as_of": _timestamp(snapshot.query.as_of),
+                "source_policy_id": snapshot.query.source_policy_id,
+                "sources": [item.to_dict() for item in snapshot.query.sources],
+                "attempts": [item.to_dict() for item in snapshot.attempts],
+                "selection": {
+                    "query": query_text,
+                    "publisher": publisher,
+                    "limit": limit,
+                },
+                "observations": [item.to_dict() for item in observations],
+            }
+
+        return ToolDescriptor(
+            name=self.name,
+            version=f"{self.version}+{snapshot.snapshot_id}",
+            description=(
+                f"{self.description} Reads only frozen Data Snapshot {snapshot.snapshot_id}; "
+                "arguments cannot change its cutoff, sources, or Provider versions."
+            ),
+            input_schema={
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "query": {"type": "string", "minLength": 1},
+                    "publisher": {"type": "string", "minLength": 1},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                },
+            },
+            required_capabilities=frozenset({self.required_capability}),
+            side_effect=ToolSideEffect.READ_ONLY,
+            timeout_seconds=self.timeout_seconds,
+            max_result_bytes=self.max_result_bytes,
+            handler=handler,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenDataSnapshotInput:
+    authorized_snapshot_ids: frozenset[str]
+
+    def __post_init__(self) -> None:
+        if not self.authorized_snapshot_ids:
+            raise ValueError("frozen Data Snapshot input requires at least one snapshot ID")
+        for snapshot_id in self.authorized_snapshot_ids:
+            _nonempty(snapshot_id, "frozen Data Snapshot input snapshot_id")
+
+
 def data_snapshot_from_dict(value: object) -> DataSnapshot:
     payload = _object(value, "data snapshot")
     query = _query_from_dict(payload.get("query"))
@@ -925,6 +1079,7 @@ def _query_from_dict(value: object) -> DataQuery:
             provider_version=_string(item, "provider_version"),
             upstream_source=_string(item, "upstream_source"),
             manifest_hash=_string(item, "manifest_hash"),
+            source_config_hash=_optional_string(item, "source_config_hash"),
             required=_boolean(item, "required"),
         )
         for item in (
@@ -1022,7 +1177,14 @@ def _coverage_complete(
 ) -> bool:
     required_complete = all(not item.required or item.status.completed for item in attempts)
     data_sources = sum(item.accepted_count > 0 for item in attempts)
-    return required_complete and data_sources >= query.minimum_data_sources
+    receipt_reached_cutoff = (
+        query.schema_version == DATA_QUERY_SCHEMA_V1
+        or query.pit_lane is not DataPITLane.PROSPECTIVE
+        or max(item.retrieved_at for item in attempts) >= query.as_of
+    )
+    return (
+        required_complete and data_sources >= query.minimum_data_sources and receipt_reached_cutoff
+    )
 
 
 def _failed_response(
@@ -1050,6 +1212,64 @@ def _prospective_receipt(observation: SourceObservation) -> bool:
         and observation.times.available_at == observation.times.retrieved_at
         and observation.authority_at == observation.times.retrieved_at
     )
+
+
+def _snapshot_observation_matches(
+    observation: SourceObservation,
+    *,
+    query_text: str | None,
+    publisher: str | None,
+) -> bool:
+    payload = observation.normalized_payload
+    if publisher is not None:
+        observed_publisher = payload.get("publisher")
+        if not isinstance(observed_publisher, str):
+            return False
+        if observed_publisher.casefold() != publisher.casefold():
+            return False
+    if query_text is None:
+        return True
+    searchable = "\n".join(_payload_strings(payload)).casefold()
+    return query_text.casefold() in searchable
+
+
+def _payload_strings(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping):
+        strings: list[str] = []
+        for item in cast(Mapping[object, object], value).values():
+            strings.extend(_payload_strings(item))
+        return tuple(strings)
+    if isinstance(value, list):
+        strings = []
+        for item in cast(list[object], value):
+            strings.extend(_payload_strings(item))
+        return tuple(strings)
+    return ()
+
+
+def _optional_argument_string(arguments: Mapping[str, object], name: str) -> str | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise TypeError(f"{name} must be a non-empty string")
+    return value.strip()
+
+
+def _optional_argument_integer(
+    arguments: Mapping[str, object],
+    name: str,
+    *,
+    default: int,
+) -> int:
+    value = arguments.get(name, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if not 1 <= value <= 100:
+        raise ValueError(f"{name} must be between 1 and 100")
+    return value
 
 
 def _timestamp(value: datetime) -> str:

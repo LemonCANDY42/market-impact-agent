@@ -23,6 +23,7 @@ class Validator(Protocol):
     [
         "data-query.schema.json",
         "data-snapshot.schema.json",
+        "syndication-feed-source.schema.json",
         "event-transmission.schema.json",
         "backtest-request.schema.json",
         "backtest-result.schema.json",
@@ -84,6 +85,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/events/synthetic-energy-supply-shock.json",
         "examples/providers/tushare-http-unverified.json",
         "examples/providers/veighna-external-bridge.json",
+        "examples/providers/federal-reserve-press-feed-v1.json",
         "examples/research/research-method-catalog-v1.json",
         "examples/providers/minimax-m3-research-v1.json",
         "examples/calibration/agent-method-ablation-v1.json",
@@ -166,6 +168,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "regime-modeled-pit-agent-validation-registration.schema.json"
     elif example_path.endswith("regime-agent-validation-v1.json"):
         schema_name = "regime-agent-validation-registration.schema.json"
+    elif example_path.endswith("federal-reserve-press-feed-v1.json"):
+        schema_name = "syndication-feed-source.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     registry: Registry[Schema] = Registry()

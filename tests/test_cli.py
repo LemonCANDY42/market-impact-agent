@@ -73,6 +73,28 @@ def test_method_skill_ablation_cli_requires_the_registered_horizon() -> None:
     assert args.eligible_horizon_sessions == 102
 
 
+def test_feed_capture_cli_generates_cutoff_from_frozen_source_receipts() -> None:
+    args = build_parser().parse_args(
+        [
+            "data",
+            "capture-feed",
+            "--source-config",
+            "examples/providers/federal-reserve-press-feed-v1.json",
+            "--window-start",
+            "2026-08-27T07:00:00Z",
+            "--source-policy-id",
+            "official-public-feeds-v1",
+            "--keyword",
+            "policy",
+        ]
+    )
+
+    assert args.data_command == "capture-feed"
+    assert args.source_policy_id == "official-public-feeds-v1"
+    assert args.keyword == ["policy"]
+    assert not hasattr(args, "as_of")
+
+
 def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dependency() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = textwrap.dedent(

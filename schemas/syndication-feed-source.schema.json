@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/syndication-feed-source.schema.json",
+  "title": "Market Impact Syndication Feed Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_config_id",
+    "source_id",
+    "request_url",
+    "expected_final_url",
+    "publisher",
+    "license_scope",
+    "content_scope"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.syndication-feed-source.v1"},
+    "source_config_id": {
+      "type": "string",
+      "pattern": "^syndication-feed-source-[0-9a-f]{64}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "request_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+    "expected_final_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "publisher": {"type": "string", "minLength": 1},
+    "license_scope": {"type": "string", "minLength": 1},
+    "content_scope": {"const": "metadata_and_feed_excerpt"}
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": "market-impact.syndication-feed-source.v1",
+  "source_config_id": "syndication-feed-source-124ae18674a4a1b445f831099a41f802aa748c95dbd3365ef416cc7d5a073f55",
+  "source_id": "federal-reserve-press-all",
+  "request_url": "https://www.federalreserve.gov/feeds/press_all.xml",
+  "expected_final_url": "https://www.federalreserve.gov/feeds/press_all.xml",
+  "publisher": "Board of Governors of the Federal Reserve System",
+  "license_scope": "official_public_feed_metadata_private_research",
+  "content_scope": "metadata_and_feed_excerpt"
+}

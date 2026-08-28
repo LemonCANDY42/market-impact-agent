@@ -12,8 +12,11 @@ degradation, local persistence, and the artifact returned to an Agent tool. A Pr
 normalizes one registered upstream source. The model cannot select a Provider, move the cutoff,
 change the required-source policy, read credentials, or bypass Evidence promotion.
 
-The first implementation is in `src/market_impact_agent/data_inputs.py`. It adds a generic contract
-and a local persistence adapter; it does not claim that a historical or live vendor is connected.
+The generic contracts and local persistence adapter are in
+`src/market_impact_agent/data_inputs.py`. The first concrete source adapter is the prospective
+RSS/Atom path in `src/market_impact_agent/syndication_feed.py`; it proves actual receipt of feed
+metadata and excerpts only. It does not establish historical PIT, article-body rights, publisher
+completeness, or execution readiness.
 
 ## Bounded-context canvas
 
@@ -37,11 +40,25 @@ A Data Query binds one semantic capability to:
 - immutable parameters;
 - an ordered Provider/version/upstream-source list;
 - the complete hash of every registered Observation Provider manifest;
+- the complete hash of every secret-free Source Route Configuration;
 - required-source flags and a minimum number of sources with accepted data; and
 - a versioned `source_policy_id`.
 
 Changing any field changes `query_id`. Host time, implicit fallback sources, credential values, and
 model-selected Provider names are not query fields.
+
+New writes use `market-impact.data-query.v2` and `market-impact.data-snapshot.v2`: every source
+binding includes its public Source Route Configuration hash. Existing v1 snapshots remain
+content-identical, readable, and available only for `cache_only` replay; a missing v1 cache entry
+cannot be refetched through a new Provider route.
+
+### Source Route Configuration
+
+A Source Route Configuration freezes the part of a connection that may safely enter an audit
+artifact: stable source ID, request URL, expected final redirect URL, publisher, content scope, and
+license scope. The Harness stores the exact configuration in its private content-addressed store and
+rejects a query when the active Provider's configuration hash differs. Credentials, cookies, account
+identifiers, and entitlement tokens never enter this configuration.
 
 ### Source Observation
 
@@ -58,7 +75,9 @@ A Data Snapshot binds the exact query, one attempt per registered source in orde
 Observations, typed failure states, rejection counts, and completion time. A source record is exposed
 only when `available_at <= query.as_of`. Missing availability and post-cutoff records are counted and
 excluded. Coverage is complete only when every required source completed and enough sources supplied
-at least one accepted record.
+at least one accepted record. A prospective snapshot also remains incomplete until actual receipt has
+reached its declared `as_of`; an earlier collection is an auditable diagnostic, never a successful
+cache entry for a future cutoff.
 
 Incomplete snapshots are retained for audit but are not reused as successful cache entries. A later
 retry creates another immutable snapshot instead of rewriting the failure.
@@ -67,6 +86,12 @@ The query selects one explicit PIT lane. `strict` rejects modeled-latency availa
 `available_at <= authority_at <= cutoff`; `modeled` preserves the authority gap for process
 diagnostics; `prospective` requires `available_at == authority_at == retrieved_at` under actual
 receipt. The lanes share the record shape but cannot satisfy one another's claim gates.
+
+The prospective syndication command uses two phases. It first collects each registered HTTP response
+and freezes its exact actual receipt timestamp. It then builds a query whose `as_of` is the latest
+of those receipts and replays only those captured responses through the Harness. Earlier captured
+responses remain visible at that cutoff, and the replay performs no second remote request. The
+operator cannot supply a different cutoff to that command.
 
 ## Agent tool surface
 
@@ -85,14 +110,22 @@ The intended semantic tools are:
 over the cutoff, source policy, Provider versions, and cache mode. Agent arguments contain only the
 domain parameters allowed by that tool's JSON Schema.
 
+`FrozenDataSnapshotToolBinding` covers the second tool mode: it binds one already materialized,
+complete Snapshot ID directly into the tool manifest version, then allows only local text/publisher
+selection and a result limit. Descriptor creation requires the enclosing run's explicit
+`FrozenDataSnapshotInput` declaration to authorize that exact Snapshot ID. Those arguments cannot
+create another Data Query or move the cutoff. The binding is ready for a registered diagnostic, but
+the generic Agent CLI does not add it implicitly; an undeclared complete snapshot cannot become a
+source of Agent context.
+
 A Transmission Path remains a cited Judgment output assembled from facts and exposure evidence. A
 mechanism-appropriate horizon set remains a versioned research-method input. Treating either as a
 vendor field would hide an inference inside the data plane.
 
 For frozen historical experiments the tool mode is `cache_only`. A scheduler or Harness operation
-must acquire and freeze the snapshot before the Judgment Run. Prospective collectors may use
-`fetch_if_missing` before the decision cutoff and record actual receipt. A fetch made after a frozen
-cutoff cannot silently move that cutoff or enter the same decision.
+must acquire and freeze the snapshot before the Judgment Run. Prospective collectors first freeze
+actual HTTP receipts, then replay those receipts under their generated latest-receipt cutoff. A
+subsequent remote fetch is a new collection, never an addition to the already frozen snapshot.
 
 ## Storage and existing-framework integration
 
@@ -165,8 +198,9 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 ### Prospective paper research
 
-1. Collectors continuously record first receipt and immutable source versions.
-2. At a decision cutoff the Harness freezes a snapshot from records already received.
+1. The collector records one immutable HTTP receipt for every registered source.
+2. It generates the snapshot cutoff from the latest actual receipt and replays exactly those
+   captured responses through the Harness.
 3. The Agent queries only that snapshot and produces a Judgment.
 4. Hard policy may later create an intent; paper execution remains separately gated.
 
@@ -188,3 +222,39 @@ In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` an
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or
 open paper/live execution. Provider-specific adapters follow only after one sample passes its frozen
 timestamp, version, revision, taxonomy, license, and replay checks.
+
+## First prospective feed adapter
+
+The syndication adapter uses the maintained `feedparser` library for RSS/Atom normalization. It
+collects one exact response per registered source, freezes the actual receipt timestamps, generates
+the cutoff from their maximum, and replays those response bytes without another HTTP request. For a
+feed inside its excerpt-only license scope, the Harness retains the exact HTTP response and exact XML
+bytes for every selected item. It rejects unregistered redirects, non-HTTPS endpoints and article
+links, malformed XML, external entities, empty 200 responses, RSS `content:encoded`, Atom `content`,
+missing publication times, source-clock timestamps after receipt, unsupported query parameters, and
+source-configuration drift. A rejected full-content feed has no raw response or item bytes persisted.
+It records publication time as a publisher field and actual receipt as
+`available_at == authority_at == retrieved_at`; publication time never becomes receipt authority.
+
+The checked-in Federal Reserve press-feed configuration is a reproducible public example because
+the [Federal Reserve explicitly publishes RSS feeds](https://www.federalreserve.gov/feeds/feeds.htm).
+It establishes the connector's prospective acquisition path, not relevance to an A-share checkpoint.
+
+The Bloomberg URLs discussed in the referenced Reddit thread are useful discovery evidence: several
+still resolve to rolling Bloomberg-hosted feeds. They are not registered here. The feed exposes
+headlines, excerpts, links, GUIDs, and publication times rather than a historical version archive,
+and [Bloomberg's site terms](https://www.bloomberg.com/notices/tos/) require a separate license review
+before automated retention or trading use. Google News RSS remains an aggregator discovery route;
+its receipt or timestamp cannot become Bloomberg publisher authority.
+
+Example prospective collection and generated-cutoff freeze:
+
+```bash
+market-impact data capture-feed \
+  --source-config examples/providers/federal-reserve-press-feed-v1.json \
+  --window-start 2026-08-27T07:00:00Z \
+  --source-policy-id official-public-feeds-v1
+```
+
+The command returns a private Data Snapshot ID and its generated `capture_cutoff_at`. It does not
+promote observations to Evidence or grant any paper/live capability.

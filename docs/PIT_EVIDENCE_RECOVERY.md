@@ -22,6 +22,13 @@ Use the least expansive source that can prove the required historical version:
    version, publisher publication/update times, requested/retrieved times, and typed failure. These
    receipts calibrate real latency but do not rewrite past cases.
 
+Public RSS/Atom is useful for the third lane when the publisher explicitly offers the feed and the
+license scope permits local retention. A current feed receipt proves only that the Harness received
+that exact feed version now. `pubDate`, `lastBuildDate`, an aggregator timestamp, or a current rolling
+feed does not authenticate historical availability. Feed discovery through Google News, GDELT, or a
+community-maintained URL list remains discovery-only until the canonical publisher source and use
+terms pass the same route/configuration gate.
+
 Internet Archive and Common Crawl are recovery authorities, not discovery substitutes for an
 established publisher. GDELT remains discovery-only. A located capture is only a candidate until
 its replay body is digest-verified and passes the publisher extractor.

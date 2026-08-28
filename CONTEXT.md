@@ -20,9 +20,15 @@ _Avoid_: API response, trusted fact
 **Data Query**:
 A content-identified request for one read-only Observation capability at one UTC cutoff, binding
 immutable parameters, a versioned source policy, an exact ordered Provider/version/upstream-source
-set, and explicit coverage requirements. Agent arguments may refine domain parameters but cannot
-change its cutoff, sources, credentials, or cache policy.
+set, each Source Route Configuration hash, and explicit coverage requirements. Agent arguments may
+refine domain parameters but cannot change its cutoff, sources, credentials, or cache policy.
 _Avoid_: Search prompt, Provider fallback, live model request
+
+**Source Route Configuration**:
+A secret-free, content-identified description of one Provider's exact upstream route, source
+identity, expected redirect identity, publisher identity, content scope, and license scope. A Data
+Query binds its hash; credentials remain outside it.
+_Avoid_: Provider name, URL string, credential file
 
 **News Observation Batch**:
 A content-identified result of one historical or masked-replay news query over an exact ordered
