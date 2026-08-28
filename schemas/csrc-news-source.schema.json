@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/csrc-news-source.schema.json",
+  "title": "Market Impact CSRC News Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_config_id",
+    "source_id",
+    "endpoint_url",
+    "channel_id",
+    "publisher",
+    "published_timezone",
+    "page_size",
+    "maximum_pages",
+    "rights_basis_url",
+    "rights_reviewed_at",
+    "license_scope",
+    "content_scope",
+    "redistribution_allowed"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.csrc-news-source.v1"},
+    "source_config_id": {
+      "type": "string",
+      "pattern": "^csrc-news-source-[0-9a-f]{64}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "endpoint_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://www\\.csrc\\.gov\\.cn/"
+    },
+    "channel_id": {"type": "string", "minLength": 1},
+    "publisher": {"type": "string", "minLength": 1},
+    "published_timezone": {"type": "string", "minLength": 1},
+    "page_size": {"type": "integer", "minimum": 1, "maximum": 100},
+    "maximum_pages": {"type": "integer", "minimum": 1, "maximum": 100},
+    "rights_basis_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://www\\.csrc\\.gov\\.cn/"
+    },
+    "rights_reviewed_at": {"type": "string", "format": "date-time"},
+    "license_scope": {
+      "const": "official_public_private_research_no_redistribution"
+    },
+    "content_scope": {"const": "official_publication_private_research"},
+    "redistribution_allowed": {"const": false}
+  }
+}

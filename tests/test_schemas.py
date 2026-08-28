@@ -24,6 +24,8 @@ class Validator(Protocol):
         "data-query.schema.json",
         "data-snapshot.schema.json",
         "syndication-feed-source.schema.json",
+        "csrc-news-source.schema.json",
+        "source-route-acceptance-report.schema.json",
         "prospective-collection-policy.schema.json",
         "prospective-dataset-manifest.schema.json",
         "event-transmission.schema.json",
@@ -88,6 +90,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/providers/tushare-http-unverified.json",
         "examples/providers/veighna-external-bridge.json",
         "examples/providers/federal-reserve-press-feed-v1.json",
+        "examples/providers/csrc-official-news-v1.json",
         "examples/research/research-method-catalog-v1.json",
         "examples/providers/minimax-m3-research-v1.json",
         "examples/calibration/agent-method-ablation-v1.json",
@@ -172,6 +175,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "regime-agent-validation-registration.schema.json"
     elif example_path.endswith("federal-reserve-press-feed-v1.json"):
         schema_name = "syndication-feed-source.schema.json"
+    elif example_path.endswith("csrc-official-news-v1.json"):
+        schema_name = "csrc-news-source.schema.json"
     else:
         schema_name = "provider-manifest.schema.json"
     registry: Registry[Schema] = Registry()

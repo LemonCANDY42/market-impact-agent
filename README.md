@@ -45,6 +45,10 @@ The bootstrap implements:
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte
   retention, and records actual receipt without claiming historical PIT or article-body rights;
+- the first accepted A-share official-event route: a bounded CSRC publication Provider plus a
+  reusable seven-gate Source Route Acceptance Report that binds captured rights evidence, exact raw
+  JSON records, publication time, actual receipt, append-only revisions, and deterministic replay;
+  the accepted route is private-research only and grants neither historical PIT nor execution;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;

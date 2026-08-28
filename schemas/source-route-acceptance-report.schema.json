@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/source-route-acceptance-report.schema.json",
+  "title": "Market Impact Source Route Acceptance Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "declaration",
+    "rights_evidence",
+    "data_snapshot_id",
+    "deterministic_replay_snapshot_id",
+    "evaluated_at",
+    "gates",
+    "accepted",
+    "historical_pit_claim",
+    "evidence_promoted",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.source-route-acceptance-report.v1"},
+    "report_id": {
+      "type": "string",
+      "pattern": "^source-route-acceptance-report-[0-9a-f]{64}$"
+    },
+    "declaration": {"$ref": "#/$defs/declaration"},
+    "rights_evidence": {
+      "oneOf": [{"$ref": "#/$defs/rights_evidence"}, {"type": "null"}]
+    },
+    "data_snapshot_id": {"$ref": "#/$defs/snapshot_id"},
+    "deterministic_replay_snapshot_id": {
+      "oneOf": [{"$ref": "#/$defs/snapshot_id"}, {"type": "null"}]
+    },
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "gates": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {"$ref": "#/$defs/rights_gate"},
+        {"$ref": "#/$defs/transport_gate"},
+        {"$ref": "#/$defs/completeness_gate"},
+        {"$ref": "#/$defs/time_gate"},
+        {"$ref": "#/$defs/semantics_gate"},
+        {"$ref": "#/$defs/determinism_gate"},
+        {"$ref": "#/$defs/isolation_gate"}
+      ],
+      "items": false
+    },
+    "accepted": {"type": "boolean"},
+    "historical_pit_claim": {"const": false},
+    "evidence_promoted": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "rights_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "evidence_id",
+        "source_ref",
+        "final_url",
+        "retrieved_at",
+        "raw_content_hash"
+      ],
+      "properties": {
+        "schema_version": {"const": "market-impact.source-rights-evidence.v1"},
+        "evidence_id": {
+          "type": "string",
+          "pattern": "^source-rights-evidence-[0-9a-f]{64}$"
+        },
+        "source_ref": {"type": "string", "format": "uri"},
+        "final_url": {"type": "string", "format": "uri"},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "raw_content_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "declaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "declaration_id",
+        "provider_id",
+        "provider_version",
+        "provider_manifest_hash",
+        "source_config_hash",
+        "upstream_source",
+        "capability",
+        "rights_basis_url",
+        "rights_reviewed_at",
+        "permitted_use",
+        "retention_scope",
+        "redistribution_allowed",
+        "semantic_scope",
+        "revision_strategy"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "market-impact.source-route-acceptance-declaration.v1"
+        },
+        "declaration_id": {
+          "type": "string",
+          "pattern": "^source-route-acceptance-declaration-[0-9a-f]{64}$"
+        },
+        "provider_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$"
+        },
+        "provider_version": {"type": "string", "minLength": 1},
+        "provider_manifest_hash": {"$ref": "#/$defs/sha256"},
+        "source_config_hash": {"$ref": "#/$defs/sha256"},
+        "upstream_source": {"type": "string", "minLength": 1},
+        "capability": {
+          "enum": [
+            "event_revelation",
+            "prior_expectation",
+            "market_context",
+            "exposure_candidates",
+            "positioning",
+            "macro_vintage",
+            "prediction_market_discovery",
+            "prediction_market_snapshot",
+            "prediction_market_history"
+          ]
+        },
+        "rights_basis_url": {"type": "string", "format": "uri"},
+        "rights_reviewed_at": {"type": "string", "format": "date-time"},
+        "permitted_use": {"const": "private_research"},
+        "retention_scope": {"const": "private_raw_and_normalized"},
+        "redistribution_allowed": {"const": false},
+        "semantic_scope": {"type": "string", "minLength": 1},
+        "revision_strategy": {"const": "append_only_content_versions"}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "status", "reasons"],
+      "properties": {
+        "gate": {"type": "string"},
+        "status": {"enum": ["pass", "fail"]},
+        "reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "rights_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "rights_and_identity"}}}
+      ]
+    },
+    "transport_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "transport"}}}
+      ]
+    },
+    "completeness_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "completeness"}}}
+      ]
+    },
+    "time_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "time_and_revisions"}}}
+      ]
+    },
+    "semantics_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "market_semantics"}}}
+      ]
+    },
+    "determinism_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "determinism_and_storage"}}}
+      ]
+    },
+    "isolation_gate": {
+      "allOf": [
+        {"$ref": "#/$defs/gate"},
+        {"properties": {"gate": {"const": "agent_isolation"}}}
+      ]
+    }
+  }
+}

@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import sys
+import tempfile
 import time
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, date, datetime
@@ -51,6 +52,12 @@ from market_impact_agent.calibration import (
     assess_phase2_calibration,
     load_phase2_calibration_evidence,
     phase2_calibration_gate_result_to_dict,
+)
+from market_impact_agent.csrc_news import (
+    CsrcNewsProvider,
+    UrllibCsrcNewsHTTPClient,
+    load_csrc_news_capture_bundle,
+    load_csrc_news_source,
 )
 from market_impact_agent.data_inputs import (
     DataInputHarness,
@@ -148,6 +155,12 @@ from market_impact_agent.regime_study import (
 from market_impact_agent.registry import ProviderRegistry
 from market_impact_agent.research_methods import load_research_method_catalog
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
+from market_impact_agent.source_acceptance import (
+    SourceRightsEvidence,
+    SourceRouteAcceptanceDeclaration,
+    qualify_source_route,
+    write_source_route_acceptance_report,
+)
 from market_impact_agent.source_coverage import (
     coverage_receipt_from_dict,
     load_source_coverage_registration,
@@ -249,6 +262,20 @@ def build_parser() -> argparse.ArgumentParser:
     feed_freeze_parser.add_argument("--not-after", required=True, type=_aware_timestamp)
     feed_freeze_parser.add_argument("--minimum-data-sources", type=int)
     feed_freeze_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    csrc_accept_parser = data_subparsers.add_parser(
+        "accept-csrc-news",
+        help="Run the seven-gate source acceptance trial for one CSRC news route",
+    )
+    csrc_accept_parser.add_argument("--source-config", required=True, type=Path)
+    csrc_accept_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
+    csrc_accept_parser.add_argument("--keyword", action="append", default=[])
+    csrc_accept_parser.add_argument("--max-items", type=int, default=50)
+    csrc_accept_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
+    csrc_accept_parser.add_argument(
         "--state-root",
         type=Path,
         default=Path(".market-impact/data-inputs"),
@@ -1148,6 +1175,135 @@ def freeze_syndication_feed_dataset(
     }
 
 
+def accept_csrc_news_source(
+    *,
+    source_config_path: Path,
+    window_start: datetime,
+    keywords: tuple[str, ...],
+    max_items: int,
+    state_root: Path,
+    provider_timeout_seconds: float,
+) -> dict[str, object]:
+    config = load_csrc_news_source(source_config_path)
+    http_client = UrllibCsrcNewsHTTPClient(timeout_seconds=provider_timeout_seconds)
+    provider = CsrcNewsProvider(
+        (config,),
+        http_client=http_client,
+    )
+    parameters: dict[str, object] = {
+        "keywords": list(keywords),
+        "max_items": max_items,
+    }
+    captures = asyncio.run(
+        provider.collect(
+            window_start=window_start.astimezone(UTC),
+            parameters=parameters,
+        )
+    )
+    capture_cutoff = max(item.retrieved_at for item in captures)
+    manifest_hash = canonical_hash(provider.manifest.to_dict())
+    source = DataSourceBinding(
+        provider_id=provider.manifest.provider_id,
+        provider_version=provider.manifest.provider_version,
+        upstream_source=config.source_id,
+        manifest_hash=manifest_hash,
+        source_config_hash=config.artifact_hash,
+        required=True,
+    )
+    declaration = SourceRouteAcceptanceDeclaration.build(
+        provider_id=provider.manifest.provider_id,
+        provider_version=provider.manifest.provider_version,
+        provider_manifest_hash=manifest_hash,
+        source_config_hash=config.artifact_hash,
+        upstream_source=config.source_id,
+        capability=ObservationCapability.EVENT_REVELATION,
+        rights_basis_url=config.rights_basis_url,
+        rights_reviewed_at=config.rights_reviewed_at,
+        permitted_use="private_research",
+        retention_scope="private_raw_and_normalized",
+        redistribution_allowed=config.redistribution_allowed,
+        semantic_scope="official_capital_market_policy_publication",
+        revision_strategy="append_only_content_versions",
+    )
+    query = DataQuery.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=capture_cutoff,
+        window_start=window_start.astimezone(UTC),
+        source_policy_id=declaration.declaration_id,
+        parameters=parameters,
+        sources=(source,),
+        minimum_data_sources=1,
+    )
+    capture_provider = provider.replay(captures)
+    store = LocalDataSnapshotStore(state_root)
+    rights_response = http_client.get(
+        config.rights_basis_url,
+        max_response_bytes=2_000_000,
+    )
+    rights_retrieved_at = datetime.now(UTC)
+    rights_hash = store.put_raw(rights_response.body)
+    rights_evidence = SourceRightsEvidence.build(
+        source_ref=config.rights_basis_url,
+        final_url=rights_response.final_url,
+        retrieved_at=rights_retrieved_at,
+        raw_content_hash=rights_hash,
+    )
+    harness = DataInputHarness(store, provider_timeout_seconds=provider_timeout_seconds)
+    harness.register(capture_provider)
+    snapshot = asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
+    raw_response_hash = snapshot.attempts[0].raw_response_hash
+    if raw_response_hash is None:
+        raise ValueError("CSRC source acceptance requires one stored raw response")
+    stored_bundle = store.artifacts.get(
+        raw_response_hash,
+        media_type="application/octet-stream",
+    ).path.read_bytes()
+    stored_capture = load_csrc_news_capture_bundle(
+        stored_bundle,
+        config=config,
+        retrieved_at=snapshot.attempts[0].retrieved_at,
+    )
+    replay_provider = provider.replay((stored_capture,))
+    state_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".acceptance-replay-", dir=state_root) as replay_root:
+        replay_store = LocalDataSnapshotStore(Path(replay_root))
+        replay_harness = DataInputHarness(
+            replay_store,
+            provider_timeout_seconds=provider_timeout_seconds,
+        )
+        replay_harness.register(replay_provider)
+        deterministic_replay = asyncio.run(
+            replay_harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING)
+        )
+        report = qualify_source_route(
+            declaration=declaration,
+            rights_evidence=rights_evidence,
+            snapshot=snapshot,
+            source_store=store,
+            deterministic_replay=deterministic_replay,
+            deterministic_replay_store=replay_store,
+            evaluated_at=datetime.now(UTC),
+        )
+    report_path = write_source_route_acceptance_report(
+        report,
+        state_root / "source-acceptance",
+    )
+    return {
+        "accepted": report.accepted,
+        "source_route_acceptance_report_id": report.report_id,
+        "source_route_acceptance_report_path": report_path.as_posix(),
+        "data_snapshot_id": snapshot.snapshot_id,
+        "capture_cutoff_at": _utc_timestamp(snapshot.query.as_of),
+        "coverage_complete": snapshot.coverage_complete,
+        "observation_count": len(snapshot.observations),
+        "gates": [item.to_dict() for item in report.gates],
+        "historical_pit_claim": report.historical_pit_claim,
+        "evidence_promoted": report.evidence_promoted,
+        "execution_capability": report.execution_capability,
+    }
+
+
 def _syndication_source_bindings(
     manifest: ObservationProviderManifest,
     configs: tuple[SyndicationFeedSourceConfig, ...],
@@ -1951,6 +2107,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["coverage_complete"] is True else 1
+    if args.command == "data" and args.data_command == "accept-csrc-news":
+        try:
+            result = accept_csrc_news_source(
+                source_config_path=args.source_config,
+                window_start=args.window_start,
+                keywords=tuple(args.keyword),
+                max_items=args.max_items,
+                state_root=args.state_root,
+                provider_timeout_seconds=args.provider_timeout_seconds,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["accepted"] is True else 1
     if args.command == "archive" and args.archive_command == "common-crawl-verify":
         try:
             result = verify_common_crawl_archive(args.locator)

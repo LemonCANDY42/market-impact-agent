@@ -39,7 +39,7 @@ retention, or multi-host operation exceeds the local design's gates below.
 | Layer | Owns | Current implementation | Must not own |
 | --- | --- | --- | --- |
 | Source registration | Exact upstream, final URL or endpoint, Provider/parser version, license scope, credentials reference, and route hash | Versioned source configuration and Provider manifest | PIT qualification, Agent policy, secrets in artifacts |
-| Acquisition | Bounded concurrent fetch, timeouts, response limits, actual receipt clock, redirects, retry classification, and typed failures | Provider adapters; RSS/Atom is the first real prospective adapter | Historical authority inference, silent fallback, order submission |
+| Acquisition | Bounded concurrent fetch, timeouts, response limits, actual receipt clock, redirects, retry classification, and typed failures | Provider adapters; RSS/Atom proves the generic feed path and CSRC is the first accepted A-share official-event route | Historical authority inference, silent fallback, order submission |
 | Raw receipt | Exact accepted response and selected record bytes with SHA-256 identity | Private content-addressed artifact store | Normalized truth, mutable cache eviction by default |
 | Normalization | Provider-specific parsing into canonical Source Observations | Provider adapter plus shared observation contract | Cross-source causal inference, overwrite of earlier revisions |
 | Receipt journal | Every collection snapshot, source attempt, observation version, first actual receipt, and repeat sighting | SQLite WAL with foreign keys, full synchronous commits, and one logical writer | Article search engine, analytical warehouse, broker state |
@@ -178,6 +178,13 @@ verified. Their discovery or fetch time never becomes publisher publication time
 backfill can enter strict historical PIT only when its product contract supplies an immutable
 historical version/delivery authority at or before the decision cutoff.
 
+The first completed use of this matrix is the CSRC official-publication route. Its private
+`source-route-acceptance-report-0671f5669de1cd78741350d8cb373a5fbd8d4535cb5efafcb1b5a5714a8d7216`
+binds a captured legal notice, exact Provider and route hashes, three prospective actual-receipt
+observations, and an identical isolated replay. Passing the route accepts private prospective event
+collection only; the report schema prevents it from claiming historical PIT, Evidence promotion, or
+execution capability.
+
 ## A-share source route order
 
 The first useful A-share implementation batch should stay narrow and checkpoint-driven:
@@ -259,8 +266,9 @@ practical research connector, but an old date returned today does not itself pro
 - The continuous CLI is a foreground collector. Process restart supervision, durable scheduler
   misfires, conditional HTTP caching, per-source jittered backoff, and source-specific stream gap
   recovery remain Provider/operations gates, not implied capabilities.
-- The first accepted public feed demonstrates prospective acquisition mechanics but is not an
-  A-share decision feed.
+- One A-share official-event route is accepted for prospective private research. It is not a
+  complete A-share decision feed: market/index, effective-dated industry, positioning, macro
+  vintage, expectation, and tradable-universe routes are still unaccepted.
 - Strict historical qualification remains unchanged until new historically authoritative records
   are materialized and requalified.
 - No model experiment, paper order, or live order is authorized by this data-platform slice.

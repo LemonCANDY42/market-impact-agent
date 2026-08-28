@@ -30,6 +30,14 @@ identity, expected redirect identity, publisher identity, content scope, and lic
 Query binds its hash; credentials remain outside it.
 _Avoid_: Provider name, URL string, credential file
 
+**Source Route Acceptance Report**:
+A content-identified result of one bounded route trial over rights and identity, transport,
+completeness, time and revision semantics, market semantics, deterministic replay and storage, and
+Agent isolation. It binds the exact source configuration, Provider manifest, captured rights notice,
+and Data Snapshot. Passing accepts that prospective route only; it does not establish historical PIT,
+promote Evidence, or grant execution authority.
+_Avoid_: Provider enabled flag, license assumption, historical-data approval
+
 **News Observation Batch**:
 A content-identified result of one historical or masked-replay news query over an exact ordered
 Provider/source chain. It preserves typed fetch outcomes, raw hashes, publication/update/availability

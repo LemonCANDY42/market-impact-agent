@@ -33,6 +33,11 @@ not begin because an earlier API exists; its acceptance evidence must exist.
   context, positioning, macro vintages, and effective-dated tradable-universe mappings. Each route
   must pass rights, transport, completeness, timestamp/revision, market-semantics, and deterministic
   replay gates before it can support checkpoint experiments or paper operation.
+  - [x] Accept the first official-event route: the CSRC publication endpoint passed the reusable
+    seven-gate contract with three prospective actual-receipt observations and deterministic replay
+    in `source-route-acceptance-report-0671f5669de1cd78741350d8cb373a5fbd8d4535cb5efafcb1b5a5714a8d7216`.
+    The private-research route does not satisfy the remaining market, industry, positioning, macro,
+    universe, or historical-PIT gates.
 - [ ] Add Harness-owned Attention Watches after the receipt plane is accepted: content-identified
   event/query scope, TTL and budgets, fixed/adaptive cadence, deterministic change/corroboration
   triggers, durable restart state, duplicate suppression, and an idempotent wake-up outbox that

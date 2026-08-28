@@ -133,6 +133,25 @@ def test_feed_collection_and_freeze_cli_bind_cadence_and_cutoff() -> None:
     assert freeze.not_after == datetime(2026, 8, 28, 7, 2, tzinfo=UTC)
 
 
+def test_csrc_source_acceptance_cli_binds_one_registered_route() -> None:
+    args = build_parser().parse_args(
+        [
+            "data",
+            "accept-csrc-news",
+            "--source-config",
+            "examples/providers/csrc-official-news-v1.json",
+            "--window-start",
+            "2026-08-01T00:00:00Z",
+            "--keyword",
+            "政策",
+        ]
+    )
+
+    assert args.data_command == "accept-csrc-news"
+    assert args.source_config == Path("examples/providers/csrc-official-news-v1.json")
+    assert args.keyword == ["政策"]
+
+
 def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dependency() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = textwrap.dedent(

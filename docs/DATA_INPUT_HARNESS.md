@@ -16,7 +16,9 @@ The generic contracts and local persistence adapter are in
 `src/market_impact_agent/data_inputs.py`. The first concrete source adapter is the prospective
 RSS/Atom path in `src/market_impact_agent/syndication_feed.py`; it proves actual receipt of feed
 metadata and excerpts only. It does not establish historical PIT, article-body rights, publisher
-completeness, or execution readiness.
+completeness, or execution readiness. The first accepted A-share route is the CSRC official
+publication Provider in `src/market_impact_agent/csrc_news.py`. Its bounded trial uses the same
+Harness and Snapshot contract and accepts prospective private-research collection only.
 
 ## Bounded-context canvas
 
@@ -258,6 +260,38 @@ market-impact data capture-feed \
 
 The command returns a private Data Snapshot ID and its generated `capture_cutoff_at`. It does not
 promote observations to Evidence or grant any paper/live capability.
+
+## First accepted A-share official-event route
+
+The CSRC Provider reads one registered official publication channel through its exact JSON endpoint.
+It binds the channel, publisher, Asia/Shanghai publication clock, page and byte limits, rights-review
+reference, private retention scope, and no-redistribution rule in a content-identified source
+configuration. Pagination follows the endpoint's descending publication-date contract while
+preserving exact intraday times; records on the same date are not assumed to be time-sorted. Every
+selected JSON record and the framed multi-page response are retained by hash in private storage.
+
+Run the bounded acceptance trial with:
+
+```bash
+market-impact data accept-csrc-news \
+  --source-config examples/providers/csrc-official-news-v1.json \
+  --window-start 2026-08-01T00:00:00Z
+```
+
+The command performs one real capture, stores the exact CSRC legal-notice response as rights
+evidence, replays the captured source responses in an isolated store, and evaluates the seven route
+gates defined in [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md). A successful report binds the
+Provider manifest, source configuration, rights evidence, original Snapshot, and identical replay
+Snapshot. It retains CSRC publication time separately from
+`available_at == authority_at == retrieved_at`; therefore it is prospective actual-receipt evidence,
+not a reconstruction of historical availability.
+
+The 2026-08-28 acceptance selected three observations and passed all gates in the private report
+`source-route-acceptance-report-0671f5669de1cd78741350d8cb373a5fbd8d4535cb5efafcb1b5a5714a8d7216`.
+The report explicitly fixes `historical_pit_claim`, `evidence_promoted`, and
+`execution_capability` to false. Acceptance is for private research retention without
+redistribution; it does not accept CSRC as a complete news source or fill the other A-share data
+families.
 
 ## Continuous prospective collection
 

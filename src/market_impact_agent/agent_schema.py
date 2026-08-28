@@ -13,6 +13,8 @@ AGENT_SCHEMA_FILES = (
     "data-query.schema.json",
     "data-snapshot.schema.json",
     "syndication-feed-source.schema.json",
+    "csrc-news-source.schema.json",
+    "source-route-acceptance-report.schema.json",
     "prospective-collection-policy.schema.json",
     "prospective-dataset-manifest.schema.json",
     "pattern-pack.schema.json",

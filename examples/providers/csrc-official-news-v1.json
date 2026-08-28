@@ -1,0 +1,16 @@
+{
+  "channel_id": "a1a078ee0bc54721ab6b148884c784a8",
+  "content_scope": "official_publication_private_research",
+  "endpoint_url": "https://www.csrc.gov.cn/searchList/a1a078ee0bc54721ab6b148884c784a8",
+  "license_scope": "official_public_private_research_no_redistribution",
+  "maximum_pages": 20,
+  "page_size": 18,
+  "published_timezone": "Asia/Shanghai",
+  "publisher": "中国证监会",
+  "redistribution_allowed": false,
+  "rights_basis_url": "https://www.csrc.gov.cn/csrc/c100227/c1362477/content.shtml",
+  "rights_reviewed_at": "2026-08-28T00:00:00Z",
+  "schema_version": "market-impact.csrc-news-source.v1",
+  "source_config_id": "csrc-news-source-6bdf8d8e345fc6b1a431c8bd87de9d32bd90e1bb5a346b708bb151a964faa4a2",
+  "source_id": "csrc-official-news"
+}
