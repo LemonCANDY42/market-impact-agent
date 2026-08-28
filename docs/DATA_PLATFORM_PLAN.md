@@ -609,7 +609,7 @@ market-impact data collection-register \
   --poll-interval-seconds 86400 \
   --maximum-gap-seconds 172800 \
   --misfire-grace-seconds 300
-market-impact data collection-run-due
+market-impact data collection-run-due --maximum-state-bytes 10000000000
 market-impact data collection-health
 market-impact data collection-qualify-tracer \
   --job-id prospective-collection-job-<csrc-sha256> \
@@ -631,6 +631,19 @@ authorization, register the service in the machine's canonical local-service inv
 start, stop, boot/restart, crash recovery, misfire classification, health visibility, log redaction,
 disabled-state behavior, and clean removal. A generated service file alone is not runtime evidence.
 
+**Repository pre-install status, 2026-08-28:** `ProspectiveSupervisorPlan` now content-identifies the
+exact host/UID, launchd label and definition path, executable, working and state roots, private
+environment file, logs, invocation interval, notification policy, disabled initial state, install
+command, separate enable command, and rollback commands. The generated plist sets `Disabled=true`
+so installation cannot begin interval collection before explicit enablement, and invokes only
+`collection-service-run`; that worker reads an owner-private `0600` environment file, passes the
+Tushare token directly to the registered Provider, and never prints or persists it. The plist
+contains no credential. This is a
+reviewable installation package, not PDI-21 acceptance: the host definition, secret file, and log
+directory remain absent until the owner approves the exact plan. Rollback runs `bootout`, then
+`launchctl disable gui/UID/LABEL` to remove the persistent enable override, then removes the plist;
+reinstallation therefore remains disabled until the separate enable command is approved again.
+
 #### PDI-22 — Pass multi-policy operations, retention, and restore
 
 **What it delivers:** supervised operation for all PDI-01 policies, health/lag/usage reporting,
@@ -647,6 +660,16 @@ Snapshot reconstruction, and dataset row counts match exactly.
 
 **Stage exit — Operations Gate:** continuous collection is demonstrably recoverable and observable;
 an installed process alone is not acceptance.
+
+**Repository recovery status, 2026-08-28:** the operations registration freezes Job IDs, an accepted
+supervisor receipt, complete checkpoint Snapshot-set IDs, the six required faults, soak duration,
+state/lag/latency/compression limits, and backup retention count. State metrics reconcile terminal,
+recoverable, and unknown opportunity states and expose CAS/Parquet/SQLite usage. Disk-budget
+pressure raises a typed fail-closed error; it never deletes an authoritative receipt or revision.
+The backup path uses SQLite's online backup API, copies immutable CAS and projections, inventories
+every file hash and relationship count, rejects corruption or any unmanifested regular file, and
+restores only manifested files into a new root outside the backup. PDI-22 remains open until PDI-21
+and PDI-17 supply their accepted identities and the registered multi-policy soak/fault report passes.
 
 ### Stage 4 — Prove complete Judgment inputs before automating model dispatch
 

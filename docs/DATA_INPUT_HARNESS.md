@@ -330,7 +330,9 @@ an expiring lease; restart resumes staged data, and every due opportunity remain
 again before the Journal commit. An in-flight Provider request is still bounded by its timeout; a
 crash still relies on lease expiry and restart recovery. `--now` controls logical due, misfire,
 backoff, and scheduling decisions only; actual opportunity completion uses the runtime UTC clock
-and cannot precede its bound Snapshot receipt.
+and cannot precede its bound Snapshot receipt. Both `collection-run-due` and
+`collection-service-run` require `--maximum-state-bytes` and fail closed before Provider collection
+when the current state exceeds that bound.
 
 The content-identified tracer report accepts exactly one CSRC event Job and one Tushare market Job
 only when both latest opportunities end in complete prospective actual-receipt Snapshots, their
@@ -338,6 +340,56 @@ route reports still match, and no miss/failure/cancellation makes the interval i
 explicit evaluation cutoff rejects opportunities, Snapshots, or receipts completed later than the
 cutoff, and rejects a next due opportunity that remains unmaterialized beyond its misfire grace. It
 does not qualify a full checkpoint or install a service.
+
+The host service entry point is separate from an interactive shell invocation:
+
+```bash
+market-impact data collection-supervisor-plan \
+  --host-name HOST \
+  --host-uid UID \
+  --service-definition-path /absolute/path/to/LaunchAgents/LABEL.plist \
+  --executable-path /absolute/path/to/.venv/bin/market-impact \
+  --working-directory /absolute/project/path \
+  --state-root /absolute/private/state/path \
+  --environment-file /absolute/private/collection.env \
+  --stdout-path /absolute/private/collection.log \
+  --stderr-path /absolute/private/collection.err.log \
+  --maximum-state-bytes 10000000000
+```
+
+The plan is disabled and secret-free. Its plist carries `Disabled=true`: the reported install
+command registers that disabled job, while the separate enable command is the only planned action
+that permits interval collection. `collection-service-run` accepts only an owner-private
+environment file containing `TUSHARE_TOKEN`; both it and the state root use canonical absolute
+paths, must remain disjoint, and reject symlinked files or ancestors. The value is passed to the
+Provider process and is not written to a Job, Snapshot, report, plist, or command output. Generating
+this plan does not install or enable launchd.
+
+Rollback is ordered and exact: `launchctl bootout gui/UID PLIST`, then
+`launchctl disable gui/UID/LABEL` to clear any persistent enable override, then
+`/bin/rm -- PLIST`. A later reinstall therefore starts from the plist's disabled state.
+
+Operational backups stay outside the authoritative state root:
+
+```bash
+market-impact data state-backup \
+  --state-root /absolute/private/state/path \
+  --backup-parent /absolute/private/backup/path
+market-impact data state-verify-backup --backup /absolute/content-identified/backup
+market-impact data state-restore \
+  --backup /absolute/content-identified/backup \
+  --destination /absolute/new/restore/path
+```
+
+Backup creation rejects file or directory symlinks before scanning state, uses a consistent SQLite
+snapshot, and copies the immutable CAS, Parquet/ZSTD projections, and private reports. Verification
+checks every file hash, SQLite integrity and foreign keys, table counts, Snapshot and Collection
+Policy identities, dataset hashes, and row counts; any regular file absent from the manifest is a
+verification failure, with `manifest.json` as the sole metadata exception. Restore refuses an
+existing destination or one inside the backup root, validates the exact inventory before creating
+it, and copies only manifested files. The bounded retention policy keeps authoritative receipts
+append-only; reaching the registered byte budget
+stops collection with an observable error instead of deleting old PIT evidence.
 
 ```bash
 market-impact data collect-feed \

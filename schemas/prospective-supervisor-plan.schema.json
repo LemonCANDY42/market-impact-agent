@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-supervisor-plan.schema.json",
+  "title": "Market Impact Prospective Supervisor Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "host_name",
+    "host_uid",
+    "launchd_label",
+    "service_definition_path",
+    "executable_path",
+    "working_directory",
+    "state_root",
+    "environment_file",
+    "stdout_path",
+    "stderr_path",
+    "invocation_interval_seconds",
+    "maximum_state_bytes",
+    "notification_policy",
+    "enabled_after_install",
+    "execution_capability",
+    "install_command",
+    "enable_command",
+    "rollback_commands"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-supervisor-plan.v1"},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^prospective-supervisor-plan-[0-9a-f]{64}$"
+    },
+    "host_name": {"type": "string", "minLength": 1},
+    "host_uid": {"type": "integer", "minimum": 1},
+    "launchd_label": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]+$"
+    },
+    "service_definition_path": {"type": "string", "pattern": "^/"},
+    "executable_path": {"type": "string", "pattern": "^/"},
+    "working_directory": {"type": "string", "pattern": "^/"},
+    "state_root": {"type": "string", "pattern": "^/"},
+    "environment_file": {"type": "string", "pattern": "^/"},
+    "stdout_path": {"type": "string", "pattern": "^/"},
+    "stderr_path": {"type": "string", "pattern": "^/"},
+    "invocation_interval_seconds": {"type": "integer", "minimum": 10},
+    "maximum_state_bytes": {"type": "integer", "minimum": 1},
+    "notification_policy": {"enum": ["health_log_only", "failed_runs_only"]},
+    "enabled_after_install": {"const": false},
+    "execution_capability": {"const": false},
+    "install_command": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "enable_command": {
+      "type": "array",
+      "minItems": 3,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "rollback_commands": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {"const": "launchctl"},
+            {"const": "bootout"},
+            {"type": "string", "pattern": "^gui/[1-9][0-9]*$"},
+            {"type": "string", "pattern": "^/.+\\.plist$"}
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"const": "launchctl"},
+            {"const": "disable"},
+            {
+              "type": "string",
+              "pattern": "^gui/[1-9][0-9]*/[A-Za-z0-9][A-Za-z0-9.-]+$"
+            }
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"const": "/bin/rm"},
+            {"const": "--"},
+            {"type": "string", "pattern": "^/.+\\.plist$"}
+          ]
+        }
+      ]
+    }
+  }
+}

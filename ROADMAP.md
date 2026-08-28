@@ -127,7 +127,14 @@ Stage 3 — operate continuous collection:
   `prospective-collection-tracer-report-4859c478c9d778bf912f038cc37a9d068db23e3cbe2098e0dac3663c73b59454`.
   This is repository/runtime acceptance only; no host supervisor is installed.
 - [ ] `PDI-21` Install and accept the authorized host process supervisor.
+  - [x] Freeze a content-identified, secret-free launchd pre-install plan and a private
+    environment-file boundary. The service definition remains absent and disabled pending the
+    required host-install approval.
 - [ ] `PDI-22` Pass multi-policy health, retention, compression, backup, and restore acceptance.
+  - [x] Add content-identified operations thresholds, state metrics and disk-budget enforcement,
+    SQLite online backup, CAS/Parquet hash inventory, corruption rejection, and clean-root restore.
+  - [ ] Bind the final registration to the accepted supervisor receipt and complete PDI-17
+    checkpoint Snapshot sets, then run the registered soak and fault matrix.
 
 Stage 4 — prove complete Judgment inputs before automatic dispatch:
 

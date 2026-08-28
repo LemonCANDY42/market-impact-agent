@@ -383,7 +383,7 @@ uv run market-impact data accept-tushare-observation \
   --window-start 2026-08-28T11:17:00Z \
   --poll-interval-seconds 300 \
   --maximum-gap-seconds 1800
-uv run market-impact data collection-run-due
+uv run market-impact data collection-run-due --maximum-state-bytes 10000000000
 uv run market-impact data collection-health
 uv run ruff check .
 uv run ruff format --check .

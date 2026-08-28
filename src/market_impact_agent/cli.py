@@ -144,6 +144,18 @@ from market_impact_agent.prospective_data import (
 from market_impact_agent.prospective_diagnostic import (
     load_prospective_diagnostic_registration,
 )
+from market_impact_agent.prospective_operations import (
+    assert_within_state_budget,
+    collect_operations_metrics,
+    create_state_backup,
+    restore_state_backup,
+    verify_state_backup,
+)
+from market_impact_agent.prospective_supervisor import (
+    ProspectiveSupervisorPlan,
+    load_supervisor_environment,
+    render_launchd_plist,
+)
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.regime_archive_recovery import (
     audit_publisher_archive_recovery,
@@ -386,6 +398,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     collection_run_parser.add_argument("--job-id", action="append", default=[])
     collection_run_parser.add_argument("--limit", type=int, default=100)
+    collection_run_parser.add_argument("--maximum-state-bytes", required=True, type=int)
     collection_run_parser.add_argument(
         "--now",
         type=_aware_timestamp,
@@ -419,6 +432,61 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/data-inputs"),
     )
+    collection_service_parser = data_subparsers.add_parser(
+        "collection-service-run",
+        help="Run due collection Jobs with secrets loaded from a private service boundary",
+    )
+    collection_service_parser.add_argument("--environment-file", required=True, type=Path)
+    collection_service_parser.add_argument("--job-id", action="append", default=[])
+    collection_service_parser.add_argument("--limit", type=int, default=100)
+    collection_service_parser.add_argument("--maximum-state-bytes", required=True, type=int)
+    collection_service_parser.add_argument("--now", type=_aware_timestamp)
+    collection_service_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    supervisor_plan_parser = data_subparsers.add_parser(
+        "collection-supervisor-plan",
+        help="Render a secret-free, disabled launchd pre-install plan",
+    )
+    supervisor_plan_parser.add_argument("--host-name", required=True)
+    supervisor_plan_parser.add_argument("--host-uid", required=True, type=int)
+    supervisor_plan_parser.add_argument(
+        "--launchd-label",
+        default="com.lemoncandy42.market-impact-agent.collection",
+    )
+    supervisor_plan_parser.add_argument("--service-definition-path", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--executable-path", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--working-directory", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--state-root", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--environment-file", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--stdout-path", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--stderr-path", required=True, type=Path)
+    supervisor_plan_parser.add_argument("--invocation-interval-seconds", type=int, default=60)
+    supervisor_plan_parser.add_argument("--maximum-state-bytes", required=True, type=int)
+    supervisor_plan_parser.add_argument(
+        "--notification-policy",
+        choices=("health_log_only", "failed_runs_only"),
+        default="health_log_only",
+    )
+    state_backup_parser = data_subparsers.add_parser(
+        "state-backup",
+        help="Create a verified content-identified prospective state backup",
+    )
+    state_backup_parser.add_argument("--state-root", required=True, type=Path)
+    state_backup_parser.add_argument("--backup-parent", required=True, type=Path)
+    state_verify_parser = data_subparsers.add_parser(
+        "state-verify-backup",
+        help="Verify a prospective state backup without restoring it",
+    )
+    state_verify_parser.add_argument("--backup", required=True, type=Path)
+    state_restore_parser = data_subparsers.add_parser(
+        "state-restore",
+        help="Restore a verified prospective state backup into a new destination",
+    )
+    state_restore_parser.add_argument("--backup", required=True, type=Path)
+    state_restore_parser.add_argument("--destination", required=True, type=Path)
 
     event_parser = subparsers.add_parser(
         "event", help="Validate point-in-time event transmission records"
@@ -1716,7 +1784,10 @@ def run_due_prospective_collection_jobs(
     ]
     | None = None,
     cancelled: Callable[[], bool] | None = None,
+    maximum_state_bytes: int | None = None,
 ) -> dict[str, object]:
+    if maximum_state_bytes is not None and maximum_state_bytes < 1:
+        raise ValueError("maximum state budget must be positive")
     run_at = datetime.now(UTC) if now is None else now.astimezone(UTC)
     store = LocalDataSnapshotStore(state_root)
     runtime = ProspectiveCollectionRuntime(store)
@@ -1732,6 +1803,12 @@ def run_due_prospective_collection_jobs(
             )
         else:
             collector = collector_factory(job, store)
+        if maximum_state_bytes is not None:
+            collector = _state_budget_guarded_collector(
+                collector,
+                state_root=state_root,
+                maximum_state_bytes=maximum_state_bytes,
+            )
         results.append(
             runtime.run_due(
                 job_id,
@@ -1751,6 +1828,26 @@ def run_due_prospective_collection_jobs(
         "evidence_promoted": False,
         "execution_capability": False,
     }
+
+
+def _state_budget_guarded_collector(
+    collector: ScheduledCollector,
+    *,
+    state_root: Path,
+    maximum_state_bytes: int,
+) -> ScheduledCollector:
+    def guarded(
+        policy: ProspectiveCollectionPolicy,
+        source_config: dict[str, object],
+    ) -> DataSnapshot:
+        metrics = collect_operations_metrics(
+            state_root=state_root,
+            measured_at=datetime.now(UTC),
+        )
+        assert_within_state_budget(metrics, maximum_state_bytes=maximum_state_bytes)
+        return collector(policy, source_config)
+
+    return guarded
 
 
 def _bound_prospective_collector(
@@ -2786,6 +2883,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     limit=args.limit,
                     tushare_token=os.environ.get("TUSHARE_TOKEN"),
                     cancelled=cancelled,
+                    maximum_state_bytes=args.maximum_state_bytes,
                 )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
@@ -2841,6 +2939,154 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 0 if report["accepted"] is True else 1
+    if args.command == "data" and args.data_command == "collection-service-run":
+        try:
+            secrets = load_supervisor_environment(
+                args.environment_file,
+                state_root=args.state_root,
+            )
+            with _collection_cancellation_signal() as cancelled:
+                result = run_due_prospective_collection_jobs(
+                    state_root=args.state_root,
+                    now=args.now,
+                    job_ids=tuple(args.job_id),
+                    limit=args.limit,
+                    tushare_token=secrets["TUSHARE_TOKEN"],
+                    cancelled=cancelled,
+                    maximum_state_bytes=args.maximum_state_bytes,
+                )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        output = {**result, "service_environment_loaded": True}
+        print(json.dumps(output, indent=2, sort_keys=True))
+        successful_outcomes = {"success", "not_due", "in_progress", "backing_off"}
+        raw_results = result.get("results")
+        result_items = cast(list[object], raw_results) if isinstance(raw_results, list) else []
+
+        def service_succeeded(item: object) -> bool:
+            if not isinstance(item, dict):
+                return False
+            return cast(dict[object, object], item).get("outcome") in successful_outcomes
+
+        return 0 if all(service_succeeded(item) for item in result_items) else 1
+    if args.command == "data" and args.data_command == "collection-supervisor-plan":
+        try:
+            plan = ProspectiveSupervisorPlan.build(
+                host_name=args.host_name,
+                host_uid=args.host_uid,
+                launchd_label=args.launchd_label,
+                service_definition_path=args.service_definition_path,
+                executable_path=args.executable_path,
+                working_directory=args.working_directory,
+                state_root=args.state_root,
+                environment_file=args.environment_file,
+                stdout_path=args.stdout_path,
+                stderr_path=args.stderr_path,
+                invocation_interval_seconds=args.invocation_interval_seconds,
+                notification_policy=args.notification_policy,
+                maximum_state_bytes=args.maximum_state_bytes,
+            )
+        except (TypeError, ValueError) as exc:
+            print(
+                json.dumps({"planned": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "planned": True,
+                    "plan": plan.to_dict(),
+                    "launchd_plist": render_launchd_plist(plan),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "data" and args.data_command == "state-backup":
+        try:
+            manifest, backup_path = create_state_backup(
+                state_root=args.state_root,
+                backup_parent=args.backup_parent,
+                created_at=datetime.now(UTC),
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"backed_up": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "backed_up": True,
+                    "backup_path": backup_path.as_posix(),
+                    "manifest_id": manifest.manifest_id,
+                    "file_count": len(manifest.files),
+                    "execution_capability": False,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "data" and args.data_command == "state-verify-backup":
+        try:
+            manifest = verify_state_backup(args.backup)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"verified": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "verified": True,
+                    "manifest_id": manifest.manifest_id,
+                    "file_count": len(manifest.files),
+                    "sqlite_integrity_ok": manifest.sqlite_integrity_ok,
+                    "foreign_keys_ok": manifest.foreign_keys_ok,
+                    "execution_capability": False,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "data" and args.data_command == "state-restore":
+        try:
+            receipt = restore_state_backup(
+                backup_path=args.backup,
+                destination=args.destination,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"restored": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            json.dumps(
+                {
+                    "restored": True,
+                    "manifest_id": receipt.manifest_id,
+                    "destination": receipt.destination.as_posix(),
+                    "restored_file_count": receipt.restored_file_count,
+                    "sqlite_integrity_ok": receipt.sqlite_integrity_ok,
+                    "foreign_keys_ok": receipt.foreign_keys_ok,
+                    "execution_capability": receipt.execution_capability,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     if args.command == "archive" and args.archive_command == "common-crawl-verify":
         try:
             result = verify_common_crawl_archive(args.locator)
