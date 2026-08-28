@@ -4,10 +4,13 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlsplit
 
 from market_impact_agent.agent_contracts import canonical_hash
@@ -92,6 +95,33 @@ class SourceRightsEvidence:
             retrieved_at=retrieved_at,
             raw_content_hash=raw_content_hash,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRouteReplayRequest:
+    """Immutable source artifacts a provider must re-import for route acceptance."""
+
+    source_snapshot_id: str
+    raw_response_payload: bytes
+    rights_payload: bytes
+
+    def __post_init__(self) -> None:
+        _trimmed(self.source_snapshot_id, "source replay source_snapshot_id")
+        if not self.raw_response_payload:
+            raise ValueError("source replay raw_response_payload must not be empty")
+        if not self.rights_payload:
+            raise ValueError("source replay rights_payload must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRouteReplayResult:
+    """Persisted replay output produced from one SourceRouteReplayRequest."""
+
+    snapshot_id: str
+    store: LocalDataSnapshotStore
+
+    def __post_init__(self) -> None:
+        _trimmed(self.snapshot_id, "source replay snapshot_id")
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,20 +328,79 @@ class SourceRouteAcceptanceReport:
         return {**self.core_dict(), "report_id": self.report_id}
 
 
+def source_route_acceptance_report_from_dict(value: object) -> SourceRouteAcceptanceReport:
+    payload = _object(value, "source route acceptance report")
+    _closed(
+        payload,
+        {
+            "schema_version",
+            "report_id",
+            "declaration",
+            "rights_evidence",
+            "data_snapshot_id",
+            "deterministic_replay_snapshot_id",
+            "evaluated_at",
+            "gates",
+            "accepted",
+            "historical_pit_claim",
+            "evidence_promoted",
+            "execution_capability",
+        },
+        "source route acceptance report",
+    )
+    if _string(payload, "schema_version") != SOURCE_ROUTE_ACCEPTANCE_REPORT_SCHEMA:
+        raise ValueError("unsupported source route acceptance report schema_version")
+    rights_value = payload["rights_evidence"]
+    report = SourceRouteAcceptanceReport(
+        report_id=_string(payload, "report_id"),
+        declaration=_source_route_acceptance_declaration_from_dict(payload["declaration"]),
+        rights_evidence=(
+            None if rights_value is None else _source_rights_evidence_from_dict(rights_value)
+        ),
+        data_snapshot_id=_string(payload, "data_snapshot_id"),
+        deterministic_replay_snapshot_id=_optional_string(
+            payload["deterministic_replay_snapshot_id"],
+            "deterministic_replay_snapshot_id",
+        ),
+        evaluated_at=_datetime(payload["evaluated_at"], "evaluated_at"),
+        gates=tuple(
+            _source_acceptance_gate_result_from_dict(item)
+            for item in _list(payload["gates"], "gates")
+        ),
+        accepted=_boolean(payload, "accepted"),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        evidence_promoted=_boolean(payload, "evidence_promoted"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if report.to_dict() != payload:
+        raise ValueError("source route acceptance report does not match canonical contract")
+    return report
+
+
+def load_source_route_acceptance_report(path: Path) -> SourceRouteAcceptanceReport:
+    return source_route_acceptance_report_from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
 def qualify_source_route(
     *,
     declaration: SourceRouteAcceptanceDeclaration,
     rights_evidence: SourceRightsEvidence | None,
     snapshot: DataSnapshot,
     source_store: LocalDataSnapshotStore,
-    deterministic_replay: DataSnapshot | None,
-    deterministic_replay_store: LocalDataSnapshotStore | None,
+    replay_from_stored_artifacts: Callable[[SourceRouteReplayRequest], SourceRouteReplayResult]
+    | None,
     evaluated_at: datetime,
 ) -> SourceRouteAcceptanceReport:
     _strict_utc(evaluated_at, "source acceptance evaluated_at")
+    try:
+        stored_snapshot = source_store.get(snapshot.snapshot_id)
+    except (FileNotFoundError, KeyError, ValueError):
+        stored_snapshot = None
+    accepted_snapshot = snapshot if stored_snapshot is None else stored_snapshot
     matching_sources = tuple(
         item
-        for item in snapshot.query.sources
+        for item in accepted_snapshot.query.sources
         if item.provider_id == declaration.provider_id
         and item.provider_version == declaration.provider_version
         and item.upstream_source == declaration.upstream_source
@@ -338,7 +427,7 @@ def qualify_source_route(
 
     attempts = tuple(
         item
-        for item in snapshot.attempts
+        for item in accepted_snapshot.attempts
         if item.provider_id == declaration.provider_id
         and item.provider_version == declaration.provider_version
         and item.upstream_source == declaration.upstream_source
@@ -350,7 +439,7 @@ def qualify_source_route(
         transport_reasons.append("source_transport_not_completed")
 
     completeness_reasons: list[str] = []
-    if not snapshot.coverage_complete:
+    if not accepted_snapshot.coverage_complete:
         completeness_reasons.append("snapshot_coverage_incomplete")
     if len(attempts) == 1:
         attempt = attempts[0]
@@ -367,11 +456,11 @@ def qualify_source_route(
             completeness_reasons.append("source_records_rejected_by_snapshot_gate")
 
     time_reasons: list[str] = []
-    if snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
+    if accepted_snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
         time_reasons.append("sample_snapshot_not_prospective")
     matching_observations = tuple(
         item
-        for item in snapshot.observations
+        for item in accepted_snapshot.observations
         if item.provider_id == declaration.provider_id
         and item.provider_version == declaration.provider_version
         and item.upstream_source == declaration.upstream_source
@@ -393,45 +482,69 @@ def qualify_source_route(
         time_reasons.append("duplicate_observation_version")
 
     semantics_reasons: list[str] = []
-    if snapshot.query.capability is not declaration.capability:
+    if accepted_snapshot.query.capability is not declaration.capability:
         semantics_reasons.append("capability_mismatch")
     if not declaration.semantic_scope:
         semantics_reasons.append("semantic_scope_missing")
 
     determinism_reasons = _snapshot_storage_reasons(
         store=source_store,
-        snapshot=snapshot,
+        snapshot=accepted_snapshot,
         prefix="source",
     )
+    source_raw_response: bytes | None = None
+    rights_payload: bytes | None = None
+    if len(attempts) == 1 and attempts[0].raw_response_hash is not None:
+        with suppress(FileNotFoundError, ValueError):
+            source_raw_response = source_store.artifacts.get(
+                attempts[0].raw_response_hash,
+                media_type="application/octet-stream",
+            ).path.read_bytes()
     if rights_evidence is not None:
         try:
-            source_store.artifacts.get(
+            rights_payload = source_store.artifacts.get(
                 rights_evidence.raw_content_hash,
                 media_type="application/octet-stream",
-            )
+            ).path.read_bytes()
         except (FileNotFoundError, ValueError):
             determinism_reasons.append("source_rights_storage_invalid")
-    if deterministic_replay is None:
+    deterministic_replay_snapshot_id: str | None = None
+    if replay_from_stored_artifacts is None:
         determinism_reasons.append("deterministic_replay_missing")
-    elif deterministic_replay.to_dict() != snapshot.to_dict():
-        determinism_reasons.append("deterministic_replay_mismatch")
-    elif deterministic_replay_store is None:
-        determinism_reasons.append("deterministic_replay_storage_missing")
+    elif stored_snapshot is None or source_raw_response is None or rights_payload is None:
+        determinism_reasons.append("deterministic_replay_source_artifacts_invalid")
     else:
-        determinism_reasons.extend(
-            _snapshot_storage_reasons(
-                store=deterministic_replay_store,
-                snapshot=deterministic_replay,
-                prefix="deterministic_replay",
+        try:
+            replay = replay_from_stored_artifacts(
+                SourceRouteReplayRequest(
+                    source_snapshot_id=stored_snapshot.snapshot_id,
+                    raw_response_payload=source_raw_response,
+                    rights_payload=rights_payload,
+                )
             )
-        )
+            replay_snapshot = replay.store.get(replay.snapshot_id)
+        except (FileNotFoundError, KeyError, ValueError):
+            determinism_reasons.append("deterministic_replay_storage_invalid")
+        except Exception:
+            determinism_reasons.append("deterministic_replay_failed")
+        else:
+            deterministic_replay_snapshot_id = replay_snapshot.snapshot_id
+            if replay_snapshot.to_dict() != stored_snapshot.to_dict():
+                determinism_reasons.append("deterministic_replay_mismatch")
+            determinism_reasons.extend(
+                _snapshot_storage_reasons(
+                    store=replay.store,
+                    snapshot=replay_snapshot,
+                    prefix="deterministic_replay",
+                )
+            )
 
     isolation_reasons: list[str] = []
-    if not snapshot.coverage_complete:
+    if not accepted_snapshot.coverage_complete:
         isolation_reasons.append("incomplete_snapshot_not_agent_eligible")
-    if len(snapshot.query.sources) != 1 or len(matching_sources) != 1:
+    if len(accepted_snapshot.query.sources) != 1 or len(matching_sources) != 1:
         isolation_reasons.append("sample_query_source_scope_not_exact")
-    if snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
+    if accepted_snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
         isolation_reasons.append("sample_query_lane_not_prospective")
 
     gates = (
@@ -447,10 +560,8 @@ def qualify_source_route(
         "schema_version": SOURCE_ROUTE_ACCEPTANCE_REPORT_SCHEMA,
         "declaration": declaration.to_dict(),
         "rights_evidence": (None if rights_evidence is None else rights_evidence.to_dict()),
-        "data_snapshot_id": snapshot.snapshot_id,
-        "deterministic_replay_snapshot_id": (
-            None if deterministic_replay is None else deterministic_replay.snapshot_id
-        ),
+        "data_snapshot_id": accepted_snapshot.snapshot_id,
+        "deterministic_replay_snapshot_id": deterministic_replay_snapshot_id,
         "evaluated_at": _timestamp(evaluated_at),
         "gates": [item.to_dict() for item in gates],
         "accepted": all(item.status == SourceAcceptanceStatus.PASS for item in gates),
@@ -462,10 +573,8 @@ def qualify_source_route(
         report_id=f"source-route-acceptance-report-{canonical_hash(core)}",
         declaration=declaration,
         rights_evidence=rights_evidence,
-        data_snapshot_id=snapshot.snapshot_id,
-        deterministic_replay_snapshot_id=(
-            None if deterministic_replay is None else deterministic_replay.snapshot_id
-        ),
+        data_snapshot_id=accepted_snapshot.snapshot_id,
+        deterministic_replay_snapshot_id=deterministic_replay_snapshot_id,
         evaluated_at=evaluated_at,
         gates=gates,
         accepted=bool(core["accepted"]),
@@ -531,6 +640,87 @@ def write_source_route_acceptance_report(
     return target
 
 
+def _source_route_acceptance_declaration_from_dict(
+    value: object,
+) -> SourceRouteAcceptanceDeclaration:
+    payload = _object(value, "source route acceptance declaration")
+    _closed(
+        payload,
+        {
+            "schema_version",
+            "declaration_id",
+            "provider_id",
+            "provider_version",
+            "provider_manifest_hash",
+            "source_config_hash",
+            "upstream_source",
+            "capability",
+            "rights_basis_url",
+            "rights_reviewed_at",
+            "permitted_use",
+            "retention_scope",
+            "redistribution_allowed",
+            "semantic_scope",
+            "revision_strategy",
+        },
+        "source route acceptance declaration",
+    )
+    return SourceRouteAcceptanceDeclaration(
+        declaration_id=_string(payload, "declaration_id"),
+        provider_id=_string(payload, "provider_id"),
+        provider_version=_string(payload, "provider_version"),
+        provider_manifest_hash=_string(payload, "provider_manifest_hash"),
+        source_config_hash=_string(payload, "source_config_hash"),
+        upstream_source=_string(payload, "upstream_source"),
+        capability=ObservationCapability(_string(payload, "capability")),
+        rights_basis_url=_string(payload, "rights_basis_url"),
+        rights_reviewed_at=_datetime(payload["rights_reviewed_at"], "rights_reviewed_at"),
+        permitted_use=_string(payload, "permitted_use"),
+        retention_scope=_string(payload, "retention_scope"),
+        redistribution_allowed=_boolean(payload, "redistribution_allowed"),
+        semantic_scope=_string(payload, "semantic_scope"),
+        revision_strategy=_string(payload, "revision_strategy"),
+        schema_version=_string(payload, "schema_version"),
+    )
+
+
+def _source_rights_evidence_from_dict(value: object) -> SourceRightsEvidence:
+    payload = _object(value, "source rights evidence")
+    _closed(
+        payload,
+        {
+            "schema_version",
+            "evidence_id",
+            "source_ref",
+            "final_url",
+            "retrieved_at",
+            "raw_content_hash",
+        },
+        "source rights evidence",
+    )
+    return SourceRightsEvidence(
+        evidence_id=_string(payload, "evidence_id"),
+        source_ref=_string(payload, "source_ref"),
+        final_url=_string(payload, "final_url"),
+        retrieved_at=_datetime(payload["retrieved_at"], "retrieved_at"),
+        raw_content_hash=_string(payload, "raw_content_hash"),
+        schema_version=_string(payload, "schema_version"),
+    )
+
+
+def _source_acceptance_gate_result_from_dict(value: object) -> SourceAcceptanceGateResult:
+    payload = _object(value, "source acceptance gate result")
+    _closed(payload, {"gate", "status", "reasons"}, "source acceptance gate result")
+    return SourceAcceptanceGateResult(
+        gate=_string(payload, "gate"),
+        status=_string(payload, "status"),
+        reasons=tuple(
+            _string(item, "source acceptance gate reason")
+            for item in _list(payload["reasons"], "reasons")
+        ),
+    )
+
+
 def _gate(
     gate: SourceAcceptanceGate,
     reasons: list[str],
@@ -543,6 +733,54 @@ def _gate(
         ),
         reasons=unique,
     )
+
+
+def _object(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{name} must be an object")
+    return cast(dict[str, object], value)
+
+
+def _closed(value: dict[str, object], expected: set[str], name: str) -> None:
+    if set(value) != expected:
+        raise ValueError(f"{name} fields are invalid")
+
+
+def _list(value: object, name: str) -> list[object]:
+    if not isinstance(value, list):
+        raise TypeError(f"{name} must be an array")
+    return cast(list[object], value)
+
+
+def _string(value: dict[str, object] | object, name: str) -> str:
+    if isinstance(value, dict):
+        candidate: object = cast(dict[str, object], value)[name]
+    else:
+        candidate = value
+    if not isinstance(candidate, str):
+        raise TypeError(f"{name} must be a string")
+    return candidate
+
+
+def _optional_string(value: object, name: str) -> str | None:
+    if value is None:
+        return None
+    return _string(value, name)
+
+
+def _boolean(value: dict[str, object], name: str) -> bool:
+    candidate = value[name]
+    if not isinstance(candidate, bool):
+        raise TypeError(f"{name} must be a boolean")
+    return candidate
+
+
+def _datetime(value: object, name: str) -> datetime:
+    raw = _string(value, name)
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an ISO 8601 timestamp") from exc
 
 
 def _identifier(value: str, name: str) -> None:

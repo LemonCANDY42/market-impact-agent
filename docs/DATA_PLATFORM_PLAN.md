@@ -462,10 +462,38 @@ call or outcome opening.
 **Boundary:** it selects requirements, not Providers or conclusions, and grants no data, model, or
 execution authority.
 
+**Accepted 2026-08-28:**
+`prospective-diagnostic-registration-fc975cf2ca4280837f64528720b447615de74b445f21fdc9045465c36d9e9dfd`
+freezes three first-eligible, EOD-only checkpoints: an A-share policy/regulatory event, an issuer
+earnings expectation delta, and an NBS CPI/PPI macro release. All six diagnostic capabilities are
+required for each checkpoint; no post-hoc `not_applicable` escape is registered. The paired arms,
+three replicates per arm, shared USD 20.00 ceiling, hidden outcomes, and process-diagnostic-only claim
+scope are fixed. This completion authorizes source acquisition against the registration; it does not
+authorize a model call or outcome opening.
+
 ### Stage 2 — Accept capability-complete prospective data slices
 
 The route Tasks may proceed independently after PDI-01. A checkpoint may bind more than one route,
 but an implicit Provider fallback is never allowed.
+
+**Route implementation checkpoint, 2026-08-28:** the new `tushare-observation` Provider has twelve
+separate official-document-bound configurations. Every one completed a real token-backed capture,
+private Journal/store write, exact stored-bundle replay in an isolated store, and all seven generic
+source-route gates. The accepted samples covered index and ETF prices, calendar, ETF/stock identity,
+daily limits, SW2021 classification and membership, exchange margin, the economic release schedule,
+analyst forecasts, and Sina-source Tushare news. Report identities and row counts are recorded in
+`TUSHARE_DATA.md`; licensed rows remain private. This closes the shared transport/config/replay
+uncertainty, not the Tasks below: capability-specific completeness and checkpoint-barrier receipts
+remain required.
+
+The bounded NBS investigation also fixed the smallest PDI-15 route design: use the
+[official annual release calendar](https://www.stats.gov.cn/sj/fbrc/bnxxfb/) as advisory schedule,
+the [official latest-release RSS](https://www.stats.gov.cn/sj/zxfb/rss.xml) only for discovery, then
+capture the direct NBS CPI/PPI article and linked XLSX as the original-release authority. The RSS is
+a rolling, unpaged window and the newer schedule JSON is a trial frontend, so neither is an archive.
+No official machine-readable CPI/PPI correction or revision-lineage contract was found; repeated
+same-document hashes may detect change but cannot invent an official revision relation. PDI-15
+therefore remains fail-closed pending implementation and revision acceptance.
 
 #### PDI-10 — Accept checkpoint-relevant event and established-news routes
 
@@ -527,6 +555,13 @@ IDs, raw hashes, coverage results, and semantic tool manifests reconcile. The ex
 
 **Stage exit — Capability Coverage Gate:** every registered slot passes, or the checkpoint remains
 ineligible. `not_applicable` is allowed only when frozen in PDI-01, never invented after collection.
+
+The contract implementation now validates the immutable barrier, Journal provenance, route report
+identity, source configuration and Provider hashes, cadence/gap/freshness minima, observation/source
+coverage, raw response hashes, and the exact `FrozenDataSnapshotInput`. It emits one read-only
+capability tool per required slot. This is implementation evidence only: PDI-17 remains open until
+the registered future events occur and every required route has produced accepted post-registration
+actual receipts at the same checkpoint barrier.
 
 ### Stage 3 — Operate continuous collection safely
 

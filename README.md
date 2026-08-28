@@ -49,6 +49,10 @@ The bootstrap implements:
   reusable seven-gate Source Route Acceptance Report that binds captured rights evidence, exact raw
   JSON records, publication time, actual receipt, append-only revisions, and deterministic replay;
   the accepted route is private-research only and grants neither historical PIT nor execution;
+- a prospective `tushare-observation` Provider with twelve separately content-identified routes for
+  news, index/ETF/calendar context, instrument/industry exposure, margin positioning, macro schedule,
+  and analyst forecasts; every checked-in route has passed real private capture, stored-bundle
+  replay, and the seven route gates without exposing the purchased token or licensed rows;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
@@ -367,15 +371,24 @@ uv run market-impact backtest phase2-register --cohort COHORT.json \
 uv run market-impact backtest phase2-run --registration PRIVATE_REGISTRATION.json \
   --data-snapshot-root .market-impact/tushare --output-dir PRIVATE_OUTPUT_DIRECTORY
 uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
+uv run market-impact data validate-prospective-diagnostic \
+  --registration examples/research/prospective-diagnostic-registration-v1.json
+uv run market-impact data accept-tushare-observation \
+  --source-config examples/providers/tushare-observation-index-daily-v1.json \
+  --parameters-json '{"ts_code":"000300.SH","start_date":"20260827","end_date":"20260827"}' \
+  --window-start 2026-08-28T11:17:00Z \
+  --poll-interval-seconds 300 \
+  --maximum-gap-seconds 1800
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright
 uv run pytest
 ```
 
-Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment and
-writes licensed observations under the ignored `.market-impact/tushare/` directory. See the
-data-boundary document for the exact command and non-claims.
+Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment. Historical
+bundles remain under ignored `.market-impact/tushare/`; prospective observations, Journals, route
+reports, and raw artifacts remain under ignored `.market-impact/data-inputs/`. See the data-boundary
+document for exact semantics and non-claims.
 
 World Monitor capture reads `WORLD_MONITOR_API_KEY` only from the process environment.
 Prediction-market responses are stored under the ignored `.market-impact/observations/`

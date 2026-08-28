@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-diagnostic-registration.schema.json",
+  "title": "Market Impact Prospective Diagnostic Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registration_id",
+    "registered_at",
+    "checkpoints",
+    "paired_arms",
+    "replicates_per_arm",
+    "model_profile_id",
+    "aggregate_model_cost_limit_usd",
+    "outcome_opening_rule",
+    "stop_conditions",
+    "go_conditions",
+    "claim_scope"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-diagnostic-registration.v1"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "registered_at": {"type": "string", "format": "date-time"},
+    "checkpoints": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/checkpoint"}
+    },
+    "paired_arms": {
+      "const": ["structured_agent_core", "structured_agent_plus_routed_methods"]
+    },
+    "replicates_per_arm": {"const": 3},
+    "model_profile_id": {"type": "string", "minLength": 1},
+    "aggregate_model_cost_limit_usd": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]{2}$"
+    },
+    "outcome_opening_rule": {
+      "const": "do_not_open_until_all_paired_judgments_are_sealed"
+    },
+    "stop_conditions": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "go_conditions": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "claim_scope": {"const": "process_diagnostic_only_no_alpha_or_execution_claim"}
+  },
+  "$defs": {
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint_key",
+        "name",
+        "mechanism",
+        "selection_rule",
+        "eligibility_rule",
+        "eligibility_source_classes",
+        "exclusion_rules",
+        "cutoff",
+        "capability_slots",
+        "target_venues",
+        "allowed_instrument_classes",
+        "candidate_horizon_sessions"
+      ],
+      "properties": {
+        "checkpoint_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "name": {"type": "string", "minLength": 1},
+        "mechanism": {
+          "enum": ["policy_regulation", "earnings_expectation_delta", "macro_cycle"]
+        },
+        "selection_rule": {"const": "first_eligible_after_registration"},
+        "eligibility_rule": {"type": "string", "minLength": 1},
+        "eligibility_source_classes": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "exclusion_rules": {"$ref": "#/$defs/nonempty_unique_strings"},
+        "cutoff": {"$ref": "#/$defs/cutoff"},
+        "capability_slots": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/capability_slot"}
+        },
+        "target_venues": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["XSHG", "XSHE"]}
+        },
+        "allowed_instrument_classes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["equity", "exchange_traded_fund"]}
+        },
+        "candidate_horizon_sessions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "cutoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timezone",
+        "session_boundary",
+        "market_close_local",
+        "decision_delay_seconds"
+      ],
+      "properties": {
+        "timezone": {"const": "Asia/Shanghai"},
+        "session_boundary": {"const": "after_market_close"},
+        "market_close_local": {"const": "15:00:00"},
+        "decision_delay_seconds": {"type": "integer", "minimum": 0, "maximum": 21600}
+      }
+    },
+    "capability_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability",
+        "applicability",
+        "not_applicable_reason",
+        "required_route_kinds",
+        "minimum_data_sources",
+        "minimum_observations",
+        "poll_interval_seconds",
+        "maximum_gap_seconds",
+        "maximum_age_seconds"
+      ],
+      "properties": {
+        "capability": {
+          "enum": [
+            "event_revelation",
+            "prior_expectation",
+            "market_context",
+            "exposure_candidates",
+            "positioning",
+            "macro_vintage"
+          ]
+        },
+        "applicability": {"enum": ["required", "not_applicable"]},
+        "not_applicable_reason": {"type": ["string", "null"]},
+        "required_route_kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "minimum_data_sources": {"type": "integer", "minimum": 0},
+        "minimum_observations": {"type": "integer", "minimum": 0},
+        "poll_interval_seconds": {"type": "integer", "minimum": 0},
+        "maximum_gap_seconds": {"type": "integer", "minimum": 0},
+        "maximum_age_seconds": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

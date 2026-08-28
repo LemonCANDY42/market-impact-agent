@@ -3,11 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
+from urllib.parse import urlencode
+
+import pytest
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.csrc_news import (
+    CsrcNewsCapture,
     CsrcNewsHTTPResponse,
+    CsrcNewsPageCapture,
+    CsrcNewsParseError,
     CsrcNewsProvider,
     CsrcNewsSourceConfig,
     load_csrc_news_capture_bundle,
@@ -101,6 +108,83 @@ def _source(provider: CsrcNewsProvider) -> DataSourceBinding:
         source_config_hash=config.artifact_hash,
         required=True,
     )
+
+
+def _complete_capture(*bodies: bytes) -> CsrcNewsCapture:
+    config = _config()
+    return CsrcNewsCapture(
+        source_id=config.source_id,
+        retrieved_at=RETRIEVED,
+        pages=tuple(
+            CsrcNewsPageCapture(
+                page=page,
+                request_url=_capture_url(config, page),
+                response=CsrcNewsHTTPResponse(
+                    body=body,
+                    final_url=_capture_url(config, page),
+                    content_type="application/json",
+                ),
+            )
+            for page, body in enumerate(bodies, start=1)
+        ),
+        coverage_complete=True,
+    )
+
+
+def _capture_url(config: CsrcNewsSourceConfig, page: int) -> str:
+    query = urlencode(
+        (
+            ("_isAgg", "true"),
+            ("_isJson", "true"),
+            ("_pageSize", str(config.page_size)),
+            ("_template", "index"),
+            ("_rangeTimeGte", ""),
+            ("_channelName", ""),
+            ("page", str(page)),
+        )
+    )
+    return f"{config.endpoint_url}?{query}"
+
+
+def _capture_bundle(capture: CsrcNewsCapture) -> bytes:
+    parts = [b"market-impact.csrc-news-capture.v1\n"]
+    for item in capture.pages:
+        body = item.response.body
+        header = json.dumps(
+            {
+                "page": item.page,
+                "request_url": item.request_url,
+                "final_url": item.response.final_url,
+                "content_type": item.response.content_type,
+                "body_size": len(body),
+                "body_sha256": sha256(body).hexdigest(),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode()
+        parts.extend((header, b"\n", body, b"\n"))
+    return b"".join(parts)
+
+
+def _replay_capture(
+    provider: CsrcNewsProvider,
+    capture: CsrcNewsCapture,
+    store_root: Path,
+):
+    store = LocalDataSnapshotStore(store_root)
+    harness = DataInputHarness(store)
+    harness.register(provider.replay((capture,)))
+    query = DataQuery.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=RETRIEVED,
+        window_start=WINDOW_START,
+        source_policy_id="csrc-official-news-prospective-v1",
+        parameters={"keywords": [], "max_items": 20},
+        sources=(_source(provider),),
+        minimum_data_sources=1,
+    )
+    return asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
 
 
 def test_checked_in_csrc_source_is_canonical_and_schema_valid() -> None:
@@ -308,6 +392,122 @@ def test_csrc_provider_fails_closed_when_pagination_total_changes() -> None:
 
     assert capture.coverage_complete is False
     assert capture.error_kind == "source_parse_error"
+
+
+def test_csrc_replay_rejects_inconsistent_persisted_page_totals(tmp_path: Path) -> None:
+    provider = CsrcNewsProvider((_config(),), clock=lambda: RETRIEVED)
+    capture = _complete_capture(
+        _page(
+            1,
+            [
+                _result(title="一", content_id="c1", published_at="2026-08-20 12:00:00"),
+                _result(title="二", content_id="c2", published_at="2026-08-19 12:00:00"),
+            ],
+            total=4,
+        ),
+        _page(
+            2,
+            [
+                _result(title="三", content_id="c3", published_at="2026-08-18 12:00:00"),
+                _result(title="四", content_id="c4", published_at="2026-08-17 12:00:00"),
+            ],
+            total=3,
+        ),
+    )
+
+    snapshot = _replay_capture(provider, capture, tmp_path / "state")
+
+    assert snapshot.coverage_complete is False
+    assert snapshot.attempts[0].error_kind == "source_parse_error"
+
+
+def test_csrc_capture_bundle_rejects_inconsistent_page_totals() -> None:
+    capture = _complete_capture(
+        _page(
+            1,
+            [
+                _result(title="一", content_id="c1", published_at="2026-08-20 12:00:00"),
+                _result(title="二", content_id="c2", published_at="2026-08-19 12:00:00"),
+            ],
+            total=4,
+        ),
+        _page(
+            2,
+            [
+                _result(title="三", content_id="c3", published_at="2026-08-18 12:00:00"),
+                _result(title="四", content_id="c4", published_at="2026-08-17 12:00:00"),
+            ],
+            total=3,
+        ),
+    )
+
+    with pytest.raises(CsrcNewsParseError, match="pagination total changed"):
+        load_csrc_news_capture_bundle(
+            _capture_bundle(capture),
+            config=_config(),
+            retrieved_at=RETRIEVED,
+        )
+
+
+def test_csrc_capture_bundle_rejects_empty_intermediate_page_with_remaining_total() -> None:
+    capture = _complete_capture(
+        _page(
+            1,
+            [
+                _result(title="一", content_id="c1", published_at="2026-08-20 12:00:00"),
+                _result(title="二", content_id="c2", published_at="2026-08-19 12:00:00"),
+            ],
+            total=4,
+        ),
+        _page(2, [], total=4),
+    )
+
+    with pytest.raises(CsrcNewsParseError, match="empty page"):
+        load_csrc_news_capture_bundle(
+            _capture_bundle(capture),
+            config=_config(),
+            retrieved_at=RETRIEVED,
+        )
+
+
+def test_csrc_replay_rejects_empty_intermediate_page_with_remaining_coverage(
+    tmp_path: Path,
+) -> None:
+    provider = CsrcNewsProvider((_config(),), clock=lambda: RETRIEVED)
+    capture = _complete_capture(
+        _page(
+            1,
+            [
+                _result(title="一", content_id="c1", published_at="2026-08-20 12:00:00"),
+                _result(title="二", content_id="c2", published_at="2026-08-19 12:00:00"),
+            ],
+            total=4,
+        ),
+        _page(2, [], total=4),
+    )
+
+    snapshot = _replay_capture(provider, capture, tmp_path / "state")
+
+    assert snapshot.coverage_complete is False
+    assert snapshot.attempts[0].error_kind == "source_parse_error"
+
+
+def test_csrc_replay_rejects_mixed_route_records_in_a_persisted_capture(
+    tmp_path: Path,
+) -> None:
+    provider = CsrcNewsProvider((_config(),), clock=lambda: RETRIEVED)
+    wrong_route = _result(
+        title="错误频道",
+        content_id="c1",
+        published_at="2026-08-20 12:00:00",
+    )
+    wrong_route["channelId"] = "another-channel"
+    capture = _complete_capture(_page(1, [wrong_route], total=1))
+
+    snapshot = _replay_capture(provider, capture, tmp_path / "state")
+
+    assert snapshot.coverage_complete is False
+    assert snapshot.attempts[0].error_kind == "source_identity_mismatch"
 
 
 def test_csrc_provider_fails_closed_on_empty_page_before_positive_total_is_covered() -> None:

@@ -188,6 +188,24 @@ Data Snapshot and emit a compressed analytical projection, but it is not a Sourc
 Evidence authority, feature store, scheduler, or execution ledger.
 _Avoid_: Latest-value cache, historical archive, data warehouse, broker journal
 
+**Prospective Diagnostic Registration**:
+A content-identified requirements freeze for two or three first-eligible future checkpoints with
+different event mechanisms. It fixes each checkpoint's end-of-day cutoff construction, explicit
+capability applicability, route-kind and source-diversity minima, cadence/gap/freshness limits,
+eligible venues and instruments, candidate horizons, paired Agent arms, three replicates, aggregate
+model budget, hidden-outcome rule, and stop/go conditions before new acquisition or inference. It
+selects requirements, not Providers, observations, outcomes, or trades.
+_Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
+
+**Prospective Checkpoint Snapshot Set**:
+A content-identified reconciliation of one registered checkpoint's immutable barrier with the
+accepted route reports, Collection Policies, complete Journal-frozen Data Snapshots, raw response
+hashes, and capability-specific read-only Agent tools required by that registration. It authorizes
+the exact Snapshot ID set through `FrozenDataSnapshotInput` without becoming a composite evidence or
+data authority. A missing, stale, unaccepted, or post-hoc `not_applicable` slot leaves the checkpoint
+ineligible.
+_Avoid_: Composite Data Snapshot, Evidence Pack, Provider fallback, execution approval
+
 **Attention Watch**:
 A Harness-approved, content-identified, expiring read-only policy that periodically reuses registered
 Data Queries and Providers for one event or entity, evaluates deterministic new-information

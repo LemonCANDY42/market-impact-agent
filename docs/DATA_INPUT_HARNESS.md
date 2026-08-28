@@ -18,7 +18,11 @@ RSS/Atom path in `src/market_impact_agent/syndication_feed.py`; it proves actual
 metadata and excerpts only. It does not establish historical PIT, article-body rights, publisher
 completeness, or execution readiness. The first accepted A-share route is the CSRC official
 publication Provider in `src/market_impact_agent/csrc_news.py`. Its bounded trial uses the same
-Harness and Snapshot contract and accepts prospective private-research collection only.
+Harness and Snapshot contract and accepts prospective private-research collection only. The
+`tushare-observation` Provider adds twelve separately configured private routes for news, market,
+instrument, industry, positioning, macro-schedule, and analyst-forecast observations. Each route
+has its own content identity and acceptance report; sharing one transport never merges their
+semantics or acceptance.
 
 ## Bounded-context canvas
 
@@ -124,6 +128,22 @@ A Transmission Path remains a cited Judgment output assembled from facts and exp
 mechanism-appropriate horizon set remains a versioned research-method input. Treating either as a
 vendor field would hide an inference inside the data plane.
 
+### Prospective diagnostic binding
+
+The `Prospective Diagnostic Registration` freezes requirements before acquisition. It names three
+first-eligible future event mechanisms and fixes each cutoff rule, all six capability slots,
+route/source minima, freshness and gap limits, allowed instruments, horizons, paired arms, three
+replicates, the aggregate model budget, hidden-outcome rule, and stop/go conditions. It deliberately
+contains no Provider IDs and grants no model or execution authority.
+
+`ProspectiveCheckpointSnapshotSet` is the later non-authoritative barrier reconciliation. For every
+required slot it requires accepted route identity, the exact Collection Policy, a complete
+Journal-frozen prospective Snapshot, raw response hashes, source diversity, observation minima, and
+freshness at one immutable barrier. It then authorizes the exact Snapshot ID set through
+`FrozenDataSnapshotInput` and materializes the six capability-specific read-only tools. It never
+combines the underlying observations into a new data authority. A missing, stale, unaccepted, or
+post-hoc `not_applicable` slot makes the checkpoint ineligible.
+
 For frozen historical experiments the tool mode is `cache_only`. A scheduler or Harness operation
 must acquire and freeze the snapshot before the Judgment Run. Prospective collectors first freeze
 actual HTTP receipts, then replay those receipts under their generated latest-receipt cutoff. A
@@ -215,10 +235,13 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 ## Acceptance sequence
 
-The next process diagnostic should use two or three checkpoints with different mechanisms. Each must
-bind a structured event fact, cited prior expectation, supporting exposure data, a registered horizon
-set, and an executable index/ETF universe before model calls begin. First measure whether the previous
-event-identity, expectation-delta, and horizon blockers fall. Stop if the same blockers persist.
+PDI-01 now freezes three first-eligible EOD checkpoints with policy/regulation,
+earnings-expectation-delta, and macro-cycle mechanisms. The current Tushare Observation Provider has
+twelve route-level seven-gate acceptance reports, and the CSRC official-event route remains accepted.
+These are route contracts, not complete checkpoint sets: direct publisher coverage, complete market
+semantics, tradability fields, effective industry-to-ETF mapping, official macro release/revision
+lineage, and future post-registration receipts still have to reconcile at each checkpoint barrier.
+No model call begins until that Query Gate passes.
 
 In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` and start prospective
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or

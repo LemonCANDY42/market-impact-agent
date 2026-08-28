@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
+
+import pytest
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_schema import validate_agent_contract
@@ -25,7 +29,11 @@ from market_impact_agent.observations import (
 from market_impact_agent.source_acceptance import (
     SourceRightsEvidence,
     SourceRouteAcceptanceDeclaration,
+    SourceRouteReplayRequest,
+    SourceRouteReplayResult,
+    load_source_route_acceptance_report,
     qualify_source_route,
+    source_route_acceptance_report_from_dict,
     write_source_route_acceptance_report,
 )
 
@@ -158,6 +166,28 @@ def _stored_snapshot(
     return store
 
 
+def _reimport_from_stored_artifacts(
+    replay_store: LocalDataSnapshotStore,
+    snapshot: DataSnapshot,
+) -> Callable[[SourceRouteReplayRequest], SourceRouteReplayResult]:
+    def reimport(request: SourceRouteReplayRequest) -> SourceRouteReplayResult:
+        assert request.source_snapshot_id == snapshot.snapshot_id
+        assert request.raw_response_payload == RESPONSE_BYTES
+        assert request.rights_payload == RIGHTS_BYTES
+        assert (
+            replay_store.put_raw(request.raw_response_payload)
+            == snapshot.attempts[0].raw_response_hash
+        )
+        assert replay_store.put_raw(RECORD_BYTES) == snapshot.observations[0].raw_content_hash
+        replay_store.put(snapshot)
+        return SourceRouteReplayResult(
+            snapshot_id=snapshot.snapshot_id,
+            store=replay_store,
+        )
+
+    return reimport
+
+
 def test_source_route_acceptance_requires_all_seven_gates_and_is_schema_valid(
     tmp_path: Path,
 ) -> None:
@@ -170,8 +200,7 @@ def test_source_route_acceptance_requires_all_seven_gates_and_is_schema_valid(
         rights_evidence=_rights_evidence(),
         snapshot=snapshot,
         source_store=source_store,
-        deterministic_replay=snapshot,
-        deterministic_replay_store=replay_store,
+        replay_from_stored_artifacts=_reimport_from_stored_artifacts(replay_store, snapshot),
         evaluated_at=RETRIEVED,
     )
 
@@ -198,6 +227,86 @@ def test_source_route_acceptance_requires_all_seven_gates_and_is_schema_valid(
     )
 
 
+def test_source_route_acceptance_reimports_persisted_raw_and_rights_artifacts(
+    tmp_path: Path,
+) -> None:
+    snapshot = _snapshot()
+    source_store = _stored_snapshot(tmp_path / "source", snapshot)
+    replay_store = LocalDataSnapshotStore(tmp_path / "replay")
+
+    report = qualify_source_route(
+        declaration=_declaration(),
+        rights_evidence=_rights_evidence(),
+        snapshot=snapshot,
+        source_store=source_store,
+        replay_from_stored_artifacts=_reimport_from_stored_artifacts(replay_store, snapshot),
+        evaluated_at=RETRIEVED,
+    )
+
+    assert report.accepted is True
+    assert report.deterministic_replay_snapshot_id == snapshot.snapshot_id
+
+
+def test_source_route_acceptance_rejects_an_unpersisted_replay_result(tmp_path: Path) -> None:
+    snapshot = _snapshot()
+    source_store = _stored_snapshot(tmp_path / "source", snapshot)
+    replay_store = LocalDataSnapshotStore(tmp_path / "replay")
+
+    def unpersisted_replay(request: SourceRouteReplayRequest) -> SourceRouteReplayResult:
+        assert request.raw_response_payload == RESPONSE_BYTES
+        assert request.rights_payload == RIGHTS_BYTES
+        return SourceRouteReplayResult(
+            snapshot_id=snapshot.snapshot_id,
+            store=replay_store,
+        )
+
+    report = qualify_source_route(
+        declaration=_declaration(),
+        rights_evidence=_rights_evidence(),
+        snapshot=snapshot,
+        source_store=source_store,
+        replay_from_stored_artifacts=unpersisted_replay,
+        evaluated_at=RETRIEVED,
+    )
+
+    determinism = next(item for item in report.gates if item.gate == "determinism_and_storage")
+    assert report.accepted is False
+    assert determinism.reasons == ("deterministic_replay_storage_invalid",)
+
+
+def test_source_route_acceptance_does_not_replay_with_a_tampered_raw_artifact(
+    tmp_path: Path,
+) -> None:
+    snapshot = _snapshot()
+    source_store = _stored_snapshot(tmp_path / "source", snapshot)
+    raw_response_hash = snapshot.attempts[0].raw_response_hash
+    assert raw_response_hash is not None
+    source_store.artifacts.get(
+        raw_response_hash,
+        media_type="application/octet-stream",
+    ).path.write_bytes(b"fabricated raw response")
+    replay_calls: list[SourceRouteReplayRequest] = []
+
+    def replay(request: SourceRouteReplayRequest) -> SourceRouteReplayResult:
+        replay_calls.append(request)
+        raise AssertionError("tampered source artifacts must not be replayed")
+
+    report = qualify_source_route(
+        declaration=_declaration(),
+        rights_evidence=_rights_evidence(),
+        snapshot=snapshot,
+        source_store=source_store,
+        replay_from_stored_artifacts=replay,
+        evaluated_at=RETRIEVED,
+    )
+
+    determinism = next(item for item in report.gates if item.gate == "determinism_and_storage")
+    assert report.accepted is False
+    assert replay_calls == []
+    assert "source_raw_storage_invalid" in determinism.reasons
+    assert "deterministic_replay_source_artifacts_invalid" in determinism.reasons
+
+
 def test_source_route_acceptance_fails_closed_without_deterministic_replay(tmp_path: Path) -> None:
     snapshot = _snapshot()
     source_store = _stored_snapshot(tmp_path / "source", snapshot)
@@ -207,8 +316,7 @@ def test_source_route_acceptance_fails_closed_without_deterministic_replay(tmp_p
         rights_evidence=_rights_evidence(),
         snapshot=snapshot,
         source_store=source_store,
-        deterministic_replay=None,
-        deterministic_replay_store=None,
+        replay_from_stored_artifacts=None,
         evaluated_at=RETRIEVED,
     )
 
@@ -228,8 +336,7 @@ def test_source_route_acceptance_fails_closed_without_captured_rights_basis(tmp_
         rights_evidence=None,
         snapshot=snapshot,
         source_store=source_store,
-        deterministic_replay=snapshot,
-        deterministic_replay_store=replay_store,
+        replay_from_stored_artifacts=_reimport_from_stored_artifacts(replay_store, snapshot),
         evaluated_at=RETRIEVED,
     )
 
@@ -249,8 +356,7 @@ def test_source_route_acceptance_report_is_written_to_private_content_identified
         rights_evidence=_rights_evidence(),
         snapshot=snapshot,
         source_store=source_store,
-        deterministic_replay=snapshot,
-        deterministic_replay_store=replay_store,
+        replay_from_stored_artifacts=_reimport_from_stored_artifacts(replay_store, snapshot),
         evaluated_at=RETRIEVED,
     )
 
@@ -260,6 +366,36 @@ def test_source_route_acceptance_report_is_written_to_private_content_identified
     assert first == second
     assert first.name == f"{report.report_id}.json"
     assert first.stat().st_mode & 0o777 == 0o600
+
+
+def test_source_route_acceptance_report_parser_is_canonical_and_closed(
+    tmp_path: Path,
+) -> None:
+    snapshot = _snapshot()
+    source_store = _stored_snapshot(tmp_path / "source", snapshot)
+    replay_store = LocalDataSnapshotStore(tmp_path / "replay")
+    report = qualify_source_route(
+        declaration=_declaration(),
+        rights_evidence=_rights_evidence(),
+        snapshot=snapshot,
+        source_store=source_store,
+        replay_from_stored_artifacts=_reimport_from_stored_artifacts(replay_store, snapshot),
+        evaluated_at=RETRIEVED,
+    )
+    payload = report.to_dict()
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert source_route_acceptance_report_from_dict(payload) == report
+    assert load_source_route_acceptance_report(report_path) == report
+
+    extra_field = {**payload, "unexpected": True}
+    with pytest.raises(ValueError, match="fields are invalid"):
+        source_route_acceptance_report_from_dict(extra_field)
+
+    noncanonical = {**payload, "evaluated_at": "2026-08-28T08:00:00+00:00"}
+    with pytest.raises(ValueError, match="canonical contract"):
+        source_route_acceptance_report_from_dict(noncanonical)
 
 
 def test_source_route_acceptance_fails_when_declared_raw_storage_is_missing(
@@ -275,8 +411,7 @@ def test_source_route_acceptance_fails_when_declared_raw_storage_is_missing(
         rights_evidence=_rights_evidence(),
         snapshot=snapshot,
         source_store=source_store,
-        deterministic_replay=snapshot,
-        deterministic_replay_store=replay_store,
+        replay_from_stored_artifacts=_reimport_from_stored_artifacts(replay_store, snapshot),
         evaluated_at=RETRIEVED,
     )
 

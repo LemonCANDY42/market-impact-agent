@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-checkpoint-snapshot-set.schema.json",
+  "title": "Market Impact Prospective Checkpoint Snapshot Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_set_id",
+    "registration_id",
+    "checkpoint_key",
+    "barrier_at",
+    "reconciled_at",
+    "capability_bindings",
+    "authorized_snapshot_ids",
+    "complete",
+    "historical_pit_claim",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-checkpoint-snapshot-set.v1"},
+    "snapshot_set_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-snapshot-set-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "barrier_at": {"type": "string", "format": "date-time"},
+    "reconciled_at": {"type": "string", "format": "date-time"},
+    "capability_bindings": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/capability_binding"}
+    },
+    "authorized_snapshot_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/snapshot_id"}
+    },
+    "complete": {"const": true},
+    "historical_pit_claim": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "capability": {
+      "enum": [
+        "event_revelation",
+        "prior_expectation",
+        "market_context",
+        "exposure_candidates",
+        "positioning",
+        "macro_vintage"
+      ]
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_kind",
+        "snapshot_id",
+        "collection_policy_id",
+        "source_acceptance_report_id",
+        "provider_id",
+        "provider_version",
+        "upstream_source",
+        "provider_manifest_hash",
+        "source_config_hash",
+        "raw_response_hash"
+      ],
+      "properties": {
+        "route_kind": {"type": "string", "minLength": 1},
+        "snapshot_id": {"$ref": "#/$defs/snapshot_id"},
+        "collection_policy_id": {
+          "type": "string",
+          "pattern": "^prospective-collection-policy-[0-9a-f]{64}$"
+        },
+        "source_acceptance_report_id": {
+          "type": "string",
+          "pattern": "^source-route-acceptance-report-[0-9a-f]{64}$"
+        },
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_version": {"type": "string", "minLength": 1},
+        "upstream_source": {"type": "string", "minLength": 1},
+        "provider_manifest_hash": {"$ref": "#/$defs/sha256"},
+        "source_config_hash": {"$ref": "#/$defs/sha256"},
+        "raw_response_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "tool_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "snapshot_ids",
+        "allowed_filter_fields",
+        "side_effect"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "lookup_event_revelation",
+            "lookup_prior_expectation",
+            "lookup_market_context",
+            "lookup_exposure_candidates",
+            "lookup_positioning",
+            "lookup_macro_vintage"
+          ]
+        },
+        "version": {"const": "1"},
+        "snapshot_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/snapshot_id"}
+        },
+        "allowed_filter_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "side_effect": {"const": "read_only"}
+      }
+    },
+    "capability_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability",
+        "applicability",
+        "not_applicable_reason",
+        "routes",
+        "tool_manifest"
+      ],
+      "properties": {
+        "capability": {"$ref": "#/$defs/capability"},
+        "applicability": {"enum": ["required", "not_applicable"]},
+        "not_applicable_reason": {"type": ["string", "null"]},
+        "routes": {"type": "array", "items": {"$ref": "#/$defs/route"}},
+        "tool_manifest": {
+          "oneOf": [{"$ref": "#/$defs/tool_manifest"}, {"type": "null"}]
+        }
+      }
+    }
+  }
+}

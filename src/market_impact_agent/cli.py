@@ -8,11 +8,13 @@ import platform
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Protocol, cast
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
@@ -124,6 +126,9 @@ from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
 )
+from market_impact_agent.prospective_diagnostic import (
+    load_prospective_diagnostic_registration,
+)
 from market_impact_agent.providers import MockExecutionProvider, ProviderManifest
 from market_impact_agent.regime_archive_recovery import (
     audit_publisher_archive_recovery,
@@ -158,6 +163,8 @@ from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStat
 from market_impact_agent.source_acceptance import (
     SourceRightsEvidence,
     SourceRouteAcceptanceDeclaration,
+    SourceRouteReplayRequest,
+    SourceRouteReplayResult,
     qualify_source_route,
     write_source_route_acceptance_report,
 )
@@ -177,6 +184,12 @@ from market_impact_agent.tushare_bundle import (
     capture_tushare_data_bundle,
     validate_tushare_data_bundle,
     write_tushare_data_bundle,
+)
+from market_impact_agent.tushare_observation import (
+    TushareObservationProvider,
+    TushareObservationTransport,
+    load_tushare_observation_capture_bundle,
+    load_tushare_observation_source,
 )
 
 
@@ -276,6 +289,32 @@ def build_parser() -> argparse.ArgumentParser:
     csrc_accept_parser.add_argument("--max-items", type=int, default=50)
     csrc_accept_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
     csrc_accept_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    prospective_diagnostic_parser = data_subparsers.add_parser(
+        "validate-prospective-diagnostic",
+        help="Validate the frozen PDI-01 prospective checkpoint registration",
+    )
+    prospective_diagnostic_parser.add_argument("--registration", required=True, type=Path)
+    tushare_observation_accept_parser = data_subparsers.add_parser(
+        "accept-tushare-observation",
+        help="Capture, journal, persist, and replay one prospective Tushare route",
+    )
+    tushare_observation_accept_parser.add_argument("--source-config", required=True, type=Path)
+    tushare_observation_accept_parser.add_argument("--parameters-json", required=True)
+    tushare_observation_accept_parser.add_argument(
+        "--window-start", required=True, type=_aware_timestamp
+    )
+    tushare_observation_accept_parser.add_argument(
+        "--poll-interval-seconds", required=True, type=int
+    )
+    tushare_observation_accept_parser.add_argument("--maximum-gap-seconds", required=True, type=int)
+    tushare_observation_accept_parser.add_argument(
+        "--provider-timeout-seconds", type=float, default=30.0
+    )
+    tushare_observation_accept_parser.add_argument(
         "--state-root",
         type=Path,
         default=Path(".market-impact/data-inputs"),
@@ -844,6 +883,35 @@ def validate_event(path: Path) -> dict[str, object]:
     }
 
 
+def validate_prospective_diagnostic(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    schema_errors = validate_agent_contract(
+        payload,
+        "prospective-diagnostic-registration.schema.json",
+    )
+    if schema_errors:
+        return {
+            "path": path.as_posix(),
+            "valid": False,
+            "errors": list(schema_errors),
+        }
+    registration = load_prospective_diagnostic_registration(path)
+    return {
+        "path": path.as_posix(),
+        "valid": True,
+        "errors": [],
+        "registration_id": registration.registration_id,
+        "registered_at": _utc_timestamp(registration.registered_at),
+        "checkpoint_keys": [item.checkpoint_key for item in registration.checkpoints],
+        "mechanisms": [item.mechanism.value for item in registration.checkpoints],
+        "replicates_per_arm": registration.replicates_per_arm,
+        "aggregate_model_cost_limit_usd": registration.aggregate_model_cost_limit_usd,
+        "historical_pit_claim": False,
+        "model_calls_authorized": False,
+        "execution_capability": False,
+    }
+
+
 def verify_common_crawl_archive(
     locator_path: Path,
     *,
@@ -1252,37 +1320,40 @@ def accept_csrc_news_source(
     harness = DataInputHarness(store, provider_timeout_seconds=provider_timeout_seconds)
     harness.register(capture_provider)
     snapshot = asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
-    raw_response_hash = snapshot.attempts[0].raw_response_hash
-    if raw_response_hash is None:
-        raise ValueError("CSRC source acceptance requires one stored raw response")
-    stored_bundle = store.artifacts.get(
-        raw_response_hash,
-        media_type="application/octet-stream",
-    ).path.read_bytes()
-    stored_capture = load_csrc_news_capture_bundle(
-        stored_bundle,
-        config=config,
-        retrieved_at=snapshot.attempts[0].retrieved_at,
-    )
-    replay_provider = provider.replay((stored_capture,))
     state_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".acceptance-replay-", dir=state_root) as replay_root:
         replay_store = LocalDataSnapshotStore(Path(replay_root))
-        replay_harness = DataInputHarness(
-            replay_store,
-            provider_timeout_seconds=provider_timeout_seconds,
-        )
-        replay_harness.register(replay_provider)
-        deterministic_replay = asyncio.run(
-            replay_harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING)
-        )
+
+        def replay_from_stored_artifacts(
+            request: SourceRouteReplayRequest,
+        ) -> SourceRouteReplayResult:
+            if request.source_snapshot_id != snapshot.snapshot_id:
+                raise ValueError("CSRC replay source Snapshot identity mismatch")
+            stored_capture = load_csrc_news_capture_bundle(
+                request.raw_response_payload,
+                config=config,
+                retrieved_at=snapshot.attempts[0].retrieved_at,
+            )
+            replay_provider = provider.replay((stored_capture,))
+            replay_harness = DataInputHarness(
+                replay_store,
+                provider_timeout_seconds=provider_timeout_seconds,
+            )
+            replay_harness.register(replay_provider)
+            replay_snapshot = asyncio.run(
+                replay_harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING)
+            )
+            return SourceRouteReplayResult(
+                snapshot_id=replay_snapshot.snapshot_id,
+                store=replay_store,
+            )
+
         report = qualify_source_route(
             declaration=declaration,
             rights_evidence=rights_evidence,
             snapshot=snapshot,
             source_store=store,
-            deterministic_replay=deterministic_replay,
-            deterministic_replay_store=replay_store,
+            replay_from_stored_artifacts=replay_from_stored_artifacts,
             evaluated_at=datetime.now(UTC),
         )
     report_path = write_source_route_acceptance_report(
@@ -1301,6 +1372,166 @@ def accept_csrc_news_source(
         "historical_pit_claim": report.historical_pit_claim,
         "evidence_promoted": report.evidence_promoted,
         "execution_capability": report.execution_capability,
+    }
+
+
+def accept_tushare_observation_source(
+    *,
+    token: str,
+    source_config_path: Path,
+    parameters: Mapping[str, object],
+    window_start: datetime,
+    poll_interval_seconds: int,
+    maximum_gap_seconds: int,
+    state_root: Path,
+    provider_timeout_seconds: float,
+    transport: TushareObservationTransport | None = None,
+    rights_fetcher: Callable[[str], tuple[str, bytes]] | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> dict[str, object]:
+    if not token or token != token.strip():
+        raise ValueError("TUSHARE_TOKEN is not configured")
+    config = load_tushare_observation_source(source_config_path)
+    provider = TushareObservationProvider(
+        token,
+        (config,),
+        timeout_seconds=provider_timeout_seconds,
+        transport=transport,
+        clock=clock,
+    )
+    capture = asyncio.run(provider.collect(source_id=config.source_id, parameters=parameters))
+    if not capture.coverage_complete:
+        raise RuntimeError(
+            f"Tushare route capture failed: {capture.error_kind or 'unknown_source_error'}"
+        )
+    manifest_hash = canonical_hash(provider.manifest.to_dict())
+    source = DataSourceBinding(
+        provider_id=provider.manifest.provider_id,
+        provider_version=provider.manifest.provider_version,
+        upstream_source=config.source_id,
+        manifest_hash=manifest_hash,
+        source_config_hash=config.artifact_hash,
+        required=True,
+    )
+    policy = ProspectiveCollectionPolicy.build(
+        capability=config.capability,
+        sources=(source,),
+        window_start=window_start.astimezone(UTC),
+        parameters=parameters,
+        poll_interval_seconds=poll_interval_seconds,
+        maximum_gap_seconds=maximum_gap_seconds,
+    )
+    query = DataQuery.build(
+        capability=config.capability,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=capture.retrieved_at,
+        window_start=policy.window_start,
+        source_policy_id=policy.policy_id,
+        parameters=parameters,
+        sources=(source,),
+        minimum_data_sources=1,
+    )
+    capture_provider = provider.replay((capture,))
+    store = LocalDataSnapshotStore(state_root)
+    harness = DataInputHarness(store, provider_timeout_seconds=provider_timeout_seconds)
+    harness.register(capture_provider)
+    snapshot = asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
+    journal = ProspectiveDataJournal(store)
+    journal_result = journal.record_snapshot(snapshot, policy=policy)
+
+    if rights_fetcher is None:
+        rights_final_url, rights_payload = _fetch_public_https_document(
+            config.rights_url,
+            timeout_seconds=provider_timeout_seconds,
+            max_response_bytes=2_000_000,
+        )
+    else:
+        rights_final_url, rights_payload = rights_fetcher(config.rights_url)
+    if not rights_payload:
+        raise ValueError("Tushare route rights evidence is empty")
+    current_time = datetime.now(UTC) if clock is None else clock()
+    rights_hash = store.put_raw(rights_payload)
+    rights_evidence = SourceRightsEvidence.build(
+        source_ref=config.rights_url,
+        final_url=rights_final_url,
+        retrieved_at=current_time,
+        raw_content_hash=rights_hash,
+    )
+    declaration = SourceRouteAcceptanceDeclaration.build(
+        provider_id=provider.manifest.provider_id,
+        provider_version=provider.manifest.provider_version,
+        provider_manifest_hash=manifest_hash,
+        source_config_hash=config.artifact_hash,
+        upstream_source=config.source_id,
+        capability=config.capability,
+        rights_basis_url=config.rights_url,
+        rights_reviewed_at=current_time,
+        permitted_use="private_research",
+        retention_scope="private_raw_and_normalized",
+        redistribution_allowed=False,
+        semantic_scope=config.semantic_scope,
+        revision_strategy="append_only_content_versions",
+    )
+
+    state_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=".tushare-acceptance-replay-",
+        dir=state_root,
+    ) as replay_root:
+        replay_store = LocalDataSnapshotStore(Path(replay_root))
+
+        def replay_from_stored_artifacts(
+            request: SourceRouteReplayRequest,
+        ) -> SourceRouteReplayResult:
+            if request.source_snapshot_id != snapshot.snapshot_id:
+                raise ValueError("Tushare replay source Snapshot identity mismatch")
+            stored_capture = load_tushare_observation_capture_bundle(
+                request.raw_response_payload,
+                config=config,
+                parameters=parameters,
+                retrieved_at=snapshot.attempts[0].retrieved_at,
+            )
+            replay_provider = provider.replay((stored_capture,))
+            replay_harness = DataInputHarness(
+                replay_store,
+                provider_timeout_seconds=provider_timeout_seconds,
+            )
+            replay_harness.register(replay_provider)
+            replay_snapshot = asyncio.run(
+                replay_harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING)
+            )
+            return SourceRouteReplayResult(
+                snapshot_id=replay_snapshot.snapshot_id,
+                store=replay_store,
+            )
+
+        report = qualify_source_route(
+            declaration=declaration,
+            rights_evidence=rights_evidence,
+            snapshot=snapshot,
+            source_store=store,
+            replay_from_stored_artifacts=replay_from_stored_artifacts,
+            evaluated_at=current_time,
+        )
+    report_path = write_source_route_acceptance_report(
+        report,
+        state_root / "source-acceptance",
+    )
+    return {
+        "accepted": report.accepted,
+        "source_route_acceptance_report_id": report.report_id,
+        "source_route_acceptance_report_path": report_path.as_posix(),
+        "collection_policy_id": policy.policy_id,
+        "data_snapshot_id": snapshot.snapshot_id,
+        "capture_cutoff_at": _utc_timestamp(snapshot.query.as_of),
+        "coverage_complete": snapshot.coverage_complete,
+        "observation_count": len(snapshot.observations),
+        "journal_already_recorded": journal_result.already_recorded,
+        "pit_lane": snapshot.query.pit_lane.value,
+        "historical_pit_claim": report.historical_pit_claim,
+        "evidence_promoted": report.evidence_promoted,
+        "execution_capability": report.execution_capability,
+        "gates": [item.to_dict() for item in report.gates],
     }
 
 
@@ -2013,6 +2244,51 @@ def _utc_timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _json_object_argument(value: str) -> dict[str, object]:
+    payload: object = json.loads(value)
+    if not isinstance(payload, dict):
+        raise ValueError("parameters JSON must be an object")
+    untyped = cast(dict[object, object], payload)
+    if any(not isinstance(key, str) for key in untyped):
+        raise ValueError("parameters JSON keys must be strings")
+    return cast(dict[str, object], untyped)
+
+
+def _fetch_public_https_document(
+    url: str,
+    *,
+    timeout_seconds: float,
+    max_response_bytes: int,
+) -> tuple[str, bytes]:
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise ValueError("rights evidence URL must be a fixed public HTTPS URL")
+    if timeout_seconds <= 0 or max_response_bytes < 1:
+        raise ValueError("rights evidence fetch bounds are invalid")
+    request = Request(url, headers={"User-Agent": "market-impact-agent/0.1"})
+    with urlopen(request, timeout=timeout_seconds) as response:
+        final_url = cast(str, response.geturl())
+        body = response.read(max_response_bytes + 1)
+    final = urlsplit(final_url)
+    if (
+        final.scheme != "https"
+        or not final.netloc
+        or final.username is not None
+        or final.password is not None
+        or final.fragment
+    ):
+        raise ValueError("rights evidence redirect must remain public HTTPS")
+    if len(body) > max_response_bytes:
+        raise ValueError("rights evidence response exceeds its byte limit")
+    return final_url, body
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
@@ -2114,6 +2390,44 @@ def main(argv: Sequence[str] | None = None) -> int:
                 window_start=args.window_start,
                 keywords=tuple(args.keyword),
                 max_items=args.max_items,
+                state_root=args.state_root,
+                provider_timeout_seconds=args.provider_timeout_seconds,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["accepted"] is True else 1
+    if args.command == "data" and args.data_command == "validate-prospective-diagnostic":
+        try:
+            result = validate_prospective_diagnostic(args.registration)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["valid"] is True else 1
+    if args.command == "data" and args.data_command == "accept-tushare-observation":
+        token = os.environ.get("TUSHARE_TOKEN", "")
+        if not token:
+            print(
+                json.dumps({"accepted": False, "error": "TUSHARE_TOKEN is not configured"}),
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            result = accept_tushare_observation_source(
+                token=token,
+                source_config_path=args.source_config,
+                parameters=_json_object_argument(args.parameters_json),
+                window_start=args.window_start,
+                poll_interval_seconds=args.poll_interval_seconds,
+                maximum_gap_seconds=args.maximum_gap_seconds,
                 state_root=args.state_root,
                 provider_timeout_seconds=args.provider_timeout_seconds,
             )

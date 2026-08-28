@@ -74,19 +74,48 @@ Stage 0 — resolve high-impact uncertainty:
 
 Stage 1 — freeze requirements:
 
-- [ ] `PDI-01` Freeze the two-to-three-checkpoint prospective diagnostic registration before new
-  acquisition, model calls, or outcome opening.
+- [x] `PDI-01` Freeze the three-checkpoint prospective diagnostic registration before new
+  acquisition, model calls, or outcome opening. Registration
+  `prospective-diagnostic-registration-fc975cf2ca4280837f64528720b447615de74b445f21fdc9045465c36d9e9dfd`
+  fixes first-eligible policy, earnings-expectation, and macro mechanisms; EOD cutoffs; all six
+  required capability slots and their route/cadence/freshness minima; target venues/classes;
+  horizons; paired arms; three replicates; the USD 20 aggregate ceiling; hidden outcomes; and exact
+  stop/go rules. It grants no model, historical-PIT, or execution authority.
 
 Stage 2 — accept capability-complete data slices:
 
 - [ ] `PDI-10` Accept checkpoint-relevant official-event and established-news routes.
+  - [x] Accept the CSRC official-event route and the Tushare/Sina prospective aggregator route.
+  - [ ] Accept the direct publisher coverage required by each registered checkpoint; aggregator
+    receipt cannot substitute for publisher authority.
 - [ ] `PDI-11` Accept the registered A-share market/index/ETF context route.
+  - [x] Accept route-level Tushare `index_daily`, `fund_daily`, and `trade_cal` captures and replay.
+  - [ ] Prove registered breadth/volatility/liquidity, sequence completeness, and corporate-action
+    semantics at the future checkpoint barrier.
 - [ ] `PDI-12` Accept an effective-dated tradable instrument and universe route.
+  - [x] Accept route-level `etf_basic`, `stock_basic`, and `stk_limit` captures and replay.
+  - [ ] Bind lot/tick rules and decision-time tradability into one effective-dated universe.
 - [ ] `PDI-13` Accept an effective-dated industry taxonomy, membership, and exposure route.
+  - [x] Accept route-level SW2021 `index_classify` and `index_member_all` captures and replay.
+  - [ ] Bind taxonomy version, historical membership, rebalance lineage, and industry-to-tradable-ETF
+    exposure without back-applying current classification.
 - [ ] `PDI-14` Accept the registered positioning route.
+  - [x] Accept the route-level Tushare exchange-margin capture and replay.
+  - [ ] Freeze units, publication cadence, revision behavior, and checkpoint-aligned no-data rules.
 - [ ] `PDI-15` Accept the registered macro release-and-revision route.
+  - [x] Accept the Tushare schedule-observation route and freeze the direct NBS
+    calendar→RSS→article/XLSX prospective design.
+  - [ ] Implement and accept the direct original-release route; keep revision lineage blocked until
+    an official correction/revision relationship can be established.
 - [ ] `PDI-16` Accept the registered prior-expectation route.
+  - [x] Accept the route-level Tushare `report_rc` forecast-observation capture and replay.
+  - [ ] Freeze and verify the registered as-of population, source-diversity, unit, and consensus
+    derivation contract at the checkpoint barrier.
 - [ ] `PDI-17` Freeze and reconcile the complete multi-Snapshot checkpoint input sets.
+  - [x] Implement the non-authoritative reconciliation contract and capability-specific read-only
+    tools: accepted routes, Collection Policies, Journal-frozen Snapshots, raw hashes, a shared
+    barrier, freshness/coverage, and `FrozenDataSnapshotInput` must reconcile. The evidence gate
+    remains open until the registered future checkpoint receipts exist.
 
 Stage 3 — operate continuous collection:
 

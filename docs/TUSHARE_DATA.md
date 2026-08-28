@@ -7,10 +7,11 @@ or a data vendor the orchestration owner.
 Tushare is fully usable as an upstream source under this project's deployment entitlement: the
 owner supplies their purchased token, uses it only inside the private Harness, and does not resell
 or redistribute the data. That fact authorizes Provider integration; it does not make any route
-Agent-visible by itself. The current `tushare-http` market-data Provider Manifest remains
-`disabled`/`unverified` until the specific route and claimed capabilities pass Harness acceptance.
-Optional APIs are tested independently because the current token may enable different products and
-freshness tiers.
+Agent-visible by itself. The legacy `tushare-http` historical-market bundle Provider remains
+`disabled`/`unverified` for its historical and execution claims. The separate
+`tushare-observation` Provider is enabled for contract-validated prospective collection, while
+every API route still requires its own accepted Source Route Configuration and report before a
+checkpoint may cite it.
 
 Official contract references: [`stock_basic`](https://tushare.pro/document/1?doc_id=25),
 [`trade_cal`](https://tushare.pro/document/2?doc_id=26), and
@@ -21,6 +22,72 @@ The separate research-only market-context panel uses
 [`index_daily`](https://tushare.pro/document/2?doc_id=95),
 [`index_classify`](https://tushare.pro/document/2?doc_id=181), and
 [`sw_daily`](https://tushare.pro/document/2?doc_id=327).
+
+## Prospective Observation Provider
+
+`src/market_impact_agent/tushare_observation.py` implements one credential-isolated HTTPS transport
+and twelve content-identified route configurations. The owner's purchased 10,000-plus-point account
+is treated as fully usable for this private Harness; the token is read only from `TUSHARE_TOKEN` and
+is excluded from requests persisted for replay, hashes, logs, errors, configs, and Agent tools.
+
+The official route contracts are [`news`](https://tushare.pro/document/2?doc_id=143),
+[`index_daily`](https://tushare.pro/document/2?doc_id=95),
+[`fund_daily`](https://tushare.pro/document/2?doc_id=127),
+[`trade_cal`](https://tushare.pro/document/2?doc_id=26),
+[`etf_basic`](https://tushare.pro/document/2?doc_id=385),
+[`stock_basic`](https://tushare.pro/document/2?doc_id=25),
+[`stk_limit`](https://tushare.pro/document/2?doc_id=183),
+[`index_classify`](https://tushare.pro/document/2?doc_id=181),
+[`index_member_all`](https://tushare.pro/document/2?doc_id=335),
+[`margin`](https://tushare.pro/document/2?doc_id=58),
+[`cn_schedule`](https://tushare.pro/document/2?doc_id=461), and
+[`report_rc`](https://tushare.pro/document/2?doc_id=292). Every configuration fixes its API,
+capability, fields, primary key, allowed/fixed parameters, time fields, source semantics, rights and
+documentation URLs, page size, and page ceiling. Pagination is bounded at 1,000 rows per page and
+100 pages, every individual HTTPS response is capped at 32 MiB before JSON parsing, and one capture
+cannot accumulate more than 256 MiB of response bodies.
+
+Collection retains the exact response pages and selected record bytes, sorts and deduplicates by the
+route-specific primary key, and records actual receipt as prospective availability and authority.
+The same private capture bundle must reproduce an identical Snapshot in an isolated store before a
+route passes. No-data, permission denial, field mismatch, duplicate keys, page overflow, response
+overflow, and transport failure remain distinct typed outcomes. The CLI performs one capture,
+Journal write, rights-page capture, isolated replay, and seven-gate qualification:
+
+```bash
+uv run market-impact data accept-tushare-observation \
+  --source-config examples/providers/tushare-observation-index-daily-v1.json \
+  --parameters-json '{"ts_code":"000300.SH","start_date":"20260827","end_date":"20260827"}' \
+  --window-start 2026-08-28T11:17:00Z \
+  --poll-interval-seconds 300 \
+  --maximum-gap-seconds 1800
+```
+
+On 2026-08-28 all twelve checked-in routes passed the seven route gates after their official
+documentation locators were bound and the new config identities were reaccepted:
+
+| Route | Capability | Accepted observations | Acceptance report |
+| --- | --- | ---: | --- |
+| `index_daily` | market context | 1 | `source-route-acceptance-report-653c4bc24cbad5d3d020cf567b37295702d8b8636cee4b5e62127093d94c11c5` |
+| `fund_daily` | market context | 1 | `source-route-acceptance-report-3fd9945ec5fb09815f929f7b9d0b48f92a71814a91ac98693eb5ef7265324d84` |
+| `trade_cal` | market context | 1 | `source-route-acceptance-report-4dc04dc822718ae1b75089ea9f0bc25dedbbe7be2d665e70ad601b675e910216` |
+| `etf_basic` | exposure candidates | 1 | `source-route-acceptance-report-59730b892100961a32fdf4eaa6ed789974831202db6ce21ba9c26df519ed43a3` |
+| `stock_basic` | exposure candidates | 1 | `source-route-acceptance-report-a37d3dfb6201ecded01d8933e2380802bbc30adf47b8cdf93ca393dfed90340d` |
+| `stk_limit` | exposure candidates | 1 | `source-route-acceptance-report-c8fd0804e7c67a8e55d35fe24d7cb3441a60edde40f2f9183d09ed36b242cf09` |
+| `index_classify` | exposure candidates | 31 | `source-route-acceptance-report-f6c4c9082b1b65839dfc7b74f9cc5eede7d35a89654615c48191e4db0d0352cb` |
+| `index_member_all` | exposure candidates | 126 | `source-route-acceptance-report-f626fc923bc68930cce7782bf5e02f7d37b338594f441b0c841c5658a8e51565` |
+| `margin` | positioning | 3 | `source-route-acceptance-report-287411904eab4b6597614cff1652c2dd4feae69b60e84eff0ee2734ecb591237` |
+| `cn_schedule` | macro schedule | 14 | `source-route-acceptance-report-52d94fbcbf6bd5959d82a16013d67413c37a04f5d31b6cf6fc1fb74f5635da2c` |
+| `report_rc` | prior expectation observations | 4,802 | `source-route-acceptance-report-a79d8525ea67763d8022a8909dcfd7a85683f5c476ab6ff2f89149aec9fba8ff` |
+| `news` (`src=sina`) | event revelation | 29 | `source-route-acceptance-report-e9bc974b0b3e0101701fed3b0dd37e57cc7fc595b93dff3802129fb125b9dde8` |
+
+This is route-level prospective evidence, not completion of PDI-10 through PDI-16. In particular,
+Tushare `news` is an aggregator route even when `src=sina`; its receipt does not establish a direct
+publisher archive or historical authority. `cn_schedule` is advisory scheduling, not an original
+NBS release or revision lineage. `report_rc` supplies cited forecast observations, not a consensus
+unless the registered population/window/method derives one. Listing, ETF, limit, and industry rows
+also do not by themselves prove lot/tick size, decision-time tradability, full market completeness,
+or an effective industry-to-tradable-ETF mapping.
 
 ## Accepted contract surface
 

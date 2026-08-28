@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/tushare-observation-source.schema.json",
+  "title": "Market Impact Tushare Observation Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_config_id",
+    "source_id",
+    "api_name",
+    "capability",
+    "upstream_publisher",
+    "documentation_url",
+    "rights_url",
+    "license_scope",
+    "content_scope",
+    "semantic_scope",
+    "fields",
+    "primary_key_fields",
+    "allowed_parameters",
+    "fixed_parameters",
+    "date_fields",
+    "datetime_fields",
+    "publisher_time_field",
+    "aggregator_timestamp_field",
+    "pagination_page_size",
+    "pagination_max_pages",
+    "source_timezone"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.tushare-observation-source.v1"},
+    "source_config_id": {
+      "type": "string",
+      "pattern": "^tushare-observation-source-[0-9a-f]{64}$"
+    },
+    "source_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "api_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"},
+    "capability": {
+      "enum": [
+        "event_revelation",
+        "market_context",
+        "exposure_candidates",
+        "positioning",
+        "macro_vintage",
+        "prior_expectation"
+      ]
+    },
+    "upstream_publisher": {"type": "string", "minLength": 1},
+    "documentation_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+    "rights_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+    "license_scope": {"type": "string", "minLength": 1},
+    "content_scope": {"type": "string", "minLength": 1},
+    "semantic_scope": {"type": "string", "minLength": 1},
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"}
+    },
+    "primary_key_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"}
+    },
+    "allowed_parameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"}
+    },
+    "fixed_parameters": {
+      "type": "object",
+      "additionalProperties": {"type": ["string", "number", "integer", "boolean", "null"]}
+    },
+    "date_fields": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"}
+    },
+    "datetime_fields": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"}
+    },
+    "publisher_time_field": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9_]*$"
+    },
+    "aggregator_timestamp_field": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9_]*$"
+    },
+    "pagination_page_size": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "pagination_max_pages": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "source_timezone": {"type": "string", "minLength": 1}
+  }
+}

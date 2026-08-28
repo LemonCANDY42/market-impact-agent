@@ -517,8 +517,13 @@ class CsrcNewsProvider(DataProvider):
         try:
             parameters = _query_parameters(query.parameters)
             parsed = tuple(
-                _parse_page(item.response.body, config=config, expected_page=item.page)
-                for item in capture.pages
+                _parse_page(item.response.body, config=config, expected_page=page)
+                for page, item in enumerate(capture.pages, start=1)
+            )
+            _validate_complete_capture(
+                parsed,
+                config=config,
+                window_start=query.window_start or query.as_of,
             )
             observations = _parse_observations(
                 parsed,
@@ -679,6 +684,67 @@ def _parse_page(
     return _PageData(page=page, total=total, records=tuple(records))
 
 
+def _validate_complete_capture(
+    pages: Sequence[_PageData],
+    *,
+    config: CsrcNewsSourceConfig,
+    window_start: datetime | None,
+) -> None:
+    """Validate persisted pagination and, when known, prove query-window coverage."""
+
+    if not pages:
+        raise CsrcNewsParseError("CSRC news capture contains no pages")
+    expected_total: int | None = None
+    fetched_count = 0
+    prior_oldest_date: date | None = None
+    coverage_complete = False
+    window_start_date = (
+        None
+        if window_start is None
+        else window_start.astimezone(ZoneInfo(config.published_timezone)).date()
+    )
+    for page in pages:
+        if expected_total is None:
+            expected_total = page.total
+        elif page.total != expected_total:
+            raise CsrcNewsParseError("CSRC news pagination total changed during capture")
+        fetched_count += len(page.records)
+        if fetched_count > expected_total:
+            raise CsrcNewsParseError("CSRC news pagination exceeds declared total")
+        if not page.records and fetched_count != expected_total:
+            raise CsrcNewsParseError(
+                "CSRC news returned an empty page before the declared total was covered"
+            )
+        publication_dates = tuple(
+            _published_at(record, config=config)
+            .astimezone(ZoneInfo(config.published_timezone))
+            .date()
+            for record, _raw in page.records
+        )
+        if any(left < right for left, right in pairwise(publication_dates)):
+            raise CsrcNewsParseError(
+                "CSRC news results are not ordered by publication date descending"
+            )
+        if (
+            prior_oldest_date is not None
+            and publication_dates
+            and publication_dates[0] > prior_oldest_date
+        ):
+            raise CsrcNewsParseError(
+                "CSRC news pagination order is not publication-date descending"
+            )
+        if publication_dates:
+            prior_oldest_date = publication_dates[-1]
+        if fetched_count == expected_total or (
+            window_start_date is not None
+            and publication_dates
+            and publication_dates[-1] < window_start_date
+        ):
+            coverage_complete = True
+    if window_start_date is not None and not coverage_complete:
+        raise CsrcNewsParseError("CSRC news capture does not cover the query window")
+
+
 def _exact_result_records(text: str, results: Sequence[object]) -> tuple[bytes, ...]:
     decoder = json.JSONDecoder()
     for match in re.finditer(r'"results"\s*:\s*\[', text):
@@ -813,6 +879,7 @@ def load_csrc_news_capture_bundle(
         raise CsrcNewsParseError("CSRC news capture bundle has an invalid header")
     offset = len(prefix)
     pages: list[CsrcNewsPageCapture] = []
+    parsed_pages: list[_PageData] = []
     while offset < len(payload):
         header_end = payload.find(b"\n", offset)
         if header_end < 0:
@@ -847,7 +914,7 @@ def load_csrc_news_capture_bundle(
             final_url=expected_url,
             content_type=_string(header, "content_type"),
         )
-        _parse_page(body, config=config, expected_page=page)
+        parsed_pages.append(_parse_page(body, config=config, expected_page=page))
         pages.append(
             CsrcNewsPageCapture(
                 page=page,
@@ -858,6 +925,11 @@ def load_csrc_news_capture_bundle(
         offset = body_end + 1
     if not pages:
         raise CsrcNewsParseError("CSRC news capture bundle contains no pages")
+    _validate_complete_capture(
+        tuple(parsed_pages),
+        config=config,
+        window_start=None,
+    )
     return CsrcNewsCapture(
         source_id=config.source_id,
         retrieved_at=retrieved_at,
