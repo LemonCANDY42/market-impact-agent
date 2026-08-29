@@ -50,6 +50,24 @@ class RuntimeEvent:
     previous_hash: str | None
     event_hash: str
 
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "run_id": self.run_id,
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "observed_at": _timestamp(self.observed_at),
+            "payload_hash": self.payload_hash,
+            "previous_hash": self.previous_hash,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.runtime-event.v1",
+            **self.core_dict(),
+            "payload": self.payload,
+            "event_hash": self.event_hash,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class RunRecord:
@@ -407,6 +425,65 @@ def _verified_event(row: sqlite3.Row) -> RuntimeEvent:
         previous_hash=cast(str | None, row["previous_hash"]),
         event_hash=stored_event_hash,
     )
+
+
+def runtime_event_from_dict(value: object) -> RuntimeEvent:
+    if not isinstance(value, dict):
+        raise TypeError("runtime event must be an object")
+    payload = cast(dict[object, object], value)
+    expected = {
+        "schema_version",
+        "run_id",
+        "event_id",
+        "event_type",
+        "observed_at",
+        "payload",
+        "payload_hash",
+        "previous_hash",
+        "event_hash",
+    }
+    if set(payload) != expected or payload.get("schema_version") != (
+        "market-impact.runtime-event.v1"
+    ):
+        raise ValueError("runtime event fields or schema are invalid")
+    raw_payload = payload.get("payload")
+    if not isinstance(raw_payload, dict):
+        raise TypeError("runtime event payload must be an object")
+    event_payload = cast(dict[str, object], raw_payload)
+    payload_hash = _required_string(payload, "payload_hash")
+    _sha256(payload_hash, "runtime event payload_hash")
+    if payload_hash != sha256(canonical_json_bytes(event_payload)).hexdigest():
+        raise ValueError("runtime event payload hash is invalid")
+    previous_hash = payload.get("previous_hash")
+    if previous_hash is not None and not isinstance(previous_hash, str):
+        raise TypeError("runtime event previous_hash must be text or null")
+    if previous_hash is not None:
+        _sha256(previous_hash, "runtime event previous_hash")
+    event_hash = _required_string(payload, "event_hash")
+    _sha256(event_hash, "runtime event event_hash")
+    event = RuntimeEvent(
+        sequence=0,
+        run_id=_required_string(payload, "run_id"),
+        event_id=_required_string(payload, "event_id"),
+        event_type=_required_string(payload, "event_type"),
+        observed_at=_parse_timestamp(_required_string(payload, "observed_at")),
+        payload=event_payload,
+        payload_hash=payload_hash,
+        previous_hash=previous_hash,
+        event_hash=event_hash,
+    )
+    if event.event_hash != sha256(canonical_json_bytes(event.core_dict())).hexdigest():
+        raise ValueError("runtime event hash is invalid")
+    if event.to_dict() != value:
+        raise ValueError("runtime event is not canonical")
+    return event
+
+
+def _required_string(payload: dict[object, object], name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, str) or not value:
+        raise TypeError(f"runtime event {name} must be non-empty text")
+    return value
 
 
 def _timestamp(value: datetime) -> str:

@@ -29,18 +29,29 @@ Unknown, disabled, or unverified providers are never eligible for live execution
 
 Agents and ordinary callers may propose a typed `OrderIntent`; they cannot submit it to a
 provider. The composition root binds a trusted Trading Mandate, clock, Price Basis source,
-durable execution store, and provider into the paper execution service; callers supply none
+durable execution store, provider, and any Agent run authorities into the paper execution service;
+callers supply none
 of that policy context. The service freezes the exact intent, mandate, price, policy
 evaluation, and approval, then atomically queues an eligible intent. Only its durable dispatch
 path can issue a sealed submission capability containing those hashes and a unique submission
 attempt identity. The provider contract accepts that capability rather than a raw intent. No
 live gateway exists in the bootstrap.
 
-For experimental Agent paper flow, the Harness may first persist an
-`ExperimentalPaperAdmission` binding an eligible prospective Query Gate, Evidence Pack, Signal, and exact paper
-Order. Providers never see or validate that research provenance, and it grants no submission
-capability. The unchanged mandate, hard policy, approval, durable outbox, sealed capability, and
-reconciliation path still decides whether an order can reach a provider.
+For Agent paper flow, the Harness may first persist a `DecisionAdmission` binding an eligible
+prospective Query Gate, exact Evidence lineage, complete paired Decision Run Manifest, stable
+treatment Judgment identities plus their Journal-bound metrics, a Harness-bundled Provider Profile,
+control-plus-routed-method Prospective Execution Plan, deterministically
+reconstructed Signal, and exact paper Order. Providers never see or validate that research
+provenance, and it grants no submission capability. The unchanged mandate, hard policy,
+approval, durable outbox, sealed capability, and reconciliation path still decides whether an order
+can reach a provider.
+
+The Decision Run Manifest cannot authenticate its own run occurrence. At Agent paper admission,
+each planned execution-binding hash must resolve to a composition-root-bound runtime authority that
+reopens the actual completed Run Record, verifies the Journal chain and source artifacts, and
+recomputes metrics. Missing authority or a mismatched result fails closed before the immutable paper
+copy is written. This is a Harness boundary and does not add research-validation duties to the
+execution Provider.
 
 The provider owns broker-specific translation and execution facts. The harness owns
 policy, approval, evidence, and the immutable decision trail.
@@ -55,8 +66,10 @@ can be the invocation surface, but it does not replace these requirements.
 ## Capability trust
 
 `declared_capabilities` describe what an adapter claims. `verified_capabilities` describe
-what the harness is allowed to route to after contract tests. The latter must be a subset
-of the former.
+what the harness is allowed to route to after contract tests. The latter must be a subset of the
+former and, for any external execution Provider, must be backed by a Harness-owned Provider
+Acceptance binding the exact implementation, dependency, configuration, environment, account scope,
+and accepted fault/reconciliation evidence. A Provider cannot verify or replace its own acceptance.
 
 Trust tiers are deliberately explicit:
 

@@ -565,6 +565,51 @@ def test_strict_modeled_and_prospective_lanes_are_distinct(tmp_path: Path) -> No
     assert prospective.observations == (actual,)
 
 
+def test_prospective_lane_rejects_receipt_timestamps_with_non_receipt_authority(
+    tmp_path: Path,
+) -> None:
+    times = ObservationTimes(
+        occurred_at=datetime(2026, 8, 28, 1, 55, tzinfo=UTC),
+        published_at=datetime(2026, 8, 28, 1, 55, tzinfo=UTC),
+        available_at=RETRIEVED,
+        source_updated_at=datetime(2026, 8, 28, 1, 55, tzinfo=UTC),
+        aggregator_fetched_at=None,
+        retrieved_at=RETRIEVED,
+        occurrence_basis=OccurrenceBasis.SOURCE_REPORTED,
+        availability_basis=AvailabilityBasis.ACTUAL_RECEIPT,
+    )
+    mislabeled = SourceObservation.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="official-feed",
+        provider_version="2024-09",
+        upstream_source="official.example",
+        upstream_record_id="release-mislabeled",
+        source_ref="https://official.example/releases/mislabeled",
+        lineage_id="release-mislabeled",
+        times=times,
+        authority_at=RETRIEVED,
+        authority_kind="verified_archive",
+        raw_content_hash=sha256_bytes(b"mislabeled-body"),
+        normalized_payload={"headline": "Mislabeled release"},
+        license_scope="private_research",
+    )
+    harness = DataInputHarness(LocalDataSnapshotStore(tmp_path / "prospective"))
+    harness.register(
+        FixtureProvider(_manifest(), _response(mislabeled, raw_body=b"mislabeled-body"))
+    )
+
+    snapshot = asyncio.run(
+        harness.execute(
+            _query(pit_lane=DataPITLane.PROSPECTIVE, as_of=RETRIEVED),
+            mode=DataQueryMode.FETCH_IF_MISSING,
+        )
+    )
+
+    assert snapshot.coverage_complete is False
+    assert snapshot.observations == ()
+    assert snapshot.attempts[0].rejected_lane_mismatch == 1
+
+
 def test_retrospective_lane_archives_late_receipt_without_historical_pit_claim(
     tmp_path: Path,
 ) -> None:

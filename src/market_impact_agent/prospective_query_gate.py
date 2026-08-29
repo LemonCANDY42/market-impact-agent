@@ -1,21 +1,30 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import cast
 
 from market_impact_agent.agent_contracts import EvidencePack, canonical_hash
-from market_impact_agent.agent_engine import AgentExecutionBinding
-from market_impact_agent.data_inputs import FrozenDataSnapshotInput
+from market_impact_agent.checkpoint_decision_inputs import (
+    checkpoint_decision_input_from_dict,
+)
+from market_impact_agent.data_inputs import FrozenDataSnapshotInput, LocalDataSnapshotStore
 from market_impact_agent.domain import require_aware
-from market_impact_agent.prospective_checkpoint_sets import ProspectiveCheckpointSnapshotSet
+from market_impact_agent.prospective_checkpoint_sets import (
+    CheckpointRouteReconciliation,
+    ProspectiveCheckpointSnapshotSet,
+    materialize_checkpoint_decision_inputs,
+)
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
+from market_impact_agent.prospective_execution import ProspectiveExecutionPlan
 
-PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA = "market-impact.prospective-query-gate-result.v1"
+PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA = "market-impact.prospective-query-gate-result.v4"
 PROCESS_DIAGNOSTIC_CLAIM_SCOPE = "process_diagnostic_only_no_alpha_or_execution_claim"
 
 
@@ -26,12 +35,15 @@ class ProspectiveQueryGateResult:
     checkpoint_key: str
     checkpoint_snapshot_set_id: str
     evidence_pack_id: str
-    agent_execution_binding_hash: str
+    evaluation_material_hash: str
+    agent_execution_plan_id: str
+    agent_execution_plan_hash: str
     model_profile_id: str
     model_cost_limit_usd: str
     barrier_at: datetime
     evaluated_at: datetime
     authorized_snapshot_ids: tuple[str, ...]
+    authorized_decision_input_ids: tuple[str, ...]
     blocking_required_gaps: tuple[str, ...]
     nonblocking_information_gaps: tuple[str, ...]
     model_run_eligible: bool
@@ -54,11 +66,27 @@ class ProspectiveQueryGateResult:
             raise ValueError("Query Gate Snapshot Set identity is invalid")
         if not self.evidence_pack_id.startswith("evidence-pack-"):
             raise ValueError("Query Gate Evidence Pack identity is invalid")
-        _sha256(self.agent_execution_binding_hash, "Query Gate execution binding hash")
+        _sha256(self.evaluation_material_hash, "Query Gate evaluation material hash")
+        _prefixed_hash(
+            self.agent_execution_plan_id,
+            "prospective-execution-plan-",
+            "Query Gate execution plan ID",
+        )
+        _sha256(self.agent_execution_plan_hash, "Query Gate execution plan hash")
         _trimmed(self.model_profile_id, "Query Gate model profile")
         _canonical_positive_usd(self.model_cost_limit_usd)
         if self.authorized_snapshot_ids != tuple(sorted(set(self.authorized_snapshot_ids))):
             raise ValueError("Query Gate Snapshot IDs must be sorted and unique")
+        if self.authorized_decision_input_ids != tuple(
+            sorted(set(self.authorized_decision_input_ids))
+        ):
+            raise ValueError("Query Gate Decision Input IDs must be sorted and unique")
+        for record_id in self.authorized_decision_input_ids:
+            _prefixed_hash(
+                record_id,
+                "checkpoint-decision-input-",
+                "Query Gate Decision Input ID",
+            )
         if self.blocking_required_gaps != tuple(sorted(set(self.blocking_required_gaps))):
             raise ValueError("Query Gate blocking gaps must be sorted and unique")
         if self.nonblocking_information_gaps != tuple(
@@ -67,7 +95,11 @@ class ProspectiveQueryGateResult:
             raise ValueError("Query Gate information gaps must be sorted and unique")
         if set(self.blocking_required_gaps) & set(self.nonblocking_information_gaps):
             raise ValueError("Query Gate gaps cannot be both blocking and nonblocking")
-        expected_eligible = bool(self.authorized_snapshot_ids) and not self.blocking_required_gaps
+        expected_eligible = (
+            bool(self.authorized_snapshot_ids)
+            and bool(self.authorized_decision_input_ids)
+            and not self.blocking_required_gaps
+        )
         if self.model_run_eligible != expected_eligible:
             raise ValueError("Query Gate eligibility does not match required inputs")
         if self.claim_scope != PROCESS_DIAGNOSTIC_CLAIM_SCOPE:
@@ -86,6 +118,12 @@ class ProspectiveQueryGateResult:
         )
 
     @property
+    def frozen_decision_input_ids(self) -> frozenset[str]:
+        if not self.model_run_eligible:
+            raise PermissionError("ineligible Query Gate result has no Agent input authority")
+        return frozenset(self.authorized_decision_input_ids)
+
+    @property
     def expected_result_id(self) -> str:
         return f"prospective-query-gate-{canonical_hash(self.core_dict())}"
 
@@ -96,12 +134,15 @@ class ProspectiveQueryGateResult:
             "checkpoint_key": self.checkpoint_key,
             "checkpoint_snapshot_set_id": self.checkpoint_snapshot_set_id,
             "evidence_pack_id": self.evidence_pack_id,
-            "agent_execution_binding_hash": self.agent_execution_binding_hash,
+            "evaluation_material_hash": self.evaluation_material_hash,
+            "agent_execution_plan_id": self.agent_execution_plan_id,
+            "agent_execution_plan_hash": self.agent_execution_plan_hash,
             "model_profile_id": self.model_profile_id,
             "model_cost_limit_usd": self.model_cost_limit_usd,
             "barrier_at": _timestamp(self.barrier_at),
             "evaluated_at": _timestamp(self.evaluated_at),
             "authorized_snapshot_ids": list(self.authorized_snapshot_ids),
+            "authorized_decision_input_ids": list(self.authorized_decision_input_ids),
             "blocking_required_gaps": list(self.blocking_required_gaps),
             "nonblocking_information_gaps": list(self.nonblocking_information_gaps),
             "model_run_eligible": self.model_run_eligible,
@@ -120,7 +161,9 @@ def evaluate_prospective_query_gate(
     registration: ProspectiveDiagnosticRegistration,
     snapshot_set: ProspectiveCheckpointSnapshotSet,
     evidence_pack: EvidencePack,
-    execution_binding: AgentExecutionBinding,
+    decision_inputs: tuple[Mapping[str, object], ...],
+    snapshot_store: LocalDataSnapshotStore,
+    execution_plan: ProspectiveExecutionPlan,
     model_profile_id: str,
     model_cost_limit_usd: Decimal,
     evaluated_at: datetime,
@@ -134,10 +177,23 @@ def evaluate_prospective_query_gate(
         raise ValueError("Query Gate Evidence Pack must use the checkpoint barrier")
     if model_profile_id != registration.model_profile_id:
         raise ValueError("Query Gate model profile differs from the registration")
+    if execution_plan.registration_id != registration.registration_id:
+        raise ValueError("Query Gate execution plan belongs to another registration")
+    if execution_plan.model_profile_alias != model_profile_id:
+        raise ValueError("Query Gate execution plan binds another Model Profile")
     canonical_cost = _canonical_positive_usd(model_cost_limit_usd)
     if model_cost_limit_usd > Decimal(registration.aggregate_model_cost_limit_usd):
         raise ValueError("Query Gate model cost exceeds the registered aggregate ceiling")
     _strict_utc(evaluated_at, "Query Gate evaluated_at")
+    if evaluated_at < snapshot_set.reconciled_at:
+        raise ValueError("Query Gate cannot predate Snapshot Set reconciliation")
+
+    authorized_decision_input_ids = _validate_evidence_lineage(
+        snapshot_set=snapshot_set,
+        evidence_pack=evidence_pack,
+        decision_inputs=decision_inputs,
+        snapshot_store=snapshot_store,
+    )
 
     blocking: list[str] = []
     nonblocking: list[str] = []
@@ -184,6 +240,14 @@ def evaluate_prospective_query_gate(
     nonblocking.extend(f"evidence_pack:{gap}" for gap in evidence_pack.data_gaps)
 
     authorized_snapshot_ids = snapshot_set.authorized_snapshot_ids
+    evaluation_material_hash = canonical_hash(
+        build_query_gate_evaluation_material(
+            registration=registration,
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+        )
+    )
     blocking_gaps = tuple(sorted(set(blocking)))
     nonblocking_gaps = tuple(sorted(set(nonblocking)))
     core = {
@@ -192,15 +256,22 @@ def evaluate_prospective_query_gate(
         "checkpoint_key": checkpoint.checkpoint_key,
         "checkpoint_snapshot_set_id": snapshot_set.snapshot_set_id,
         "evidence_pack_id": evidence_pack.pack_id,
-        "agent_execution_binding_hash": execution_binding.binding_hash,
+        "evaluation_material_hash": evaluation_material_hash,
+        "agent_execution_plan_id": execution_plan.plan_id,
+        "agent_execution_plan_hash": canonical_hash(execution_plan.to_dict()),
         "model_profile_id": model_profile_id,
         "model_cost_limit_usd": canonical_cost,
         "barrier_at": _timestamp(snapshot_set.barrier_at),
         "evaluated_at": _timestamp(evaluated_at),
         "authorized_snapshot_ids": list(authorized_snapshot_ids),
+        "authorized_decision_input_ids": list(authorized_decision_input_ids),
         "blocking_required_gaps": list(blocking_gaps),
         "nonblocking_information_gaps": list(nonblocking_gaps),
-        "model_run_eligible": bool(authorized_snapshot_ids) and not blocking_gaps,
+        "model_run_eligible": (
+            bool(authorized_snapshot_ids)
+            and bool(authorized_decision_input_ids)
+            and not blocking_gaps
+        ),
         "claim_scope": PROCESS_DIAGNOSTIC_CLAIM_SCOPE,
         "historical_pit_claim": False,
         "strategy_promotion_claim": False,
@@ -212,16 +283,143 @@ def evaluate_prospective_query_gate(
         checkpoint_key=checkpoint.checkpoint_key,
         checkpoint_snapshot_set_id=snapshot_set.snapshot_set_id,
         evidence_pack_id=evidence_pack.pack_id,
-        agent_execution_binding_hash=execution_binding.binding_hash,
+        evaluation_material_hash=evaluation_material_hash,
+        agent_execution_plan_id=execution_plan.plan_id,
+        agent_execution_plan_hash=canonical_hash(execution_plan.to_dict()),
         model_profile_id=model_profile_id,
         model_cost_limit_usd=canonical_cost,
         barrier_at=snapshot_set.barrier_at,
         evaluated_at=evaluated_at,
         authorized_snapshot_ids=authorized_snapshot_ids,
+        authorized_decision_input_ids=authorized_decision_input_ids,
         blocking_required_gaps=blocking_gaps,
         nonblocking_information_gaps=nonblocking_gaps,
-        model_run_eligible=bool(authorized_snapshot_ids) and not blocking_gaps,
+        model_run_eligible=(
+            bool(authorized_snapshot_ids)
+            and bool(authorized_decision_input_ids)
+            and not blocking_gaps
+        ),
     )
+
+
+def build_query_gate_evaluation_material(
+    *,
+    registration: ProspectiveDiagnosticRegistration,
+    snapshot_set: ProspectiveCheckpointSnapshotSet,
+    decision_inputs: tuple[Mapping[str, object], ...],
+    snapshot_store: LocalDataSnapshotStore,
+) -> dict[str, object]:
+    canonical_inputs = tuple(
+        sorted(
+            (checkpoint_decision_input_from_dict(item) for item in decision_inputs),
+            key=lambda item: _required_string(item, "record_id"),
+        )
+    )
+    snapshots = tuple(
+        snapshot_store.get(snapshot_id) for snapshot_id in snapshot_set.authorized_snapshot_ids
+    )
+    return {
+        "schema_version": "market-impact.prospective-query-gate-evaluation-material.v1",
+        "registration": registration.to_dict(),
+        "checkpoint_snapshot_set": snapshot_set.to_dict(),
+        "decision_inputs": list(canonical_inputs),
+        "snapshots": [item.to_dict() for item in snapshots],
+    }
+
+
+def _validate_evidence_lineage(
+    *,
+    snapshot_set: ProspectiveCheckpointSnapshotSet,
+    evidence_pack: EvidencePack,
+    decision_inputs: tuple[Mapping[str, object], ...],
+    snapshot_store: LocalDataSnapshotStore,
+) -> tuple[str, ...]:
+    if not snapshot_set.authorized_snapshot_ids:
+        if decision_inputs:
+            raise ValueError("blocked Query Gate cannot authorize Decision Inputs")
+        return ()
+
+    materialized_inputs = {
+        _required_string(item, "record_id"): item
+        for item in materialize_checkpoint_decision_inputs(snapshot_set, store=snapshot_store)
+    }
+    authorized_routes: dict[tuple[str, str], tuple[CheckpointRouteReconciliation, ...]] = {}
+    capability_by_pair: dict[tuple[str, str], str] = {}
+    for binding in snapshot_set.capability_bindings:
+        for route in binding.routes:
+            for observation_id in route.observation_ids:
+                pair = (route.snapshot_id, observation_id)
+                authorized_routes[pair] = (*authorized_routes.get(pair, ()), route)
+                capability_by_pair[pair] = binding.capability.value
+
+    canonical_inputs: dict[str, dict[str, object]] = {}
+    pairs: set[tuple[str, str]] = set()
+    for raw in decision_inputs:
+        item = checkpoint_decision_input_from_dict(raw)
+        record_id = _required_string(item, "record_id")
+        if record_id in canonical_inputs:
+            raise ValueError("Query Gate Decision Input IDs must be unique")
+        if materialized_inputs.get(record_id) != item:
+            raise ValueError("Decision Input differs from its frozen Observation projection")
+        if item["checkpoint_snapshot_set_id"] != snapshot_set.snapshot_set_id:
+            raise ValueError("Decision Input belongs to a different Snapshot Set")
+        if item["checkpoint_key"] != snapshot_set.checkpoint_key:
+            raise ValueError("Decision Input belongs to a different checkpoint")
+        if item["barrier_at"] != _timestamp(snapshot_set.barrier_at):
+            raise ValueError("Decision Input barrier differs from the Snapshot Set")
+        pair = (
+            _required_string(item, "snapshot_id"),
+            _required_string(item, "observation_id"),
+        )
+        if pair not in authorized_routes:
+            raise ValueError("Decision Input is not bound to an authorized observation")
+        if pair in pairs:
+            raise ValueError("Query Gate cannot authorize duplicate observation projections")
+        pairs.add(pair)
+        if item["capability"] != capability_by_pair[pair]:
+            raise ValueError("Decision Input capability differs from its selected route")
+        route_kinds = tuple(sorted({route.route_kind for route in authorized_routes[pair]}))
+        if item["route_kinds"] != list(route_kinds):
+            raise ValueError("Decision Input route kinds differ from the selected route")
+        canonical_inputs[record_id] = item
+
+    if not canonical_inputs:
+        raise ValueError("eligible prospective Query Gate requires Decision Inputs")
+    for evidence in evidence_pack.evidence:
+        lineage = evidence.prospective_lineage
+        if lineage is None:
+            raise ValueError("prospective evidence lacks Snapshot/Observation/Input lineage")
+        item = canonical_inputs.get(lineage.checkpoint_decision_input_id)
+        if item is None:
+            raise ValueError("prospective evidence references an unauthorized Decision Input")
+        if (
+            item["snapshot_id"] != lineage.snapshot_id
+            or item["observation_id"] != lineage.observation_id
+        ):
+            raise ValueError("prospective evidence lineage identity does not match its input")
+        source = _required_mapping(item, "source")
+        times = _required_mapping(item, "times")
+        if evidence.source_ref != source.get("source_ref"):
+            raise ValueError("prospective evidence source_ref differs from its input")
+        if evidence.content_hash != source.get("raw_content_hash"):
+            raise ValueError("prospective evidence content hash differs from its input")
+        if _timestamp(evidence.available_at) != times.get("available_at"):
+            raise ValueError("prospective evidence available_at differs from its input")
+    return tuple(sorted(canonical_inputs))
+
+
+def _required_string(payload: Mapping[str, object], name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, str) or not value:
+        raise TypeError(f"{name} must be non-empty text")
+    return value
+
+
+def _required_mapping(payload: Mapping[str, object], name: str) -> Mapping[str, object]:
+    value = payload.get(name)
+    if not isinstance(value, dict):
+        raise TypeError(f"{name} must be an object")
+    return cast(Mapping[str, object], value)
 
 
 def _canonical_positive_usd(value: Decimal | str) -> str:
@@ -237,6 +435,12 @@ def _canonical_positive_usd(value: Decimal | str) -> str:
 def _sha256(value: str, name: str) -> None:
     if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
         raise ValueError(f"{name} must be lowercase SHA-256 text")
+
+
+def _prefixed_hash(value: str, prefix: str, name: str) -> None:
+    if not value.startswith(prefix):
+        raise ValueError(f"{name} must start with {prefix}")
+    _sha256(value.removeprefix(prefix), name)
 
 
 def _trimmed(value: str, name: str) -> None:

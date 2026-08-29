@@ -77,7 +77,30 @@
         "available_at": {"type": "string", "format": "date-time"},
         "content_hash": {"$ref": "#/$defs/sha256"},
         "summary": {"type": "string", "minLength": 1},
-        "untrusted_text": {"type": "boolean"}
+        "untrusted_text": {"type": "boolean"},
+        "prospective_lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "snapshot_id",
+            "observation_id",
+            "checkpoint_decision_input_id"
+          ],
+          "properties": {
+            "snapshot_id": {
+              "type": "string",
+              "pattern": "^data-snapshot-[0-9a-f]{64}$"
+            },
+            "observation_id": {
+              "type": "string",
+              "pattern": "^source-observation-[0-9a-f]{64}$"
+            },
+            "checkpoint_decision_input_id": {
+              "type": "string",
+              "pattern": "^checkpoint-decision-input-[0-9a-f]{64}$"
+            }
+          }
+        }
       }
     },
     "pattern_pack_reference": {

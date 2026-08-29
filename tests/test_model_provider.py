@@ -5,6 +5,7 @@ import pytest
 from market_impact_agent.agent_runtime import ModelTurn
 from market_impact_agent.model_provider import (
     ModelProviderFactory,
+    load_builtin_model_provider_profile,
     load_model_provider_profile,
 )
 
@@ -44,6 +45,11 @@ def test_profile_is_content_identified_and_builds_the_runtime_cost_cap() -> None
     assert profile.profile_id == f"model-provider-{profile.profile_hash}"
     assert profile.credential_env == "MINIMAX_API_KEY"
     assert profile.runtime_config().budget.max_estimated_cost_microusd == 50_000
+
+    bundled = load_builtin_model_provider_profile("cliproxyapi-luna-xhigh-v1")
+    assert bundled.model == "gpt-5.6-luna"
+    with pytest.raises(FileNotFoundError, match="unknown Harness-bundled"):
+        load_builtin_model_provider_profile("not-registered")
 
 
 def test_provider_factory_is_adapter_neutral_and_checks_identity() -> None:

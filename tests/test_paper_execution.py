@@ -5,18 +5,12 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from hashlib import sha256
 from pathlib import Path
 from stat import S_IMODE
 from threading import Event, Thread
 
 import pytest
 
-from market_impact_agent.agent_contracts import (
-    EvidencePack,
-    EvidenceReference,
-    canonical_hash,
-)
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.domain import (
     ApprovalMode,
@@ -25,12 +19,8 @@ from market_impact_agent.domain import (
     OrderIntent,
     OrderKind,
     Side,
-    SignalIntent,
     TradingEnvironment,
     TradingMandate,
-)
-from market_impact_agent.experimental_paper_admission import (
-    prepare_experimental_paper_admission,
 )
 from market_impact_agent.paper_execution import (
     ApprovalState,
@@ -38,7 +28,6 @@ from market_impact_agent.paper_execution import (
     PaperExecutionService,
     PriceBasis,
 )
-from market_impact_agent.prospective_query_gate import ProspectiveQueryGateResult
 from market_impact_agent.providers import (
     Capability,
     ExecutionProvider,
@@ -47,7 +36,6 @@ from market_impact_agent.providers import (
     SubmissionCapability,
     _issue_submission_capability,  # pyright: ignore[reportPrivateUsage]
 )
-from market_impact_agent.research import EvidenceTier
 
 NOW = datetime(2026, 8, 29, 2, tzinfo=UTC)
 
@@ -238,226 +226,6 @@ def test_identical_admission_retry_remains_idempotent_as_clock_advances(
     first = service.admit(make_order())
     clock.current = NOW + timedelta(seconds=1)
     assert service.admit(make_order()) == first
-
-
-def test_experimental_agent_paper_binds_query_gate_without_claiming_strategy_or_live(
-    tmp_path: Path,
-) -> None:
-    root = tmp_path / "paper"
-    service = make_service(root, MockExecutionProvider(tmp_path / "provider.sqlite3"))
-    order = make_order()
-    signal = SignalIntent(
-        signal_id=order.signal_id,
-        event_id="prospective-policy-event",
-        instrument_id=order.instrument_id,
-        side=order.side,
-        valid_from=NOW - timedelta(minutes=1),
-        expires_at=order.expires_at,
-        evidence_refs=("prospective-event-observation",),
-        invalidation_conditions=("event is retracted",),
-    )
-    evidence_pack = make_evidence_pack()
-    query_gate = make_query_gate(evidence_pack)
-    admission = prepare_experimental_paper_admission(
-        query_gate=query_gate,
-        evidence_pack=evidence_pack,
-        signal=signal,
-        order=order,
-        created_at=NOW,
-    )
-
-    record = service.admit_experimental(
-        order,
-        admission,
-        query_gate=query_gate,
-        evidence_pack=evidence_pack,
-        signal=signal,
-    )
-
-    assert record.agent_admission_hash == canonical_hash(admission.to_dict())
-    assert admission.signal_intent_hash == canonical_hash(signal.to_dict())
-    assert admission.query_gate_result_hash == canonical_hash(query_gate.to_dict())
-    assert admission.evidence_pack_hash == canonical_hash(evidence_pack.to_dict())
-    assert admission.strategy_admission_id is None
-    assert admission.alpha_claim is False
-    assert admission.live_capability is False
-    assert admission.execution_authority is False
-    assert (
-        validate_agent_contract(
-            admission.to_dict(),
-            "experimental-paper-admission.schema.json",
-        )
-        == ()
-    )
-    restarted = make_service(
-        root,
-        MockExecutionProvider(tmp_path / "provider.sqlite3"),
-    )
-    assert restarted.get(order.client_order_id) == record
-
-
-def test_experimental_agent_paper_rejects_ineligible_gate_and_low_level_rebinding(
-    tmp_path: Path,
-) -> None:
-    order = make_order()
-    signal = SignalIntent(
-        signal_id=order.signal_id,
-        event_id="prospective-policy-event",
-        instrument_id=order.instrument_id,
-        side=order.side,
-        valid_from=NOW - timedelta(minutes=1),
-        expires_at=order.expires_at,
-        evidence_refs=("prospective-event-observation",),
-        invalidation_conditions=("event is retracted",),
-    )
-    with pytest.raises(PermissionError, match="eligible prospective Query Gate"):
-        prepare_experimental_paper_admission(
-            query_gate=make_query_gate(make_evidence_pack(), eligible=False),
-            evidence_pack=make_evidence_pack(),
-            signal=signal,
-            order=order,
-            created_at=NOW,
-        )
-
-    service = make_service(tmp_path / "paper", MockExecutionProvider())
-    service.admit(order)
-    evidence_pack = make_evidence_pack()
-    admission = prepare_experimental_paper_admission(
-        query_gate=make_query_gate(evidence_pack),
-        evidence_pack=evidence_pack,
-        signal=signal,
-        order=order,
-        created_at=NOW,
-    )
-    with pytest.raises(ValueError, match="different Agent admission binding"):
-        service.admit_experimental(
-            order,
-            admission,
-            query_gate=make_query_gate(evidence_pack),
-            evidence_pack=evidence_pack,
-            signal=signal,
-        )
-
-
-def test_experimental_agent_paper_rejects_changed_signal_content(tmp_path: Path) -> None:
-    order = make_order()
-    signal = SignalIntent(
-        signal_id=order.signal_id,
-        event_id="prospective-policy-event",
-        instrument_id=order.instrument_id,
-        side=order.side,
-        valid_from=NOW - timedelta(minutes=1),
-        expires_at=order.expires_at,
-        evidence_refs=("prospective-event-observation",),
-        invalidation_conditions=("event is retracted",),
-    )
-    evidence_pack = make_evidence_pack()
-    query_gate = make_query_gate(evidence_pack)
-    admission = prepare_experimental_paper_admission(
-        query_gate=query_gate,
-        evidence_pack=evidence_pack,
-        signal=signal,
-        order=order,
-        created_at=NOW,
-    )
-
-    service = make_service(tmp_path / "paper", MockExecutionProvider())
-    with pytest.raises(ValueError, match="Signal evidence_refs are not all in the Evidence Pack"):
-        service.admit_experimental(
-            order,
-            admission,
-            query_gate=query_gate,
-            evidence_pack=evidence_pack,
-            signal=replace(signal, evidence_refs=("different-observation",)),
-        )
-
-
-@pytest.mark.parametrize(
-    ("mismatch", "message"),
-    [
-        (
-            "event",
-            "Signal event differs from the Evidence Pack",
-        ),
-        (
-            "evidence_refs",
-            "Signal evidence_refs are not all in the Evidence Pack",
-        ),
-        (
-            "instrument",
-            "Signal instrument is not an allowed Evidence Pack target",
-        ),
-    ],
-)
-def test_experimental_agent_paper_requires_pack_provenance(
-    mismatch: str,
-    message: str,
-) -> None:
-    order = make_order()
-    evidence_pack = make_evidence_pack()
-    signal = order_signal(order)
-    if mismatch == "event":
-        signal = replace(signal, event_id="different-event")
-    elif mismatch == "evidence_refs":
-        signal = replace(signal, evidence_refs=("missing-evidence",))
-    else:
-        signal = replace(signal, instrument_id="OTHER")
-
-    with pytest.raises(ValueError, match=message):
-        prepare_experimental_paper_admission(
-            query_gate=make_query_gate(evidence_pack),
-            evidence_pack=evidence_pack,
-            signal=signal,
-            order=order,
-            created_at=NOW,
-        )
-
-
-def test_experimental_agent_paper_rejects_query_gate_for_a_different_pack() -> None:
-    order = make_order()
-    evidence_pack = make_evidence_pack()
-
-    with pytest.raises(ValueError, match="different Evidence Pack"):
-        prepare_experimental_paper_admission(
-            query_gate=make_query_gate(make_evidence_pack(event_id="other-event")),
-            evidence_pack=evidence_pack,
-            signal=order_signal(order),
-            order=order,
-            created_at=NOW,
-        )
-
-
-def test_experimental_agent_paper_restart_requires_persisted_evidence_pack(
-    tmp_path: Path,
-) -> None:
-    root = tmp_path / "paper"
-    service = make_service(root, MockExecutionProvider(tmp_path / "provider.sqlite3"))
-    order = make_order()
-    signal = order_signal(order)
-    evidence_pack = make_evidence_pack()
-    query_gate = make_query_gate(evidence_pack)
-    admission = prepare_experimental_paper_admission(
-        query_gate=query_gate,
-        evidence_pack=evidence_pack,
-        signal=signal,
-        order=order,
-        created_at=NOW,
-    )
-    service.admit_experimental(
-        order,
-        admission,
-        query_gate=query_gate,
-        evidence_pack=evidence_pack,
-        signal=signal,
-    )
-    service.artifacts.get(admission.evidence_pack_hash, media_type="application/json").path.unlink()
-
-    restarted = make_service(
-        root,
-        MockExecutionProvider(tmp_path / "provider.sqlite3"),
-    )
-    with pytest.raises(FileNotFoundError):
-        restarted.get(order.client_order_id)
 
 
 def test_existing_paper_database_adds_nullable_agent_admission_binding(
@@ -891,85 +659,4 @@ def make_price_basis(*, valid_until: datetime | None = None) -> PriceBasis:
         source_version="quote-1",
         observed_at=NOW - timedelta(seconds=1),
         valid_until=valid_until or NOW + timedelta(seconds=30),
-    )
-
-
-def order_signal(order: OrderIntent) -> SignalIntent:
-    return SignalIntent(
-        signal_id=order.signal_id,
-        event_id="prospective-policy-event",
-        instrument_id=order.instrument_id,
-        side=order.side,
-        valid_from=NOW - timedelta(minutes=1),
-        expires_at=order.expires_at,
-        evidence_refs=("prospective-event-observation",),
-        invalidation_conditions=("event is retracted",),
-    )
-
-
-def make_evidence_pack(*, event_id: str = "prospective-policy-event") -> EvidencePack:
-    return EvidencePack.build(
-        event_id=event_id,
-        as_of=NOW - timedelta(minutes=2),
-        research_question="Which registered paper target may be affected?",
-        evidence=(
-            EvidenceReference(
-                evidence_id="prospective-event-observation",
-                claim_id="policy-event",
-                source_ref="prospective://official/policy-event",
-                source_tier=EvidenceTier.OFFICIAL,
-                available_at=NOW - timedelta(minutes=3),
-                content_hash=sha256(b"prospective-event-observation").hexdigest(),
-                summary="An official prospective event observation.",
-            ),
-        ),
-        pattern_packs=(),
-        allowed_targets=("TEST",),
-    )
-
-
-def make_query_gate(
-    evidence_pack: EvidencePack,
-    *,
-    eligible: bool = True,
-) -> ProspectiveQueryGateResult:
-    blocking = () if eligible else ("event_revelation:missing_required_input",)
-    snapshot_ids = ("data-snapshot-" + "1" * 64,) if eligible else ()
-    barrier_at = NOW - timedelta(minutes=2)
-    evaluated_at = NOW - timedelta(minutes=1)
-    core = {
-        "schema_version": "market-impact.prospective-query-gate-result.v1",
-        "registration_id": "prospective-diagnostic-registration-" + "2" * 64,
-        "checkpoint_key": "policy-event-v2",
-        "checkpoint_snapshot_set_id": "prospective-checkpoint-snapshot-set-" + "3" * 64,
-        "evidence_pack_id": evidence_pack.pack_id,
-        "agent_execution_binding_hash": "5" * 64,
-        "model_profile_id": "cliproxyapi-luna-xhigh-v1",
-        "model_cost_limit_usd": "5.00",
-        "barrier_at": barrier_at.isoformat().replace("+00:00", "Z"),
-        "evaluated_at": evaluated_at.isoformat().replace("+00:00", "Z"),
-        "authorized_snapshot_ids": list(snapshot_ids),
-        "blocking_required_gaps": list(blocking),
-        "nonblocking_information_gaps": ["positioning:missing_registered_routes"],
-        "model_run_eligible": eligible,
-        "claim_scope": "process_diagnostic_only_no_alpha_or_execution_claim",
-        "historical_pit_claim": False,
-        "strategy_promotion_claim": False,
-        "execution_capability": False,
-    }
-    return ProspectiveQueryGateResult(
-        result_id=f"prospective-query-gate-{canonical_hash(core)}",
-        registration_id="prospective-diagnostic-registration-" + "2" * 64,
-        checkpoint_key="policy-event-v2",
-        checkpoint_snapshot_set_id="prospective-checkpoint-snapshot-set-" + "3" * 64,
-        evidence_pack_id=evidence_pack.pack_id,
-        agent_execution_binding_hash="5" * 64,
-        model_profile_id="cliproxyapi-luna-xhigh-v1",
-        model_cost_limit_usd="5.00",
-        barrier_at=barrier_at,
-        evaluated_at=evaluated_at,
-        authorized_snapshot_ids=snapshot_ids,
-        blocking_required_gaps=blocking,
-        nonblocking_information_gaps=("positioning:missing_registered_routes",),
-        model_run_eligible=eligible,
     )

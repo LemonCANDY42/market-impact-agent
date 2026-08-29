@@ -208,11 +208,12 @@ The first useful A-share implementation batch should stay narrow and checkpoint-
    before implementing a broad vendor adapter.
 3. Materialize effective-dated instrument and exposure mappings so the Agent can query tradable ETF,
    index, and stock candidates without choosing a Provider or current universe.
-4. Freeze two or three representative checkpoint inputs containing the observed event fact, cited
-   prior expectation, market and sector context, positioning, registered horizon choices, and
-   executable universe.
-5. Only after those Snapshots are complete, run three paired Agent replicates. Historical strict PIT,
-   prospective paper evaluation, and live execution remain separate admission lanes.
+4. Freeze two or three representative checkpoint inputs from the information actually observed. The
+   event trigger and selected target/universe identities are required; expectation, market, sector,
+   positioning, macro, and corroboration remain explicit optional gaps when absent.
+5. Only after each selected Snapshot and Observation binding is internally verified, run three paired
+   Agent replicates. This does not require every optional information slot to be populated. Historical
+   strict PIT, prospective paper evaluation, and live execution remain separate admission lanes.
 
 Public exchange pages can be prospective inputs only after route and rights acceptance. Licensed
 SZSE market feeds, CSI/CNI taxonomy data, Wind, Bloomberg, LSEG, or similar products require a
@@ -812,9 +813,13 @@ inputs and evaluation strata; they do not collapse these states into one global 
 
 Promote only policy-admitted observations into the existing Event Envelope/Evidence Pack, bind all
 authorized Snapshot IDs through `FrozenDataSnapshotInput`, and construct the semantic tools and
-Agent Execution Binding for one checkpoint. Missing optional slots and semantic gaps are included in
+Prospective Execution Plan for one checkpoint. The plan binds the exact Provider Profile and distinct
+control/treatment execution surfaces before replicate one. Missing optional slots and semantic gaps are included in
 the Evidence Pack rather than fabricated. Tests reject cutoff drift, undeclared Snapshots,
 Provider-selected targets, missing required trigger, future evidence, and mismatched tool hashes.
+Every prospective Evidence Reference must additionally bind one selected Snapshot ID, Source
+Observation version, and deterministic Checkpoint Decision Input ID; matching URLs or cutoff times
+alone are insufficient provenance.
 
 Before the first event, freeze a content-identified route plan that binds only already accepted
 Collection Jobs and use its admission time as the lower bound for trigger candidates. The readiness
@@ -831,6 +836,13 @@ Recompute the v2 registration from immutable artifacts. Required trigger, cutoff
 integrity, tool binding, horizon, target scope, model profile, cost, and future-outcome gates must
 pass before a model process starts. Optional expectation, market, exposure, positioning, macro, and
 corroboration gaps are reported as `nonblocking_information_gaps` and passed to both paired arms.
+The v4 Query Gate binds exact Snapshot/Observation/Decision Input lineage and the runtime tools expose
+only its authorized Decision Input IDs, even when an authorized Snapshot contains other rows. It
+reconstructs each submitted projection from the Harness-owned Snapshot Store and rejects any
+caller-rehashed content that differs from the selected Source Observation. Its content-addressed
+evaluation material retains the exact registration, Snapshot Set, Decision Inputs, and underlying
+Data Snapshots for downstream re-evaluation and restart recovery. Gate evaluation cannot predate the
+Snapshot Set's reconciliation time.
 
 **Blocked by:** PDI-30.
 
@@ -840,6 +852,18 @@ Execute the frozen arms under one Provider Profile and shared cost ceiling. Repo
 tool use, citations, abstention, candidates, event-identity/expectation/horizon blockers, decision
 agreement, latency, and the reconciled Usage Ledger. Apply the PDI-01 stop rule immediately; do not
 expand to more checkpoints when the same input blockers persist.
+
+The implemented Decision Run Manifest accepts only six canonically indexed runs whose Judgment
+artifacts prove the planned arm surface and exact Provider/model. The registered alias resolves to
+one Harness-bundled Provider Profile, while treatment preserves the control surface and adds
+routed-method Skills. Each metrics payload is content-identified and must match the final
+`judgment.validated` Journal event referenced by its Judgment; mutable caller totals, post-hoc arm
+relabeling, reused runs, and unsealed cost evidence force abstention. The Manifest does not prove its
+own run occurrence: mock paper admission must use composition-root-bound Agent runtime authorities
+to reopen all six source Run Records, complete Journal chains, terminal/transcript/raw/tool-result
+artifacts, and Journal-recomputed metrics before accepting the immutable copy. A proposed Signal is
+reconstructed from the exact agreeing treatment Judgments and must cover the entire Order lifetime. Runs must start after Query Gate
+evaluation, while Signal and Order creation must not predate the resulting consensus Manifest.
 
 **Blocked by:** PDI-31.
 
@@ -877,9 +901,10 @@ and unregistered event clusters.
 
 Add a durable claim/lease around pending Wakes and derive an idempotent dispatch identity from the
 immutable Wake and runtime registration. Before starting a model, the dispatcher invokes the
-registered checkpoint coordinator to collect/freeze every other required capability at the wake
-barrier cutoff; an incomplete companion Snapshot defers or rejects dispatch rather than giving the
-Agent a partial context. It then starts one fresh bounded Agent Run with the complete Snapshot set
+registered checkpoint coordinator to collect/freeze the selected required capabilities at the wake
+barrier cutoff; a structurally invalid required Snapshot defers or rejects dispatch, while absent
+optional inputs remain explicit gaps supplied to the Agent. It then starts one fresh bounded Agent Run
+with the internally verified selected Snapshot set
 and acknowledges only after durable run creation. Crash-before-create, crash-after-create,
 concurrent consumers, cancellation, budget exhaustion, invalid or incomplete Snapshots, cutoff
 drift, and terminal replay are accepted. The dispatcher exposes research capabilities only and

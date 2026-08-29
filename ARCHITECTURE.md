@@ -12,13 +12,14 @@ Observation adapters (aggregated discovery + direct sources)
     -> immutable raw/normalized observation bundle
     -> availability and latency gate -> Evidence Items -> Event Envelope
     -> Evidence Pack + pre-cutoff Pattern Pack
-    -> Agent Harness -> sealed Judgment Artifact
-    -> deterministic admission -> Event Assessment -> Signal Intent
+    -> Agent Harness -> Prospective Execution Plan -> paired Judgment Artifacts + metrics
+    -> bound Agent runtime authority reopens Run Records + Journals + source artifacts
+    -> Decision Run Manifest -> Decision Admission: abstain | Signal Intent
          -> Backtest Request -> engine-neutral backtest port
               -> Nautilus backtest bridge -> independent horizon replays and results
               -> calibration gate -> baseline/out-of-sample accept or reject
-         -> Experimental Paper Admission or later Strategy Admission
-              -> Order Intent -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
+         -> Decision Admission or later Strategy Admission
+              -> exact paper Order Intent -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
               -> Semantic Auto Approver (optional; cannot override hard policy)
               -> Approval Decision -> durable outbox
               -> paper execution gateway -> sealed submission capability
@@ -68,9 +69,10 @@ registered Data Query + accepted Source Route
     -> non-authoritative Checkpoint Market Universe View
          = same-set market/exposure inputs + versioned exchange rules
          -> explicit capability and semantic gaps
+         -> exact Snapshot/Observation/Decision-Input Evidence lineage
          -> Prospective Query Gate
               required trigger/structural failure -> no model call
-              eligible with optional gaps -> bounded Judgment Run
+              eligible with optional gaps -> exact authorized Decision Inputs + bounded Judgment Run
 ```
 
 The Market Universe View is a deterministic relationship projection, not another acquisition
@@ -98,10 +100,13 @@ availability or a frozen delivery-latency model; local backfill retrieval time i
 metadata and never substitutes for historical visibility. See
 [`docs/OBSERVATION_DATA.md`](docs/OBSERVATION_DATA.md).
 
-The bootstrap exposes one composed `PaperExecutionGateway`. Its experimental Agent entry binds the
-eligible Query Gate, exact Evidence Pack, exact Signal, and exact paper Order through an `ExperimentalPaperAdmission`
-artifact persisted with the outbox. That artifact grants no strategy or execution authority. The
-gateway still re-evaluates hard
+The bootstrap exposes one composed `PaperExecutionGateway`. Its Agent entry binds the eligible Query
+Gate, exact Evidence lineage, complete paired Decision Run Manifest, stable treatment Judgment
+identities plus their final Journal-bound metrics, an exact Prospective Execution Plan whose
+treatment surface preserves control and adds routed methods, a deterministically reconstructed Signal, and
+exact paper Order through a `DecisionAdmission` artifact persisted with the outbox. An abstaining
+admission cannot create a Signal or Order. That artifact grants no strategy
+or execution authority. The gateway still re-evaluates hard
 policy and provider capability before issuing the sealed input accepted by an
 execution provider. Providers do not accept a raw `OrderIntent`, and no
 equivalent live gateway exists.
@@ -169,6 +174,14 @@ to a Judgment Run. Prospective tools must first capture and time-bind new source
 before the Agent may cite it. The sealed Judgment Artifact records the exact Provider,
 model, prompt, Skill, MCP, tool, compaction, evidence, and output identities. Replaying a
 trade consumes that artifact; it never re-runs the model inside Nautilus.
+
+A Decision Run Manifest is a content-identified assessment, not proof by itself that its six runs
+occurred. Before an Agent-originated Order enters durable paper admission, the Harness composition
+root must resolve each planned execution-binding hash to a trusted Agent runtime authority. That
+authority reopens the actual terminal Run Record, verifies the complete Journal hash chain, reloads
+model/transcript/raw/tool-result artifacts, recomputes metrics from Journal events, and matches the
+terminal Judgment and `judgment.validated` event. The order caller cannot supply or replace this
+authority at admission time. Missing, mismatched, or unavailable runtime state fails closed.
 
 Context summaries, Skill instructions, MCP output, and model responses are evidence-bearing
 artifacts with identities and provenance; none may silently become policy. Model success is

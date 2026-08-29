@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/decision-run-manifest.schema.json",
+  "title": "Market Impact Decision Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "manifest_id", "registration_id", "registration_hash",
+    "checkpoint_key", "query_gate_result_id", "query_gate_result_hash",
+    "evidence_pack_id", "evidence_pack_hash", "agent_execution_plan_id",
+    "agent_execution_plan_hash", "control_arm", "treatment_arm", "replicates_per_arm",
+    "assessments", "disposition", "agreement_target_id", "agreement_direction",
+    "agreement_count", "agreeing_judgment_artifact_ids", "total_estimated_cost_microusd",
+    "blockers", "created_at", "claim_scope", "historical_pit_claim",
+    "strategy_promotion_claim", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.decision-run-manifest.v1"},
+    "manifest_id": {"type": "string", "pattern": "^decision-run-manifest-[0-9a-f]{64}$"},
+    "registration_id": {"type": "string", "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"},
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "query_gate_result_id": {"type": "string", "pattern": "^prospective-query-gate-[0-9a-f]{64}$"},
+    "query_gate_result_hash": {"$ref": "#/$defs/sha256"},
+    "evidence_pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "evidence_pack_hash": {"$ref": "#/$defs/sha256"},
+    "agent_execution_plan_id": {"type": "string", "pattern": "^prospective-execution-plan-[0-9a-f]{64}$"},
+    "agent_execution_plan_hash": {"$ref": "#/$defs/sha256"},
+    "control_arm": {"const": "structured_agent_core"},
+    "treatment_arm": {"const": "structured_agent_plus_routed_methods"},
+    "replicates_per_arm": {"const": 3},
+    "assessments": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "items": {"$ref": "#/$defs/assessment"}
+    },
+    "disposition": {"enum": ["propose", "abstain"]},
+    "agreement_target_id": {"type": ["string", "null"]},
+    "agreement_direction": {"enum": ["up", "down", null]},
+    "agreement_count": {"type": "integer", "minimum": 0, "maximum": 3},
+    "agreeing_judgment_artifact_ids": {
+      "type": "array", "uniqueItems": true,
+      "items": {"$ref": "#/$defs/judgment_id"}
+    },
+    "total_estimated_cost_microusd": {"type": "integer", "minimum": 0},
+    "blockers": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "claim_scope": {"const": "execution_diagnostic_only_no_alpha_or_live_claim"},
+    "historical_pit_claim": {"const": false},
+    "strategy_promotion_claim": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "judgment_id": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"},
+    "nullable_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+    "nullable_judgment_id": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/judgment_id"}]},
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm", "replicate_index", "run_id", "run_status", "outcome", "reason",
+        "terminal_store_hash", "judgment_artifact_id", "judgment_artifact_hash",
+        "execution_binding_hash", "metrics_hash", "run_validation_evidence_hash",
+        "estimated_cost_microusd", "vote_target_id", "vote_direction"
+      ],
+      "properties": {
+        "arm": {"enum": ["structured_agent_core", "structured_agent_plus_routed_methods"]},
+        "replicate_index": {"type": "integer", "minimum": 1, "maximum": 3},
+        "run_id": {"type": "string", "minLength": 1},
+        "run_status": {"enum": ["running", "completed", "failed", "cancelled", "budget_exhausted", "human_input_required"]},
+        "outcome": {"enum": ["propose", "abstain", "invalid"]},
+        "reason": {"type": "string", "minLength": 1},
+        "terminal_store_hash": {"$ref": "#/$defs/nullable_sha256"},
+        "judgment_artifact_id": {"$ref": "#/$defs/nullable_judgment_id"},
+        "judgment_artifact_hash": {"$ref": "#/$defs/nullable_sha256"},
+        "execution_binding_hash": {"$ref": "#/$defs/nullable_sha256"},
+        "metrics_hash": {"$ref": "#/$defs/nullable_sha256"},
+        "run_validation_evidence_hash": {"$ref": "#/$defs/nullable_sha256"},
+        "estimated_cost_microusd": {"type": ["integer", "null"], "minimum": 0},
+        "vote_target_id": {"type": ["string", "null"]},
+        "vote_direction": {"enum": ["up", "down", null]}
+      }
+    }
+  }
+}

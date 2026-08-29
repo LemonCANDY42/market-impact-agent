@@ -246,23 +246,48 @@ _Avoid_: Query Gate pass, Event Envelope, trigger decision, execution readiness
 
 **Prospective Checkpoint Snapshot Set**:
 A content-identified reconciliation of one registered checkpoint's immutable barrier with the
-accepted route reports, Collection Policies, complete Journal-frozen Data Snapshots, raw response
-hashes, and capability-specific read-only Agent tools required by that registration. It authorizes
-the exact Snapshot ID set through `FrozenDataSnapshotInput` without becoming a composite evidence or
-data authority. Schema v2 preserves the original capability-complete contract. Schema v3 may retain
-an incomplete registered coverage target through explicit `capability_gaps`: structurally valid
-present Snapshots remain usable, missing optional information remains visible, and no absent or
-unaccepted source is fabricated.
+accepted route reports, Collection Policies, internally complete Journal-frozen Data Snapshots, raw
+response hashes, exact selected Observation identities, and capability-specific read-only Agent
+tools. It authorizes the exact selected Snapshot set through `FrozenDataSnapshotInput` without
+becoming a composite evidence or data authority. `Complete` means every selected Snapshot and
+Observation binding is internally verifiable; it never means every optional information capability
+is present. Schema v2 preserves the original capability-complete contract. Schema v3 may retain
+registered coverage gaps: structurally valid present Snapshots remain usable, missing optional
+information remains visible, and no absent or unaccepted source is fabricated. Schema v4 also binds
+each accepted route to exact Source Observation IDs; Agent tools expose only the Query Gate-authorized
+Checkpoint Decision Input IDs projected from those observations, never every row in a shared Snapshot.
 _Avoid_: Composite Data Snapshot, Evidence Pack, Provider fallback, execution approval
+
+**Prospective Evidence Lineage**:
+The exact binding from one Evidence Reference to one selected Data Snapshot, Source Observation
+version, and deterministic Checkpoint Decision Input. A prospective Query Gate accepts the reference
+only when source identity, availability, raw content, and all three content identities reconcile with
+the authorized checkpoint input set.
+_Avoid_: Matching URL, inferred provenance, same-cutoff Evidence Pack
 
 **Prospective Query Gate Result**:
 A content-identified preflight binding one v2 registration, checkpoint Snapshot Set, Evidence Pack,
-Agent Execution Binding, model profile, cost ceiling, and exact authorized Snapshot IDs. Missing
-required trigger or structural input is blocking; missing optional information and unmet
-corroboration targets are nonblocking gaps passed into the Judgment Run. It grants one bounded
-process-diagnostic model run only, never historical PIT, strategy promotion, paper/live execution,
-or an alpha claim.
+Prospective Evidence Lineage, Prospective Execution Plan, model profile, cost ceiling, and exact
+authorized Snapshot and Checkpoint Decision Input IDs. Missing required trigger or structural input
+is blocking; missing optional information and unmet corroboration targets are nonblocking gaps passed
+into the Judgment Run. It grants one bounded process-diagnostic model run only, never historical PIT,
+strategy promotion, paper/live execution, or an alpha claim.
+It reconstructs every supplied Decision Input from the Harness-owned frozen Snapshot Store before
+granting authority; a caller cannot make fabricated data canonical by recomputing its content ID.
+Schema v4 binds a single content-addressed evaluation material containing the exact registration,
+Snapshot Set, Decision Inputs, and underlying Data Snapshots so downstream paper admission can
+re-evaluate the Gate and restart recovery can reopen its authority evidence.
 _Avoid_: Information-completeness score, strategy admission, order approval
+
+**Prospective Execution Plan**:
+A content-identified pre-model plan binding the registered model-profile alias to the exact Provider
+Profile identity, provider/model, and two distinct frozen execution surfaces for the registered
+control and treatment arms. It prevents callers from relabeling runs after execution and makes the
+model and per-arm prompt/Skill/tool/MCP/runtime surface independently recoverable.
+The alias resolves only through the Harness-bundled profile registry. The treatment surface must
+preserve the complete control runtime/tool/MCP/Skill prefix and add at least one routed-method Skill;
+two arbitrary hashes cannot be self-labeled as control and treatment.
+_Avoid_: Mutable run configuration, arm label, model alias alone
 
 **Checkpoint Decision Input**:
 A deterministic, content-identified, Provider-neutral read-only projection of one Source Observation
@@ -546,6 +571,20 @@ Pack and runtime surface without cross-replicate memory. It measures decision st
 is not a multi-Agent debate.
 _Avoid_: Agent team, repeated chat
 
+**Decision Run Manifest**:
+A content-identified record of one eligible Prospective Query Gate, exact Evidence Pack and Agent
+Execution Plan, and the complete registered paired Judgment Replicate Set. It records every terminal
+run, Judgment, execution-surface, and content-identified metrics artifact, verifies exact
+provider/model and per-arm provenance, derives treatment-arm stability by the pre-registered rule,
+and retains the control arm only for comparison. It is run lineage, not a new policy or execution
+authority.
+Each run also binds the exact final `judgment.validated` Journal event. That event binds the Judgment
+proposal, transcript, content-identified metrics payload, and cost, so a caller cannot lower reported
+cost by replacing a standalone metrics object.
+Every run must begin at or after the bound Query Gate evaluation; a later Gate cannot retroactively
+authorize an earlier model run.
+_Avoid_: Experiment folder, model summary, execution admission
+
 **Ensemble Decision**:
 A deterministic candidate-or-abstain result derived from one Judgment Replicate Set by a
 pre-registered agreement rule. It cannot add targets, evidence, direction, or confidence
@@ -574,14 +613,22 @@ An idempotently identified request to evaluate a specific order against policy
 and approval. It is not proof of broker acceptance.
 _Avoid_: Order, execution
 
-**Experimental Paper Admission**:
-A content-identified provenance binding from one eligible Prospective Query Gate Result and its exact
-Evidence Pack through an exact Signal Intent to an exact paper Order Intent. It may be persisted beside the durable mock/paper
-outbox so execution mechanics can be tested before strategy promotion. It remains
+**Decision Admission**:
+A content-identified deterministic admission of one exact Decision Run Manifest. An abstaining
+manifest produces an archived abstention with no Signal or Order. A treatment arm with the registered
+two-of-three target-and-direction agreement may produce one exact Signal Intent and paper Order
+Intent. The Signal is deterministically reconstructed from the exact agreeing treatment Judgments,
+must remain valid for the Order's entire lifetime, and cannot substitute another allowed target or
+direction. Neither Signal nor Order may predate the consensus Manifest; the control arm is
+comparison-only and need not agree. The Manifest's content hashes are not occurrence authority:
+paper admission additionally requires the trusted Harness composition root to bind each planned
+execution surface to an Agent runtime authority that reopens the completed Run Record, full Journal
+chain, terminal/transcript/raw/tool-result artifacts, validation event, and Journal-recomputed
+metrics. The order caller cannot self-attest or inject that authority. The admission remains
 `execution_diagnostic_only`, carries no Strategy Admission, alpha claim, live capability, credential
-access, or authority to bypass Trading Mandate, price, policy, approval, Provider, and reconciliation
-gates.
-_Avoid_: Strategy promotion, broker acceptance, live mandate, Agent execution tool
+access, or authority to bypass Trading Mandate, tradability, price, policy, approval, Provider, and
+reconciliation gates.
+_Avoid_: Experimental Paper Admission, strategy promotion, broker acceptance, Agent execution tool
 
 **Trading Mandate**:
 A versioned, expiring grant that defines the accounts, environments,
@@ -623,6 +670,13 @@ _Avoid_: Evidence authority, execution Provider
 A point-in-time record of what a Provider declares and what the harness has
 independently verified it can do.
 _Avoid_: Integration config, feature list
+
+**Provider Acceptance**:
+A Harness-owned, content-identified conformance decision binding one Provider implementation,
+dependency and configuration version, environment, account scope, advertised capability subset, and
+the exact restart, ambiguity, reconciliation, and fault evidence that passed. Provider declarations
+are inputs to this decision and cannot mint verified capability themselves.
+_Avoid_: Provider manifest, successful connection, mock acceptance
 
 **Model Provider Profile**:
 A versioned declaration binding one model adapter to its exact Provider identity, endpoint,

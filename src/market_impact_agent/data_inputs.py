@@ -1212,6 +1212,7 @@ def _prospective_receipt(observation: SourceObservation) -> bool:
         observation.times.availability_basis is AvailabilityBasis.ACTUAL_RECEIPT
         and observation.times.available_at == observation.times.retrieved_at
         and observation.authority_at == observation.times.retrieved_at
+        and observation.authority_kind == "actual_receipt"
     )
 
 

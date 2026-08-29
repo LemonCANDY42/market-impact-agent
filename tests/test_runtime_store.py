@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
+from market_impact_agent.runtime_store import (
+    ArtifactStore,
+    RunJournal,
+    RunStatus,
+    runtime_event_from_dict,
+)
 
 NOW = datetime(2026, 8, 26, 5, tzinfo=UTC)
 
@@ -73,6 +78,12 @@ def test_run_journal_is_append_only_hash_chained_and_idempotent(tmp_path: Path) 
     assert second.previous_hash == first.event_hash
     assert journal.events("run-1") == (first, second)
     assert journal.journal_hash("run-1") == second.event_hash
+    assert runtime_event_from_dict(second.to_dict()).to_dict() == second.to_dict()
+
+    tampered_event = second.to_dict()
+    tampered_event["payload"] = {"response_hash": sha256(b"tampered").hexdigest()}
+    with pytest.raises(ValueError, match="payload hash"):
+        runtime_event_from_dict(tampered_event)
 
     with pytest.raises(ValueError, match="different content"):
         journal.append(

@@ -31,6 +31,33 @@ class JudgmentDecision(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ProspectiveEvidenceLineage:
+    snapshot_id: str
+    observation_id: str
+    checkpoint_decision_input_id: str
+
+    def __post_init__(self) -> None:
+        _prefixed_hash(self.snapshot_id, "data-snapshot-", "prospective snapshot_id")
+        _prefixed_hash(
+            self.observation_id,
+            "source-observation-",
+            "prospective observation_id",
+        )
+        _prefixed_hash(
+            self.checkpoint_decision_input_id,
+            "checkpoint-decision-input-",
+            "prospective checkpoint decision input ID",
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "snapshot_id": self.snapshot_id,
+            "observation_id": self.observation_id,
+            "checkpoint_decision_input_id": self.checkpoint_decision_input_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceReference:
     evidence_id: str
     claim_id: str
@@ -40,6 +67,7 @@ class EvidenceReference:
     content_hash: str
     summary: str
     untrusted_text: bool = True
+    prospective_lineage: ProspectiveEvidenceLineage | None = None
 
     def __post_init__(self) -> None:
         for name in ("evidence_id", "claim_id", "source_ref", "summary"):
@@ -48,7 +76,7 @@ class EvidenceReference:
         _sha256(self.content_hash, "content_hash")
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "evidence_id": self.evidence_id,
             "claim_id": self.claim_id,
             "source_ref": self.source_ref,
@@ -58,6 +86,9 @@ class EvidenceReference:
             "summary": self.summary,
             "untrusted_text": self.untrusted_text,
         }
+        if self.prospective_lineage is not None:
+            payload["prospective_lineage"] = self.prospective_lineage.to_dict()
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -672,6 +703,11 @@ def evidence_pack_from_dict(value: object) -> EvidencePack:
             content_hash=_string(item, "content_hash"),
             summary=_string(item, "summary"),
             untrusted_text=_boolean(item.get("untrusted_text"), "untrusted_text"),
+            prospective_lineage=(
+                None
+                if item.get("prospective_lineage") is None
+                else _prospective_evidence_lineage(item.get("prospective_lineage"))
+            ),
         )
         for item in _mapping_list(payload.get("evidence"), "evidence")
     )
@@ -697,6 +733,15 @@ def evidence_pack_from_dict(value: object) -> EvidencePack:
     if pack.to_dict() != payload:
         raise ValueError("Evidence Pack does not match the canonical contract")
     return pack
+
+
+def _prospective_evidence_lineage(value: object) -> ProspectiveEvidenceLineage:
+    payload = _mapping(value, "prospective evidence lineage")
+    return ProspectiveEvidenceLineage(
+        snapshot_id=_string(payload, "snapshot_id"),
+        observation_id=_string(payload, "observation_id"),
+        checkpoint_decision_input_id=_string(payload, "checkpoint_decision_input_id"),
+    )
 
 
 def judgment_artifact_from_dict(value: object) -> JudgmentArtifact:
@@ -800,6 +845,12 @@ def _unique_nonempty(values: tuple[str, ...], name: str) -> None:
 def _sha256(value: str, name: str) -> None:
     if re.fullmatch(r"[0-9a-f]{64}", value) is None:
         raise ValueError(f"{name} must be a sha256 hex digest")
+
+
+def _prefixed_hash(value: str, prefix: str, name: str) -> None:
+    if not value.startswith(prefix):
+        raise ValueError(f"{name} must start with {prefix}")
+    _sha256(value.removeprefix(prefix), name)
 
 
 def _mapping(value: object, name: str) -> dict[str, object]:

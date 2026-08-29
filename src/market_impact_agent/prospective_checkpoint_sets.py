@@ -35,8 +35,11 @@ PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2 = (
 PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3 = (
     "market-impact.prospective-checkpoint-snapshot-set.v3"
 )
-# Backward-compatible default; partial sets select v3 explicitly.
-PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4 = (
+    "market-impact.prospective-checkpoint-snapshot-set.v4"
+)
+# v4 binds each accepted route to the exact observations selected from its Snapshot.
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4
 
 _TOOL_NAMES = {
     ObservationCapability.EVENT_REVELATION: "lookup_event_revelation",
@@ -141,8 +144,19 @@ class CheckpointRouteReconciliation:
     provider_manifest_hash: str
     source_config_hash: str
     raw_response_hash: str
+    observation_ids: tuple[str, ...]
 
-    def to_dict(self) -> dict[str, str]:
+    def __post_init__(self) -> None:
+        if self.observation_ids != tuple(sorted(set(self.observation_ids))):
+            raise ValueError("checkpoint route Observation IDs must be sorted and unique")
+        for observation_id in self.observation_ids:
+            _prefixed(
+                observation_id,
+                "source-observation-",
+                "checkpoint route observation_id",
+            )
+
+    def to_dict(self) -> dict[str, object]:
         return {
             "route_kind": self.route_kind,
             "snapshot_id": self.snapshot_id,
@@ -154,6 +168,7 @@ class CheckpointRouteReconciliation:
             "provider_manifest_hash": self.provider_manifest_hash,
             "source_config_hash": self.source_config_hash,
             "raw_response_hash": self.raw_response_hash,
+            "observation_ids": list(self.observation_ids),
         }
 
 
@@ -239,6 +254,7 @@ class ProspectiveCheckpointSnapshotSet:
         if self.schema_version not in {
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2,
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4,
         }:
             raise ValueError("unsupported prospective checkpoint Snapshot Set schema")
         _prefixed(
@@ -333,12 +349,132 @@ class ProspectiveCheckpointSnapshotSet:
             "historical_pit_claim": self.historical_pit_claim,
             "execution_capability": self.execution_capability,
         }
-        if self.schema_version == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3:
+        if self.schema_version in {
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4,
+        }:
             payload["capability_gaps"] = list(self.capability_gaps)
         return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "snapshot_set_id": self.snapshot_set_id}
+
+
+def prospective_checkpoint_snapshot_set_from_dict(
+    value: object,
+) -> ProspectiveCheckpointSnapshotSet:
+    if not isinstance(value, dict):
+        raise TypeError("prospective checkpoint Snapshot Set must be an object")
+    payload = cast(dict[object, object], value)
+    raw_bindings = payload.get("capability_bindings")
+    if not isinstance(raw_bindings, list):
+        raise TypeError("checkpoint Snapshot Set capability_bindings must be an array")
+    bindings: list[CheckpointCapabilityBinding] = []
+    for raw_binding_value in cast(list[object], raw_bindings):
+        raw_binding = raw_binding_value
+        if not isinstance(raw_binding, dict):
+            raise TypeError("checkpoint capability binding must be an object")
+        raw_binding = cast(dict[object, object], raw_binding)
+        raw_routes = raw_binding.get("routes")
+        if not isinstance(raw_routes, list):
+            raise TypeError("checkpoint capability routes must be an array")
+        routes: list[CheckpointRouteReconciliation] = []
+        for raw_route_value in cast(list[object], raw_routes):
+            raw_route = raw_route_value
+            if not isinstance(raw_route, dict):
+                raise TypeError("checkpoint route reconciliation must be an object")
+            raw_route = cast(dict[object, object], raw_route)
+            routes.append(
+                CheckpointRouteReconciliation(
+                    route_kind=_payload_string(raw_route, "route_kind"),
+                    snapshot_id=_payload_string(raw_route, "snapshot_id"),
+                    collection_policy_id=_payload_string(raw_route, "collection_policy_id"),
+                    source_acceptance_report_id=_payload_string(
+                        raw_route, "source_acceptance_report_id"
+                    ),
+                    provider_id=_payload_string(raw_route, "provider_id"),
+                    provider_version=_payload_string(raw_route, "provider_version"),
+                    upstream_source=_payload_string(raw_route, "upstream_source"),
+                    provider_manifest_hash=_payload_string(raw_route, "provider_manifest_hash"),
+                    source_config_hash=_payload_string(raw_route, "source_config_hash"),
+                    raw_response_hash=_payload_string(raw_route, "raw_response_hash"),
+                    observation_ids=_payload_string_tuple(raw_route, "observation_ids"),
+                )
+            )
+        raw_manifest = raw_binding.get("tool_manifest")
+        manifest = None
+        if raw_manifest is not None:
+            if not isinstance(raw_manifest, dict):
+                raise TypeError("checkpoint tool manifest must be an object")
+            raw_manifest = cast(dict[object, object], raw_manifest)
+            manifest = CheckpointToolManifest(
+                name=_payload_string(raw_manifest, "name"),
+                version=_payload_string(raw_manifest, "version"),
+                snapshot_ids=_payload_string_tuple(raw_manifest, "snapshot_ids"),
+                allowed_filter_fields=_payload_string_tuple(raw_manifest, "allowed_filter_fields"),
+                side_effect=_payload_string(raw_manifest, "side_effect"),
+            )
+        not_applicable_reason = raw_binding.get("not_applicable_reason")
+        if not_applicable_reason is not None and not isinstance(not_applicable_reason, str):
+            raise TypeError("checkpoint not_applicable_reason must be text or null")
+        bindings.append(
+            CheckpointCapabilityBinding(
+                capability=ObservationCapability(_payload_string(raw_binding, "capability")),
+                applicability=CapabilityApplicability(
+                    _payload_string(raw_binding, "applicability")
+                ),
+                not_applicable_reason=not_applicable_reason,
+                routes=tuple(routes),
+                tool_manifest=manifest,
+            )
+        )
+    result = ProspectiveCheckpointSnapshotSet(
+        snapshot_set_id=_payload_string(payload, "snapshot_set_id"),
+        registration_id=_payload_string(payload, "registration_id"),
+        checkpoint_key=_payload_string(payload, "checkpoint_key"),
+        barrier_at=_parse_timestamp(_payload_string(payload, "barrier_at")),
+        reconciled_at=_parse_timestamp(_payload_string(payload, "reconciled_at")),
+        capability_bindings=tuple(bindings),
+        authorized_snapshot_ids=_payload_string_tuple(payload, "authorized_snapshot_ids"),
+        complete=_payload_bool(payload, "complete"),
+        capability_gaps=_payload_string_tuple(payload, "capability_gaps"),
+        historical_pit_claim=_payload_bool(payload, "historical_pit_claim"),
+        execution_capability=_payload_bool(payload, "execution_capability"),
+        schema_version=_payload_string(payload, "schema_version"),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("prospective checkpoint Snapshot Set is not canonical")
+    return result
+
+
+def _payload_string(payload: dict[object, object], name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, str) or not value:
+        raise TypeError(f"checkpoint Snapshot Set {name} must be non-empty text")
+    return value
+
+
+def _payload_string_tuple(payload: dict[object, object], name: str) -> tuple[str, ...]:
+    value = payload.get(name)
+    if not isinstance(value, list):
+        raise TypeError(f"checkpoint Snapshot Set {name} must be a string array")
+    items = cast(list[object], value)
+    if any(not isinstance(item, str) for item in items):
+        raise TypeError(f"checkpoint Snapshot Set {name} must be a string array")
+    return tuple(cast(list[str], items))
+
+
+def _payload_bool(payload: dict[object, object], name: str) -> bool:
+    value = payload.get(name)
+    if not isinstance(value, bool):
+        raise TypeError(f"checkpoint Snapshot Set {name} must be boolean")
+    return value
+
+
+def _parse_timestamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    _strict_utc(parsed, "checkpoint Snapshot Set timestamp")
+    return parsed
 
 
 def reconcile_prospective_checkpoint_snapshot_set(
@@ -527,6 +663,9 @@ def reconcile_prospective_checkpoint_snapshot_set(
                     provider_manifest_hash=declaration.provider_manifest_hash,
                     source_config_hash=declaration.source_config_hash,
                     raw_response_hash=raw_response_hash,
+                    observation_ids=tuple(
+                        sorted(item.observation_id for item in matching_observations)
+                    ),
                 )
             )
         if any(
@@ -576,11 +715,7 @@ def reconcile_prospective_checkpoint_snapshot_set(
     )
     sorted_capability_gaps = tuple(sorted(set(capability_gaps)))
     complete = not sorted_capability_gaps
-    snapshot_set_schema = (
-        PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3
-        if allow_partial
-        else PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2
-    )
+    snapshot_set_schema = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4
     core: dict[str, object] = {
         "schema_version": snapshot_set_schema,
         "registration_id": registration.registration_id,
@@ -593,7 +728,10 @@ def reconcile_prospective_checkpoint_snapshot_set(
         "historical_pit_claim": False,
         "execution_capability": False,
     }
-    if snapshot_set_schema == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3:
+    if snapshot_set_schema in {
+        PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
+        PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4,
+    }:
         core["capability_gaps"] = list(sorted_capability_gaps)
     return ProspectiveCheckpointSnapshotSet(
         snapshot_set_id=(f"prospective-checkpoint-snapshot-set-{canonical_hash(core)}"),
@@ -614,11 +752,18 @@ def build_checkpoint_tool_descriptors(
     *,
     store: LocalDataSnapshotStore,
     frozen_input: FrozenDataSnapshotInput,
+    authorized_decision_input_ids: frozenset[str],
     required_capability: str,
 ) -> tuple[ToolDescriptor, ...]:
     _trimmed(required_capability, "checkpoint tool required_capability")
     if not set(snapshot_set.authorized_snapshot_ids) <= frozen_input.authorized_snapshot_ids:
         raise ValueError("checkpoint Snapshot is not declared by the enclosing run input")
+    materialized_inputs = materialize_checkpoint_decision_inputs(snapshot_set, store=store)
+    materialized_by_id = {cast(str, item["record_id"]): item for item in materialized_inputs}
+    if not authorized_decision_input_ids:
+        raise ValueError("checkpoint tools require Query Gate-authorized Decision Inputs")
+    if not authorized_decision_input_ids <= set(materialized_by_id):
+        raise ValueError("checkpoint tool Decision Input is outside the selected routes")
     descriptors: list[ToolDescriptor] = []
     for binding in snapshot_set.capability_bindings:
         manifest = binding.tool_manifest
@@ -629,34 +774,25 @@ def build_checkpoint_tool_descriptors(
             raise ValueError("checkpoint tool requires complete frozen Snapshots")
         if any(item.query.capability is not binding.capability for item in snapshots):
             raise ValueError("checkpoint tool Snapshot capability mismatch")
-        route_kinds_by_source: dict[tuple[str, str, str, str], tuple[str, ...]] = {}
-        for route in binding.routes:
-            key = (
-                route.snapshot_id,
-                route.provider_id,
-                route.provider_version,
-                route.upstream_source,
-            )
-            route_kinds_by_source[key] = tuple(
-                sorted({*route_kinds_by_source.get(key, ()), route.route_kind})
-            )
+        bound_records = tuple(
+            item
+            for item in materialized_inputs
+            if item["capability"] == binding.capability.value
+            and cast(str, item["record_id"]) in authorized_decision_input_ids
+        )
 
         async def handler(
             arguments: dict[str, object],
             *,
             bound_manifest: CheckpointToolManifest = manifest,
-            bound_snapshots: tuple[object, ...] = snapshots,
-            bound_route_kinds: dict[
-                tuple[str, str, str, str], tuple[str, ...]
-            ] = route_kinds_by_source,
+            bound_records: tuple[dict[str, object], ...] = bound_records,
             bound_capability: ObservationCapability = binding.capability,
         ) -> object:
             return _handle_checkpoint_tool(
                 arguments,
                 snapshot_set=snapshot_set,
                 manifest=bound_manifest,
-                snapshots=bound_snapshots,
-                route_kinds_by_source=bound_route_kinds,
+                records=bound_records,
                 capability=bound_capability,
             )
 
@@ -696,17 +832,68 @@ def build_checkpoint_tool_descriptors(
     return tuple(descriptors)
 
 
+def materialize_checkpoint_decision_inputs(
+    snapshot_set: ProspectiveCheckpointSnapshotSet,
+    *,
+    store: LocalDataSnapshotStore,
+) -> tuple[dict[str, object], ...]:
+    """Project only the exact observations selected by the reconciled routes."""
+
+    snapshots = {
+        snapshot_id: store.get(snapshot_id) for snapshot_id in snapshot_set.authorized_snapshot_ids
+    }
+    route_kinds_by_pair: dict[tuple[str, str], set[str]] = {}
+    capability_by_pair: dict[tuple[str, str], ObservationCapability] = {}
+    for binding in snapshot_set.capability_bindings:
+        for route in binding.routes:
+            snapshot = snapshots.get(route.snapshot_id)
+            if snapshot is None:
+                raise ValueError("checkpoint route Snapshot is not authorized by its Snapshot Set")
+            observations = {item.observation_id: item for item in snapshot.observations}
+            for observation_id in route.observation_ids:
+                observation = observations.get(observation_id)
+                if observation is None:
+                    raise ValueError("checkpoint route Observation is absent from its Snapshot")
+                if _observation_route_key(route.snapshot_id, observation) != (
+                    route.snapshot_id,
+                    route.provider_id,
+                    route.provider_version,
+                    route.upstream_source,
+                ):
+                    raise ValueError("checkpoint route Observation source identity changed")
+                pair = (route.snapshot_id, observation_id)
+                previous_capability = capability_by_pair.setdefault(pair, binding.capability)
+                if previous_capability is not binding.capability:
+                    raise ValueError("checkpoint Observation is assigned to multiple capabilities")
+                route_kinds_by_pair.setdefault(pair, set()).add(route.route_kind)
+
+    rows: list[dict[str, object]] = []
+    for snapshot_id, observation_id in sorted(route_kinds_by_pair):
+        snapshot = snapshots[snapshot_id]
+        observation = next(
+            item for item in snapshot.observations if item.observation_id == observation_id
+        )
+        rows.append(
+            project_checkpoint_observation(
+                checkpoint_snapshot_set_id=snapshot_set.snapshot_set_id,
+                checkpoint_key=snapshot_set.checkpoint_key,
+                barrier_at=snapshot_set.barrier_at,
+                snapshot_id=snapshot_id,
+                route_kinds=tuple(sorted(route_kinds_by_pair[(snapshot_id, observation_id)])),
+                observation=observation,
+            )
+        )
+    return tuple(sorted(rows, key=lambda item: cast(str, item["record_id"])))
+
+
 def _handle_checkpoint_tool(
     arguments: dict[str, object],
     *,
     snapshot_set: ProspectiveCheckpointSnapshotSet,
     manifest: CheckpointToolManifest,
-    snapshots: tuple[object, ...],
-    route_kinds_by_source: Mapping[tuple[str, str, str, str], tuple[str, ...]],
+    records: tuple[dict[str, object], ...],
     capability: ObservationCapability,
 ) -> dict[str, object]:
-    from market_impact_agent.data_inputs import DataSnapshot
-
     if not set(arguments) <= {"query", "publisher", "filters", "limit"}:
         raise ValueError("checkpoint tool arguments contain unsupported fields")
     query = _optional_trimmed(arguments.get("query"), "query")
@@ -731,45 +918,24 @@ def _handle_checkpoint_tool(
         raise ValueError("checkpoint tool limit must be between 1 and 100")
 
     rows: list[dict[str, object]] = []
-    seen: set[str] = set()
-    for raw_snapshot in snapshots:
-        snapshot = cast(DataSnapshot, raw_snapshot)
-        for observation in snapshot.observations:
-            if observation.observation_id in seen:
-                continue
-            route_kinds = route_kinds_by_source.get(
-                _observation_route_key(snapshot.snapshot_id, observation)
+    for projected in records:
+        searchable_payload = canonical_json_bytes(projected["data"]).decode().casefold()
+        if query is not None and query.casefold() not in searchable_payload:
+            continue
+        if publisher is not None:
+            payload_publisher = _payload_field(
+                cast(Mapping[str, object], projected["data"]), "publisher"
             )
-            if route_kinds is None:
-                raise ValueError("checkpoint observation source has no selected route")
-            projected = project_checkpoint_observation(
-                checkpoint_snapshot_set_id=snapshot_set.snapshot_set_id,
-                checkpoint_key=snapshot_set.checkpoint_key,
-                barrier_at=snapshot_set.barrier_at,
-                snapshot_id=snapshot.snapshot_id,
-                route_kinds=route_kinds,
-                observation=observation,
-            )
-            searchable_payload = canonical_json_bytes(projected["data"]).decode().casefold()
-            if query is not None and query.casefold() not in searchable_payload:
-                continue
-            if publisher is not None:
-                payload_publisher = _payload_field(
-                    cast(Mapping[str, object], projected["data"]), "publisher"
-                )
-                if not isinstance(payload_publisher, str) or (
-                    payload_publisher.casefold() != publisher.casefold()
-                ):
-                    continue
-            if any(
-                _payload_field(cast(Mapping[str, object], projected["data"]), key) != value
-                for key, value in filters.items()
+            if not isinstance(payload_publisher, str) or (
+                payload_publisher.casefold() != publisher.casefold()
             ):
                 continue
-            seen.add(observation.observation_id)
-            rows.append(projected)
-            if len(rows) >= limit_value:
-                break
+        if any(
+            _payload_field(cast(Mapping[str, object], projected["data"]), key) != value
+            for key, value in filters.items()
+        ):
+            continue
+        rows.append(projected)
         if len(rows) >= limit_value:
             break
     core = {

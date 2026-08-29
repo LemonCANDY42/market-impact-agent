@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/decision-admission.schema.json",
+  "title": "Market Impact Decision Admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "admission_id", "disposition", "decision_run_manifest_id",
+    "decision_run_manifest_hash", "query_gate_result_id", "query_gate_result_hash",
+    "evidence_pack_id", "evidence_pack_hash", "signal_id", "signal_intent_hash",
+    "order_intent_hash", "agreeing_judgment_artifact_ids", "paper_approval_mode",
+    "created_at", "claim_scope", "alpha_claim", "live_capability", "execution_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.decision-admission.v1"},
+    "admission_id": {"type": "string", "pattern": "^decision-admission-[0-9a-f]{64}$"},
+    "disposition": {"enum": ["propose", "abstain"]},
+    "decision_run_manifest_id": {"type": "string", "pattern": "^decision-run-manifest-[0-9a-f]{64}$"},
+    "decision_run_manifest_hash": {"$ref": "#/$defs/sha256"},
+    "query_gate_result_id": {"type": "string", "pattern": "^prospective-query-gate-[0-9a-f]{64}$"},
+    "query_gate_result_hash": {"$ref": "#/$defs/sha256"},
+    "evidence_pack_id": {"type": "string", "pattern": "^evidence-pack-[0-9a-f]{64}$"},
+    "evidence_pack_hash": {"$ref": "#/$defs/sha256"},
+    "signal_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^signal-.+$"}]},
+    "signal_intent_hash": {"$ref": "#/$defs/nullable_sha256"},
+    "order_intent_hash": {"$ref": "#/$defs/nullable_sha256"},
+    "agreeing_judgment_artifact_ids": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"}
+    },
+    "paper_approval_mode": {"const": "manual_each"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "claim_scope": {"const": "execution_diagnostic_only_no_alpha_or_live_claim"},
+    "alpha_claim": {"const": false},
+    "live_capability": {"const": false},
+    "execution_authority": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}
+  }
+}

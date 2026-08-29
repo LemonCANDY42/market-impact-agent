@@ -3,6 +3,26 @@
 Roadmap items are evidence gates, not a feature inventory. A later phase does
 not begin because an earlier API exists; its acceptance evidence must exist.
 
+## Current delivery lane
+
+The shortest accepted path to Agent-directed paper operation is:
+
+1. observe one real post-admission trigger and freeze the internally verifiable selected Snapshot
+   Set, explicit optional gaps, Prospective Evidence Lineage, tools, and Query Gate;
+2. run three paired Judgment replicates per arm and freeze one Decision Run Manifest;
+3. require treatment-arm two-of-three target-and-direction agreement, or archive abstention without a
+   Signal or Order; the control arm is comparison-only;
+4. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
+   the already accepted durable mock outbox;
+5. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
+   account-scoped reconciliation before any real broker-paper claim.
+
+Strict historical PIT recovery, optional information-quality improvements, and the five-run physical
+energy study remain parallel research lanes. They may improve evidence or claims, but they do not
+globally block prospective Judgment under actual-receipt inputs. Only trigger, target/universe,
+cutoff/input identity, model/cost, order-time tradability, safety, approval, and execution-state gates
+are hard at their owning boundary.
+
 ## Phase 0 — Auditable skeleton
 
 - [x] Freeze vocabulary and authority boundaries.
@@ -204,15 +224,34 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     remain unauthorized.
   - [ ] After a post-admission candidate appears, seal its registered eligibility selection and
     trading-session barrier, then freeze the actual Snapshot Set, Evidence Pack, read-only tools,
-    and Agent Execution Binding. Pre-admission observations remain ineligible.
+    Prospective Evidence Lineage, and Prospective Execution Plan. Pre-admission observations remain
+    ineligible.
 - [ ] `PDI-31` Pass Query Gate preflight for two or three registered checkpoints.
-  - [x] Implement the content-identified v2 Query Gate contract: required trigger/structural gaps
+  - [x] Implement the content-identified v4 Query Gate contract: required trigger/structural gaps
     block without model cost; optional and corroboration gaps remain nonblocking Agent inputs; the
     result grants no PIT, alpha, strategy, paper, or live authority.
+  - [x] Require every prospective Evidence Reference to reconcile to one authorized Snapshot,
+    Source Observation version, and deterministic Checkpoint Decision Input; reject unrelated
+    same-cutoff Evidence Packs, and expose only those exact authorized Decision Inputs through the
+    runtime tools. Rebuild supplied projections from the Harness-owned frozen Snapshot Store so a
+    recomputed caller hash cannot promote fabricated input; bind the full evaluation material for
+    paper-boundary re-evaluation and restart recovery.
   - [ ] Freeze and pass the gate for the first real post-route-plan checkpoint, then add one or two
     independently triggered registered checkpoints. Waiting for an external event is tracked
     separately from missing trigger-route infrastructure.
 - [ ] `PDI-32` Run three paired replicates per checkpoint under the frozen stop and cost rules.
+  - [x] Implement the Prospective Execution Plan and Decision Run Manifest contracts. They seal the
+    Harness-bundled Provider Profile, a control surface plus treatment routed-method superset, six
+    canonically indexed runs, Judgment-linked validation events and metrics, total cost, and
+    treatment-only agreement; swapped, reused, incomplete, or mutable-cost runs abstain. Query Gate
+    must follow Snapshot Set reconciliation, runs must start after their Query Gate, and Signal and
+    Order must follow the resulting Manifest in time. Mock paper admission additionally requires
+    composition-root-bound Agent runtime authorities to reopen every actual Run Record, complete
+    Journal chain, source artifact, and recomputed metric; caller-authored self-consistent hashes do
+    not prove that a run occurred.
+  - [ ] Freeze the first real six terminal runs in one Decision Run Manifest. Treatment-arm two-of-three
+    target-and-direction agreement may form a Signal; the control arm is comparison-only. Invalid,
+    reused, mismatched-runtime, or incomplete replicate sets abstain.
 
 Stage 5 — automate bounded follow-up and open registered outcomes:
 
@@ -494,14 +533,26 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   durability, global reconciliation blocking, duplicate identity rejection, and complete-snapshot
   recovery pass locally. This is mock contract acceptance only: it exposes no Agent execution tool,
   account capability, IBKR route, or broker-paper acceptance.
-- [x] Add content-identified experimental Agent paper admission binding an eligible prospective
-  Query Gate and exact Evidence Pack to the exact Signal and paper Order Intent. Persist its hash with the durable outbox
-  while keeping the low-level mock contract seam available for lifecycle tests. The admission is
-  explicitly no-alpha, no-strategy-promotion, no-live, and cannot bypass mandate, price, policy,
-  approval, Provider capability, or reconciliation.
+- [x] Replace the pre-validation experimental Agent seam with one content-identified Decision
+  Admission binding the eligible Query Gate, exact Evidence lineage, complete paired Decision Run
+  Manifest, stable treatment Judgment identities, exact Signal, and paper Order Intent. An abstention
+  must archive without creating either. Persist its hash with the durable outbox while keeping the
+  low-level mock contract seam available only for isolated lifecycle tests. The admission is
+  explicitly no-alpha, no-strategy-promotion, no-live, and cannot bypass mandate, tradability, price,
+  policy, approval, Provider capability, or reconciliation.
+  The mock boundary re-evaluates the full v4 Gate material on admission and restart and reopens the
+  exact six Judgment, validation-event, metrics, execution-plan, Manifest, Signal, and Order
+  artifacts. Initial admission also resolves each execution-binding hash through a trusted Agent
+  runtime authority and reopens its source Run Journal/artifact store before copying the immutable
+  evidence into paper state; no such authority may be supplied by the order caller. This is
+  mock-only `manual_each` contract acceptance; no real checkpoint has exercised it.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
   engine and official IB adapter; create a direct IBKR Provider only if that path cannot
   pass lifecycle and reconciliation acceptance.
+- Add a Harness-owned Provider Acceptance artifact before advertising external paper capability. It
+  must bind the exact adapter/dependency/configuration/environment/account scope and the accepted
+  ambiguity, restart, fault, and account-level reconciliation evidence; a Provider manifest cannot
+  verify itself.
 - Add CLI, MCP approval tools, generic webhook, and macOS notifications.
 - Pass crash/restart/reconciliation and duplicate-order acceptance.
 

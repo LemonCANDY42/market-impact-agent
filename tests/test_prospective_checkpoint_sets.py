@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
@@ -10,7 +11,12 @@ from typing import cast
 
 import pytest
 
-from market_impact_agent.agent_contracts import EvidencePack, EvidenceReference, canonical_hash
+from market_impact_agent.agent_contracts import (
+    EvidencePack,
+    EvidenceReference,
+    ProspectiveEvidenceLineage,
+    canonical_hash,
+)
 from market_impact_agent.agent_engine import AgentExecutionBinding
 from market_impact_agent.agent_runtime import ToolSideEffect
 from market_impact_agent.agent_schema import validate_agent_contract
@@ -26,6 +32,7 @@ from market_impact_agent.data_inputs import (
     LocalDataSnapshotStore,
     SourceObservation,
 )
+from market_impact_agent.model_provider import load_model_provider_profile
 from market_impact_agent.observations import (
     AvailabilityBasis,
     ObservationCapability,
@@ -34,7 +41,9 @@ from market_impact_agent.observations import (
 )
 from market_impact_agent.prospective_checkpoint_sets import (
     CheckpointRouteSelection,
+    ProspectiveCheckpointSnapshotSet,
     build_checkpoint_tool_descriptors,
+    materialize_checkpoint_decision_inputs,
     reconcile_prospective_checkpoint_snapshot_set,
 )
 from market_impact_agent.prospective_data import (
@@ -50,6 +59,10 @@ from market_impact_agent.prospective_diagnostic import (
     DiagnosticMechanism,
     ProspectiveDiagnosticCheckpoint,
     ProspectiveDiagnosticRegistration,
+)
+from market_impact_agent.prospective_execution import (
+    PairedArmExecutionBinding,
+    ProspectiveExecutionPlan,
 )
 from market_impact_agent.prospective_query_gate import evaluate_prospective_query_gate
 from market_impact_agent.research import EvidenceTier
@@ -259,6 +272,50 @@ def _evidence_pack() -> EvidencePack:
     )
 
 
+def _lineaged_evidence_pack(
+    snapshot_set: ProspectiveCheckpointSnapshotSet,
+    frozen: DataSnapshot,
+) -> tuple[EvidencePack, dict[str, object]]:
+    observation = frozen.observations[0]
+    available_at = observation.times.available_at
+    assert available_at is not None
+    decision_input = project_checkpoint_observation(
+        checkpoint_snapshot_set_id=snapshot_set.snapshot_set_id,
+        checkpoint_key=snapshot_set.checkpoint_key,
+        barrier_at=snapshot_set.barrier_at,
+        snapshot_id=frozen.snapshot_id,
+        route_kinds=("official_event",),
+        observation=observation,
+    )
+    return (
+        EvidencePack.build(
+            event_id="policy-event-v2",
+            as_of=BARRIER,
+            research_question="What can be inferred from the information actually observed?",
+            evidence=(
+                EvidenceReference(
+                    evidence_id="prospective-event-observation",
+                    claim_id="observed-event",
+                    source_ref=observation.source_ref,
+                    source_tier=EvidenceTier.OFFICIAL,
+                    available_at=available_at,
+                    content_hash=observation.raw_content_hash,
+                    summary="An event was observed before the checkpoint barrier.",
+                    prospective_lineage=ProspectiveEvidenceLineage(
+                        snapshot_id=frozen.snapshot_id,
+                        observation_id=observation.observation_id,
+                        checkpoint_decision_input_id=cast(str, decision_input["record_id"]),
+                    ),
+                ),
+            ),
+            pattern_packs=(),
+            allowed_targets=("510300.XSHG",),
+            data_gaps=("prior_expectation unavailable",),
+        ),
+        decision_input,
+    )
+
+
 def _execution_binding() -> AgentExecutionBinding:
     digest = canonical_hash({"fixture": "query-gate"})
     return AgentExecutionBinding(
@@ -271,6 +328,32 @@ def _execution_binding() -> AgentExecutionBinding:
         mcp_server_hashes=(),
         context_estimator_id="context-estimator-v1",
         compactor_id="compactor-v1",
+    )
+
+
+def _execution_plan() -> ProspectiveExecutionPlan:
+    registration = _v2_partial_registration()
+    profile = load_model_provider_profile(Path("examples/providers/cliproxyapi-luna-xhigh-v1.json"))
+    control = _execution_binding()
+    treatment = AgentExecutionBinding(
+        runtime_ref=control.runtime_ref,
+        runtime_config_hash=control.runtime_config_hash,
+        prompt_hash=control.prompt_hash,
+        skill_hashes=(canonical_hash({"fixture": "treatment-skill"}),),
+        tool_manifest_hashes=control.tool_manifest_hashes,
+        tool_surface_hash=control.tool_surface_hash,
+        mcp_server_hashes=control.mcp_server_hashes,
+        context_estimator_id=control.context_estimator_id,
+        compactor_id=control.compactor_id,
+    )
+    return ProspectiveExecutionPlan.build(
+        registration=registration,
+        model_profile_alias=registration.model_profile_id,
+        model_profile=profile,
+        arm_bindings=(
+            PairedArmExecutionBinding(arm=registration.paired_arms[0], execution_binding=control),
+            PairedArmExecutionBinding(arm=registration.paired_arms[1], execution_binding=treatment),
+        ),
     )
 
 
@@ -502,7 +585,7 @@ def test_reconcile_builds_non_authoritative_snapshot_set_and_read_only_tool(
     )
 
     assert snapshot_set.complete is True
-    assert snapshot_set.schema_version == "market-impact.prospective-checkpoint-snapshot-set.v2"
+    assert snapshot_set.schema_version == "market-impact.prospective-checkpoint-snapshot-set.v4"
     assert snapshot_set.historical_pit_claim is False
     assert snapshot_set.execution_capability is False
     assert snapshot_set.frozen_input == FrozenDataSnapshotInput(
@@ -540,6 +623,10 @@ def test_reconcile_builds_non_authoritative_snapshot_set_and_read_only_tool(
         snapshot_set,
         store=store,
         frozen_input=snapshot_set.frozen_input,
+        authorized_decision_input_ids=frozenset(
+            cast(str, item["record_id"])
+            for item in materialize_checkpoint_decision_inputs(snapshot_set, store=store)
+        ),
         required_capability="data.snapshot.read",
     )
     assert [item.name for item in descriptors] == ["lookup_event_revelation"]
@@ -689,6 +776,10 @@ def test_tool_binding_rejects_snapshot_outside_frozen_run_input(tmp_path: Path) 
             store=store,
             frozen_input=FrozenDataSnapshotInput(
                 authorized_snapshot_ids=frozenset({"data-snapshot-other"})
+            ),
+            authorized_decision_input_ids=frozenset(
+                cast(str, item["record_id"])
+                for item in materialize_checkpoint_decision_inputs(snapshot_set, store=store)
             ),
             required_capability="data.snapshot.read",
         )
@@ -901,6 +992,10 @@ def test_checkpoint_tool_binds_route_kinds_to_each_observation_source(tmp_path: 
         snapshot_set,
         store=store,
         frozen_input=snapshot_set.frozen_input,
+        authorized_decision_input_ids=frozenset(
+            cast(str, item["record_id"])
+            for item in materialize_checkpoint_decision_inputs(snapshot_set, store=store)
+        ),
         required_capability="data.snapshot.read",
     )[0]
 
@@ -919,6 +1014,24 @@ def test_checkpoint_tool_binds_route_kinds_to_each_observation_source(tmp_path: 
         "official-event": ["official_event"],
         "secondary-event": ["secondary_event"],
     }
+
+    materialized = materialize_checkpoint_decision_inputs(snapshot_set, store=store)
+    one_authorized_id = cast(str, materialized[0]["record_id"])
+    restricted_descriptor = build_checkpoint_tool_descriptors(
+        snapshot_set,
+        store=store,
+        frozen_input=snapshot_set.frozen_input,
+        authorized_decision_input_ids=frozenset({one_authorized_id}),
+        required_capability="data.snapshot.read",
+    )[0]
+
+    async def invoke_restricted_tool() -> object:
+        return await restricted_descriptor.handler({"limit": 10})
+
+    restricted_value = asyncio.run(invoke_restricted_tool())
+    assert isinstance(restricted_value, dict)
+    restricted_records = cast(list[dict[str, object]], restricted_value["records"])
+    assert [item["record_id"] for item in restricted_records] == [one_authorized_id]
 
 
 @pytest.mark.parametrize(
@@ -1042,6 +1155,10 @@ def test_checkpoint_tool_filters_tushare_record_fields_and_semantic_aliases(
         snapshot_set,
         store=store,
         frozen_input=snapshot_set.frozen_input,
+        authorized_decision_input_ids=frozenset(
+            cast(str, item["record_id"])
+            for item in materialize_checkpoint_decision_inputs(snapshot_set, store=store)
+        ),
         required_capability="data.snapshot.read",
     )[0]
 
@@ -1258,11 +1375,14 @@ def test_partial_v2_snapshot_set_keeps_optional_gaps_without_blocking_model_run(
         )
         == ()
     )
+    evidence_pack, decision_input = _lineaged_evidence_pack(snapshot_set, frozen)
     gate = evaluate_prospective_query_gate(
         registration=registration,
         snapshot_set=snapshot_set,
-        evidence_pack=_evidence_pack(),
-        execution_binding=_execution_binding(),
+        evidence_pack=evidence_pack,
+        decision_inputs=(decision_input,),
+        snapshot_store=store,
+        execution_plan=_execution_plan(),
         model_profile_id=registration.model_profile_id,
         model_cost_limit_usd=Decimal("5.00"),
         evaluated_at=BARRIER + timedelta(minutes=2),
@@ -1309,7 +1429,9 @@ def test_partial_v2_query_gate_blocks_missing_trigger_but_not_optional_informati
         registration=registration,
         snapshot_set=snapshot_set,
         evidence_pack=_evidence_pack(),
-        execution_binding=_execution_binding(),
+        decision_inputs=(),
+        snapshot_store=store,
+        execution_plan=_execution_plan(),
         model_profile_id=registration.model_profile_id,
         model_cost_limit_usd=Decimal("5.00"),
         evaluated_at=BARRIER + timedelta(minutes=2),
@@ -1320,6 +1442,91 @@ def test_partial_v2_query_gate_blocks_missing_trigger_but_not_optional_informati
         "event_revelation:missing_registered_routes:established_news,official_event",
     )
     assert all(not gap.startswith("event_revelation:") for gap in gate.nonblocking_information_gaps)
+
+
+def test_query_gate_rejects_evidence_from_an_unrelated_decision_input(
+    tmp_path: Path,
+) -> None:
+    store, journal, policy, frozen, report = _fixture(tmp_path)
+    registration = _v2_partial_registration()
+    snapshot_set = reconcile_prospective_checkpoint_snapshot_set(
+        registration=registration,
+        checkpoint_key="policy-event-v2",
+        barrier_at=BARRIER,
+        selections=(
+            CheckpointRouteSelection(
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="official_event",
+                snapshot_id=frozen.snapshot_id,
+                collection_policy_id=policy.policy_id,
+                source_acceptance_report_id=report.report_id,
+            ),
+        ),
+        store=store,
+        journal=journal,
+        policies={policy.policy_id: policy},
+        acceptance_reports={report.report_id: report},
+        reconciled_at=BARRIER + timedelta(minutes=1),
+        allow_partial=True,
+    )
+    evidence_pack, decision_input = _lineaged_evidence_pack(snapshot_set, frozen)
+    unrelated = deepcopy(decision_input)
+    unrelated["snapshot_id"] = "data-snapshot-" + "9" * 64
+    unrelated_core = {key: value for key, value in unrelated.items() if key != "record_id"}
+    unrelated["record_id"] = f"checkpoint-decision-input-{canonical_hash(unrelated_core)}"
+
+    with pytest.raises(ValueError, match="frozen Observation projection"):
+        evaluate_prospective_query_gate(
+            registration=registration,
+            snapshot_set=snapshot_set,
+            evidence_pack=evidence_pack,
+            decision_inputs=(unrelated,),
+            snapshot_store=store,
+            execution_plan=_execution_plan(),
+            model_profile_id=registration.model_profile_id,
+            model_cost_limit_usd=Decimal("5.00"),
+            evaluated_at=BARRIER + timedelta(minutes=2),
+        )
+
+    forged = deepcopy(decision_input)
+    forged_data = cast(dict[str, object], forged["data"])
+    forged_data["headline"] = "Fabricated event"
+    forged_source = cast(dict[str, object], forged["source"])
+    forged_hash = sha256(b"fabricated-event").hexdigest()
+    forged_source["raw_content_hash"] = forged_hash
+    forged_core = {key: value for key, value in forged.items() if key != "record_id"}
+    forged["record_id"] = f"checkpoint-decision-input-{canonical_hash(forged_core)}"
+    original_evidence = evidence_pack.evidence[0]
+    assert original_evidence.prospective_lineage is not None
+    forged_evidence = replace(
+        original_evidence,
+        content_hash=forged_hash,
+        prospective_lineage=replace(
+            original_evidence.prospective_lineage,
+            checkpoint_decision_input_id=forged["record_id"],
+        ),
+    )
+    forged_pack = EvidencePack.build(
+        event_id=evidence_pack.event_id,
+        as_of=evidence_pack.as_of,
+        research_question=evidence_pack.research_question,
+        evidence=(forged_evidence,),
+        pattern_packs=evidence_pack.pattern_packs,
+        allowed_targets=evidence_pack.allowed_targets,
+        data_gaps=evidence_pack.data_gaps,
+    )
+    with pytest.raises(ValueError, match="frozen Observation projection"):
+        evaluate_prospective_query_gate(
+            registration=registration,
+            snapshot_set=snapshot_set,
+            evidence_pack=forged_pack,
+            decision_inputs=(forged,),
+            snapshot_store=store,
+            execution_plan=_execution_plan(),
+            model_profile_id=registration.model_profile_id,
+            model_cost_limit_usd=Decimal("5.00"),
+            evaluated_at=BARRIER + timedelta(minutes=2),
+        )
 
 
 def test_v1_snapshot_reconciliation_remains_fail_closed_when_routes_are_missing(

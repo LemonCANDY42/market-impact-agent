@@ -35,8 +35,15 @@ The bootstrap implements:
 - a Harness-owned durable paper-execution contract slice that freezes exact intent/mandate/price/
   policy/approval identities, atomically queues approved mock intents, treats lost acknowledgements
   and expired leases as `unknown`, and requires complete reconciliation before continuing; a
-  separate experimental admission can now persist an eligible prospective Query Gate→Evidence Pack→Signal→paper
-  Order provenance hash without claiming strategy promotion or execution authority. There is still
+  Decision Admission can now persist an eligible prospective Query Gate→exact Evidence lineage→frozen
+  Harness-profile/control-plus-routed-method Execution Plan→paired Decision Run Manifest with sealed
+  Judgment/Journal-event/metrics evidence→stable
+  treatment consensus→deterministic Signal→paper Order provenance hash without claiming
+  strategy promotion or execution authority. Paper admission does not trust those caller-supplied
+  hashes alone: the trusted composition root must bind the exact execution-surface hash to an Agent
+  runtime authority that reopens each completed Run Record, full hash-chained Journal, terminal
+  Judgment, transcript/raw response, tool-result, validation-event, and recomputed metrics artifact.
+  There is still
   no Agent execution tool, account capability, broker connection, or live path;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
@@ -317,8 +324,10 @@ exhaustiveness, and oil/non-European direct confirmation still needs additional 
 ## Architecture at a glance
 
 ```text
-Evidence Pack + pre-cutoff Pattern Pack -> 5 isolated Judgment Runs
-       -> pre-frozen binding + deterministic 3/5 Ensemble Decision -> SignalIntent
+Prospective Snapshot Set -> exact Decision Inputs + Evidence lineage -> Query Gate
+       -> frozen Provider Profile + two-arm Execution Plan -> 3 Judgment Runs per arm
+       -> runtime-authority-verified Judgment/Journal/metrics evidence -> Decision Run Manifest
+       -> treatment 2/3 agreement or archived abstention -> Decision Admission -> SignalIntent
        -> backtest request -> Nautilus backtest bridge
        -> deterministic policy -> optional semantic approval
        -> durable OrderIntent -> sealed submission capability -> execution provider

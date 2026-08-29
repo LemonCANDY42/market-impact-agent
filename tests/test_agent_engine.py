@@ -2,7 +2,7 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -583,6 +583,42 @@ def test_agent_engine_completes_tool_loop_and_freezes_auditable_judgment(tmp_pat
     )
 
 
+def test_agent_engine_reopens_authoritative_completed_run_state(tmp_path: Path) -> None:
+    run_request = request()
+    engine = make_engine(
+        tmp_path,
+        FixtureProvider([tool_turn(1), final_turn(proposal())]),
+        handler_calls=[],
+    )
+    binding = engine.execution_binding(
+        run_request,
+        runtime_ref="market-impact-agent-runtime-v1",
+    )
+    result = asyncio.run(engine.run(run_request))
+
+    engine.assert_authoritative_completed_run(result, execution_binding=binding)
+
+    assert result.metrics is not None
+    forged_metrics = replace(result.metrics, estimated_cost_microusd=0)
+    with pytest.raises(ValueError, match="authoritative Run Journal"):
+        engine.assert_authoritative_completed_run(
+            replace(
+                result,
+                metrics=forged_metrics,
+                metrics_hash=canonical_hash(forged_metrics.to_dict()),
+            ),
+            execution_binding=binding,
+        )
+
+    assert result.judgment is not None
+    engine.artifact_store.get(
+        result.judgment.transcript_hash,
+        media_type="application/json",
+    ).path.unlink()
+    with pytest.raises(FileNotFoundError):
+        engine.assert_authoritative_completed_run(result, execution_binding=binding)
+
+
 def test_crash_resume_replays_read_only_tool_once_and_matches_control(tmp_path: Path) -> None:
     resumed_root = tmp_path / "resumed"
     handler_calls: list[str] = []
@@ -719,7 +755,12 @@ def test_forced_compaction_retains_policy_and_reaches_same_proposal(tmp_path: Pa
         config=compact_config,
         counter=EntryCounter(tokens_per_message=100),
     )
-    compacted = asyncio.run(compact_engine.run(request("compact-run")))
+    compact_request = request("compact-run")
+    compact_binding = compact_engine.execution_binding(
+        compact_request,
+        runtime_ref="market-impact-agent-runtime-v1",
+    )
+    compacted = asyncio.run(compact_engine.run(compact_request))
 
     control_provider = FixtureProvider(
         [tool_turn(1, "call-1"), tool_turn(2, "call-2"), final_turn(proposal(), 3)]
@@ -747,6 +788,26 @@ def test_forced_compaction_retains_policy_and_reaches_same_proposal(tmp_path: Pa
         message.get("role") == "user" and "evidence_pack" in str(message)
         for message in final_context
     )
+    compact_engine.assert_authoritative_completed_run(
+        compacted,
+        execution_binding=compact_binding,
+    )
+    checkpoint_event = next(
+        event
+        for event in compact_engine.journal.events("compact-run")
+        if event.event_type == "context.checkpointed"
+    )
+    checkpoint_hash = checkpoint_event.payload["checkpoint_artifact_hash"]
+    assert isinstance(checkpoint_hash, str)
+    compact_engine.artifact_store.get(
+        checkpoint_hash,
+        media_type="application/json",
+    ).path.unlink()
+    with pytest.raises(FileNotFoundError):
+        compact_engine.assert_authoritative_completed_run(
+            compacted,
+            execution_binding=compact_binding,
+        )
 
 
 def test_tool_error_can_produce_audited_abstention(tmp_path: Path) -> None:

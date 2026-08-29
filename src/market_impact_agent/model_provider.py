@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -148,10 +149,13 @@ class ModelProviderFactory:
 
 
 def load_model_provider_profile(path: Path) -> ModelProviderProfile:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
+    return model_provider_profile_from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+def model_provider_profile_from_dict(value: object) -> ModelProviderProfile:
+    if not isinstance(value, dict):
         raise TypeError("Model Provider Profile must be an object")
-    mapping = cast(dict[object, object], raw)
+    mapping = cast(dict[object, object], value)
     if not all(isinstance(key, str) for key in mapping):
         raise TypeError("Model Provider Profile must have string keys")
     payload = cast(dict[str, object], mapping)
@@ -243,11 +247,24 @@ def load_model_provider_profile(path: Path) -> ModelProviderProfile:
 
 
 def default_model_provider_profile_path() -> Path:
+    return builtin_model_provider_profile_path("minimax-m3-research-v1")
+
+
+def builtin_model_provider_profile_path(profile_alias: str) -> Path:
+    if re.fullmatch(r"[a-z0-9][a-z0-9-]*", profile_alias) is None:
+        raise ValueError("Model Provider Profile alias is invalid")
     package_root = Path(__file__).resolve().parent
-    installed = package_root / "builtin_provider_profiles" / "minimax-m3-research-v1.json"
+    installed = package_root / "builtin_provider_profiles" / f"{profile_alias}.json"
     if installed.is_file():
         return installed
-    return package_root.parents[1] / "examples/providers/minimax-m3-research-v1.json"
+    source = package_root.parents[1] / "examples/providers" / f"{profile_alias}.json"
+    if not source.is_file():
+        raise FileNotFoundError(f"unknown Harness-bundled Model Provider Profile: {profile_alias}")
+    return source
+
+
+def load_builtin_model_provider_profile(profile_alias: str) -> ModelProviderProfile:
+    return load_model_provider_profile(builtin_model_provider_profile_path(profile_alias))
 
 
 def _build_minimax(profile: ModelProviderProfile) -> ModelProvider:

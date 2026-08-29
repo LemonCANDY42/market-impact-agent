@@ -3,18 +3,35 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import MappingProxyType
 from typing import cast
 
 from market_impact_agent.agent_contracts import (
     EvidencePack,
+    JudgmentArtifact,
     canonical_hash,
     evidence_pack_from_dict,
+)
+from market_impact_agent.agent_engine import CompletedAgentRunAuthority
+from market_impact_agent.agent_ensemble import execution_binding_hash
+from market_impact_agent.data_inputs import (
+    LocalDataSnapshotStore,
+    data_snapshot_from_dict,
+)
+from market_impact_agent.decision_admission import (
+    DecisionAdmission,
+    DecisionDisposition,
+    DecisionRunManifest,
+    PairedDecisionRun,
+    build_signal_from_decision_manifest,
+    completed_run_validation_evidence_hash,
 )
 from market_impact_agent.domain import (
     ApprovalMode,
@@ -26,16 +43,31 @@ from market_impact_agent.domain import (
     TradingMandate,
     require_aware,
 )
-from market_impact_agent.experimental_paper_admission import ExperimentalPaperAdmission
 from market_impact_agent.policy import HardPolicyEvaluator
-from market_impact_agent.prospective_query_gate import ProspectiveQueryGateResult
+from market_impact_agent.prospective_checkpoint_sets import (
+    ProspectiveCheckpointSnapshotSet,
+    prospective_checkpoint_snapshot_set_from_dict,
+)
+from market_impact_agent.prospective_diagnostic import (
+    ProspectiveDiagnosticRegistration,
+    prospective_diagnostic_registration_from_dict,
+)
+from market_impact_agent.prospective_execution import (
+    ProspectiveExecutionPlan,
+    prospective_execution_plan_from_dict,
+)
+from market_impact_agent.prospective_query_gate import (
+    ProspectiveQueryGateResult,
+    build_query_gate_evaluation_material,
+    evaluate_prospective_query_gate,
+)
 from market_impact_agent.providers import (
     Capability,
     ExecutionProvider,
     SubmissionCapability,
     _issue_submission_capability,  # pyright: ignore[reportPrivateUsage]
 )
-from market_impact_agent.runtime_store import ArtifactStore
+from market_impact_agent.runtime_store import ArtifactStore, runtime_event_from_dict
 
 
 class ApprovalState(StrEnum):
@@ -139,6 +171,7 @@ class PaperExecutionService:
         policy: HardPolicyEvaluator | None = None,
         clock: Callable[[], datetime] | None = None,
         lease_timeout_seconds: int = 30,
+        agent_run_authorities: Mapping[str, CompletedAgentRunAuthority] | None = None,
     ) -> None:
         if lease_timeout_seconds < 1:
             raise ValueError("lease_timeout_seconds must be positive")
@@ -162,6 +195,7 @@ class PaperExecutionService:
         self.policy = policy or HardPolicyEvaluator()
         self.clock = clock or (lambda: datetime.now(UTC))
         self.lease_timeout_seconds = lease_timeout_seconds
+        self.__agent_run_authorities = MappingProxyType(dict(agent_run_authorities or {}))
         self._initialize()
         os.chmod(self.root, 0o700)
         os.chmod(self.database_path, 0o600)
@@ -181,30 +215,150 @@ class PaperExecutionService:
     def admit(self, order: OrderIntent) -> PaperIntentRecord:
         return self._admit(order, agent_admission_hash=None)
 
-    def admit_experimental(
+    def admit_decision(
         self,
         order: OrderIntent,
-        admission: ExperimentalPaperAdmission,
+        admission: DecisionAdmission,
         *,
+        manifest: DecisionRunManifest,
         query_gate: ProspectiveQueryGateResult,
         evidence_pack: EvidencePack,
+        registration: ProspectiveDiagnosticRegistration,
+        snapshot_set: ProspectiveCheckpointSnapshotSet,
+        decision_inputs: tuple[Mapping[str, object], ...],
+        snapshot_store: LocalDataSnapshotStore,
+        execution_plan: ProspectiveExecutionPlan,
         signal: SignalIntent,
+        paired_runs: tuple[PairedDecisionRun, ...],
     ) -> PaperIntentRecord:
+        if admission.disposition is not DecisionDisposition.PROPOSE:
+            raise PermissionError("abstaining Decision Admission cannot reach paper execution")
+        if self.mandate.approval_mode is not ApprovalMode.MANUAL_EACH:
+            raise PermissionError("initial Agent-directed paper requires manual_each approval")
+        recomputed_query_gate = evaluate_prospective_query_gate(
+            registration=registration,
+            snapshot_set=snapshot_set,
+            evidence_pack=evidence_pack,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=execution_plan,
+            model_profile_id=query_gate.model_profile_id,
+            model_cost_limit_usd=Decimal(query_gate.model_cost_limit_usd),
+            evaluated_at=query_gate.evaluated_at,
+        )
+        if recomputed_query_gate.to_dict() != query_gate.to_dict():
+            raise ValueError("paper admission Query Gate was not deterministically evaluated")
         admission.assert_matches(
+            manifest=manifest,
             query_gate=query_gate,
             evidence_pack=evidence_pack,
             signal=signal,
             order=order,
         )
+        if (
+            query_gate.agent_execution_plan_id != execution_plan.plan_id
+            or query_gate.agent_execution_plan_hash != canonical_hash(execution_plan.to_dict())
+            or manifest.agent_execution_plan_id != execution_plan.plan_id
+            or manifest.agent_execution_plan_hash != canonical_hash(execution_plan.to_dict())
+        ):
+            raise ValueError("paper admission Agent execution plan is not exact")
+        if (
+            manifest.registration_id != registration.registration_id
+            or manifest.registration_hash != canonical_hash(registration.to_dict())
+            or (manifest.control_arm, manifest.treatment_arm) != registration.paired_arms
+        ):
+            raise ValueError("paper admission Decision Run registration is not exact")
+        expected_keys = tuple((item.arm, item.replicate_index) for item in manifest.assessments)
+        if tuple((item.arm, item.replicate_index) for item in paired_runs) != expected_keys:
+            raise ValueError("paper admission requires all six canonical paired runs")
+        judgments: list[JudgmentArtifact] = []
+        for paired, assessment in zip(paired_runs, manifest.assessments, strict=True):
+            result = paired.result
+            judgment = result.judgment
+            if judgment is None or result.metrics is None:
+                raise ValueError("paper admission requires sealed Judgment and metrics artifacts")
+            binding = execution_plan.arm_binding(paired.arm)
+            authority = self.__agent_run_authorities.get(binding.binding_hash)
+            if authority is None:
+                raise PermissionError("paper admission lacks the Harness-bound Agent run authority")
+            authority.assert_authoritative_completed_run(
+                result,
+                execution_binding=binding,
+            )
+            if (
+                assessment.run_id != result.run_id
+                or assessment.judgment_artifact_id != judgment.artifact_id
+                or assessment.judgment_artifact_hash != canonical_hash(judgment.to_dict())
+                or assessment.execution_binding_hash
+                != execution_binding_hash(judgment, runtime_ref=binding.runtime_ref)
+                or assessment.execution_binding_hash != binding.binding_hash
+                or judgment.provider_id != execution_plan.provider_id
+                or judgment.model != execution_plan.model
+                or judgment.started_at < query_gate.evaluated_at
+                or judgment.started_at > judgment.finished_at
+                or judgment.finished_at > manifest.created_at
+                or assessment.metrics_hash != canonical_hash(result.metrics.to_dict())
+                or result.metrics_hash != assessment.metrics_hash
+                or assessment.run_validation_evidence_hash
+                != completed_run_validation_evidence_hash(result)
+                or assessment.estimated_cost_microusd != result.metrics.estimated_cost_microusd
+            ):
+                raise ValueError("paper admission paired run content is not exact")
+            judgments.append(judgment)
+        agreeing_judgments = tuple(
+            item
+            for item in judgments
+            if item.artifact_id in manifest.agreeing_judgment_artifact_ids
+        )
+        expected_signal = build_signal_from_decision_manifest(
+            manifest=manifest,
+            evidence_pack=evidence_pack,
+            judgments=agreeing_judgments,
+            valid_from=signal.valid_from,
+            expires_at=signal.expires_at,
+        )
+        if canonical_hash(expected_signal.to_dict()) != canonical_hash(signal.to_dict()):
+            raise ValueError("paper admission Signal is not the exact treatment consensus")
         query_gate_artifact = self.artifacts.put_json(query_gate.to_dict())
+        evaluation_material_artifact = self.artifacts.put_json(
+            build_query_gate_evaluation_material(
+                registration=registration,
+                snapshot_set=snapshot_set,
+                decision_inputs=decision_inputs,
+                snapshot_store=snapshot_store,
+            )
+        )
         evidence_pack_artifact = self.artifacts.put_json(evidence_pack.to_dict())
+        execution_plan_artifact = self.artifacts.put_json(execution_plan.to_dict())
+        manifest_artifact = self.artifacts.put_json(manifest.to_dict())
         signal_artifact = self.artifacts.put_json(signal.to_dict())
+        for paired, judgment, assessment in zip(
+            paired_runs,
+            judgments,
+            manifest.assessments,
+            strict=True,
+        ):
+            self.artifacts.put_json(judgment.to_dict())
+            assert paired.result.metrics is not None
+            metrics_artifact = self.artifacts.put_json(paired.result.metrics.to_dict())
+            if metrics_artifact.content_hash != paired.result.metrics_hash:
+                raise ValueError("paper admission metrics hash is not exact")
+            assert paired.result.validation_event is not None
+            validation_artifact = self.artifacts.put_json(paired.result.validation_event.to_dict())
+            if validation_artifact.content_hash != assessment.run_validation_evidence_hash:
+                raise ValueError("paper admission run validation evidence is not exact")
         if query_gate_artifact.content_hash != admission.query_gate_result_hash:
-            raise ValueError("experimental paper admission Query Gate hash is not exact")
+            raise ValueError("Decision Admission Query Gate hash is not exact")
+        if evaluation_material_artifact.content_hash != query_gate.evaluation_material_hash:
+            raise ValueError("Decision Admission Query Gate evaluation material is not exact")
         if signal_artifact.content_hash != admission.signal_intent_hash:
-            raise ValueError("experimental paper admission Signal hash is not exact")
+            raise ValueError("Decision Admission Signal hash is not exact")
         if evidence_pack_artifact.content_hash != admission.evidence_pack_hash:
-            raise ValueError("experimental paper admission Evidence Pack hash is not exact")
+            raise ValueError("Decision Admission Evidence Pack hash is not exact")
+        if manifest_artifact.content_hash != admission.decision_run_manifest_hash:
+            raise ValueError("Decision Admission run manifest hash is not exact")
+        if execution_plan_artifact.content_hash != query_gate.agent_execution_plan_hash:
+            raise ValueError("Decision Admission execution plan hash is not exact")
         admission_artifact = self.artifacts.put_json(admission.to_dict())
         return self._admit(order, agent_admission_hash=admission_artifact.content_hash)
 
@@ -704,7 +858,17 @@ class PaperExecutionService:
         if agent_admission_hash is not None:
             admission_payload = _json_object(
                 self.artifacts.read_json(agent_admission_hash),
-                "experimental paper admission artifact",
+                "Decision Admission artifact",
+            )
+            if _json_string(admission_payload, "schema_version") != (
+                "market-impact.decision-admission.v1"
+            ):
+                raise ValueError("paper intent does not bind the canonical Decision Admission")
+            if _json_string(admission_payload, "disposition") != "propose":
+                raise ValueError("abstaining Decision Admission reached the paper outbox")
+            manifest_hash = _json_string(
+                admission_payload,
+                "decision_run_manifest_hash",
             )
             query_gate_hash = _json_string(
                 admission_payload,
@@ -715,11 +879,45 @@ class PaperExecutionService:
                 "evidence_pack_hash",
             )
             signal_hash = _json_string(admission_payload, "signal_intent_hash")
+            manifest_payload = _json_object(
+                self.artifacts.read_json(manifest_hash),
+                "Decision Run Manifest artifact",
+            )
             query_gate_payload = _json_object(
                 self.artifacts.read_json(query_gate_hash),
                 "prospective Query Gate artifact",
             )
+            evaluation_material_payload = _json_object(
+                self.artifacts.read_json(
+                    _json_string(query_gate_payload, "evaluation_material_hash")
+                ),
+                "prospective Query Gate evaluation material",
+            )
+            if _json_string(evaluation_material_payload, "schema_version") != (
+                "market-impact.prospective-query-gate-evaluation-material.v1"
+            ):
+                raise ValueError("Query Gate evaluation material schema is not canonical")
+            registration_payload = _json_object(
+                evaluation_material_payload.get("registration"),
+                "prospective diagnostic registration",
+            )
+            snapshot_set_payload = _json_object(
+                evaluation_material_payload.get("checkpoint_snapshot_set"),
+                "prospective checkpoint Snapshot Set",
+            )
             evidence_pack = evidence_pack_from_dict(self.artifacts.read_json(evidence_pack_hash))
+            execution_plan_hash = _json_string(
+                query_gate_payload,
+                "agent_execution_plan_hash",
+            )
+            execution_plan_payload = _json_object(
+                self.artifacts.read_json(execution_plan_hash),
+                "prospective execution plan artifact",
+            )
+            model_provider_profile_payload = _json_object(
+                execution_plan_payload.get("model_provider_profile"),
+                "Model Provider Profile",
+            )
             signal_payload = _json_object(
                 self.artifacts.read_json(signal_hash),
                 "Signal Intent artifact",
@@ -732,13 +930,223 @@ class PaperExecutionService:
                 query_gate_payload,
                 "result_id",
             ):
-                raise ValueError("experimental paper admission Query Gate identity is not exact")
-            if _json_string(query_gate_payload, "evidence_pack_id") != evidence_pack.pack_id:
-                raise ValueError(
-                    "experimental paper admission Query Gate Evidence Pack is not exact"
+                raise ValueError("Decision Admission Query Gate identity is not exact")
+            if (
+                _json_string(registration_payload, "registration_id")
+                != _json_string(query_gate_payload, "registration_id")
+                or _json_string(snapshot_set_payload, "snapshot_set_id")
+                != _json_string(query_gate_payload, "checkpoint_snapshot_set_id")
+                or _json_string(snapshot_set_payload, "registration_id")
+                != _json_string(query_gate_payload, "registration_id")
+                or _json_string(snapshot_set_payload, "checkpoint_key")
+                != _json_string(query_gate_payload, "checkpoint_key")
+            ):
+                raise ValueError("Query Gate evaluation material identity is not exact")
+            material_snapshots = evaluation_material_payload.get("snapshots")
+            material_inputs = evaluation_material_payload.get("decision_inputs")
+            if not isinstance(material_snapshots, list) or not isinstance(material_inputs, list):
+                raise TypeError("Query Gate evaluation material arrays are invalid")
+            snapshot_ids = tuple(
+                sorted(
+                    _json_string(
+                        _json_object(item, "Query Gate material Snapshot"),
+                        "snapshot_id",
+                    )
+                    for item in cast(list[object], material_snapshots)
                 )
+            )
+            decision_input_payloads = tuple(
+                _json_object(item, "Query Gate material Decision Input")
+                for item in cast(list[object], material_inputs)
+            )
+            decision_input_ids = tuple(
+                sorted(_json_string(item, "record_id") for item in decision_input_payloads)
+            )
+            if snapshot_ids != tuple(
+                sorted(_json_string_list(query_gate_payload, "authorized_snapshot_ids"))
+            ) or decision_input_ids != tuple(
+                sorted(_json_string_list(query_gate_payload, "authorized_decision_input_ids"))
+            ):
+                raise ValueError("Query Gate evaluation material authorization is not exact")
+            if any(
+                _json_string(item, "checkpoint_snapshot_set_id")
+                != _json_string(snapshot_set_payload, "snapshot_set_id")
+                or _json_string(item, "snapshot_id") not in snapshot_ids
+                for item in decision_input_payloads
+            ):
+                raise ValueError("Query Gate material Decision Input lineage is invalid")
+            registration = prospective_diagnostic_registration_from_dict(registration_payload)
+            snapshot_set = prospective_checkpoint_snapshot_set_from_dict(snapshot_set_payload)
+            execution_plan = prospective_execution_plan_from_dict(execution_plan_payload)
+            with TemporaryDirectory(
+                prefix="query-gate-revalidation-",
+                dir=self.root,
+            ) as revalidation_root:
+                snapshot_store = LocalDataSnapshotStore(Path(revalidation_root))
+                for raw_snapshot in cast(list[object], material_snapshots):
+                    snapshot_store.put(data_snapshot_from_dict(raw_snapshot))
+                recomputed_query_gate = evaluate_prospective_query_gate(
+                    registration=registration,
+                    snapshot_set=snapshot_set,
+                    evidence_pack=evidence_pack,
+                    decision_inputs=decision_input_payloads,
+                    snapshot_store=snapshot_store,
+                    execution_plan=execution_plan,
+                    model_profile_id=_json_string(query_gate_payload, "model_profile_id"),
+                    model_cost_limit_usd=Decimal(
+                        _json_string(query_gate_payload, "model_cost_limit_usd")
+                    ),
+                    evaluated_at=_datetime(_json_string(query_gate_payload, "evaluated_at")),
+                )
+            if recomputed_query_gate.to_dict() != query_gate_payload:
+                raise ValueError("persisted prospective Query Gate does not re-evaluate exactly")
+            if _json_string(admission_payload, "decision_run_manifest_id") != _json_string(
+                manifest_payload,
+                "manifest_id",
+            ):
+                raise ValueError("Decision Admission run manifest identity is not exact")
+            if _json_string(manifest_payload, "query_gate_result_id") != _json_string(
+                query_gate_payload,
+                "result_id",
+            ):
+                raise ValueError("Decision Run Manifest Query Gate identity is not exact")
+            if (
+                _json_string(query_gate_payload, "agent_execution_plan_id")
+                != _json_string(execution_plan_payload, "plan_id")
+                or _json_string(manifest_payload, "agent_execution_plan_id")
+                != _json_string(execution_plan_payload, "plan_id")
+                or _json_string(manifest_payload, "agent_execution_plan_hash")
+                != execution_plan_hash
+                or _json_string(query_gate_payload, "model_profile_id")
+                != _json_string(execution_plan_payload, "model_profile_alias")
+            ):
+                raise ValueError("Decision Run execution plan identity is not exact")
+            if _json_string(query_gate_payload, "evidence_pack_id") != evidence_pack.pack_id:
+                raise ValueError("Decision Admission Query Gate Evidence Pack is not exact")
             if _json_string(admission_payload, "evidence_pack_id") != evidence_pack.pack_id:
-                raise ValueError("experimental paper admission Evidence Pack identity is not exact")
+                raise ValueError("Decision Admission Evidence Pack identity is not exact")
+            if _json_string(manifest_payload, "evidence_pack_id") != evidence_pack.pack_id:
+                raise ValueError("Decision Run Manifest Evidence Pack identity is not exact")
+            agreeing_ids = _json_string_list(
+                admission_payload,
+                "agreeing_judgment_artifact_ids",
+            )
+            if agreeing_ids != _json_string_list(
+                manifest_payload,
+                "agreeing_judgment_artifact_ids",
+            ):
+                raise ValueError("Decision Admission agreeing Judgment IDs are not exact")
+            assessments = manifest_payload.get("assessments")
+            if not isinstance(assessments, list):
+                raise TypeError("Decision Run Manifest assessments must be an array")
+            arm_bindings_value = execution_plan_payload.get("arm_bindings")
+            if not isinstance(arm_bindings_value, list):
+                raise TypeError("prospective execution plan arm_bindings must be an array")
+            arm_bindings: dict[str, tuple[str, str]] = {}
+            for raw_arm_binding in cast(list[object], arm_bindings_value):
+                arm_binding = _json_object(raw_arm_binding, "execution plan arm binding")
+                arm = _json_string(arm_binding, "arm")
+                binding_payload = _json_object(
+                    arm_binding.get("execution_binding"),
+                    "Agent execution binding",
+                )
+                binding_hash = _json_string(arm_binding, "execution_binding_hash")
+                if canonical_hash(binding_payload) != binding_hash:
+                    raise ValueError("Agent execution binding hash is not exact")
+                arm_bindings[arm] = (
+                    binding_hash,
+                    _json_string(binding_payload, "runtime_ref"),
+                )
+            if (
+                set(arm_bindings)
+                != {
+                    "structured_agent_core",
+                    "structured_agent_plus_routed_methods",
+                }
+                or len({item[0] for item in arm_bindings.values()}) != 2
+            ):
+                raise ValueError("prospective execution plan paired arms are invalid")
+            judgment_hashes: dict[str, str] = {}
+            for raw_assessment in cast(list[object], assessments):
+                assessment = _json_object(raw_assessment, "Decision Run assessment")
+                artifact_id = assessment.get("judgment_artifact_id")
+                artifact_hash = assessment.get("judgment_artifact_hash")
+                metrics_hash = assessment.get("metrics_hash")
+                validation_evidence_hash = assessment.get("run_validation_evidence_hash")
+                arm = _json_string(assessment, "arm")
+                if (
+                    not isinstance(artifact_id, str)
+                    or not isinstance(artifact_hash, str)
+                    or not isinstance(metrics_hash, str)
+                    or not isinstance(validation_evidence_hash, str)
+                ):
+                    raise ValueError("proposed Decision Run lacks sealed run artifacts")
+                if _json_string(assessment, "execution_binding_hash") != arm_bindings[arm][0]:
+                    raise ValueError("Decision Run arm provenance is not exact")
+                metrics_payload = _json_object(
+                    self.artifacts.read_json(metrics_hash),
+                    "Agent Run metrics artifact",
+                )
+                estimated_cost = metrics_payload.get("estimated_cost_microusd")
+                if (
+                    not isinstance(estimated_cost, int)
+                    or isinstance(estimated_cost, bool)
+                    or assessment.get("estimated_cost_microusd") != estimated_cost
+                ):
+                    raise ValueError("Decision Run cost evidence is not exact")
+                artifact_payload = _json_object(
+                    self.artifacts.read_json(artifact_hash),
+                    "Judgment Artifact",
+                )
+                validation_event = runtime_event_from_dict(
+                    self.artifacts.read_json(validation_evidence_hash)
+                )
+                if (
+                    validation_event.run_id != _json_string(assessment, "run_id")
+                    or validation_event.event_id
+                    != f"{_json_string(assessment, 'run_id')}.proposal.validated"
+                    or validation_event.event_type != "judgment.validated"
+                    or validation_event.event_hash != _json_string(artifact_payload, "journal_hash")
+                    or set(validation_event.payload)
+                    != {"proposal_hash", "transcript_hash", "metrics_hash", "metrics"}
+                    or validation_event.payload.get("proposal_hash")
+                    != canonical_hash(
+                        _json_object(artifact_payload.get("proposal"), "Judgment proposal")
+                    )
+                    or validation_event.payload.get("transcript_hash")
+                    != _json_string(artifact_payload, "transcript_hash")
+                    or validation_event.payload.get("metrics_hash") != metrics_hash
+                    or validation_event.payload.get("metrics") != metrics_payload
+                    or not _datetime(_json_string(artifact_payload, "started_at"))
+                    <= validation_event.observed_at
+                    <= _datetime(_json_string(artifact_payload, "finished_at"))
+                ):
+                    raise ValueError("Decision Run validation event is not exact")
+                judgment_hashes[artifact_id] = artifact_hash
+            for artifact_id, artifact_hash in judgment_hashes.items():
+                artifact_payload = _json_object(
+                    self.artifacts.read_json(artifact_hash),
+                    "Judgment Artifact",
+                )
+                if _json_string(artifact_payload, "artifact_id") != artifact_id:
+                    raise ValueError("paired Judgment identity is not exact")
+                if _json_string(artifact_payload, "provider_id") != _json_string(
+                    model_provider_profile_payload, "provider_id"
+                ) or _json_string(artifact_payload, "model") != _json_string(
+                    model_provider_profile_payload, "model"
+                ):
+                    raise ValueError("paired Judgment provider/model is not exact")
+                started_at = _datetime(_json_string(artifact_payload, "started_at"))
+                finished_at = _datetime(_json_string(artifact_payload, "finished_at"))
+                if not (
+                    _datetime(_json_string(query_gate_payload, "evaluated_at"))
+                    <= started_at
+                    <= finished_at
+                    <= _datetime(_json_string(manifest_payload, "created_at"))
+                ):
+                    raise ValueError("paired Judgment chronology is not exact")
+            if not set(agreeing_ids) <= set(judgment_hashes):
+                raise ValueError("agreeing Judgment is absent from the run manifest")
             if _json_string(admission_payload, "signal_id") != _json_string(
                 signal_payload,
                 "signal_id",
@@ -746,34 +1154,53 @@ class PaperExecutionService:
                 order_payload,
                 "signal_id",
             ):
-                raise ValueError("experimental paper admission Signal identity is not exact")
+                raise ValueError("Decision Admission Signal identity is not exact")
             if _json_string(admission_payload, "order_intent_hash") != cast(
                 str,
                 row["order_hash"],
             ):
-                raise ValueError("experimental paper admission Order Intent hash is not exact")
+                raise ValueError("Decision Admission Order Intent hash is not exact")
             if _json_string(signal_payload, "event_id") != evidence_pack.event_id:
-                raise ValueError(
-                    "experimental paper admission Signal event is not in the Evidence Pack"
-                )
+                raise ValueError("Decision Admission Signal event is not in the Evidence Pack")
+            expected_side = (
+                "buy" if _json_string(manifest_payload, "agreement_direction") == "up" else "sell"
+            )
+            if (
+                _json_string(signal_payload, "instrument_id")
+                != _json_string(manifest_payload, "agreement_target_id")
+                or _json_string(signal_payload, "side") != expected_side
+                or _json_string(order_payload, "instrument_id")
+                != _json_string(signal_payload, "instrument_id")
+                or _json_string(order_payload, "side") != expected_side
+            ):
+                raise ValueError("Decision Admission Signal differs from treatment agreement")
+            if not (
+                _datetime(_json_string(signal_payload, "valid_from"))
+                <= _datetime(_json_string(order_payload, "created_at"))
+                < _datetime(_json_string(signal_payload, "expires_at"))
+            ) or _datetime(_json_string(order_payload, "expires_at")) > _datetime(
+                _json_string(signal_payload, "expires_at")
+            ):
+                raise ValueError("Decision Admission Order is outside Signal validity")
+            manifest_created_at = _datetime(_json_string(manifest_payload, "created_at"))
+            if (
+                _datetime(_json_string(signal_payload, "valid_from")) < manifest_created_at
+                or _datetime(_json_string(order_payload, "created_at")) < manifest_created_at
+            ):
+                raise ValueError("Decision Admission Signal and Order predate consensus")
             if not set(_json_string_list(signal_payload, "evidence_refs")) <= {
                 item.evidence_id for item in evidence_pack.evidence
             }:
-                raise ValueError(
-                    "experimental paper admission Signal evidence_refs are not in the Evidence Pack"
-                )
+                raise ValueError("Decision Admission Signal evidence_refs are not in Evidence Pack")
             if _json_string(signal_payload, "instrument_id") not in evidence_pack.allowed_targets:
                 raise ValueError(
-                    "experimental paper admission Signal instrument is not an allowed "
-                    "Evidence Pack target"
+                    "Decision Admission Signal instrument is not an allowed Evidence Pack target"
                 )
             if _json_string(signal_payload, "instrument_id") != _json_string(
                 order_payload,
                 "instrument_id",
             ):
-                raise ValueError(
-                    "experimental paper admission Signal instrument differs from Order Intent"
-                )
+                raise ValueError("Decision Admission Signal instrument differs from Order Intent")
 
     def _initialize(self) -> None:
         with self._connect() as connection:

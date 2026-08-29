@@ -22,7 +22,8 @@
       "enum": [
         "market-impact.prospective-checkpoint-snapshot-set.v1",
         "market-impact.prospective-checkpoint-snapshot-set.v2",
-        "market-impact.prospective-checkpoint-snapshot-set.v3"
+        "market-impact.prospective-checkpoint-snapshot-set.v3",
+        "market-impact.prospective-checkpoint-snapshot-set.v4"
       ]
     },
     "snapshot_set_id": {
@@ -107,7 +108,15 @@
         "upstream_source": {"type": "string", "minLength": 1},
         "provider_manifest_hash": {"$ref": "#/$defs/sha256"},
         "source_config_hash": {"$ref": "#/$defs/sha256"},
-        "raw_response_hash": {"$ref": "#/$defs/sha256"}
+        "raw_response_hash": {"$ref": "#/$defs/sha256"},
+        "observation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^source-observation-[0-9a-f]{64}$"
+          }
+        }
       }
     },
     "tool_manifest": {
@@ -246,6 +255,42 @@
           "capability_bindings": {
             "items": {
               "properties": {
+                "tool_manifest": {
+                  "oneOf": [
+                    {"type": "null"},
+                    {
+                      "allOf": [
+                        {"$ref": "#/$defs/tool_manifest"},
+                        {"properties": {"version": {"const": "2"}}}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-checkpoint-snapshot-set.v4"
+          }
+        }
+      },
+      "then": {
+        "required": ["capability_gaps"],
+        "properties": {
+          "capability_bindings": {
+            "items": {
+              "properties": {
+                "routes": {
+                  "items": {
+                    "required": ["observation_ids"]
+                  }
+                },
                 "tool_manifest": {
                   "oneOf": [
                     {"type": "null"},

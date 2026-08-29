@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import cast
+from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import (
     EvidencePack,
@@ -123,6 +123,22 @@ class RunMetrics:
     provider_attempts: int
     estimated_cost_microusd: int
 
+    def __post_init__(self) -> None:
+        for name in (
+            "turns",
+            "tool_calls",
+            "input_tokens",
+            "output_tokens",
+            "result_bytes",
+            "provider_attempts",
+            "estimated_cost_microusd",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"Run Metrics {name} must be a non-negative integer")
+        if not math.isfinite(self.latency_ms) or self.latency_ms < 0:
+            raise ValueError("Run Metrics latency_ms must be finite and non-negative")
+
     def to_dict(self) -> dict[str, object]:
         return {
             "turns": self.turns,
@@ -143,6 +159,8 @@ class AgentRunResult:
     judgment: JudgmentArtifact | None
     terminal_store_hash: str | None
     metrics: RunMetrics | None
+    metrics_hash: str | None = None
+    validation_event: RuntimeEvent | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +191,17 @@ class AgentExecutionBinding:
             "context_estimator_id": self.context_estimator_id,
             "compactor_id": self.compactor_id,
         }
+
+
+class CompletedAgentRunAuthority(Protocol):
+    """Trusted Harness boundary that can reopen authoritative Agent run state."""
+
+    def assert_authoritative_completed_run(
+        self,
+        result: AgentRunResult,
+        *,
+        execution_binding: AgentExecutionBinding,
+    ) -> None: ...
 
 
 class CancellationToken:
@@ -286,6 +315,114 @@ class AgentEngine:
             context_estimator_id=self.token_counter.counter_id,
             compactor_id=self.compactor.compactor_id,
         )
+
+    def assert_authoritative_completed_run(
+        self,
+        result: AgentRunResult,
+        *,
+        execution_binding: AgentExecutionBinding,
+    ) -> None:
+        """Reopen one completed result from this engine's journal and artifact store."""
+        judgment = result.judgment
+        if (
+            result.status is not RunStatus.COMPLETED
+            or judgment is None
+            or result.metrics is None
+            or result.metrics_hash is None
+            or result.validation_event is None
+        ):
+            raise ValueError("authoritative Agent run must be completed and fully sealed")
+        if (
+            execution_binding.runtime_config_hash != self.config.config_hash
+            or execution_binding.context_estimator_id != self.token_counter.counter_id
+            or execution_binding.compactor_id != self.compactor.compactor_id
+        ):
+            raise ValueError("Agent execution binding differs from the authoritative runtime")
+        observed_binding = AgentExecutionBinding(
+            runtime_ref=execution_binding.runtime_ref,
+            runtime_config_hash=judgment.runtime_config_hash,
+            prompt_hash=judgment.prompt_hash,
+            skill_hashes=judgment.skill_hashes,
+            tool_manifest_hashes=judgment.tool_manifest_hashes,
+            tool_surface_hash=judgment.tool_surface_hash,
+            mcp_server_hashes=judgment.mcp_server_hashes,
+            context_estimator_id=judgment.context_estimator_id,
+            compactor_id=judgment.compactor_id,
+        )
+        if observed_binding != execution_binding:
+            raise ValueError("Agent result differs from its frozen execution binding")
+
+        record = self.journal.get_run(result.run_id)
+        if (
+            record.status is not RunStatus.COMPLETED
+            or record.terminal_artifact_id is None
+            or record.terminal_artifact_id != result.terminal_store_hash
+            or judgment.run_id != record.run_id
+            or judgment.started_at != record.created_at
+            or judgment.finished_at != record.updated_at
+        ):
+            raise ValueError("Agent result differs from the authoritative Run Record")
+        stored_judgment = judgment_artifact_from_dict(
+            self.artifact_store.read_json(record.terminal_artifact_id)
+        )
+        if stored_judgment.to_dict() != judgment.to_dict():
+            raise ValueError("Agent result differs from the authoritative terminal artifact")
+
+        events = self.journal.events(result.run_id)
+        if not events or events[-1].event_hash != judgment.journal_hash:
+            raise ValueError("Agent result differs from the authoritative Run Journal tail")
+        metrics = self._metrics_from_journal(result.run_id)
+        metrics_hash = canonical_hash(metrics.to_dict())
+        if result.metrics != metrics or result.metrics_hash != metrics_hash:
+            raise ValueError("Agent result metrics differ from the authoritative Run Journal")
+
+        snapshots_by_hash = {item.binding_hash: item for item in self._mcp_snapshots.values()}
+        try:
+            bound_snapshots = tuple(
+                snapshots_by_hash[item] for item in execution_binding.mcp_server_hashes
+            )
+        except KeyError as exc:
+            raise ValueError(
+                "Agent execution binding references an unknown authoritative MCP snapshot"
+            ) from exc
+        surface = _ExecutionSurface(
+            model_tools=(),
+            tool_manifest_hashes=execution_binding.tool_manifest_hashes,
+            tool_surface_hash=execution_binding.tool_surface_hash,
+            mcp_snapshots=bound_snapshots,
+        )
+        self._validate_completed_judgment(judgment, metrics=metrics, surface=surface)
+        if result.validation_event.to_dict() != events[-1].to_dict():
+            raise ValueError("Agent result validation event differs from the Run Journal")
+
+        for event in events:
+            if event.event_type == "model.turn.completed":
+                self._load_turn(event, surface=surface)
+            elif event.event_type == "tool.call.completed":
+                artifact_hash = _payload_string(event.payload, "result_artifact_hash")
+                media_type = _payload_string(event.payload, "result_media_type")
+                artifact = self.artifact_store.get(artifact_hash, media_type=media_type)
+                if artifact.size_bytes != _payload_integer(
+                    event.payload,
+                    "result_size_bytes",
+                ):
+                    raise ValueError("Agent tool result artifact size differs from the Run Journal")
+            elif event.event_type == "context.checkpointed":
+                checkpoint = self.artifact_store.read_json(
+                    _payload_string(event.payload, "checkpoint_artifact_hash")
+                )
+                if not isinstance(checkpoint, dict):
+                    raise TypeError("Agent checkpoint artifact must be an object")
+                checkpoint_payload = cast(dict[str, object], checkpoint)
+                if checkpoint_payload.get("checkpoint_id") != _payload_string(
+                    event.payload,
+                    "checkpoint_id",
+                ):
+                    raise ValueError("Agent checkpoint artifact differs from the Run Journal")
+            elif event.event_type == "judgment.contract_correction":
+                self.artifact_store.read_json(
+                    _payload_string(event.payload, "invalid_response_hash")
+                )
 
     async def run(
         self,
@@ -583,6 +720,8 @@ class AgentEngine:
                 judgment=judgment,
                 terminal_store_hash=terminal.content_hash,
                 metrics=metrics.freeze(),
+                metrics_hash=metrics_artifact.content_hash,
+                validation_event=proposal_event,
             )
         raise _BudgetExceeded("run exhausted its model-turn budget")
 
@@ -853,6 +992,7 @@ class AgentEngine:
             judgment=None,
             terminal_store_hash=artifact.content_hash,
             metrics=frozen_metrics,
+            metrics_hash=canonical_hash(frozen_metrics.to_dict()),
         )
 
     def _terminal_result(
@@ -881,12 +1021,15 @@ class AgentEngine:
                 metrics=metrics,
                 surface=surface,
             )
+            proposal_event = self.journal.events(record.run_id)[-1]
             return AgentRunResult(
                 run_id=record.run_id,
                 status=record.status,
                 judgment=judgment,
                 terminal_store_hash=record.terminal_artifact_id,
                 metrics=metrics,
+                metrics_hash=canonical_hash(metrics.to_dict()),
+                validation_event=proposal_event,
             )
         self._validate_terminal_error(
             payload,
@@ -900,6 +1043,7 @@ class AgentEngine:
             judgment=None,
             terminal_store_hash=record.terminal_artifact_id,
             metrics=metrics,
+            metrics_hash=canonical_hash(metrics.to_dict()),
         )
 
     def _validate_completed_judgment(
