@@ -26,7 +26,7 @@ The separate research-only market-context panel uses
 ## Prospective Observation Provider
 
 `src/market_impact_agent/tushare_observation.py` implements one credential-isolated HTTPS transport
-and twelve content-identified route configurations. The owner's purchased 10,000-plus-point account
+and fourteen content-identified route configurations. The owner's purchased 10,000-plus-point account
 is treated as fully usable for this private Harness; the token is read only from `TUSHARE_TOKEN` and
 is excluded from requests persisted for replay, hashes, logs, errors, configs, and Agent tools.
 
@@ -39,6 +39,8 @@ The official route contracts are [`news`](https://tushare.pro/document/2?doc_id=
 [`stk_limit`](https://tushare.pro/document/2?doc_id=183),
 [`index_classify`](https://tushare.pro/document/2?doc_id=181),
 [`index_member_all`](https://tushare.pro/document/2?doc_id=335),
+[`etf_sh_cons`](https://tushare.pro/document/2?doc_id=471),
+[`etf_sz_cons`](https://tushare.pro/document/2?doc_id=472),
 [`margin`](https://tushare.pro/document/2?doc_id=58),
 [`cn_schedule`](https://tushare.pro/document/2?doc_id=461), and
 [`report_rc`](https://tushare.pro/document/2?doc_id=292). Every configuration fixes its API,
@@ -63,8 +65,8 @@ uv run market-impact data accept-tushare-observation \
   --maximum-gap-seconds 1800
 ```
 
-On 2026-08-28 all twelve checked-in routes passed the seven route gates after their official
-documentation locators were bound and the new config identities were reaccepted:
+The original twelve routes passed the seven route gates on 2026-08-28. The two exchange-PCF routes
+passed the same capture, Journal, isolated replay, rights, and seven-gate path on 2026-08-29:
 
 | Route | Capability | Accepted observations | Acceptance report |
 | --- | --- | ---: | --- |
@@ -76,6 +78,8 @@ documentation locators were bound and the new config identities were reaccepted:
 | `stk_limit` | exposure candidates | 1 | `source-route-acceptance-report-c8fd0804e7c67a8e55d35fe24d7cb3441a60edde40f2f9183d09ed36b242cf09` |
 | `index_classify` | exposure candidates | 31 | `source-route-acceptance-report-f6c4c9082b1b65839dfc7b74f9cc5eede7d35a89654615c48191e4db0d0352cb` |
 | `index_member_all` | exposure candidates | 126 | `source-route-acceptance-report-f626fc923bc68930cce7782bf5e02f7d37b338594f441b0c841c5658a8e51565` |
+| `etf_sh_cons` (`517030.SH`, 2026-08-28 PCF) | exposure candidates | 300 | `source-route-acceptance-report-2191215db92de1eb58bc7de988f53ec119123708a1b7254fced13a0a51cebed8` |
+| `etf_sz_cons` (`159051.SZ`, 2026-08-28 PCF) | exposure candidates | 99 | `source-route-acceptance-report-50c86e9eda5cc290c0a59b07d34b1c7edd68e16264c908515da537543dcc3636` |
 | `margin` | positioning | 3 | `source-route-acceptance-report-287411904eab4b6597614cff1652c2dd4feae69b60e84eff0ee2734ecb591237` |
 | `cn_schedule` | macro schedule | 14 | `source-route-acceptance-report-52d94fbcbf6bd5959d82a16013d67413c37a04f5d31b6cf6fc1fb74f5635da2c` |
 | `report_rc` | prior expectation observations | 4,802 | `source-route-acceptance-report-a79d8525ea67763d8022a8909dcfd7a85683f5c476ab6ff2f89149aec9fba8ff` |
@@ -85,9 +89,10 @@ This is route-level prospective evidence, not completion of PDI-10 through PDI-1
 Tushare `news` is an aggregator route even when `src=sina`; its receipt does not establish a direct
 publisher archive or historical authority. `cn_schedule` is advisory scheduling, not an original
 NBS release or revision lineage. `report_rc` supplies cited forecast observations, not a consensus
-unless the registered population/window/method derives one. Listing, ETF, limit, and industry rows
-also do not by themselves prove lot/tick size, decision-time tradability, full market completeness,
-or an effective industry-to-tradable-ETF mapping.
+unless the registered population/window/method derives one. Listing, ETF, limit, PCF, and industry
+rows do not by themselves prove decision-time tradability, full market completeness, taxonomy
+effective intervals, or revision lineage. PCF quantity is not a portfolio weight and is never
+converted into one without a decision-time valuation basis.
 
 On 2026-08-29 a separate isolated semantic probe captured all 1,658 listed `etf_basic` rows into
 complete prospective Snapshot
@@ -100,6 +105,33 @@ classification as a proven direct industry-to-ETF relation. The Harness records 
 it does not derive one from similar names or silently substitute another taxonomy.
 No Checkpoint Decision Input was created from this isolated probe because no complete registered
 six-slot Prospective Checkpoint Snapshot Set existed at its receipt barrier.
+
+The accepted PCF routes close the earlier cross-taxonomy ETF mapping blocker without weakening that
+Snapshot-set boundary. `etf_sh_cons` and `etf_sz_cons` expose an exchange PCF's ETF code and exact
+constituent codes for one trading date. `CheckpointMarketUniverseView` can therefore bind
+ETF → PCF constituent → effective current SW membership → exact SW2021 taxonomy code. The member
+row identifies the Shenwan family but not a taxonomy version, so the view retains
+`taxonomy_version_unverified`. A private 2026-08-29
+compatibility probe found 211 exact current SW-member code matches among the 300 SSE PCF rows and 98
+among the 99 SZSE PCF rows; it did not use constituent names. The accepted Snapshots were
+`data-snapshot-b37b79afd8cebe9c84eb9bcc0b575a13dd31c6063bff6787b92476121bb2df07`
+and `data-snapshot-b11f8c4ff96aad93bcaca96c4cdd3fdf8b3b8125d2ab20287451d0c629bc4962`.
+They were received on 2026-08-29 and therefore make no historical authority claim for 2026-08-28.
+
+Two bounded daily collection Jobs are registered in the private runtime, starting at 08:50
+Asia/Shanghai on 2026-08-31. Each requests one representative ETF with a fixed 2026-08-28 lower
+bound, so later receipts append a bounded growing PCF window without a mutable host-date template.
+The Jobs are `prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045`
+and `prospective-collection-job-cf1fa7f0bed68a250bcf21d0a147642e2641b841227abdf900737b4c9a391601`.
+Registration did not restart either existing collector.
+
+Decision-time ETF tradability remains fail-closed. The purchased account does not have the separate
+`rt_etf_k` entitlement, and a real-time bar would in any case prove observed activity rather than
+exchange acceptance of a future order. Tushare `suspend_d` is documented for stocks, not ETFs. The
+SSE publishes structured positive fund-suspension records and the SZSE publishes official
+suspension notices, but the current Harness has no accepted symmetric, complete, per-instrument
+absence/status contract across both registered venues. Consequently an otherwise eligible ETF
+still returns `suspension_status_unverified`; PDI-12 remains open.
 
 The accepted `index_daily` route also participates in the first PDI-20 scheduled collection tracer.
 On 2026-08-28 the Harness-owned one-shot worker captured 20 CSI 300 observations into complete

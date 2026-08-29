@@ -19,7 +19,7 @@ metadata and excerpts only. It does not establish historical PIT, article-body r
 completeness, or execution readiness. The first accepted A-share route is the CSRC official
 publication Provider in `src/market_impact_agent/csrc_news.py`. Its bounded trial uses the same
 Harness and Snapshot contract and accepts prospective private-research collection only. The
-`tushare-observation` Provider adds twelve separately configured private routes for news, market,
+`tushare-observation` Provider adds fourteen separately configured private routes for news, market,
 instrument, industry, positioning, macro-schedule, and analyst-forecast observations. Each route
 has its own content identity and acceptance report; sharing one transport never merges their
 semantics or acceptance.
@@ -137,14 +137,19 @@ remains bound to the immutable checkpoint barrier and authorized Snapshot set.
 
 `CheckpointMarketUniverseView` is the narrow multi-record consumer for PDI-11 through PDI-13. It
 accepts only validated Checkpoint Decision Inputs from one Snapshot Set and one content-identified
-exchange rule set. It may join an ETF master `index_code` to a taxonomy observation and count
-effective membership rows, normalize SSE/SZSE venue aliases, and attach the general auction buy-lot
-and tick rules effective at the barrier. It does not rewrite the source records or create a composite
-Snapshot. A current SW2021 observation is reported as `observed_at_barrier`; without an effective
-taxonomy interval its `effective_at_barrier` remains unknown. Likewise, an eligible listed ETF with
-a raw daily bar remains decision-time-tradability `unverified` until suspension/status evidence is
-present. Index prices remain non-executable, and raw fund prices do not become adjusted or total-
-return research series.
+exchange rule set. It may join an ETF master `index_code` directly to a taxonomy observation, or
+join an ETF to its same-session exchange PCF constituent code and then to an effective current
+Shenwan membership and exact SW2021 taxonomy code. When the membership route identifies only the
+Shenwan family, the join retains `taxonomy_version_unverified` rather than assigning a version to
+the source row. Both paths are exact-code only; names never create a mapping. The
+view normalizes SSE/SZSE venue aliases and attaches the general auction buy-lot and tick rules
+effective at the barrier. It does not rewrite source records or create a composite Snapshot. A
+current SW2021 observation is reported as `observed_at_barrier`; without an effective taxonomy
+interval its `effective_at_barrier` remains unknown. PCF quantity is not silently converted into
+industry weight, and PCF publication/revision gaps remain explicit. Likewise, an eligible listed
+ETF with a raw daily bar remains decision-time-tradability `unverified` until suspension/status
+evidence is present. Index prices remain non-executable, and raw fund prices do not become adjusted
+or total-return research series.
 
 The bundled 2026 exchange rule set cites the current
 [SSE trading rules](https://www.sse.com.cn/lawandrules/sselawsrules2025/stocks/exchange/c/c_20260424_10816482.shtml)
@@ -267,9 +272,10 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 PDI-01 now freezes three first-eligible EOD checkpoints with policy/regulation,
 earnings-expectation-delta, and macro-cycle mechanisms. The current Tushare Observation Provider has
-twelve route-level seven-gate acceptance reports, and the CSRC official-event route remains accepted.
+fourteen route-level seven-gate acceptance reports, and the CSRC official-event route remains
+accepted.
 These are route contracts, not complete checkpoint sets: direct publisher coverage, complete market
-semantics, tradability fields, effective industry-to-ETF mapping, official macro release/revision
+semantics, tradability fields, taxonomy effective intervals, official macro release/revision
 lineage, and future post-registration receipts still have to reconcile at each checkpoint barrier.
 No model call begins until that Query Gate passes.
 

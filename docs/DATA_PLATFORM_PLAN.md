@@ -477,15 +477,17 @@ authorize a model call or outcome opening.
 The route Tasks may proceed independently after PDI-01. A checkpoint may bind more than one route,
 but an implicit Provider fallback is never allowed.
 
-**Route implementation checkpoint, 2026-08-28:** the new `tushare-observation` Provider has twelve
-separate official-document-bound configurations. Every one completed a real token-backed capture,
-private Journal/store write, exact stored-bundle replay in an isolated store, and all seven generic
+**Route implementation checkpoints, 2026-08-28 through 2026-08-29:** the `tushare-observation`
+Provider has fourteen separate official-document-bound configurations. Every one completed a real
+token-backed capture, private Journal/store write, exact stored-bundle replay in an isolated store,
+and all seven generic
 source-route gates. The accepted samples covered index and ETF prices, calendar, ETF/stock identity,
 daily limits, SW2021 classification and membership, exchange margin, the economic release schedule,
-analyst forecasts, and Sina-source Tushare news. Report identities and row counts are recorded in
-`TUSHARE_DATA.md`; licensed rows remain private. This closes the shared transport/config/replay
-uncertainty, not the Tasks below: capability-specific completeness and checkpoint-barrier receipts
-remain required.
+analyst forecasts, Sina-source Tushare news, and one representative SSE and SZSE exchange-PCF route.
+Report identities and row counts are recorded in `TUSHARE_DATA.md`; licensed rows remain private.
+This closes the shared transport/config/replay uncertainty and the empty cross-taxonomy ETF mapping
+blocker, not the Tasks below: capability-specific completeness and checkpoint-barrier receipts remain
+required.
 
 The bounded NBS investigation also fixed the smallest PDI-15 route design: use the
 [official annual release calendar](https://www.stats.gov.cn/sj/fbrc/bnxxfb/) as advisory schedule,
@@ -518,6 +520,18 @@ and decision-time tradability through `lookup_exposure_candidates`. Acceptance r
 instrument masters mislabeled as historical membership and binds every mapping to its effective
 interval and source version.
 
+**Tradability-route checkpoint, 2026-08-29:** the available routes do not satisfy this contract.
+Tushare [`suspend_d`](https://tushare.pro/document/2?doc_id=214) is a stock suspension route, not an
+ETF status feed. The purchased account does not have the separately entitled
+[`rt_etf_k`](https://tushare.pro/document/2?doc_id=400) route, and a recent quote or trade would prove
+observed activity rather than exchange acceptance of a future order. The
+[SSE fund-suspension page](https://www.sse.com.cn/disclosure/dealinstruc/suspension/fund/) exposes
+structured positive records, while the
+[SZSE suspension channel](https://www.szse.cn/disclosure/notice/temp/index.html) publishes official
+notices; neither currently gives the Harness an accepted symmetric, complete per-instrument
+absence/status contract across both registered venues. No proxy was installed. Listed ETFs remain
+research-eligible but `suspension_status_unverified`, and PDI-12 remains open.
+
 #### PDI-13 — Accept an effective-dated industry route
 
 Deliver the then-effective taxonomy version, hierarchy, constituent membership, and index/ETF
@@ -530,12 +544,16 @@ validated market/exposure Checkpoint Decision Inputs from exactly one Snapshot S
 content-identified SSE/SZSE ordinary-auction rule set. The view keeps index and fund price bases
 separate, scopes instrument candidates to the registration's venues/classes, attaches effective
 lot/tick rules, and joins current-as-received taxonomy plus effective membership to ETF `index_code`
-relationships. It is deliberately non-authoritative and always denies model/execution admission.
+relationships or exact daily PCF constituent codes. The PCF path binds ETF → constituent →
+effective membership → exact same-family taxonomy code without using names. A membership row that
+does not itself carry a taxonomy version retains `taxonomy_version_unverified`; the join also keeps
+missing weight, publication time, taxonomy interval, and revision/rebalance lineage. It is deliberately
+non-authoritative and always denies model/execution admission.
 PDI-11 remains open for breadth/volatility/liquidity, sequence and corporate actions; PDI-12 remains
 open for decision-time suspension/status; PDI-13 remains open for taxonomy effective intervals and
 rebalance/revision lineage. A current SW2021 receipt is never back-applied to an older barrier.
 
-The isolated real-receipt probe captured all 1,658 listed ETF master rows at
+The first isolated real-receipt probe captured all 1,658 listed ETF master rows at
 `2026-08-29T03:03:43.118883Z` into complete prospective Snapshot
 `data-snapshot-0f99e095245aac464aba334b58d541675c8452acf9f6ffd19bb6236614d9da2d`;
 all seven generic route gates passed in private report
@@ -543,7 +561,13 @@ all seven generic route gates passed in private report
 Of 1,631 ETF rows carrying an `index_code`, none exactly matched the 31 accepted SW2021 Level-1
 taxonomy codes. This is negative acceptance evidence: the exact join correctly returns no exposure
 and `industry_to_tradable_mapping_missing`. No name/similarity inference is allowed in the data
-plane; PDI-13 needs an accepted cross-taxonomy/index relationship or a direct authoritative mapping.
+plane. The accepted 2026-08-29 `etf_sh_cons` and `etf_sz_cons` routes then supplied the missing
+code-level bridge: 211 of 300 representative SSE PCF rows and 98 of 99 SZSE PCF rows exactly joined
+to current SW membership codes. Their route reports are
+`source-route-acceptance-report-2191215db92de1eb58bc7de988f53ec119123708a1b7254fced13a0a51cebed8`
+and `source-route-acceptance-report-50c86e9eda5cc290c0a59b07d34b1c7edd68e16264c908515da537543dcc3636`.
+This closes the non-empty current mapping sub-gate but does not prove taxonomy effective intervals,
+PCF publication time/weights, or rebalance and classification-revision lineage.
 The probe did not manufacture a Prospective Checkpoint Snapshot Set or Checkpoint Decision Input:
 those artifacts remain blocked on a real registered checkpoint with all six capability slots. The
 new view contract is therefore implementation evidence plus negative real-input compatibility
@@ -571,7 +595,9 @@ the Agent may form an evidence-linked Expectation Delta.
 
 #### PDI-17 — Freeze complete checkpoint Snapshot sets
 
-**Blocked by:** PDI-10 through PDI-16 as required by PDI-01.
+**Blocked by:** PDI-10 through PDI-16 as required by PDI-01. As of 2026-08-29, the new PCF inputs do
+not change that result: no complete checkpoint Snapshot Set is frozen and no paired Agent model call
+is authorized.
 
 **Acceptance:** each registered capability has a complete prospective Data Snapshot with actual-
 receipt authority at the checkpoint cutoff; all route acceptance IDs, Snapshot IDs, source-policy
@@ -835,7 +861,7 @@ larger prospective study is justified; a pass authorizes that next research regi
 - Attention Watch provides durable `run_due` state and a local pending/delivered outbox, but no
   installed scheduler or Agent-run dispatcher. An external supervisor must call it, and only the
   new-observation-version trigger is accepted.
-- CSRC and twelve Tushare route-level contracts are accepted for prospective private research, but
+- CSRC and fourteen Tushare route-level contracts are accepted for prospective private research, but
   this is not a capability-complete A-share decision feed. Registered direct-publisher coverage,
   total-return/as-of price semantics, then-effective taxonomy and tradability, positioning units and
   cadence, original macro releases and revision lineage, prior-expectation population/units/

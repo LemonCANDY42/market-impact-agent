@@ -301,6 +301,7 @@ def _project_payload(
         )
     if observation.capability is ObservationCapability.EXPOSURE_CANDIDATES:
         api_name = _string(_first(payload, record, "api_name"))
+        is_pcf_constituent = api_name in {"etf_sh_cons", "etf_sz_cons"}
         industry_code, industry_name, taxonomy_level, taxonomy_gap = _industry_taxonomy(
             payload,
             record,
@@ -309,40 +310,59 @@ def _project_payload(
         trade_date = _first(payload, record, "trade_date")
         effective_from = (
             trade_date
-            if api_name == "stk_limit"
+            if api_name == "stk_limit" or is_pcf_constituent
             else _first(payload, record, "in_date", "list_date")
         )
         effective_to = (
             trade_date
-            if api_name == "stk_limit"
+            if api_name == "stk_limit" or is_pcf_constituent
             else _first(payload, record, "out_date", "delist_date")
         )
+        taxonomy_source = _first(payload, record, "src")
+        exposure_data = {
+            "effective_at_barrier": _effective_at_barrier(
+                effective_from,
+                effective_to,
+                barrier_at=barrier_at,
+            ),
+            "effective_from": effective_from,
+            "effective_to": effective_to,
+            "index_code": _first(payload, record, "index_code"),
+            "industry_code": industry_code,
+            "industry_name": industry_name,
+            "instrument_class": _instrument_class(api_name),
+            "instrument_code": _first(payload, record, "instrument_code", "ts_code"),
+            "instrument_name": _first(payload, record, "instrument_name", "name", "csname"),
+            "list_status": _first(payload, record, "list_status"),
+            "lower_price_limit": _first(payload, record, "lower_price_limit", "down_limit"),
+            "previous_close": _first(payload, record, "previous_close", "pre_close"),
+            "publisher": _first(payload, record, "publisher", "upstream_publisher"),
+            "taxonomy_level": taxonomy_level,
+            "taxonomy_source": taxonomy_source,
+            "trade_date": trade_date,
+            "upper_price_limit": _first(payload, record, "upper_price_limit", "up_limit"),
+            "venue": _first(payload, record, "venue", "exchange"),
+        }
+        if api_name in {"index_classify", "index_member_all"}:
+            exposure_data["taxonomy_family"] = "shenwan"
+        if is_pcf_constituent:
+            exposure_data.update(
+                {
+                    "cash_premium_rate": _first(payload, record, "cpr"),
+                    "cash_substitution_amount": _first(payload, record, "sca"),
+                    "component_exchange": _first(payload, record, "exchange"),
+                    "constituent_code": _first(payload, record, "con_code"),
+                    "constituent_name": _first(payload, record, "con_name"),
+                    "constituent_quantity": _first(payload, record, "qty"),
+                    "redemption_cash_component": _first(payload, record, "red_cc"),
+                    "replacement_ratio": _first(payload, record, "rdr"),
+                    "subscription_cash_component": _first(payload, record, "sub_cc"),
+                    "substitution_flag": _first(payload, record, "sub_flag"),
+                }
+            )
         return (
             _exposure_record_type(api_name),
-            {
-                "effective_at_barrier": _effective_at_barrier(
-                    effective_from,
-                    effective_to,
-                    barrier_at=barrier_at,
-                ),
-                "effective_from": effective_from,
-                "effective_to": effective_to,
-                "index_code": _first(payload, record, "index_code"),
-                "industry_code": industry_code,
-                "industry_name": industry_name,
-                "instrument_class": _instrument_class(api_name),
-                "instrument_code": _first(payload, record, "instrument_code", "ts_code"),
-                "instrument_name": _first(payload, record, "instrument_name", "name", "csname"),
-                "list_status": _first(payload, record, "list_status"),
-                "lower_price_limit": _first(payload, record, "lower_price_limit", "down_limit"),
-                "previous_close": _first(payload, record, "previous_close", "pre_close"),
-                "publisher": _first(payload, record, "publisher", "upstream_publisher"),
-                "taxonomy_level": taxonomy_level,
-                "taxonomy_source": _first(payload, record, "src"),
-                "trade_date": trade_date,
-                "upper_price_limit": _first(payload, record, "upper_price_limit", "up_limit"),
-                "venue": _first(payload, record, "venue", "exchange"),
-            },
+            exposure_data,
             None,
             _exposure_gaps(api_name, taxonomy_gap=taxonomy_gap),
         )
@@ -486,6 +506,8 @@ def _exposure_record_type(api_name: str | None) -> str:
         "index_classify": "industry_taxonomy",
         "index_member_all": "industry_membership",
         "stk_limit": "daily_tradability_limit",
+        "etf_sh_cons": "etf_basket_constituent",
+        "etf_sz_cons": "etf_basket_constituent",
     }
     if api_name is None:
         return "instrument_reference"
@@ -494,6 +516,8 @@ def _exposure_record_type(api_name: str | None) -> str:
 
 def _instrument_class(api_name: str | None) -> str | None:
     if api_name == "etf_basic":
+        return "exchange_traded_fund"
+    if api_name in {"etf_sh_cons", "etf_sz_cons"}:
         return "exchange_traded_fund"
     if api_name in {"stock_basic", "index_member_all", "stk_limit"}:
         return "equity"
@@ -517,6 +541,12 @@ def _exposure_gaps(
         )
     if api_name == "index_classify":
         return ("effective_taxonomy_interval_unverified", "tradable_exposure_mapping_missing")
+    if api_name in {"etf_sh_cons", "etf_sz_cons"}:
+        return (
+            "basket_publication_time_unverified",
+            "basket_revision_lineage_missing",
+            "basket_weight_missing",
+        )
     return (
         "decision_time_tradability_unverified",
         "lot_size_missing",

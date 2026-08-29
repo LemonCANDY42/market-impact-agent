@@ -49,8 +49,9 @@ The bootstrap implements:
   checkpoint results are content-identified Provider-neutral decision inputs with explicit source,
   time, authority, price-basis, and completeness-gap fields; a separate content-identified
   Checkpoint Market Universe View can deterministically join one frozen checkpoint's market,
-  instrument, taxonomy, membership, and ETF-mapping inputs with versioned SSE/SZSE lot/tick rules
-  while keeping suspension, corporate-action, taxonomy-interval, and rebalance gaps fail-closed; the
+  instrument, taxonomy, membership, and ETF-mapping inputs—including exact daily exchange-PCF
+  constituent links—with versioned SSE/SZSE lot/tick rules while keeping suspension,
+  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte
   retention, and records actual receipt without claiming historical PIT or article-body rights;
@@ -58,10 +59,11 @@ The bootstrap implements:
   reusable seven-gate Source Route Acceptance Report that binds captured rights evidence, exact raw
   JSON records, publication time, actual receipt, append-only revisions, and deterministic replay;
   the accepted route is private-research only and grants neither historical PIT nor execution;
-- a prospective `tushare-observation` Provider with twelve separately content-identified routes for
-  news, index/ETF/calendar context, instrument/industry exposure, margin positioning, macro schedule,
-  and analyst forecasts; every checked-in route has passed real private capture, stored-bundle
-  replay, and the seven route gates without exposing the purchased token or licensed rows;
+- a prospective `tushare-observation` Provider with fourteen separately content-identified routes
+  for news, index/ETF/calendar context, instrument/industry/ETF-PCF exposure, margin positioning,
+  macro schedule, and analyst forecasts; every checked-in route has passed real private capture,
+  stored-bundle replay, and the seven route gates without exposing the purchased token or licensed
+  rows;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;

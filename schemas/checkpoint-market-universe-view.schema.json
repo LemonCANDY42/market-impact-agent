@@ -237,6 +237,9 @@
         "industry_name": {"$ref": "#/$defs/scalar"},
         "index_code": {"type": "string", "minLength": 1},
         "instrument_code": {"type": "string", "minLength": 1},
+        "mapping_basis": {
+          "enum": ["etf_index_code_exact", "daily_pcf_constituent_exact"]
+        },
         "observed_at_barrier": {"const": true},
         "effective_at_barrier": {"type": "null"},
         "constituent_count": {"type": "integer", "minimum": 0},

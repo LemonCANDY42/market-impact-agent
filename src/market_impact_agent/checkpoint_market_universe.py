@@ -489,29 +489,55 @@ def _industry_exposures(
     instruments: list[dict[str, object]],
 ) -> tuple[list[dict[str, object]], set[str]]:
     taxonomy_versions_by_index_source: dict[tuple[str, str], list[dict[str, object]]] = {}
+    taxonomy_identities_by_index_family: dict[tuple[str, str], set[tuple[str, str]]] = {}
     memberships_by_industry_source: dict[tuple[str, str], list[dict[str, object]]] = {}
+    memberships_by_industry_family: dict[tuple[str, str], list[dict[str, object]]] = {}
     memberships_by_industry: dict[str, list[dict[str, object]]] = {}
+    memberships_by_instrument: dict[str, list[dict[str, object]]] = {}
+    basket_constituents_by_etf: dict[str, list[dict[str, object]]] = {}
     taxonomy_indices_without_source: set[str] = set()
     membership_industries_without_source: set[str] = set()
     for item in inputs:
         data = cast(dict[str, object], item["data"])
         if item["record_type"] == "industry_taxonomy":
             index_code = _optional_string(data.get("index_code"))
+            taxonomy_family = _optional_string(data.get("taxonomy_family"))
             taxonomy_source = _optional_string(data.get("taxonomy_source"))
             if index_code is not None and taxonomy_source is not None:
                 taxonomy_identity = (index_code, taxonomy_source)
                 taxonomy_versions_by_index_source.setdefault(taxonomy_identity, []).append(item)
+                if taxonomy_family is not None:
+                    taxonomy_identities_by_index_family.setdefault(
+                        (index_code, taxonomy_family), set()
+                    ).add(taxonomy_identity)
             elif index_code is not None:
                 taxonomy_indices_without_source.add(index_code)
         elif item["record_type"] == "industry_membership":
             industry_code = _optional_string(data.get("industry_code"))
+            taxonomy_family = _optional_string(data.get("taxonomy_family"))
             taxonomy_source = _optional_string(data.get("taxonomy_source"))
+            member_code = _optional_string(data.get("instrument_code"))
+            if member_code is not None:
+                memberships_by_instrument.setdefault(member_code, []).append(item)
             if industry_code is not None and taxonomy_source is not None:
                 membership_identity = (industry_code, taxonomy_source)
                 memberships_by_industry_source.setdefault(membership_identity, []).append(item)
                 memberships_by_industry.setdefault(industry_code, []).append(item)
             elif industry_code is not None:
                 membership_industries_without_source.add(industry_code)
+            if industry_code is not None and taxonomy_family is not None:
+                memberships_by_industry_family.setdefault(
+                    (industry_code, taxonomy_family), []
+                ).append(item)
+        elif item["record_type"] == "etf_basket_constituent":
+            etf_code = _optional_string(data.get("instrument_code"))
+            constituent_code = _optional_string(data.get("constituent_code"))
+            if (
+                etf_code is not None
+                and constituent_code is not None
+                and data.get("effective_at_barrier") is True
+            ):
+                basket_constituents_by_etf.setdefault(etf_code, []).append(item)
 
     values: list[dict[str, object]] = []
     join_gaps: set[str] = set()
@@ -519,14 +545,12 @@ def _industry_exposures(
         if instrument["research_eligible"] is not True:
             continue
         index_code = _optional_string(instrument.get("index_code"))
-        if index_code is None:
-            continue
-        if index_code in taxonomy_indices_without_source:
+        if index_code is not None and index_code in taxonomy_indices_without_source:
             join_gaps.add("taxonomy_version_unverified")
         for (taxonomy_index_code, taxonomy_source), taxonomy_versions in sorted(
             taxonomy_versions_by_index_source.items()
         ):
-            if taxonomy_index_code != index_code:
+            if index_code is None or taxonomy_index_code != index_code:
                 continue
             taxonomy = max(
                 taxonomy_versions,
@@ -537,11 +561,28 @@ def _industry_exposures(
             )
             taxonomy_data = cast(dict[str, object], taxonomy["data"])
             industry_code = _optional_string(taxonomy_data.get("industry_code")) or index_code
-            memberships = [
+            exact_memberships = [
                 item
                 for item in memberships_by_industry_source.get((industry_code, taxonomy_source), ())
                 if cast(dict[str, object], item["data"]).get("effective_at_barrier") is True
             ]
+            taxonomy_family = _optional_string(taxonomy_data.get("taxonomy_family"))
+            family_memberships = (
+                [
+                    item
+                    for item in memberships_by_industry_family.get(
+                        (industry_code, taxonomy_family), ()
+                    )
+                    if cast(dict[str, object], item["data"]).get("effective_at_barrier") is True
+                    and _optional_string(
+                        cast(dict[str, object], item["data"]).get("taxonomy_source")
+                    )
+                    is None
+                ]
+                if taxonomy_family is not None
+                else []
+            )
+            memberships = [*exact_memberships, *family_memberships]
             mismatched_memberships = [
                 item
                 for item in memberships_by_industry.get(industry_code, ())
@@ -563,7 +604,8 @@ def _industry_exposures(
                 gaps.update(cast(list[str], membership["completeness_gaps"]))
             gaps.discard("tradable_exposure_mapping_missing")
             gaps.discard("industry_to_tradable_mapping_missing")
-            gaps.discard("taxonomy_version_unverified")
+            if not family_memberships:
+                gaps.discard("taxonomy_version_unverified")
             gaps.discard("effective_taxonomy_interval_unverified")
             gaps.update({"taxonomy_effective_interval_unverified", "rebalance_lineage_missing"})
             if len(taxonomy_versions) > 1:
@@ -582,9 +624,115 @@ def _industry_exposures(
                     "industry_name": taxonomy_data.get("industry_name"),
                     "index_code": index_code,
                     "instrument_code": instrument["instrument_code"],
+                    "mapping_basis": "etf_index_code_exact",
                     "observed_at_barrier": True,
                     "effective_at_barrier": None,
                     "constituent_count": len(memberships),
+                    "input_record_ids": sorted(input_record_ids),
+                    "completeness_gaps": sorted(gaps),
+                }
+            )
+
+        instrument_code = cast(str, instrument["instrument_code"])
+        basket_rows = basket_constituents_by_etf.get(instrument_code, ())
+        matched_by_industry_source: dict[
+            tuple[str, str], list[tuple[dict[str, object], dict[str, object], bool]]
+        ] = {}
+        for basket in basket_rows:
+            basket_data = cast(dict[str, object], basket["data"])
+            constituent_code = _optional_string(basket_data.get("constituent_code"))
+            if constituent_code is None:
+                continue
+            for membership in memberships_by_instrument.get(constituent_code, ()):
+                membership_data = cast(dict[str, object], membership["data"])
+                if membership_data.get("effective_at_barrier") is not True:
+                    continue
+                industry_code = _optional_string(membership_data.get("industry_code"))
+                taxonomy_family = _optional_string(membership_data.get("taxonomy_family"))
+                taxonomy_source = _optional_string(membership_data.get("taxonomy_source"))
+                if industry_code is None:
+                    continue
+                source_exact = taxonomy_source is not None
+                identities: set[tuple[str, str]]
+                if taxonomy_source is not None:
+                    identities = {(industry_code, taxonomy_source)}
+                elif taxonomy_family is not None:
+                    identities = taxonomy_identities_by_index_family.get(
+                        (industry_code, taxonomy_family), set()
+                    )
+                else:
+                    identities = set()
+                if len(identities) != 1:
+                    if any(
+                        taxonomy_code == industry_code
+                        for taxonomy_code, _source in taxonomy_versions_by_index_source
+                    ):
+                        join_gaps.add(
+                            "taxonomy_version_unverified"
+                            if taxonomy_source is None
+                            else "taxonomy_source_mismatch"
+                        )
+                    continue
+                identity = next(iter(identities))
+                if identity not in taxonomy_versions_by_index_source:
+                    join_gaps.add("taxonomy_source_mismatch")
+                    continue
+                matched_by_industry_source.setdefault(identity, []).append(
+                    (basket, membership, source_exact)
+                )
+
+        for (industry_code, taxonomy_source), matches in sorted(matched_by_industry_source.items()):
+            taxonomy_versions = taxonomy_versions_by_index_source[(industry_code, taxonomy_source)]
+            taxonomy = max(
+                taxonomy_versions,
+                key=lambda value: (
+                    cast(str, cast(dict[str, object], value["times"])["authority_at"]),
+                    cast(str, value["record_id"]),
+                ),
+            )
+            taxonomy_data = cast(dict[str, object], taxonomy["data"])
+            gaps = {
+                *cast(list[str], taxonomy["completeness_gaps"]),
+                *cast(list[str], instrument["completeness_gaps"]),
+            }
+            input_record_ids = {
+                *cast(list[str], instrument["input_record_ids"]),
+                *(cast(str, value["record_id"]) for value in taxonomy_versions),
+            }
+            constituent_codes: set[str] = set()
+            used_family_join = False
+            for basket, membership, source_exact in matches:
+                gaps.update(cast(list[str], basket["completeness_gaps"]))
+                gaps.update(cast(list[str], membership["completeness_gaps"]))
+                used_family_join = used_family_join or not source_exact
+                input_record_ids.add(cast(str, basket["record_id"]))
+                input_record_ids.add(cast(str, membership["record_id"]))
+                constituent_code = _optional_string(
+                    cast(dict[str, object], basket["data"]).get("constituent_code")
+                )
+                if constituent_code is not None:
+                    constituent_codes.add(constituent_code)
+            gaps.discard("tradable_exposure_mapping_missing")
+            gaps.discard("industry_to_tradable_mapping_missing")
+            if not used_family_join:
+                gaps.discard("taxonomy_version_unverified")
+            gaps.discard("effective_taxonomy_interval_unverified")
+            gaps.update({"taxonomy_effective_interval_unverified", "rebalance_lineage_missing"})
+            if len(taxonomy_versions) > 1:
+                gaps.add("taxonomy_versions_present")
+            values.append(
+                {
+                    "taxonomy_source": taxonomy_source,
+                    "taxonomy_version": taxonomy_source,
+                    "taxonomy_level": taxonomy_data.get("taxonomy_level"),
+                    "industry_code": industry_code,
+                    "industry_name": taxonomy_data.get("industry_name"),
+                    "index_code": taxonomy_data.get("index_code") or industry_code,
+                    "instrument_code": instrument_code,
+                    "mapping_basis": "daily_pcf_constituent_exact",
+                    "observed_at_barrier": True,
+                    "effective_at_barrier": None,
+                    "constituent_count": len(constituent_codes),
                     "input_record_ids": sorted(input_record_ids),
                     "completeness_gaps": sorted(gaps),
                 }
@@ -596,6 +744,7 @@ def _industry_exposures(
                 cast(str, item["industry_code"]),
                 cast(str, item["instrument_code"]),
                 cast(str, item["taxonomy_source"]),
+                cast(str, item["mapping_basis"]),
             ),
         ),
         join_gaps,

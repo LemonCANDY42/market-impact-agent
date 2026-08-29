@@ -197,12 +197,72 @@
               "industry_taxonomy",
               "industry_membership",
               "daily_tradability_limit",
+              "etf_basket_constituent",
               "instrument_reference"
             ]
           },
           "data": {"$ref": "#/$defs/exposure_data"},
           "price_basis": {"type": "null"}
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {"record_type": {"const": "etf_basket_constituent"}}
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "required": [
+                    "cash_premium_rate",
+                    "cash_substitution_amount",
+                    "component_exchange",
+                    "constituent_code",
+                    "constituent_name",
+                    "constituent_quantity",
+                    "redemption_cash_component",
+                    "replacement_ratio",
+                    "subscription_cash_component",
+                    "substitution_flag"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "data": {
+                  "not": {
+                    "anyOf": [
+                      {"required": ["cash_premium_rate"]},
+                      {"required": ["cash_substitution_amount"]},
+                      {"required": ["component_exchange"]},
+                      {"required": ["constituent_code"]},
+                      {"required": ["constituent_name"]},
+                      {"required": ["constituent_quantity"]},
+                      {"required": ["redemption_cash_component"]},
+                      {"required": ["replacement_ratio"]},
+                      {"required": ["subscription_cash_component"]},
+                      {"required": ["substitution_flag"]}
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "enum": ["industry_taxonomy", "industry_membership"]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "data": {"not": {"required": ["taxonomy_family"]}}
+              }
+            }
+          }
+        ]
       }
     },
     {
@@ -366,10 +426,21 @@
         "previous_close": {"$ref": "#/$defs/nullable_scalar"},
         "publisher": {"$ref": "#/$defs/nullable_scalar"},
         "taxonomy_level": {"$ref": "#/$defs/nullable_scalar"},
+        "taxonomy_family": {"$ref": "#/$defs/nullable_scalar"},
         "taxonomy_source": {"$ref": "#/$defs/nullable_scalar"},
         "trade_date": {"$ref": "#/$defs/nullable_scalar"},
         "upper_price_limit": {"$ref": "#/$defs/nullable_scalar"},
-        "venue": {"$ref": "#/$defs/nullable_scalar"}
+        "venue": {"$ref": "#/$defs/nullable_scalar"},
+        "cash_premium_rate": {"$ref": "#/$defs/nullable_scalar"},
+        "cash_substitution_amount": {"$ref": "#/$defs/nullable_scalar"},
+        "component_exchange": {"$ref": "#/$defs/nullable_scalar"},
+        "constituent_code": {"$ref": "#/$defs/nullable_scalar"},
+        "constituent_name": {"$ref": "#/$defs/nullable_scalar"},
+        "constituent_quantity": {"$ref": "#/$defs/nullable_scalar"},
+        "redemption_cash_component": {"$ref": "#/$defs/nullable_scalar"},
+        "replacement_ratio": {"$ref": "#/$defs/nullable_scalar"},
+        "subscription_cash_component": {"$ref": "#/$defs/nullable_scalar"},
+        "substitution_flag": {"$ref": "#/$defs/nullable_scalar"}
       }
     },
     "positioning_data": {

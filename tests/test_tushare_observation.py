@@ -40,6 +40,8 @@ DOCUMENTATION_IDS = {
     "stk_limit": 183,
     "index_classify": 181,
     "index_member_all": 335,
+    "etf_sh_cons": 471,
+    "etf_sz_cons": 472,
     "margin": 58,
     "cn_schedule": 461,
     "report_rc": 292,
@@ -229,6 +231,49 @@ def _route_specs() -> tuple[
             {"l3_code": "850531.SI"},
         ),
         (
+            "etf_sh_cons",
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            (
+                "trade_date",
+                "ts_code",
+                "con_code",
+                "con_name",
+                "qty",
+                "sub_flag",
+                "cpr",
+                "rdr",
+                "sca",
+                "exchange",
+            ),
+            ("trade_date", "ts_code", "con_code"),
+            ("trade_date",),
+            (),
+            {},
+            {"ts_code": "517030.SH", "trade_date": "20260828"},
+        ),
+        (
+            "etf_sz_cons",
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            (
+                "trade_date",
+                "ts_code",
+                "con_code",
+                "con_name",
+                "qty",
+                "sub_flag",
+                "cpr",
+                "rdr",
+                "sub_cc",
+                "red_cc",
+                "exchange",
+            ),
+            ("trade_date", "ts_code", "con_code"),
+            ("trade_date",),
+            (),
+            {},
+            {"ts_code": "159051.SZ", "trade_date": "20260828"},
+        ),
+        (
             "margin",
             ObservationCapability.POSITIONING,
             ("trade_date", "exchange_id", "rzye", "rzmre", "rzche", "rqye", "rqmcl", "rzrqye"),
@@ -395,6 +440,15 @@ def _values(api_name: str, fields: tuple[str, ...]) -> list[object]:
         "in_date": "20200101",
         "out_date": "",
         "is_new": "Y",
+        "con_code": "600000.SH",
+        "con_name": "Synthetic constituent",
+        "qty": 1000.0,
+        "sub_flag": "1",
+        "cpr": 0.1,
+        "rdr": 0.2,
+        "sca": 100.0,
+        "sub_cc": 90.0,
+        "red_cc": 110.0,
         "exchange_id": "SSE",
         "rzye": 1.0,
         "rzmre": 1.0,
@@ -445,6 +499,12 @@ def _values(api_name: str, fields: tuple[str, ...]) -> list[object]:
         values["ts_code"] = "510300.SH"
     if api_name == "index_member_all":
         values["ts_code"] = "000001.SZ"
+    if api_name == "etf_sh_cons":
+        values["ts_code"] = "517030.SH"
+        values["exchange"] = "SH"
+    if api_name == "etf_sz_cons":
+        values["ts_code"] = "159051.SZ"
+        values["exchange"] = "SZ"
     if api_name == "fund_daily":
         values["ts_code"] = "510300.SH"
     if api_name == "stock_basic":
@@ -469,6 +529,8 @@ def _config(
         "index_daily": ("ts_code", "trade_date", "start_date", "end_date"),
         "etf_basic": ("ts_code", "index_code", "list_date", "list_status", "exchange", "mgr"),
         "index_member_all": ("l1_code", "l2_code", "l3_code", "ts_code", "is_new"),
+        "etf_sh_cons": ("ts_code", "trade_date", "con_code", "start_date", "end_date"),
+        "etf_sz_cons": ("ts_code", "trade_date", "con_code", "start_date", "end_date"),
         "margin": ("trade_date", "start_date", "end_date", "exchange_id"),
         "cn_schedule": ("m", "title"),
         "report_rc": ("ts_code", "report_date", "start_date", "end_date"),
@@ -583,7 +645,7 @@ def test_checked_in_source_configs_are_canonical_schema_valid_and_secret_free() 
     paths = sorted(Path("examples/providers").glob("tushare-observation-*.json"))
 
     configs = tuple(load_tushare_observation_source(path) for path in paths)
-    assert len(configs) == 12
+    assert len(configs) == len(_route_specs())
     assert {item.api_name for item in configs} == {spec[0] for spec in _route_specs()}
     assert {item.api_name: item.documentation_url for item in configs} == {
         api_name: f"https://tushare.pro/document/2?doc_id={doc_id}"
@@ -741,7 +803,7 @@ def test_provider_fails_closed_for_malformed_duplicate_and_truncated_pages() -> 
 def test_prospective_actual_receipt_does_not_claim_publisher_or_revision_authority(
     tmp_path: Path,
 ) -> None:
-    config = _configs()[6]
+    config = next(item for item in _configs() if item.api_name == "report_rc")
     parameters = {"start_date": "20260828", "end_date": "20260828"}
     provider = TushareObservationProvider(
         TOKEN,

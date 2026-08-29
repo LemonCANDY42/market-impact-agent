@@ -260,11 +260,85 @@ def test_market_universe_view_binds_price_basis_rules_and_industry_exposure() ->
     assert mapping["taxonomy_version"] == "SW2021"
     assert mapping["index_code"] == "801150.SI"
     assert mapping["instrument_code"] == "512010.SH"
+    assert mapping["mapping_basis"] == "etf_index_code_exact"
     assert mapping["observed_at_barrier"] is True
     assert mapping["effective_at_barrier"] is None
     assert mapping["constituent_count"] == 1
     assert "taxonomy_effective_interval_unverified" in cast(list[str], mapping["completeness_gaps"])
     assert "rebalance_lineage_missing" in cast(list[str], mapping["completeness_gaps"])
+
+
+def test_market_universe_view_loads_rehashed_legacy_exposure_without_mapping_basis() -> None:
+    legacy = deepcopy(_build())
+    exposures = cast(list[dict[str, object]], legacy["industry_exposures"])
+    for exposure in exposures:
+        exposure.pop("mapping_basis")
+    core = {key: value for key, value in legacy.items() if key != "view_id"}
+    legacy["view_id"] = f"checkpoint-market-universe-view-{canonical_hash(core)}"
+
+    assert validate_agent_contract(legacy, "checkpoint-market-universe-view.schema.json") == ()
+    assert checkpoint_market_universe_view_from_dict(legacy) == legacy
+
+
+def test_market_universe_view_joins_daily_pcf_constituent_to_current_industry() -> None:
+    inputs = list(_decision_inputs())
+    instrument = next(
+        item for item in inputs if item["record_type"] == "tradable_instrument_mapping"
+    )
+    instrument_data = cast(dict[str, object], instrument["data"])
+    instrument_data["index_code"] = None
+    instrument_core = {key: value for key, value in instrument.items() if key != "record_id"}
+    instrument["record_id"] = f"checkpoint-decision-input-{canonical_hash(instrument_core)}"
+    membership = next(item for item in inputs if item["record_type"] == "industry_membership")
+    membership_data = cast(dict[str, object], membership["data"])
+    membership_data["taxonomy_source"] = None
+    membership_core = {key: value for key, value in membership.items() if key != "record_id"}
+    membership["record_id"] = f"checkpoint-decision-input-{canonical_hash(membership_core)}"
+    pcf = _project(
+        ObservationCapability.EXPOSURE_CANDIDATES,
+        source_id="etf-sh-cons",
+        route_kind="industry_to_tradable_mapping",
+        payload={
+            "api_name": "etf_sh_cons",
+            "record": {
+                "trade_date": "20260828",
+                "ts_code": "512010.SH",
+                "con_code": "600000.SH",
+                "con_name": "Fixture issuer",
+                "qty": 1000.0,
+                "sub_flag": "1",
+                "cpr": 0.1,
+                "rdr": 0.2,
+                "sca": 100.0,
+                "exchange": "SH",
+            },
+        },
+    )
+    inputs.append(pcf)
+
+    view = build_checkpoint_market_universe_view(
+        decision_inputs=tuple(inputs),
+        rule_set=load_exchange_instrument_rule_set(
+            ROOT / "examples/research/a-share-exchange-instrument-rules-v1.json"
+        ),
+        target_venues=("XSHG", "XSHE"),
+        allowed_instrument_classes=("exchange_traded_fund",),
+    )
+
+    exposures = cast(list[dict[str, object]], view["industry_exposures"])
+    assert len(exposures) == 1
+    mapping = exposures[0]
+    assert mapping["taxonomy_source"] == "SW2021"
+    assert mapping["industry_code"] == "801150.SI"
+    assert mapping["instrument_code"] == "512010.SH"
+    assert mapping["mapping_basis"] == "daily_pcf_constituent_exact"
+    assert mapping["constituent_count"] == 1
+    assert pcf["record_id"] in cast(list[str], mapping["input_record_ids"])
+    assert "industry_to_tradable_mapping_missing" not in cast(list[str], view["completeness_gaps"])
+    assert "basket_weight_missing" in cast(list[str], mapping["completeness_gaps"])
+    assert "basket_publication_time_unverified" in cast(list[str], mapping["completeness_gaps"])
+    assert "taxonomy_version_unverified" in cast(list[str], mapping["completeness_gaps"])
+    assert validate_agent_contract(view, "checkpoint-market-universe-view.schema.json") == ()
 
 
 def test_market_universe_view_is_deterministic_and_rejects_content_drift() -> None:

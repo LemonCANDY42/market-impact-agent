@@ -98,14 +98,18 @@ Stage 2 — accept capability-complete data slices:
   - [x] Accept route-level `etf_basic`, `stock_basic`, and `stk_limit` captures and replay.
   - [x] Bind content-identified SSE/SZSE lot/tick rules effective from 2026-07-06 into the checkpoint
     market-universe view, scoped to registered venues/classes and explicit exchange-rule exceptions.
+  - [x] Reject the currently available false substitutes: `suspend_d` is stock-only, the purchased
+    account lacks `rt_etf_k`, a recent bar proves activity rather than future order acceptance, and
+    positive exchange suspension notices do not prove a complete two-venue absence/status view.
   - [ ] Add decision-time suspension/status evidence; listing lifecycle plus a daily bar is research-
     eligible but cannot prove the instrument is presently tradable.
 - [ ] `PDI-13` Accept an effective-dated industry taxonomy, membership, and exposure route.
   - [x] Accept route-level SW2021 `index_classify` and `index_member_all` captures and replay.
   - [x] Implement an exact-code, source-identity-preserving join from current-as-received taxonomy,
     effective membership, and ETF `index_code` observations; an absent join remains an explicit gap.
-  - [ ] Accept a non-empty current industry-to-tradable-ETF relation. The 2026-08-29 all-listed-ETF
-    probe found no exact SW2021 `index_code` match, so name-based inference remains prohibited.
+  - [x] Accept `etf_sh_cons` and `etf_sz_cons` exchange-PCF routes and a non-empty exact-code join from
+    ETF → PCF constituent → current effective SW member → SW2021 taxonomy. The real 2026-08-29
+    probes matched 211/300 SSE and 98/99 SZSE PCF rows without using names.
   - [ ] Prove the taxonomy effective interval and rebalance/classification-revision lineage; the
     observed current relation cannot be back-applied as a historical mapping.
 - [ ] `PDI-14` Accept the registered positioning route.

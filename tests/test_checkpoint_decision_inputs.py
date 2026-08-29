@@ -316,3 +316,69 @@ def test_index_member_uses_deepest_complete_taxonomy_tuple() -> None:
         list[str], projected["completeness_gaps"]
     )
     _validate_schema(projected)
+
+
+def test_index_member_binds_current_shenwan_route_identity_without_record_src() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            {
+                "api_name": "index_member_all",
+                "record": {
+                    "l1_code": "801150.SI",
+                    "l1_name": "Medicine and biology",
+                    "ts_code": "600000.SH",
+                    "in_date": "20260101",
+                    "is_new": "Y",
+                },
+            },
+        )
+    )
+
+    data = cast(dict[str, object], projected["data"])
+    assert data["taxonomy_family"] == "shenwan"
+    assert data["taxonomy_source"] is None
+    assert "taxonomy_version_unverified" in cast(list[str], projected["completeness_gaps"])
+    _validate_schema(projected)
+
+
+@pytest.mark.parametrize("api_name", ("etf_sh_cons", "etf_sz_cons"))
+def test_exchange_pcf_constituent_projects_exact_daily_mapping(api_name: str) -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.EXPOSURE_CANDIDATES,
+            {
+                "api_name": api_name,
+                "upstream_publisher": "Tushare Pro",
+                "record": {
+                    "trade_date": "20260828",
+                    "ts_code": "517030.SH" if api_name == "etf_sh_cons" else "159051.SZ",
+                    "con_code": "600000.SH",
+                    "con_name": "Fixture constituent",
+                    "qty": 1000.0,
+                    "sub_flag": "1",
+                    "cpr": 0.1,
+                    "rdr": 0.2,
+                    "sca": 100.0 if api_name == "etf_sh_cons" else None,
+                    "sub_cc": 90.0 if api_name == "etf_sz_cons" else None,
+                    "red_cc": 110.0 if api_name == "etf_sz_cons" else None,
+                    "exchange": "SH" if api_name == "etf_sh_cons" else "SZ",
+                },
+            },
+        )
+    )
+
+    assert projected["record_type"] == "etf_basket_constituent"
+    data = cast(dict[str, object], projected["data"])
+    assert data["effective_at_barrier"] is True
+    assert data["effective_from"] == "20260828"
+    assert data["effective_to"] == "20260828"
+    assert data["instrument_class"] == "exchange_traded_fund"
+    assert data["constituent_code"] == "600000.SH"
+    assert data["constituent_quantity"] == 1000.0
+    assert projected["completeness_gaps"] == [
+        "basket_publication_time_unverified",
+        "basket_revision_lineage_missing",
+        "basket_weight_missing",
+    ]
+    _validate_schema(projected)
