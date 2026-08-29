@@ -354,7 +354,7 @@ def collect_operations_metrics(
     if not index_path.is_file():
         raise FileNotFoundError(f"prospective state index is missing: {index_path}")
     all_files = tuple(path for path in root.rglob("*") if path.is_file())
-    total_state_bytes = sum(path.stat().st_size for path in all_files)
+    total_state_bytes = sum(_existing_file_sizes(all_files))
     sqlite_paths = tuple(
         path
         for path in (index_path, root / "index.sqlite3-wal", root / "index.sqlite3-shm")
@@ -362,6 +362,9 @@ def collect_operations_metrics(
     )
     artifact_paths = tuple(path for path in (root / "artifacts").rglob("*") if path.is_file())
     parquet_paths = tuple(path for path in (root / "datasets").rglob("*.parquet") if path.is_file())
+    sqlite_sizes = _existing_file_sizes(sqlite_paths)
+    artifact_sizes = _existing_file_sizes(artifact_paths)
+    parquet_sizes = _existing_file_sizes(parquet_paths)
     connection = sqlite3.connect(f"file:{index_path.as_posix()}?mode=ro", uri=True)
     try:
         outcomes = _opportunity_outcome_counts(connection)
@@ -382,11 +385,11 @@ def collect_operations_metrics(
         metrics = ProspectiveOperationsMetrics(
             measured_at=measured_at,
             total_state_bytes=total_state_bytes,
-            sqlite_bytes=sum(path.stat().st_size for path in sqlite_paths),
-            artifact_file_count=len(artifact_paths),
-            artifact_bytes=sum(path.stat().st_size for path in artifact_paths),
-            parquet_file_count=len(parquet_paths),
-            parquet_bytes=sum(path.stat().st_size for path in parquet_paths),
+            sqlite_bytes=sum(sqlite_sizes),
+            artifact_file_count=len(artifact_sizes),
+            artifact_bytes=sum(artifact_sizes),
+            parquet_file_count=len(parquet_sizes),
+            parquet_bytes=sum(parquet_sizes),
             job_count=_table_count(connection, "prospective_collection_jobs"),
             opportunity_count=opportunity_count,
             terminal_opportunity_count=terminal_count,
@@ -405,6 +408,18 @@ def collect_operations_metrics(
     finally:
         connection.close()
     return metrics
+
+
+def _existing_file_sizes(paths: tuple[Path, ...]) -> tuple[int, ...]:
+    sizes: list[int] = []
+    for path in paths:
+        try:
+            sizes.append(path.stat().st_size)
+        except FileNotFoundError:
+            # SQLite WAL sidecars may disappear after enumeration when another
+            # one-shot collector closes its connection.
+            continue
+    return tuple(sizes)
 
 
 def assert_within_state_budget(

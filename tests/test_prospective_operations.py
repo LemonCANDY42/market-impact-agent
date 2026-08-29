@@ -202,6 +202,33 @@ def test_operations_metrics_measure_deduplication_and_fail_closed_disk_budget(
         assert_within_state_budget(metrics, maximum_state_bytes=metrics.total_state_bytes - 1)
 
 
+def test_operations_metrics_tolerate_file_disappearing_after_enumeration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "state"
+    LocalDataSnapshotStore(state_root)
+    transient = state_root / "transient-sidecar"
+    transient.write_bytes(b"ephemeral")
+    real_file_sizes = operations_module._existing_file_sizes  # pyright: ignore[reportPrivateUsage]
+    transient_removed = False
+
+    def remove_then_measure(paths: tuple[Path, ...]) -> tuple[int, ...]:
+        nonlocal transient_removed
+        if transient in paths and not transient_removed:
+            transient.unlink()
+            transient_removed = True
+        return real_file_sizes(paths)
+
+    monkeypatch.setattr(operations_module, "_existing_file_sizes", remove_then_measure)
+
+    metrics = collect_operations_metrics(state_root=state_root, measured_at=NOW)
+
+    assert transient_removed is True
+    assert metrics.total_state_bytes > 0
+    assert metrics.execution_capability is False
+
+
 @pytest.mark.parametrize("link_parent", ("state-root", "operations"))
 def test_metrics_and_backup_reject_directory_symlinks_without_following_them(
     tmp_path: Path,
