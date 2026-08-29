@@ -209,6 +209,16 @@ def test_journal_deduplicates_versions_but_retains_every_actual_receipt(
         "deduplicated_observation_count": 1,
     }
 
+    refs = journal.observation_version_refs(
+        policy_id=policy.policy_id,
+        capability=ObservationCapability.EVENT_REVELATION,
+        not_before=FIRST_RECEIPT,
+        not_after=SECOND_RECEIPT,
+    )
+    assert len(refs) == 1
+    assert refs[0].first_available_at == FIRST_RECEIPT
+    assert refs[0].provider_id == _source().provider_id
+
 
 def test_changed_record_content_creates_an_append_only_revision(tmp_path: Path) -> None:
     store = LocalDataSnapshotStore(tmp_path / "state")

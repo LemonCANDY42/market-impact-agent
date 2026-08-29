@@ -1,0 +1,53 @@
+{
+  "schema_version": "market-impact.prospective-checkpoint-route-plan.v1",
+  "registration_id": "prospective-diagnostic-registration-19ef4193130c0121527a75f3235505c4eec708495e8848588e8ac344e90bc426",
+  "admission_timing_protocol": "sqlite_begin_immediate_then_harness_clock_v1",
+  "bindings": [
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "official_event",
+      "job_id": "prospective-collection-job-ff06ba788efbf292f725bed5e282b58cce3316375b58fd085c759b4d2a1eead6"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    }
+  ],
+  "historical_pit_claim": false,
+  "model_calls_authorized": false,
+  "execution_capability": false,
+  "plan_id": "prospective-checkpoint-route-plan-575e81dd6c81648823ae524668fff4d6e2da68f333441e4c27e050839a244244"
+}

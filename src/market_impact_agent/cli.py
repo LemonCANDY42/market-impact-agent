@@ -135,6 +135,11 @@ from market_impact_agent.prediction_markets import (
     polymarket_provider_manifest,
     world_monitor_provider_manifest,
 )
+from market_impact_agent.prospective_checkpoint_readiness import (
+    ProspectiveCheckpointAdmissionStore,
+    evaluate_prospective_checkpoint_readiness,
+    load_prospective_checkpoint_route_plan,
+)
 from market_impact_agent.prospective_collection_runtime import (
     ProspectiveCollectionAdapterKind,
     ProspectiveCollectionJob,
@@ -377,6 +382,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate the frozen PDI-01 prospective checkpoint registration",
     )
     prospective_diagnostic_parser.add_argument("--registration", required=True, type=Path)
+    checkpoint_admit_parser = data_subparsers.add_parser(
+        "checkpoint-route-admit",
+        help="Durably admit a no-authority checkpoint route plan at the Harness clock",
+    )
+    checkpoint_admit_parser.add_argument("--registration", required=True, type=Path)
+    checkpoint_admit_parser.add_argument("--route-plan", required=True, type=Path)
+    checkpoint_admit_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    checkpoint_readiness_parser = data_subparsers.add_parser(
+        "checkpoint-readiness",
+        help=("Audit pre-bound prospective checkpoint trigger routes without starting a model"),
+    )
+    checkpoint_readiness_parser.add_argument("--registration", required=True, type=Path)
+    checkpoint_readiness_parser.add_argument("--route-plan", required=True, type=Path)
+    checkpoint_readiness_parser.add_argument("--evaluated-at", type=_aware_timestamp)
+    checkpoint_readiness_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
     tushare_observation_accept_parser = data_subparsers.add_parser(
         "accept-tushare-observation",
         help="Capture, journal, persist, and replay one prospective Tushare route",
@@ -1109,6 +1137,48 @@ def validate_prospective_diagnostic(path: Path) -> dict[str, object]:
         "model_calls_authorized": False,
         "execution_capability": False,
     }
+
+
+def prospective_checkpoint_readiness(
+    *,
+    registration_path: Path,
+    route_plan_path: Path,
+    state_root: Path,
+    evaluated_at: datetime | None,
+) -> dict[str, object]:
+    registration = load_prospective_diagnostic_registration(registration_path)
+    route_plan = load_prospective_checkpoint_route_plan(route_plan_path)
+    store = LocalDataSnapshotStore(state_root)
+    runtime = ProspectiveCollectionRuntime(store)
+    admission_store = ProspectiveCheckpointAdmissionStore(state_root)
+    report = evaluate_prospective_checkpoint_readiness(
+        registration=registration,
+        route_plan=route_plan,
+        admission_store=admission_store,
+        runtime=runtime,
+        evaluated_at=datetime.now(UTC) if evaluated_at is None else evaluated_at,
+    )
+    artifact = store.artifacts.put_json(report.to_dict())
+    return {
+        **report.to_dict(),
+        "artifact_hash": artifact.content_hash,
+        "artifact_media_type": artifact.media_type,
+    }
+
+
+def admit_prospective_checkpoint_routes(
+    *,
+    registration_path: Path,
+    route_plan_path: Path,
+    state_root: Path,
+) -> dict[str, object]:
+    registration = load_prospective_diagnostic_registration(registration_path)
+    route_plan = load_prospective_checkpoint_route_plan(route_plan_path)
+    admission = ProspectiveCheckpointAdmissionStore(state_root).admit(
+        route_plan=route_plan,
+        registration=registration,
+    )
+    return admission.to_dict()
 
 
 def verify_common_crawl_archive(
@@ -3062,6 +3132,44 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] is True else 1
+    if args.command == "data" and args.data_command == "checkpoint-readiness":
+        try:
+            result = prospective_checkpoint_readiness(
+                registration_path=args.registration,
+                route_plan_path=args.route_plan,
+                state_root=args.state_root,
+                evaluated_at=args.evaluated_at,
+            )
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"ready": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "data" and args.data_command == "checkpoint-route-admit":
+        try:
+            result = admit_prospective_checkpoint_routes(
+                registration_path=args.registration,
+                route_plan_path=args.route_plan,
+                state_root=args.state_root,
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"admitted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps({**result, "admitted": True}, indent=2, sort_keys=True))
+        return 0
     if args.command == "data" and args.data_command == "accept-tushare-observation":
         token = os.environ.get("TUSHARE_TOKEN", "")
         if not token:

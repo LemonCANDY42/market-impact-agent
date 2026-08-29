@@ -55,7 +55,10 @@ The bootstrap implements:
   constituent links—with versioned SSE/SZSE lot/tick rules while keeping suspension,
   corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps explicit; the v2 prospective
   registration and Query Gate block missing trigger/structural inputs while allowing the Agent to
-  reason or abstain with optional information missing. Order-time tradability and risk remain
+  reason or abstain with optional information missing. A content-identified route plan now binds
+  accepted Collection Jobs before any new trigger, and a read-only readiness report distinguishes
+  expected waiting from missing trigger infrastructure without starting a model. Order-time
+  tradability and risk remain
   independently fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte

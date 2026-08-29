@@ -178,6 +178,26 @@ registration retains its original all-required semantics. The superseding v2 reg
 only the actual-receipt event trigger for model dispatch; expectation, market, exposure, positioning,
 and macro slots are optional observed information whose absence remains part of the input.
 
+`ProspectiveCheckpointRoutePlan` separately pre-binds those registered semantic route kinds to
+accepted durable Collection Jobs. A separate SQLite/CAS admission record uses the Harness clock to
+prevent observations already known before admission from being promoted as future triggers; the
+checked-in plan cannot backdate or authorize itself. Admission takes the SQLite write lock before
+sampling that clock and commits the timestamp and CAS binding in the same transaction, so a
+qualifying Journal write cannot interleave before durable admission. The plan does not make a
+Provider an authority and does not select an event. The plan's canonical content and schema fix
+this behavior as `sqlite_begin_immediate_then_harness_clock_v1`; a pre-protocol plan ID or admission
+row cannot be grandfathered into the current loader or readiness audit.
+`ProspectiveCheckpointReadinessReport` then
+audits only source identity, Job activation, and content-identified post-admission observation
+versions. Opportunity evidence is truncated to scheduled, started, and completed times no later
+than `evaluated_at`. If the mutable Job row was updated later than that cutoff, historical health is
+not reconstructible from the current schema and the audit fails closed rather than borrowing its
+current lag, backoff, failure, or miss state. Its states intentionally distinguish
+`waiting_for_post_admission_trigger` from
+`trigger_route_unconfigured`; neither state spends model budget. An observed version remains an
+unclassified candidate until a separate eligibility selection and session-barrier calculation are
+sealed.
+
 `ProspectiveCheckpointSnapshotSet` is the later non-authoritative barrier reconciliation. Every
 selected input must still bind an accepted route, exact Collection Policy, complete Journal-frozen
 prospective Snapshot, raw response hash, and immutable barrier. Schema v2 retains the original
@@ -295,6 +315,32 @@ semantics, tradability fields, taxonomy effective intervals, official macro rele
 lineage, and future post-registration receipts still have to reconcile at each checkpoint barrier.
 Those gaps limit coverage claims and later execution where relevant; they no longer all block a
 prospective process diagnostic. No model call begins until the structural Query Gate passes.
+
+The current v2 route plan is frozen in
+`examples/research/prospective-checkpoint-route-plan-v1.json`. First durably anchor the plan:
+
+```bash
+market-impact data checkpoint-route-admit \
+  --registration examples/research/prospective-diagnostic-registration-v2.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v1.json \
+  --state-root .market-impact/data-inputs
+```
+
+Admission is idempotent and records only the Harness clock; readiness refuses an unadmitted plan.
+Then run the non-mutating readiness audit:
+
+```bash
+market-impact data checkpoint-readiness \
+  --registration examples/research/prospective-diagnostic-registration-v2.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v1.json \
+  --state-root .market-impact/data-inputs
+```
+
+The readiness command persists only the content-identified report in the private CAS. A healthy
+`waiting_for_post_admission_trigger` result is expected external wait, not a failed collector or a
+Query Gate pass. A historical `--evaluated-at` may fail once that Job has newer state; creating a
+current report or adding a future versioned health-snapshot contract is required instead of
+retroactively reusing live aggregates.
 
 In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` and start prospective
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or

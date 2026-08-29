@@ -35,6 +35,8 @@ class Validator(Protocol):
         "prospective-collection-tracer-report.schema.json",
         "prospective-dataset-manifest.schema.json",
         "prospective-diagnostic-registration.schema.json",
+        "prospective-checkpoint-route-plan.schema.json",
+        "prospective-checkpoint-readiness-report.schema.json",
         "prospective-checkpoint-snapshot-set.schema.json",
         "prospective-query-gate-result.schema.json",
         "checkpoint-decision-input.schema.json",
@@ -150,6 +152,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/regime-modeled-pit-agent-validation-v1.json",
         "examples/research/prospective-diagnostic-registration-v1.json",
         "examples/research/prospective-diagnostic-registration-v2.json",
+        "examples/research/prospective-checkpoint-route-plan-v1.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -215,6 +218,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         )
     ):
         schema_name = "prospective-diagnostic-registration.schema.json"
+    elif example_path.endswith("prospective-checkpoint-route-plan-v1.json"):
+        schema_name = "prospective-checkpoint-route-plan.schema.json"
     elif example_path.endswith("federal-reserve-press-feed-v1.json"):
         schema_name = "syndication-feed-source.schema.json"
     elif example_path.endswith("csrc-official-news-v1.json"):

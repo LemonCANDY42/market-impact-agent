@@ -1,0 +1,897 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from pathlib import Path
+from typing import cast
+
+from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.data_inputs import LocalDataSnapshotStore
+from market_impact_agent.domain import require_aware
+from market_impact_agent.observations import ObservationCapability
+from market_impact_agent.prospective_collection_runtime import ProspectiveCollectionRuntime
+from market_impact_agent.prospective_diagnostic import (
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    CapabilityApplicability,
+    ProspectiveDiagnosticRegistration,
+)
+
+PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA = "market-impact.prospective-checkpoint-route-plan.v1"
+PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL = "sqlite_begin_immediate_then_harness_clock_v1"
+PROSPECTIVE_CHECKPOINT_READINESS_REPORT_SCHEMA = (
+    "market-impact.prospective-checkpoint-readiness-report.v1"
+)
+
+
+class CheckpointReadinessStatus(StrEnum):
+    TRIGGER_ROUTE_UNCONFIGURED = "trigger_route_unconfigured"
+    WAITING_FOR_POST_ADMISSION_TRIGGER = "waiting_for_post_admission_trigger"
+    UNCLASSIFIED_TRIGGER_CANDIDATE_OBSERVED = "unclassified_trigger_candidate_observed"
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCheckpointRouteBinding:
+    checkpoint_key: str
+    capability: ObservationCapability
+    route_kind: str
+    job_id: str
+
+    def __post_init__(self) -> None:
+        _trimmed(self.checkpoint_key, "checkpoint route binding checkpoint_key")
+        _trimmed(self.route_kind, "checkpoint route binding route_kind")
+        _prefixed(
+            self.job_id,
+            "prospective-collection-job-",
+            "checkpoint route binding job_id",
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "checkpoint_key": self.checkpoint_key,
+            "capability": self.capability.value,
+            "route_kind": self.route_kind,
+            "job_id": self.job_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCheckpointRoutePlan:
+    plan_id: str
+    registration_id: str
+    bindings: tuple[ProspectiveCheckpointRouteBinding, ...]
+    admission_timing_protocol: str = PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL
+    historical_pit_claim: bool = False
+    model_calls_authorized: bool = False
+    execution_capability: bool = False
+    schema_version: str = PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA:
+            raise ValueError("unsupported prospective checkpoint route plan schema")
+        if self.admission_timing_protocol != PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL:
+            raise ValueError("unsupported checkpoint route admission timing protocol")
+        _prefixed(
+            self.registration_id,
+            "prospective-diagnostic-registration-",
+            "checkpoint route plan registration_id",
+        )
+        keys = tuple(
+            (item.checkpoint_key, item.capability.value, item.route_kind) for item in self.bindings
+        )
+        if keys != tuple(sorted(set(keys))):
+            raise ValueError("checkpoint route plan bindings must be sorted and unique")
+        if self.historical_pit_claim or self.model_calls_authorized or self.execution_capability:
+            raise ValueError(
+                "checkpoint route plan cannot grant PIT, model, or execution authority"
+            )
+        if self.plan_id != self.expected_plan_id:
+            raise ValueError("prospective checkpoint route plan_id does not match content")
+
+    @property
+    def expected_plan_id(self) -> str:
+        return f"prospective-checkpoint-route-plan-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "registration_id": self.registration_id,
+            "admission_timing_protocol": self.admission_timing_protocol,
+            "bindings": [item.to_dict() for item in self.bindings],
+            "historical_pit_claim": self.historical_pit_claim,
+            "model_calls_authorized": self.model_calls_authorized,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "plan_id": self.plan_id}
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        registration_id: str,
+        bindings: tuple[ProspectiveCheckpointRouteBinding, ...],
+    ) -> ProspectiveCheckpointRoutePlan:
+        ordered = tuple(
+            sorted(
+                bindings,
+                key=lambda item: (
+                    item.checkpoint_key,
+                    item.capability.value,
+                    item.route_kind,
+                ),
+            )
+        )
+        core = {
+            "schema_version": PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA,
+            "registration_id": registration_id,
+            "admission_timing_protocol": (PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL),
+            "bindings": [item.to_dict() for item in ordered],
+            "historical_pit_claim": False,
+            "model_calls_authorized": False,
+            "execution_capability": False,
+        }
+        return cls(
+            plan_id=f"prospective-checkpoint-route-plan-{canonical_hash(core)}",
+            registration_id=registration_id,
+            bindings=ordered,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCheckpointRouteAdmission:
+    admission_id: str
+    route_plan_id: str
+    registration_id: str
+    recorded_at: datetime
+
+    def __post_init__(self) -> None:
+        _prefixed(
+            self.admission_id,
+            "prospective-checkpoint-route-admission-",
+            "checkpoint route admission_id",
+        )
+        _prefixed(
+            self.route_plan_id,
+            "prospective-checkpoint-route-plan-",
+            "checkpoint route admission route_plan_id",
+        )
+        _strict_utc(self.recorded_at, "checkpoint route admission recorded_at")
+        if self.admission_id != self.expected_admission_id:
+            raise ValueError("prospective checkpoint route admission_id does not match content")
+
+    @property
+    def expected_admission_id(self) -> str:
+        return f"prospective-checkpoint-route-admission-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "route_plan_id": self.route_plan_id,
+            "registration_id": self.registration_id,
+            "recorded_at": _timestamp(self.recorded_at),
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "admission_id": self.admission_id}
+
+
+class ProspectiveCheckpointAdmissionStore:
+    """Durable Harness-clock admission for no-authority route plans."""
+
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self.store = LocalDataSnapshotStore(state_root)
+        self.index_path = self.store.index_path
+        self._clock = (lambda: datetime.now(UTC)) if clock is None else clock
+        with self._connect() as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS prospective_checkpoint_route_admissions (
+                    route_plan_id TEXT PRIMARY KEY,
+                    admission_id TEXT NOT NULL UNIQUE,
+                    registration_id TEXT NOT NULL,
+                    artifact_hash TEXT NOT NULL UNIQUE,
+                    recorded_at TEXT NOT NULL
+                )
+                """
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.index_path)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = FULL")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        return connection
+
+    def admit(
+        self,
+        *,
+        route_plan: ProspectiveCheckpointRoutePlan,
+        registration: ProspectiveDiagnosticRegistration,
+    ) -> ProspectiveCheckpointRouteAdmission:
+        if route_plan.registration_id != registration.registration_id:
+            raise ValueError("checkpoint route plan belongs to a different registration")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT admission_id, registration_id, artifact_hash, recorded_at
+                FROM prospective_checkpoint_route_admissions
+                WHERE route_plan_id = ?
+                """,
+                (route_plan.plan_id,),
+            ).fetchone()
+            if row is not None:
+                return self._verified_admission(route_plan.plan_id, row)
+            recorded_at = self._clock()
+            _strict_utc(recorded_at, "checkpoint route admission Harness clock")
+            if recorded_at < registration.registered_at:
+                raise ValueError("checkpoint routes cannot be admitted before the registration")
+            core = {
+                "route_plan_id": route_plan.plan_id,
+                "registration_id": route_plan.registration_id,
+                "recorded_at": _timestamp(recorded_at),
+            }
+            admission = ProspectiveCheckpointRouteAdmission(
+                admission_id=("prospective-checkpoint-route-admission-" + canonical_hash(core)),
+                route_plan_id=route_plan.plan_id,
+                registration_id=route_plan.registration_id,
+                recorded_at=recorded_at,
+            )
+            artifact = self.store.artifacts.put_json(admission.to_dict())
+            connection.execute(
+                """
+                INSERT INTO prospective_checkpoint_route_admissions(
+                    route_plan_id, admission_id, registration_id, artifact_hash, recorded_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    route_plan.plan_id,
+                    admission.admission_id,
+                    admission.registration_id,
+                    artifact.content_hash,
+                    _timestamp(recorded_at),
+                ),
+            )
+        return admission
+
+    def admission(self, route_plan_id: str) -> ProspectiveCheckpointRouteAdmission:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT admission_id, registration_id, artifact_hash, recorded_at
+                FROM prospective_checkpoint_route_admissions
+                WHERE route_plan_id = ?
+                """,
+                (route_plan_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"checkpoint route plan is not durably admitted: {route_plan_id}")
+        return self._verified_admission(route_plan_id, row)
+
+    def _verified_admission(
+        self,
+        route_plan_id: str,
+        row: sqlite3.Row,
+    ) -> ProspectiveCheckpointRouteAdmission:
+        admission = _admission_from_row(route_plan_id, row)
+        artifact_hash = cast(str, row["artifact_hash"])
+        if self.store.artifacts.read_json(artifact_hash) != admission.to_dict():
+            raise ValueError("checkpoint route admission CAS artifact does not match durable state")
+        return admission
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCheckpointReadiness:
+    checkpoint_key: str
+    status: CheckpointReadinessStatus
+    operational_trigger_route_job_ids: tuple[str, ...]
+    trigger_candidate_version_ids: tuple[str, ...]
+    latest_trigger_available_at: datetime | None
+    blocking_gaps: tuple[str, ...]
+    information_gaps: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        _trimmed(self.checkpoint_key, "checkpoint readiness checkpoint_key")
+        _sorted_unique(
+            self.operational_trigger_route_job_ids,
+            "checkpoint readiness trigger route jobs",
+        )
+        _sorted_unique(
+            self.trigger_candidate_version_ids,
+            "checkpoint readiness trigger candidates",
+        )
+        _sorted_unique(self.blocking_gaps, "checkpoint readiness blocking gaps")
+        _sorted_unique(self.information_gaps, "checkpoint readiness information gaps")
+        if set(self.blocking_gaps) & set(self.information_gaps):
+            raise ValueError("checkpoint readiness gaps cannot be both blocking and informational")
+        if self.latest_trigger_available_at is not None:
+            _strict_utc(
+                self.latest_trigger_available_at,
+                "checkpoint readiness latest_trigger_available_at",
+            )
+        if bool(self.trigger_candidate_version_ids) != (
+            self.latest_trigger_available_at is not None
+        ):
+            raise ValueError("checkpoint readiness candidate time does not match candidates")
+        expected_status = (
+            CheckpointReadinessStatus.TRIGGER_ROUTE_UNCONFIGURED
+            if not self.operational_trigger_route_job_ids
+            else (
+                CheckpointReadinessStatus.UNCLASSIFIED_TRIGGER_CANDIDATE_OBSERVED
+                if self.trigger_candidate_version_ids
+                else CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+            )
+        )
+        if self.status is not expected_status:
+            raise ValueError("checkpoint readiness status does not match observed state")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "checkpoint_key": self.checkpoint_key,
+            "status": self.status.value,
+            "operational_trigger_route_job_ids": list(self.operational_trigger_route_job_ids),
+            "trigger_candidate_version_ids": list(self.trigger_candidate_version_ids),
+            "latest_trigger_available_at": (
+                None
+                if self.latest_trigger_available_at is None
+                else _timestamp(self.latest_trigger_available_at)
+            ),
+            "blocking_gaps": list(self.blocking_gaps),
+            "information_gaps": list(self.information_gaps),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCheckpointReadinessReport:
+    report_id: str
+    route_plan_id: str
+    route_admission_id: str
+    registration_id: str
+    admitted_at: datetime
+    evaluated_at: datetime
+    checkpoints: tuple[ProspectiveCheckpointReadiness, ...]
+    operational_checkpoint_count: int
+    candidate_checkpoint_count: int
+    waiting_for_external_event: bool
+    model_calls_authorized: bool = False
+    historical_pit_claim: bool = False
+    execution_capability: bool = False
+    schema_version: str = PROSPECTIVE_CHECKPOINT_READINESS_REPORT_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != PROSPECTIVE_CHECKPOINT_READINESS_REPORT_SCHEMA:
+            raise ValueError("unsupported prospective checkpoint readiness report schema")
+        _prefixed(
+            self.route_plan_id,
+            "prospective-checkpoint-route-plan-",
+            "checkpoint readiness route_plan_id",
+        )
+        _prefixed(
+            self.registration_id,
+            "prospective-diagnostic-registration-",
+            "checkpoint readiness registration_id",
+        )
+        _prefixed(
+            self.route_admission_id,
+            "prospective-checkpoint-route-admission-",
+            "checkpoint readiness route_admission_id",
+        )
+        _strict_utc(self.admitted_at, "checkpoint readiness admitted_at")
+        _strict_utc(self.evaluated_at, "checkpoint readiness evaluated_at")
+        if self.evaluated_at < self.admitted_at:
+            raise ValueError("checkpoint readiness cannot precede route admission")
+        keys = tuple(item.checkpoint_key for item in self.checkpoints)
+        if keys != tuple(sorted(set(keys))):
+            raise ValueError("checkpoint readiness entries must be sorted and unique")
+        operational = sum(bool(item.operational_trigger_route_job_ids) for item in self.checkpoints)
+        candidates = sum(bool(item.trigger_candidate_version_ids) for item in self.checkpoints)
+        waiting = any(
+            item.status is CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+            for item in self.checkpoints
+        )
+        if (
+            self.operational_checkpoint_count != operational
+            or self.candidate_checkpoint_count != candidates
+            or self.waiting_for_external_event != waiting
+        ):
+            raise ValueError("checkpoint readiness aggregate does not match checkpoint state")
+        if self.model_calls_authorized or self.historical_pit_claim or self.execution_capability:
+            raise ValueError("checkpoint readiness cannot grant model, PIT, or execution authority")
+        if self.report_id != self.expected_report_id:
+            raise ValueError("prospective checkpoint readiness report_id does not match content")
+
+    @property
+    def expected_report_id(self) -> str:
+        return f"prospective-checkpoint-readiness-report-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "route_plan_id": self.route_plan_id,
+            "route_admission_id": self.route_admission_id,
+            "registration_id": self.registration_id,
+            "admitted_at": _timestamp(self.admitted_at),
+            "evaluated_at": _timestamp(self.evaluated_at),
+            "checkpoints": [item.to_dict() for item in self.checkpoints],
+            "operational_checkpoint_count": self.operational_checkpoint_count,
+            "candidate_checkpoint_count": self.candidate_checkpoint_count,
+            "waiting_for_external_event": self.waiting_for_external_event,
+            "model_calls_authorized": self.model_calls_authorized,
+            "historical_pit_claim": self.historical_pit_claim,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "report_id": self.report_id}
+
+
+@dataclass(frozen=True, slots=True)
+class _RouteSourceContract:
+    capability: ObservationCapability
+    provider_id: str
+    upstream_source: str
+    semantic_scope: str
+
+
+_ROUTE_SOURCE_CONTRACTS = {
+    "official_event": _RouteSourceContract(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="csrc-official-news",
+        upstream_source="csrc-official-news",
+        semantic_scope="official_capital_market_policy_publication",
+    ),
+    "market_index_price": _RouteSourceContract(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        provider_id="tushare-observation",
+        upstream_source="tushare-index-daily",
+        semantic_scope="aggregated_source_observation_actual_receipt_only",
+    ),
+    "industry_to_tradable_mapping": _RouteSourceContract(
+        capability=ObservationCapability.EXPOSURE_CANDIDATES,
+        provider_id="tushare-observation",
+        upstream_source="tushare-etf-sh-cons",
+        semantic_scope="aggregated_exchange_pcf_actual_receipt_only",
+    ),
+    "macro_release_calendar": _RouteSourceContract(
+        capability=ObservationCapability.MACRO_VINTAGE,
+        provider_id="tushare-observation",
+        upstream_source="tushare-cn-schedule",
+        semantic_scope="schedule_observation_only_not_original_release_or_revision",
+    ),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidatedRoute:
+    job_id: str
+    policy_id: str
+    source_config_hash: str
+    operational: bool
+    health_gaps: tuple[str, ...]
+
+
+def evaluate_prospective_checkpoint_readiness(
+    *,
+    registration: ProspectiveDiagnosticRegistration,
+    route_plan: ProspectiveCheckpointRoutePlan,
+    admission_store: ProspectiveCheckpointAdmissionStore,
+    runtime: ProspectiveCollectionRuntime,
+    evaluated_at: datetime,
+) -> ProspectiveCheckpointReadinessReport:
+    if registration.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2:
+        raise ValueError("checkpoint readiness requires a v2 prospective registration")
+    if route_plan.registration_id != registration.registration_id:
+        raise ValueError("checkpoint route plan belongs to a different registration")
+    admission = admission_store.admission(route_plan.plan_id)
+    if admission.registration_id != registration.registration_id:
+        raise ValueError("checkpoint route admission belongs to a different registration")
+    _strict_utc(evaluated_at, "checkpoint readiness evaluated_at")
+    if evaluated_at < admission.recorded_at:
+        raise ValueError("checkpoint readiness cannot precede route admission")
+
+    validated: dict[
+        tuple[str, ObservationCapability, str],
+        _ValidatedRoute,
+    ] = {}
+    for binding in route_plan.bindings:
+        checkpoint = registration.checkpoint(binding.checkpoint_key)
+        slot = checkpoint.slot(binding.capability)
+        if slot.applicability is CapabilityApplicability.NOT_APPLICABLE:
+            raise ValueError("checkpoint route plan binds a not_applicable capability")
+        if binding.route_kind not in slot.required_route_kinds:
+            raise ValueError("checkpoint route plan contains an unregistered route kind")
+        job = runtime.job(binding.job_id)
+        policy = runtime.journal.policy(job.collection_policy_id)
+        report = runtime.source_acceptance_report(binding.job_id)
+        if policy.capability is not binding.capability:
+            raise ValueError("checkpoint route job capability does not match its binding")
+        if report.report_id != job.source_acceptance_report_id or not report.accepted:
+            raise ValueError("checkpoint route job lacks its accepted source report")
+        declaration = report.declaration
+        if declaration.capability is not binding.capability:
+            raise ValueError("checkpoint route accepted capability does not match its binding")
+        contract = _ROUTE_SOURCE_CONTRACTS.get(binding.route_kind)
+        if contract is None or (
+            contract.capability is not binding.capability
+            or contract.provider_id != declaration.provider_id
+            or contract.upstream_source != declaration.upstream_source
+            or contract.semantic_scope != declaration.semantic_scope
+        ):
+            raise ValueError(
+                "checkpoint route kind does not match accepted source semantics and identity"
+            )
+        health = runtime.health(binding.job_id, now=evaluated_at)
+        state_updated_at = _runtime_state_updated_at(
+            runtime,
+            binding.job_id,
+            health=health,
+        )
+        if state_updated_at > evaluated_at:
+            raise ValueError(
+                "checkpoint readiness cannot reconstruct historical runtime health "
+                "after later job updates"
+            )
+        health_gaps: list[str] = []
+        if policy.poll_interval_seconds > slot.poll_interval_seconds:
+            health_gaps.append("poll_interval_exceeds_registration")
+        if policy.maximum_gap_seconds > slot.maximum_gap_seconds:
+            health_gaps.append("maximum_gap_exceeds_registration")
+        if health.status != "active" or job.starts_at > evaluated_at:
+            health_gaps.append("route_inactive")
+        if health.backoff_until is not None and evaluated_at < health.backoff_until:
+            health_gaps.append("route_in_backoff")
+        if health.lag_seconds > slot.maximum_gap_seconds:
+            health_gaps.append("route_lag_exceeds_registration_maximum_gap")
+        post_admission_opportunities = tuple(
+            item
+            for item in runtime.opportunities(binding.job_id)
+            if item.scheduled_for >= admission.recorded_at
+            and _opportunity_is_visible_at(item, evaluated_at)
+        )
+        if any(item.outcome == "missed" for item in post_admission_opportunities):
+            health_gaps.append("post_admission_missed_opportunity")
+        latest_post_admission = (
+            max(post_admission_opportunities, key=lambda item: item.scheduled_for)
+            if post_admission_opportunities
+            else None
+        )
+        if latest_post_admission is not None and latest_post_admission.outcome in {
+            "source_failure",
+            "collector_failure",
+        }:
+            health_gaps.append(f"current_{latest_post_admission.outcome}")
+        if latest_post_admission is not None and health.last_outcome == "storage_failure":
+            health_gaps.append("current_storage_failure")
+        gaps = tuple(sorted(set(health_gaps)))
+        validated[(binding.checkpoint_key, binding.capability, binding.route_kind)] = (
+            _ValidatedRoute(
+                job_id=binding.job_id,
+                policy_id=policy.policy_id,
+                source_config_hash=declaration.source_config_hash,
+                operational=not gaps,
+                health_gaps=gaps,
+            )
+        )
+
+    checkpoint_results: list[ProspectiveCheckpointReadiness] = []
+    for checkpoint in sorted(registration.checkpoints, key=lambda item: item.checkpoint_key):
+        trigger_slot = checkpoint.slot(ObservationCapability.EVENT_REVELATION)
+        trigger_rows = tuple(
+            (key, value)
+            for key, value in validated.items()
+            if key[0] == checkpoint.checkpoint_key
+            and key[1] is ObservationCapability.EVENT_REVELATION
+            and value.operational
+        )
+        operational_job_ids = tuple(sorted({value.job_id for _, value in trigger_rows}))
+        candidate_refs = {
+            item.version_id: item
+            for _, value in trigger_rows
+            for item in runtime.journal.observation_version_refs(
+                policy_id=value.policy_id,
+                capability=ObservationCapability.EVENT_REVELATION,
+                not_before=admission.recorded_at,
+                not_after=evaluated_at,
+            )
+        }
+        candidate_ids = tuple(sorted(candidate_refs))
+        latest = max(
+            (item.first_available_at for item in candidate_refs.values()),
+            default=None,
+        )
+        blocking: list[str] = []
+        if len(operational_job_ids) < trigger_slot.minimum_data_sources:
+            blocking.append("event_revelation:no_active_registered_trigger_route")
+            blocking.extend(
+                f"event_revelation:{gap}"
+                for key, value in validated.items()
+                if key[0] == checkpoint.checkpoint_key
+                and key[1] is ObservationCapability.EVENT_REVELATION
+                for gap in value.health_gaps
+            )
+            status = CheckpointReadinessStatus.TRIGGER_ROUTE_UNCONFIGURED
+        elif not candidate_ids:
+            blocking.append("event_revelation:no_post_admission_observation")
+            status = CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+        else:
+            blocking.append("event_revelation:trigger_candidate_requires_eligibility_selection")
+            status = CheckpointReadinessStatus.UNCLASSIFIED_TRIGGER_CANDIDATE_OBSERVED
+
+        information: list[str] = []
+        for slot in checkpoint.capability_slots:
+            if slot.applicability is CapabilityApplicability.NOT_APPLICABLE:
+                continue
+            planned = tuple(
+                (key, value)
+                for key, value in validated.items()
+                if key[0] == checkpoint.checkpoint_key and key[1] is slot.capability
+            )
+            operational = tuple((key, value) for key, value in planned if value.operational)
+            planned_route_kinds = {key[2] for key, _ in planned}
+            missing_route_kinds = tuple(
+                sorted(set(slot.required_route_kinds) - planned_route_kinds)
+            )
+            if missing_route_kinds:
+                information.append(
+                    f"{slot.capability.value}:unbound_route_kinds:{','.join(missing_route_kinds)}"
+                )
+            inactive_route_kinds = tuple(
+                sorted({key[2] for key, value in planned if not value.operational})
+            )
+            if inactive_route_kinds:
+                information.append(
+                    f"{slot.capability.value}:bound_routes_not_operational:"
+                    f"{','.join(inactive_route_kinds)}"
+                )
+            information.extend(
+                f"{slot.capability.value}:{gap}"
+                for _, value in planned
+                for gap in value.health_gaps
+            )
+            distinct_sources = {value.source_config_hash for _, value in operational}
+            if slot.capability is not ObservationCapability.EVENT_REVELATION and (
+                len(distinct_sources) < slot.minimum_data_sources
+            ):
+                information.append(
+                    f"{slot.capability.value}:route_source_coverage:"
+                    f"{len(distinct_sources)}/{slot.minimum_data_sources}"
+                )
+
+        checkpoint_results.append(
+            ProspectiveCheckpointReadiness(
+                checkpoint_key=checkpoint.checkpoint_key,
+                status=status,
+                operational_trigger_route_job_ids=operational_job_ids,
+                trigger_candidate_version_ids=candidate_ids,
+                latest_trigger_available_at=latest,
+                blocking_gaps=tuple(sorted(set(blocking))),
+                information_gaps=tuple(sorted(set(information) - set(blocking))),
+            )
+        )
+
+    checkpoints = tuple(checkpoint_results)
+    operational_count = sum(bool(item.operational_trigger_route_job_ids) for item in checkpoints)
+    candidate_count = sum(bool(item.trigger_candidate_version_ids) for item in checkpoints)
+    waiting = any(
+        item.status is CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+        for item in checkpoints
+    )
+    core = {
+        "schema_version": PROSPECTIVE_CHECKPOINT_READINESS_REPORT_SCHEMA,
+        "route_plan_id": route_plan.plan_id,
+        "route_admission_id": admission.admission_id,
+        "registration_id": registration.registration_id,
+        "admitted_at": _timestamp(admission.recorded_at),
+        "evaluated_at": _timestamp(evaluated_at),
+        "checkpoints": [item.to_dict() for item in checkpoints],
+        "operational_checkpoint_count": operational_count,
+        "candidate_checkpoint_count": candidate_count,
+        "waiting_for_external_event": waiting,
+        "model_calls_authorized": False,
+        "historical_pit_claim": False,
+        "execution_capability": False,
+    }
+    return ProspectiveCheckpointReadinessReport(
+        report_id=f"prospective-checkpoint-readiness-report-{canonical_hash(core)}",
+        route_plan_id=route_plan.plan_id,
+        route_admission_id=admission.admission_id,
+        registration_id=registration.registration_id,
+        admitted_at=admission.recorded_at,
+        evaluated_at=evaluated_at,
+        checkpoints=checkpoints,
+        operational_checkpoint_count=operational_count,
+        candidate_checkpoint_count=candidate_count,
+        waiting_for_external_event=waiting,
+    )
+
+
+def load_prospective_checkpoint_route_plan(path: Path) -> ProspectiveCheckpointRoutePlan:
+    return prospective_checkpoint_route_plan_from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+def prospective_checkpoint_route_plan_from_dict(
+    value: object,
+) -> ProspectiveCheckpointRoutePlan:
+    payload = _object(value, "prospective checkpoint route plan")
+    _exact_keys(
+        payload,
+        {
+            "schema_version",
+            "plan_id",
+            "registration_id",
+            "admission_timing_protocol",
+            "bindings",
+            "historical_pit_claim",
+            "model_calls_authorized",
+            "execution_capability",
+        },
+        "prospective checkpoint route plan",
+    )
+    plan = ProspectiveCheckpointRoutePlan(
+        plan_id=_string(payload, "plan_id"),
+        registration_id=_string(payload, "registration_id"),
+        admission_timing_protocol=_string(payload, "admission_timing_protocol"),
+        bindings=tuple(
+            _route_binding_from_dict(item) for item in _list(payload.get("bindings"), "bindings")
+        ),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        model_calls_authorized=_boolean(payload, "model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if plan.to_dict() != payload:
+        raise ValueError("prospective checkpoint route plan is not canonical")
+    return plan
+
+
+def _admission_from_row(
+    route_plan_id: str,
+    row: sqlite3.Row,
+) -> ProspectiveCheckpointRouteAdmission:
+    return ProspectiveCheckpointRouteAdmission(
+        admission_id=cast(str, row["admission_id"]),
+        route_plan_id=route_plan_id,
+        registration_id=cast(str, row["registration_id"]),
+        recorded_at=_datetime(cast(str, row["recorded_at"]), "recorded_at"),
+    )
+
+
+def _runtime_state_updated_at(
+    runtime: ProspectiveCollectionRuntime,
+    job_id: str,
+    *,
+    health: object,
+) -> datetime:
+    injected = getattr(health, "state_updated_at", None)
+    if isinstance(injected, datetime):
+        _strict_utc(injected, "checkpoint readiness runtime state_updated_at")
+        return injected
+    with sqlite3.connect(runtime.index_path) as connection:
+        row = connection.execute(
+            "SELECT updated_at FROM prospective_collection_jobs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+    if row is None:
+        raise KeyError(f"unknown prospective collection job: {job_id}")
+    return _datetime(cast(str, row[0]), "checkpoint readiness runtime state_updated_at")
+
+
+def _opportunity_is_visible_at(item: object, evaluated_at: datetime) -> bool:
+    scheduled_for = getattr(item, "scheduled_for", None)
+    if not isinstance(scheduled_for, datetime):
+        raise TypeError("checkpoint readiness opportunity scheduled_for must be a timestamp")
+    started_at = getattr(item, "started_at", None)
+    if started_at is None:
+        started_at = scheduled_for
+    if not isinstance(started_at, datetime):
+        raise TypeError("checkpoint readiness opportunity started_at must be a timestamp")
+    completed_at = getattr(item, "completed_at", None)
+    if completed_at is not None and not isinstance(completed_at, datetime):
+        raise TypeError("checkpoint readiness opportunity completed_at must be a timestamp")
+    for value, name in (
+        (scheduled_for, "scheduled_for"),
+        (started_at, "started_at"),
+    ):
+        _strict_utc(value, f"checkpoint readiness opportunity {name}")
+    if completed_at is not None:
+        _strict_utc(completed_at, "checkpoint readiness opportunity completed_at")
+    return (
+        scheduled_for <= evaluated_at
+        and started_at <= evaluated_at
+        and (completed_at is None or completed_at <= evaluated_at)
+    )
+
+
+def _route_binding_from_dict(value: object) -> ProspectiveCheckpointRouteBinding:
+    payload = _object(value, "prospective checkpoint route binding")
+    _exact_keys(
+        payload,
+        {"checkpoint_key", "capability", "route_kind", "job_id"},
+        "prospective checkpoint route binding",
+    )
+    return ProspectiveCheckpointRouteBinding(
+        checkpoint_key=_string(payload, "checkpoint_key"),
+        capability=ObservationCapability(_string(payload, "capability")),
+        route_kind=_string(payload, "route_kind"),
+        job_id=_string(payload, "job_id"),
+    )
+
+
+def _object(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{name} must be an object")
+    typed = cast(dict[object, object], value)
+    if any(not isinstance(key, str) for key in typed):
+        raise TypeError(f"{name} must be an object")
+    return cast(dict[str, object], typed)
+
+
+def _list(value: object, name: str) -> list[object]:
+    if not isinstance(value, list):
+        raise TypeError(f"{name} must be a list")
+    return cast(list[object], value)
+
+
+def _exact_keys(value: dict[str, object], keys: set[str], name: str) -> None:
+    if set(value) != keys:
+        raise ValueError(f"{name} fields are invalid")
+
+
+def _string(value: dict[str, object], key: str) -> str:
+    item = value.get(key)
+    if not isinstance(item, str):
+        raise TypeError(f"{key} must be a string")
+    return item
+
+
+def _boolean(value: dict[str, object], key: str) -> bool:
+    item = value.get(key)
+    if not isinstance(item, bool):
+        raise TypeError(f"{key} must be a boolean")
+    return item
+
+
+def _datetime(value: object, name: str) -> datetime:
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be an ISO timestamp")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    _strict_utc(parsed, name)
+    return parsed
+
+
+def _prefixed(value: str, prefix: str, name: str) -> None:
+    if not value.startswith(prefix) or len(value) != len(prefix) + 64:
+        raise ValueError(f"{name} is invalid")
+    digest = value[len(prefix) :]
+    if any(character not in "0123456789abcdef" for character in digest):
+        raise ValueError(f"{name} is invalid")
+
+
+def _sorted_unique(values: tuple[str, ...], name: str) -> None:
+    if values != tuple(sorted(set(values))):
+        raise ValueError(f"{name} must be sorted and unique")
+
+
+def _trimmed(value: str, name: str) -> None:
+    if not value or value != value.strip():
+        raise ValueError(f"{name} must be non-empty trimmed text")
+
+
+def _strict_utc(value: datetime, name: str) -> None:
+    require_aware(value, name)
+    if value.utcoffset() != UTC.utcoffset(value):
+        raise ValueError(f"{name} must use UTC")
+
+
+def _timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

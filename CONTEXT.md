@@ -226,6 +226,24 @@ the other declared information capabilities to be optional observed context whos
 visible to the Agent and evaluator.
 _Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
 
+**Prospective Checkpoint Route Plan**:
+A content-identified, no-authority binding from registered checkpoint capability/route kinds to
+already accepted Harness Collection Jobs. A separate durable Harness-clock admission record is the
+lower bound for trigger candidate receipt, so the checked-in plan cannot self-authorize a backdated
+route. It selects neither an Event nor a conclusion and grants no model, historical-PIT, or
+execution authority.
+_Avoid_: Provider fallback, Event selection, Watch, model registration
+
+**Prospective Checkpoint Readiness Report**:
+A content-identified read-only audit of one route plan against durable Job health, accepted source
+identity, and post-admission observation-version identities. Runtime health evidence is bounded by
+the report's evaluation time; if later mutable Job state prevents historical reconstruction, the
+audit fails closed instead of applying current health to the past. It distinguishes an operational
+route waiting for an external event, an unconfigured trigger route, and an observed but still
+unclassified candidate. It does not perform semantic eligibility selection, calculate a
+trading-session barrier, freeze a Snapshot Set, or authorize a model call.
+_Avoid_: Query Gate pass, Event Envelope, trigger decision, execution readiness
+
 **Prospective Checkpoint Snapshot Set**:
 A content-identified reconciliation of one registered checkpoint's immutable barrier with the
 accepted route reports, Collection Policies, complete Journal-frozen Data Snapshots, raw response

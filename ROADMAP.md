@@ -191,11 +191,27 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
 
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
+  - [x] Freeze the no-authority route plan
+    `prospective-checkpoint-route-plan-575e81dd6c81648823ae524668fff4d6e2da68f333441e4c27e050839a244244`
+    and implement a content-identified readiness audit. Its canonical content now fixes
+    `sqlite_begin_immediate_then_harness_clock_v1`; admissions for the retired pre-protocol plan do
+    not match it. The new plan was durably admitted as
+    `prospective-checkpoint-route-admission-0932cbdcec4e0841d25cb0d7cf612f676870afd9bb37a83b13c40b83ab1da538`
+    and audited in private report
+    `prospective-checkpoint-readiness-report-42dbf28390bf3324918cfaa12d1a5989e2f9af30516e480a55ba518d461804ae`:
+    one policy checkpoint is operational and waiting for a post-admission external trigger, the
+    issuer and macro trigger routes remain unconfigured, candidate count is zero, and model calls
+    remain unauthorized.
+  - [ ] After a post-admission candidate appears, seal its registered eligibility selection and
+    trading-session barrier, then freeze the actual Snapshot Set, Evidence Pack, read-only tools,
+    and Agent Execution Binding. Pre-admission observations remain ineligible.
 - [ ] `PDI-31` Pass Query Gate preflight for two or three registered checkpoints.
   - [x] Implement the content-identified v2 Query Gate contract: required trigger/structural gaps
     block without model cost; optional and corroboration gaps remain nonblocking Agent inputs; the
     result grants no PIT, alpha, strategy, paper, or live authority.
-  - [ ] Freeze and pass the gate for two or three real post-v2 checkpoints.
+  - [ ] Freeze and pass the gate for the first real post-route-plan checkpoint, then add one or two
+    independently triggered registered checkpoints. Waiting for an external event is tracked
+    separately from missing trigger-route infrastructure.
 - [ ] `PDI-32` Run three paired replicates per checkpoint under the frozen stop and cost rules.
 
 Stage 5 — automate bounded follow-up and open registered outcomes:

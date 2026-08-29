@@ -429,8 +429,10 @@ flowchart LR
     R --> D[PDI-10 and PDI-12..16 accept other routes]
     R --> O[PDI-20 collection supervisor]
     M --> O
-    M --> F[PDI-17 freeze observed checkpoint Snapshot sets]
-    D --> F[PDI-17 freeze observed checkpoint Snapshot sets]
+    M --> A[pre-bind routes and audit trigger readiness]
+    D --> A
+    O --> A
+    A --> F[PDI-17 freeze observed checkpoint Snapshot sets]
     O --> I[PDI-21 install host supervisor]
     I --> H[PDI-22 operations and restore gate]
     F --> H
@@ -798,6 +800,14 @@ fault matrix, and accepted PDI-17 observed checkpoint Snapshot sets.
 
 ### Stage 4 — Prove bounded Judgment inputs before automating model dispatch
 
+Stage 4 separates implementation readiness from event-dependent acceptance. The Harness first
+pre-binds accepted Jobs to registered route kinds, then waits for a genuinely new post-admission
+observation. A candidate is classified against the frozen eligibility rule, the trading-session
+barrier is sealed, actual inputs are frozen, and only then is Query Gate evaluated. `waiting for
+external event`, `trigger route unconfigured`, `candidate requires eligibility selection`, and
+`Query Gate blocked` are different states. Historical or optional information gaps remain archived
+inputs and evaluation strata; they do not collapse these states into one global completeness gate.
+
 #### PDI-30 — Assemble bounded prospective Judgment inputs
 
 Promote only policy-admitted observations into the existing Event Envelope/Evidence Pack, bind all
@@ -806,7 +816,14 @@ Agent Execution Binding for one checkpoint. Missing optional slots and semantic 
 the Evidence Pack rather than fabricated. Tests reject cutoff drift, undeclared Snapshots,
 Provider-selected targets, missing required trigger, future evidence, and mismatched tool hashes.
 
-**Blocked by:** PDI-17.
+Before the first event, freeze a content-identified route plan that binds only already accepted
+Collection Jobs and use its admission time as the lower bound for trigger candidates. The readiness
+report may identify an operational route waiting for the market without treating that wait as a
+collector failure. It may also identify missing issuer or macro trigger infrastructure without
+blocking unrelated checkpoint mechanisms.
+
+**Blocked by:** one registered post-route-admission trigger plus the Snapshot routes actually
+selected at its barrier. Optional slot absence is retained, not fabricated.
 
 #### PDI-31 — Qualify two or three registered checkpoints
 
@@ -830,6 +847,19 @@ expand to more checkpoints when the same input blockers persist.
 can make or abstain from a decision under the information actually observed. Missingness is an
 evaluation dimension, not silently completed. Required-gate failure returns work to its owning data
 or input Task and keeps automatic dispatch closed.
+
+**Route-readiness status, 2026-08-29:** route plan
+`prospective-checkpoint-route-plan-575e81dd6c81648823ae524668fff4d6e2da68f333441e4c27e050839a244244`
+canonically binds `sqlite_begin_immediate_then_harness_clock_v1`. Any SQLite admission and readiness
+report for the retired pre-protocol plan remain historical rows only and cannot satisfy this plan's
+identity. The plan was durably admitted as
+`prospective-checkpoint-route-admission-0932cbdcec4e0841d25cb0d7cf612f676870afd9bb37a83b13c40b83ab1da538`
+at `2026-08-29T09:03:54.782300Z`; private readiness report
+`prospective-checkpoint-readiness-report-42dbf28390bf3324918cfaa12d1a5989e2f9af30516e480a55ba518d461804ae`
+then found one operational policy checkpoint waiting for a post-admission trigger, zero candidates,
+and unconfigured issuer and macro trigger routes. CSRC still cannot be relabeled as `issuer_event`
+or `official_macro_release`. No model call, Snapshot Set, Evidence Pack, Query Gate pass, paper
+admission, or execution authority was created.
 
 ### Stage 5 — Automate bounded follow-up and open registered outcomes
 

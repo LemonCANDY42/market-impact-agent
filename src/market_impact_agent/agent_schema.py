@@ -28,6 +28,8 @@ AGENT_SCHEMA_FILES = (
     "prospective-backup-manifest.schema.json",
     "prospective-dataset-manifest.schema.json",
     "prospective-diagnostic-registration.schema.json",
+    "prospective-checkpoint-route-plan.schema.json",
+    "prospective-checkpoint-readiness-report.schema.json",
     "prospective-checkpoint-snapshot-set.schema.json",
     "prospective-query-gate-result.schema.json",
     "checkpoint-decision-input.schema.json",

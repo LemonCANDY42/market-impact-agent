@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-checkpoint-route-plan.schema.json",
+  "title": "Market Impact Prospective Checkpoint Route Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "registration_id",
+    "admission_timing_protocol",
+    "bindings",
+    "historical_pit_claim",
+    "model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-checkpoint-route-plan.v1"},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-route-plan-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "admission_timing_protocol": {
+      "const": "sqlite_begin_immediate_then_harness_clock_v1"
+    },
+    "bindings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/binding"}
+    },
+    "historical_pit_claim": {"const": false},
+    "model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "capability": {
+      "enum": [
+        "event_revelation",
+        "prior_expectation",
+        "market_context",
+        "exposure_candidates",
+        "positioning",
+        "macro_vintage"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint_key", "capability", "route_kind", "job_id"],
+      "properties": {
+        "checkpoint_key": {"type": "string", "minLength": 1},
+        "capability": {"$ref": "#/$defs/capability"},
+        "route_kind": {"type": "string", "minLength": 1},
+        "job_id": {
+          "type": "string",
+          "pattern": "^prospective-collection-job-[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

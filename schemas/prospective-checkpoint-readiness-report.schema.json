@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-checkpoint-readiness-report.schema.json",
+  "title": "Market Impact Prospective Checkpoint Readiness Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "route_plan_id",
+    "route_admission_id",
+    "registration_id",
+    "admitted_at",
+    "evaluated_at",
+    "checkpoints",
+    "operational_checkpoint_count",
+    "candidate_checkpoint_count",
+    "waiting_for_external_event",
+    "model_calls_authorized",
+    "historical_pit_claim",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.prospective-checkpoint-readiness-report.v1"
+    },
+    "report_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-readiness-report-[0-9a-f]{64}$"
+    },
+    "route_plan_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-route-plan-[0-9a-f]{64}$"
+    },
+    "route_admission_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-route-admission-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "admitted_at": {"type": "string", "format": "date-time"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "checkpoints": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/checkpoint"}
+    },
+    "operational_checkpoint_count": {"type": "integer", "minimum": 0, "maximum": 3},
+    "candidate_checkpoint_count": {"type": "integer", "minimum": 0, "maximum": 3},
+    "waiting_for_external_event": {"type": "boolean"},
+    "model_calls_authorized": {"const": false},
+    "historical_pit_claim": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint_key",
+        "status",
+        "operational_trigger_route_job_ids",
+        "trigger_candidate_version_ids",
+        "latest_trigger_available_at",
+        "blocking_gaps",
+        "information_gaps"
+      ],
+      "properties": {
+        "checkpoint_key": {"type": "string", "minLength": 1},
+        "status": {
+          "enum": [
+            "trigger_route_unconfigured",
+            "waiting_for_post_admission_trigger",
+            "unclassified_trigger_candidate_observed"
+          ]
+        },
+        "operational_trigger_route_job_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^prospective-collection-job-[0-9a-f]{64}$"
+          }
+        },
+        "trigger_candidate_version_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+          }
+        },
+        "latest_trigger_available_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "format": "date-time"}
+          ]
+        },
+        "blocking_gaps": {"$ref": "#/$defs/strings"},
+        "information_gaps": {"$ref": "#/$defs/strings"}
+      }
+    }
+  }
+}

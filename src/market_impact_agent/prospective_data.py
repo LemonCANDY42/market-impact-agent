@@ -143,6 +143,37 @@ class JournalAppendResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ProspectiveObservationVersionRef:
+    version_id: str
+    first_available_at: datetime
+    provider_id: str
+    provider_version: str
+    upstream_source: str
+
+    def __post_init__(self) -> None:
+        prefix = "prospective-observation-version-"
+        if not self.version_id.startswith(prefix):
+            raise ValueError("prospective observation version identity is invalid")
+        _sha256(
+            self.version_id[len(prefix) :],
+            "prospective observation version identity",
+        )
+        _strict_utc(self.first_available_at, "prospective observation first_available_at")
+        for value in (self.provider_id, self.provider_version, self.upstream_source):
+            if not value or value != value.strip():
+                raise ValueError("prospective observation source identity is invalid")
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "version_id": self.version_id,
+            "first_available_at": _timestamp(self.first_available_at),
+            "provider_id": self.provider_id,
+            "provider_version": self.provider_version,
+            "upstream_source": self.upstream_source,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ProspectiveDatasetPartition:
     capability: ObservationCapability
     available_date: str
@@ -520,6 +551,60 @@ class ProspectiveDataJournal:
             raise KeyError(f"unknown prospective collection policy: {policy_id}")
         return prospective_collection_policy_from_dict(
             self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
+        )
+
+    def observation_version_refs(
+        self,
+        *,
+        policy_id: str,
+        capability: ObservationCapability,
+        not_before: datetime,
+        not_after: datetime,
+    ) -> tuple[ProspectiveObservationVersionRef, ...]:
+        """Return content identities visible in one policy window without exposing payloads."""
+
+        policy = self.policy(policy_id)
+        if policy.capability is not capability:
+            raise ValueError("prospective observation query capability does not match policy")
+        _strict_utc(not_before, "prospective observation query not_before")
+        _strict_utc(not_after, "prospective observation query not_after")
+        if not_before > not_after:
+            raise ValueError("prospective observation query window is inverted")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT version.version_id, version.first_available_at,
+                                version.provider_id, version.provider_version,
+                                version.upstream_source
+                FROM prospective_observation_versions AS version
+                JOIN prospective_observation_sightings AS sighting
+                  ON sighting.version_id = version.version_id
+                JOIN prospective_collection_snapshots AS snapshot
+                  ON snapshot.snapshot_id = sighting.snapshot_id
+                WHERE snapshot.policy_id = ?
+                  AND version.capability = ?
+                  AND version.first_available_at >= ?
+                  AND version.first_available_at <= ?
+                ORDER BY version.first_available_at, version.version_id
+                """,
+                (
+                    policy_id,
+                    capability.value,
+                    _timestamp(not_before),
+                    _timestamp(not_after),
+                ),
+            ).fetchall()
+        return tuple(
+            ProspectiveObservationVersionRef(
+                version_id=cast(str, row["version_id"]),
+                first_available_at=_datetime(
+                    cast(str, row["first_available_at"]), "first_available_at"
+                ),
+                provider_id=cast(str, row["provider_id"]),
+                provider_version=cast(str, row["provider_version"]),
+                upstream_source=cast(str, row["upstream_source"]),
+            )
+            for row in rows
         )
 
     def freeze_snapshot(
