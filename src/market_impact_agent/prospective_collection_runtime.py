@@ -30,6 +30,7 @@ _MAX_MISFIRES_PER_RUN = 10_000
 
 class ProspectiveCollectionAdapterKind(StrEnum):
     CSRC_NEWS = "csrc_news"
+    NBS_MACRO_RELEASE = "nbs_macro_release"
     TUSHARE_OBSERVATION = "tushare_observation"
 
 
@@ -102,6 +103,11 @@ class ProspectiveCollectionJob:
         maximum_jitter_seconds: int,
         provider_timeout_seconds: float,
     ) -> ProspectiveCollectionJob:
+        _validate_adapter_policy_scope(
+            adapter_kind,
+            collection_policy=collection_policy,
+            source_config=source_config,
+        )
         report_hash = canonical_hash(source_acceptance_report.to_dict())
         source_config_hash = canonical_hash(source_config)
         core = {
@@ -225,6 +231,25 @@ ScheduledCollector = Callable[
     [ProspectiveCollectionPolicy, dict[str, object]],
     DataSnapshot,
 ]
+
+
+def _validate_adapter_policy_scope(
+    adapter_kind: ProspectiveCollectionAdapterKind,
+    *,
+    collection_policy: ProspectiveCollectionPolicy,
+    source_config: Mapping[str, object],
+) -> None:
+    if adapter_kind is not ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE:
+        return
+    configured_indicators = source_config.get("indicators")
+    if (
+        not isinstance(configured_indicators, list)
+        or set(collection_policy.parameters) != {"indicators"}
+        or collection_policy.parameters.get("indicators") != configured_indicators
+    ):
+        raise ValueError(
+            "NBS macro release collection policy indicators must exactly match the source config"
+        )
 
 
 class ProspectiveCollectionRuntime:
@@ -657,6 +682,11 @@ class ProspectiveCollectionRuntime:
             raise ValueError("collection job source acceptance report hash mismatch")
         if job.source_config_hash != canonical_hash(source_config):
             raise ValueError("collection job source config hash mismatch")
+        _validate_adapter_policy_scope(
+            job.adapter_kind,
+            collection_policy=collection_policy,
+            source_config=source_config,
+        )
         if len(collection_policy.sources) != 1:
             raise ValueError("collection job requires exactly one accepted source route")
         source = collection_policy.sources[0]

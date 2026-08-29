@@ -52,6 +52,7 @@ packages = ["src/market_impact_agent"]
 "schemas/data-snapshot.schema.json" = "market_impact_agent/schemas/data-snapshot.schema.json"
 "schemas/syndication-feed-source.schema.json" = "market_impact_agent/schemas/syndication-feed-source.schema.json"
 "schemas/csrc-news-source.schema.json" = "market_impact_agent/schemas/csrc-news-source.schema.json"
+"schemas/nbs-macro-release-source.schema.json" = "market_impact_agent/schemas/nbs-macro-release-source.schema.json"
 "schemas/tushare-observation-source.schema.json" = "market_impact_agent/schemas/tushare-observation-source.schema.json"
 "schemas/source-route-acceptance-report.schema.json" = "market_impact_agent/schemas/source-route-acceptance-report.schema.json"
 "schemas/attention-watch-policy.schema.json" = "market_impact_agent/schemas/attention-watch-policy.schema.json"

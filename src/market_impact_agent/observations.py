@@ -186,10 +186,17 @@ class ObservationTimes:
         ):
             raise ValueError("published_at must not be after available_at")
         if self.occurrence_basis is OccurrenceBasis.SOURCE_REPORTED:
-            if self.source_updated_at is None:
-                raise ValueError("source-reported occurrence requires source_updated_at")
-            if self.occurred_at != self.source_updated_at:
-                raise ValueError("source-reported occurred_at must equal source_updated_at")
+            reported_at = (
+                self.source_updated_at if self.source_updated_at is not None else self.published_at
+            )
+            if reported_at is None:
+                raise ValueError(
+                    "source-reported occurrence requires source_updated_at or published_at"
+                )
+            if self.occurred_at != reported_at:
+                raise ValueError(
+                    "source-reported occurred_at must equal source_updated_at or published_at"
+                )
         if self.occurrence_basis is OccurrenceBasis.AGGREGATOR_SNAPSHOT:
             if self.aggregator_fetched_at is None:
                 raise ValueError("aggregator occurrence requires aggregator_fetched_at")

@@ -137,7 +137,12 @@
         "retention_scope": {"const": "private_raw_and_normalized"},
         "redistribution_allowed": {"const": false},
         "semantic_scope": {"type": "string", "minLength": 1},
-        "revision_strategy": {"const": "append_only_content_versions"}
+        "revision_strategy": {
+          "enum": [
+            "append_only_content_versions",
+            "append_only_content_versions_without_asserted_revision_relation"
+          ]
+        }
       }
     },
     "gate": {

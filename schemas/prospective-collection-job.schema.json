@@ -24,7 +24,9 @@
       "type": "string",
       "pattern": "^prospective-collection-job-[0-9a-f]{64}$"
     },
-    "adapter_kind": {"enum": ["csrc_news", "tushare_observation"]},
+    "adapter_kind": {
+      "enum": ["csrc_news", "nbs_macro_release", "tushare_observation"]
+    },
     "collection_policy_id": {
       "type": "string",
       "pattern": "^prospective-collection-policy-[0-9a-f]{64}$"

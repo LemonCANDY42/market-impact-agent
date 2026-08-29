@@ -58,8 +58,7 @@
     },
     "record_type": {"type": "string", "minLength": 1},
     "observation_id": {
-      "type": "string",
-      "pattern": "^source-observation-[0-9a-f]{64}$"
+      "$ref": "#/$defs/source_observation_id"
     },
     "source": {"$ref": "#/$defs/source"},
     "times": {"$ref": "#/$defs/times"},
@@ -279,15 +278,33 @@
       "if": {"properties": {"capability": {"const": "macro_vintage"}}},
       "then": {
         "properties": {
-          "record_type": {"const": "macro_release_schedule"},
+          "record_type": {
+            "enum": ["macro_release_schedule", "macro_original_release"]
+          },
           "data": {"$ref": "#/$defs/macro_release_data"},
           "price_basis": {"type": "null"}
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {"record_type": {"const": "macro_original_release"}}
+            },
+            "then": {
+              "properties": {
+                "data": {"$ref": "#/$defs/macro_original_release_data"}
+              }
+            }
+          }
+        ]
       }
     }
   ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_observation_id": {
+      "type": "string",
+      "pattern": "^source-observation-[0-9a-f]{64}$"
+    },
     "scalar": {"type": ["string", "number", "integer", "boolean", "null"]},
     "nullable_scalar": {"$ref": "#/$defs/scalar"},
     "source": {
@@ -480,12 +497,53 @@
         "reference_period": {"$ref": "#/$defs/nullable_scalar"},
         "release_date": {"$ref": "#/$defs/nullable_scalar"},
         "release_title": {"$ref": "#/$defs/nullable_scalar"},
+        "release_summary": {"$ref": "#/$defs/nullable_scalar"},
+        "release_url": {"$ref": "#/$defs/nullable_scalar"},
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url", "filename", "content_type", "size_bytes", "sha256"],
+            "properties": {
+              "url": {"type": "string", "format": "uri"},
+              "filename": {"type": "string", "minLength": 1},
+              "content_type": {"type": "string", "minLength": 1},
+              "size_bytes": {"type": "integer", "minimum": 1},
+              "sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        },
         "revision_lineage": {
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "uniqueItems": true
         }
       }
+    },
+    "macro_original_release_data": {
+      "allOf": [
+        {"$ref": "#/$defs/macro_release_data"},
+        {
+          "type": "object",
+          "required": [
+            "original_release_observation_id",
+            "release_url",
+            "attachments"
+          ],
+          "properties": {
+            "original_release_observation_id": {
+              "$ref": "#/$defs/source_observation_id"
+            },
+            "release_url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "attachments": {"minItems": 1}
+          }
+        }
+      ]
     }
   }
 }

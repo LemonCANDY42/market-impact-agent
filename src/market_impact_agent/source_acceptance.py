@@ -165,10 +165,11 @@ class SourceRouteAcceptanceDeclaration:
             raise ValueError("source acceptance retention_scope must be private_raw_and_normalized")
         if self.redistribution_allowed:
             raise ValueError("source acceptance cannot grant redistribution")
-        if self.revision_strategy != "append_only_content_versions":
-            raise ValueError(
-                "source acceptance revision_strategy must be append_only_content_versions"
-            )
+        if self.revision_strategy not in {
+            "append_only_content_versions",
+            "append_only_content_versions_without_asserted_revision_relation",
+        }:
+            raise ValueError("source acceptance revision_strategy is unsupported")
         if self.declaration_id != self.expected_declaration_id:
             raise ValueError("source acceptance declaration_id does not match content")
 

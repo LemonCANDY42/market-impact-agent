@@ -118,8 +118,11 @@ Stage 2 — accept capability-complete data slices:
 - [ ] `PDI-15` Accept the registered macro release-and-revision route.
   - [x] Accept the Tushare schedule-observation route and freeze the direct NBS
     calendar→RSS→article/XLSX prospective design.
-  - [ ] Implement and accept the direct original-release route; keep revision lineage blocked until
-    an official correction/revision relationship can be established.
+  - [x] Implement and accept the direct NBS CPI/PPI original-release route after fail-closed review
+    corrections, with exact CPI+PPI scope, actual-receipt Journal storage, and deterministic
+    article/XLSX bundle replay.
+  - [ ] Establish and accept an official correction/revision relationship; same-document content
+    versions cannot assert revision lineage by themselves.
 - [ ] `PDI-16` Accept the registered prior-expectation route.
   - [x] Accept the route-level Tushare `report_rc` forecast-observation capture and replay.
   - [ ] Freeze and verify the registered as-of population, source-diversity, unit, and consensus

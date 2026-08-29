@@ -28,6 +28,8 @@ RECEIVED = BARRIER - timedelta(minutes=30)
 def _observation(
     capability: ObservationCapability,
     payload: dict[str, object],
+    *,
+    source_ref: str = "https://fixture.example/record",
 ) -> SourceObservation:
     return SourceObservation.build(
         capability=capability,
@@ -35,7 +37,7 @@ def _observation(
         provider_version="1",
         upstream_source="fixture-source",
         upstream_record_id="fixture-record",
-        source_ref="https://fixture.example/record",
+        source_ref=source_ref,
         lineage_id="fixture-source:fixture-record",
         times=ObservationTimes(
             occurred_at=RECEIVED - timedelta(minutes=2),
@@ -217,6 +219,167 @@ def test_provider_specific_rows_project_to_fail_closed_decision_inputs(
     data = cast(dict[str, object], projected["data"])
     assert "expectation_delta" not in data
     assert "consensus_value" not in data
+
+
+def test_nbs_original_release_projects_without_a_missing_original_gap() -> None:
+    observation = _observation(
+        ObservationCapability.MACRO_VINTAGE,
+        {
+            "record_type": "original_release",
+            "indicator": "cpi",
+            "reference_period": "2026-07",
+            "release_title": "2026年7月份居民消费价格同比上涨0.5%",
+            "release_summary": "Official CPI original release.",
+            "release_url": "https://www.stats.gov.cn/sj/zxfb/202608/release.html",
+            "publisher": "国家统计局",
+            "published_at": "2026-08-09T01:30:00Z",
+            "attachments": [
+                {
+                    "url": "https://www.stats.gov.cn/sj/zxfb/202608/table.xlsx",
+                    "filename": "table.xlsx",
+                    "content_type": (
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    ),
+                    "size_bytes": 100,
+                    "sha256": "a" * 64,
+                }
+            ],
+            "revision_lineage": [],
+        },
+        source_ref="https://www.stats.gov.cn/sj/zxfb/202608/release.html",
+    )
+
+    projected = _project(observation)
+
+    assert projected["record_type"] == "macro_original_release"
+    assert projected["completeness_gaps"] == ["revision_lineage_missing"]
+    data = cast(dict[str, object], projected["data"])
+    assert data["original_release_observation_id"] == observation.observation_id
+    assert data["release_summary"] == "Official CPI original release."
+    assert data["release_url"] == "https://www.stats.gov.cn/sj/zxfb/202608/release.html"
+    assert checkpoint_decision_input_from_dict(projected) == projected
+    _validate_schema(projected)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    (
+        ("original_release_observation_id", None),
+        ("release_url", None),
+        ("release_url", "/not-a-direct-release-url"),
+        ("attachments", []),
+    ),
+)
+def test_macro_original_release_loader_rejects_missing_authoritative_bindings(
+    field: str,
+    invalid_value: object,
+) -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.MACRO_VINTAGE,
+            {
+                "record_type": "original_release",
+                "indicator": "cpi",
+                "reference_period": "2026-07",
+                "release_title": "2026年7月份居民消费价格同比上涨0.5%",
+                "release_url": "https://www.stats.gov.cn/sj/zxfb/202608/release.html",
+                "publisher": "国家统计局",
+                "published_at": "2026-08-09T01:30:00Z",
+                "attachments": [
+                    {
+                        "url": "https://www.stats.gov.cn/sj/zxfb/202608/table.xlsx",
+                        "filename": "table.xlsx",
+                        "content_type": (
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        ),
+                        "size_bytes": 100,
+                        "sha256": "a" * 64,
+                    }
+                ],
+            },
+        )
+    )
+    data = cast(dict[str, object], projected["data"])
+    data[field] = invalid_value
+    core = {key: value for key, value in projected.items() if key != "record_id"}
+    projected["record_id"] = f"checkpoint-decision-input-{canonical_hash(core)}"
+
+    with pytest.raises(ValueError, match="does not conform to its schema"):
+        checkpoint_decision_input_from_dict(projected)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value", "message"),
+    (
+        ("original_release_observation_id", "source-observation-" + "c" * 64, "observation ID"),
+        (
+            "release_url",
+            "https://www.stats.gov.cn/sj/zxfb/202608/different-release.html",
+            "direct source reference",
+        ),
+    ),
+)
+def test_macro_original_release_loader_rejects_mismatched_authority_bindings(
+    field: str,
+    invalid_value: str,
+    message: str,
+) -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.MACRO_VINTAGE,
+            {
+                "record_type": "original_release",
+                "indicator": "cpi",
+                "reference_period": "2026-07",
+                "release_title": "2026年7月份居民消费价格同比上涨0.5%",
+                "publisher": "国家统计局",
+                "published_at": "2026-08-09T01:30:00Z",
+                "attachments": [
+                    {
+                        "url": "https://www.stats.gov.cn/sj/zxfb/202608/table.xlsx",
+                        "filename": "table.xlsx",
+                        "content_type": (
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        ),
+                        "size_bytes": 100,
+                        "sha256": "a" * 64,
+                    }
+                ],
+            },
+        )
+    )
+    data = cast(dict[str, object], projected["data"])
+    data[field] = invalid_value
+    core = {key: value for key, value in projected.items() if key != "record_id"}
+    projected["record_id"] = f"checkpoint-decision-input-{canonical_hash(core)}"
+
+    with pytest.raises(ValueError, match=message):
+        checkpoint_decision_input_from_dict(projected)
+
+
+def test_macro_release_schedule_keeps_legacy_nullable_and_missing_fields() -> None:
+    projected = _project(
+        _observation(
+            ObservationCapability.MACRO_VINTAGE,
+            {
+                "api_name": "cn_schedule",
+                "record": {
+                    "month": "202607",
+                    "publish_date": "20260809",
+                    "title": "National CPI release",
+                    "issuing_org": "NBS",
+                    "data_api": "cn_cpi",
+                },
+            },
+        )
+    )
+
+    data = cast(dict[str, object], projected["data"])
+    assert data["original_release_observation_id"] is None
+    assert "release_url" not in data
+    assert "attachments" not in data
+    assert checkpoint_decision_input_from_dict(projected) == projected
+    _validate_schema(projected)
 
 
 def test_projected_decision_input_conforms_to_public_schema() -> None:

@@ -152,6 +152,26 @@ def test_csrc_source_acceptance_cli_binds_one_registered_route() -> None:
     assert args.keyword == ["政策"]
 
 
+def test_nbs_source_acceptance_cli_binds_direct_release_indicators() -> None:
+    args = build_parser().parse_args(
+        [
+            "data",
+            "accept-nbs-macro-release",
+            "--source-config",
+            "examples/providers/nbs-macro-release-cpi-ppi-v1.json",
+            "--window-start",
+            "2026-08-01T00:00:00Z",
+            "--indicator",
+            "cpi",
+            "--indicator",
+            "ppi",
+        ]
+    )
+
+    assert args.data_command == "accept-nbs-macro-release"
+    assert args.indicator == ["cpi", "ppi"]
+
+
 def test_base_install_cli_imports_without_mcp_and_agent_run_reports_optional_dependency() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = textwrap.dedent(

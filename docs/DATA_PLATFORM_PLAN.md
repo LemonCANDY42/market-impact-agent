@@ -489,14 +489,18 @@ This closes the shared transport/config/replay uncertainty and the empty cross-t
 blocker, not the Tasks below: capability-specific completeness and checkpoint-barrier receipts remain
 required.
 
-The bounded NBS investigation also fixed the smallest PDI-15 route design: use the
+The bounded NBS investigation fixed the smallest PDI-15 route design: use the
 [official annual release calendar](https://www.stats.gov.cn/sj/fbrc/bnxxfb/) as advisory schedule,
 the [official latest-release RSS](https://www.stats.gov.cn/sj/zxfb/rss.xml) only for discovery, then
 capture the direct NBS CPI/PPI article and linked XLSX as the original-release authority. The RSS is
 a rolling, unpaged window and the newer schedule JSON is a trial frontend, so neither is an archive.
 No official machine-readable CPI/PPI correction or revision-lineage contract was found; repeated
-same-document hashes may detect change but cannot invent an official revision relation. PDI-15
-therefore remains fail-closed pending implementation and revision acceptance.
+same-document hashes may detect change but cannot invent an official revision relation. The direct
+original-release implementation is complete, including deterministic stored-bundle replay. A fresh
+canonical private-state run after fail-closed corrections to authoritative content, HTML structure,
+timestamp semantics, and CPI+PPI scope binding selected two observations and passed all seven gates
+in `source-route-acceptance-report-0f7416edc7faa22e04835f60d74b118e249dc2aa2d75afc399450aec4a68e7d6`.
+PDI-15 remains fail-closed for the still-unproven official correction/revision relationship.
 
 #### PDI-10 — Accept checkpoint-relevant event and established-news routes
 
@@ -585,6 +589,22 @@ unavailable outcomes.
 Deliver original releases, release calendars, and revision lineage through `lookup_macro_vintage`.
 Acceptance retains the first actual receipt separately from release/reference periods and later
 revisions; a current revised series cannot satisfy the original-release slot.
+
+**Original-release implementation, 2026-08-29:** the dedicated NBS adapter captures the exact official
+RSS for discovery and requires a matching direct CPI/PPI article plus a valid same-directory XLSX.
+It rejects source-identity, media-type, XML/HTML identity, publication-time, window-coverage, and
+spreadsheet-structure drift. RSS descriptions are discovery-only; article HTML must be complete,
+and `PubDate` does not populate `source_updated_at`. Exact bytes are retained in a deterministic
+private bundle and isolated replay reproduces the same Snapshot. Acceptance must sample exactly the
+configured CPI+PPI scope with one observation per indicator. The corrected canonical private-state
+run selected two observations, reproduced Snapshot
+`data-snapshot-4d2ee53f32618314c3075636989815d2ce75f7b61d07ff24ab8d2c863131d00e`, and passed all
+seven gates in
+`source-route-acceptance-report-0f7416edc7faa22e04835f60d74b118e249dc2aa2d75afc399450aec4a68e7d6`.
+This closes the original-release acceptance subgate. The strategy explicitly appends content
+versions without asserting a revision relation, so PDI-15 remains open until an official
+correction/revision relationship is established. Strict historical PIT remains 0/18; no model call,
+Evidence promotion, paper admission, or live capability follows.
 
 #### PDI-16 — Accept a prior-expectation route
 

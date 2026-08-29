@@ -1,0 +1,22 @@
+{
+  "content_scope": "official_nbs_cpi_ppi_original_release_private_research",
+  "feed_url": "https://www.stats.gov.cn/sj/zxfb/rss.xml",
+  "indicators": [
+    "cpi",
+    "ppi"
+  ],
+  "license_scope": "official_public_private_research_no_redistribution",
+  "max_article_bytes": 4000000,
+  "max_attachment_bytes": 8000000,
+  "max_capture_bytes": 32000000,
+  "max_feed_bytes": 8000000,
+  "published_timezone": "Asia/Shanghai",
+  "publisher": "国家统计局",
+  "redistribution_allowed": false,
+  "require_spreadsheet": true,
+  "rights_basis_url": "https://www.stats.gov.cn/wzgl/202302/t20230217_1912857.html",
+  "rights_reviewed_at": "2026-08-29T00:00:00Z",
+  "schema_version": "market-impact.nbs-macro-release-source.v1",
+  "source_config_id": "nbs-macro-release-source-fc80720bf3e3b8a89c51c64e2e72ca8e671608a21976e716eaa8fa496b338577",
+  "source_id": "nbs-official-cpi-ppi"
+}

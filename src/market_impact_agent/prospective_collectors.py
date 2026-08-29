@@ -19,6 +19,12 @@ from market_impact_agent.data_inputs import (
     DataSnapshot,
     LocalDataSnapshotStore,
 )
+from market_impact_agent.nbs_macro_release import (
+    NbsMacroReleaseHTTPClient,
+    NbsMacroReleaseProvider,
+    UrllibNbsMacroReleaseHTTPClient,
+    nbs_macro_release_source_from_dict,
+)
 from market_impact_agent.prospective_collection_runtime import (
     ProspectiveCollectionAdapterKind,
     ProspectiveCollectionJob,
@@ -40,6 +46,7 @@ def collect_prospective_source_snapshot(
     tushare_token: str | None = None,
     tushare_transport: TushareObservationTransport | None = None,
     csrc_http_client: CsrcNewsHTTPClient | None = None,
+    nbs_http_client: NbsMacroReleaseHTTPClient | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> DataSnapshot:
     """Capture one accepted route and materialize its immutable prospective Snapshot."""
@@ -75,6 +82,40 @@ def collect_prospective_source_snapshot(
             provider.collect(
                 window_start=policy.window_start,
                 parameters=policy.parameters,
+            )
+        )
+        capture_cutoff = max(item.retrieved_at for item in captures)
+        replay_provider = provider.replay(captures)
+    elif job.adapter_kind is ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE:
+        config = nbs_macro_release_source_from_dict(dict(source_config))
+        if policy.parameters != {"indicators": list(config.indicators)}:
+            raise ValueError(
+                "NBS macro release collection policy indicators must exactly match "
+                "the source config"
+            )
+        http_client = (
+            UrllibNbsMacroReleaseHTTPClient(timeout_seconds=job.provider_timeout_seconds)
+            if nbs_http_client is None
+            else nbs_http_client
+        )
+        provider = NbsMacroReleaseProvider(
+            (config,),
+            http_client=http_client,
+            clock=clock,
+        )
+        _assert_provider_binding(
+            provider_id=provider.manifest.provider_id,
+            provider_version=provider.manifest.provider_version,
+            manifest_hash=canonical_hash(provider.manifest.to_dict()),
+            upstream_source=config.source_id,
+            source_config_hash=config.artifact_hash,
+            policy=policy,
+        )
+        captures = asyncio.run(
+            provider.collect(
+                window_start=policy.window_start,
+                parameters=policy.parameters,
+                require_complete_indicator_scope=True,
             )
         )
         capture_cutoff = max(item.retrieved_at for item in captures)

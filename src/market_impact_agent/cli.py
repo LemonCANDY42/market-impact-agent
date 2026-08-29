@@ -105,6 +105,15 @@ from market_impact_agent.model_provider import (
     default_model_provider_profile_path,
     load_model_provider_profile,
 )
+from market_impact_agent.nbs_macro_release import (
+    NBS_MACRO_RELEASE_REVISION_STRATEGY,
+    NBS_MACRO_RELEASE_SEMANTIC_SCOPE,
+    NbsMacroReleaseHTTPClient,
+    NbsMacroReleaseProvider,
+    UrllibNbsMacroReleaseHTTPClient,
+    load_nbs_macro_release_capture_bundle,
+    load_nbs_macro_release_source,
+)
 from market_impact_agent.observations import (
     ObservationCapability,
     ObservationProviderManifest,
@@ -339,6 +348,26 @@ def build_parser() -> argparse.ArgumentParser:
     csrc_accept_parser.add_argument("--max-items", type=int, default=50)
     csrc_accept_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
     csrc_accept_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    nbs_accept_parser = data_subparsers.add_parser(
+        "accept-nbs-macro-release",
+        help="Capture, journal, persist, and replay the direct NBS CPI/PPI release route",
+    )
+    nbs_accept_parser.add_argument("--source-config", required=True, type=Path)
+    nbs_accept_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
+    nbs_accept_parser.add_argument(
+        "--indicator",
+        action="append",
+        choices=("cpi", "ppi"),
+        default=[],
+    )
+    nbs_accept_parser.add_argument("--poll-interval-seconds", type=int, default=3600)
+    nbs_accept_parser.add_argument("--maximum-gap-seconds", type=int, default=90000)
+    nbs_accept_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
+    nbs_accept_parser.add_argument(
         "--state-root",
         type=Path,
         default=Path(".market-impact/data-inputs"),
@@ -1545,6 +1574,186 @@ def accept_csrc_news_source(
     }
 
 
+def accept_nbs_macro_release_source(
+    *,
+    source_config_path: Path,
+    window_start: datetime,
+    indicators: tuple[str, ...],
+    poll_interval_seconds: int,
+    maximum_gap_seconds: int,
+    state_root: Path,
+    provider_timeout_seconds: float,
+    http_client: NbsMacroReleaseHTTPClient | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> dict[str, object]:
+    config = load_nbs_macro_release_source(source_config_path)
+    if indicators and indicators != config.indicators:
+        raise ValueError(
+            "NBS macro release acceptance indicators must exactly match the source config"
+        )
+    parameters: dict[str, object] = {"indicators": list(config.indicators)}
+    client = (
+        UrllibNbsMacroReleaseHTTPClient(timeout_seconds=provider_timeout_seconds)
+        if http_client is None
+        else http_client
+    )
+    provider = NbsMacroReleaseProvider(
+        (config,),
+        http_client=client,
+        clock=clock,
+    )
+    captures = asyncio.run(
+        provider.collect(
+            window_start=window_start.astimezone(UTC),
+            parameters=parameters,
+        )
+    )
+    if any(not item.coverage_complete for item in captures):
+        error_kind = next(
+            (
+                item.error_kind
+                for item in captures
+                if not item.coverage_complete and item.error_kind is not None
+            ),
+            "unknown_source_error",
+        )
+        raise RuntimeError(f"NBS macro release capture failed: {error_kind}")
+    capture_cutoff = max(item.retrieved_at for item in captures)
+    manifest_hash = canonical_hash(provider.manifest.to_dict())
+    source = DataSourceBinding(
+        provider_id=provider.manifest.provider_id,
+        provider_version=provider.manifest.provider_version,
+        upstream_source=config.source_id,
+        manifest_hash=manifest_hash,
+        source_config_hash=config.artifact_hash,
+        required=True,
+    )
+    policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.MACRO_VINTAGE,
+        sources=(source,),
+        window_start=window_start.astimezone(UTC),
+        parameters=parameters,
+        poll_interval_seconds=poll_interval_seconds,
+        maximum_gap_seconds=maximum_gap_seconds,
+    )
+    query = DataQuery.build(
+        capability=ObservationCapability.MACRO_VINTAGE,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=capture_cutoff,
+        window_start=policy.window_start,
+        source_policy_id=policy.policy_id,
+        parameters=parameters,
+        sources=(source,),
+        minimum_data_sources=1,
+    )
+    store = LocalDataSnapshotStore(state_root)
+    harness = DataInputHarness(store, provider_timeout_seconds=provider_timeout_seconds)
+    harness.register(provider.replay(captures))
+    snapshot = asyncio.run(harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
+    observed_indicators = tuple(
+        cast(str, item.normalized_payload.get("indicator")) for item in snapshot.observations
+    )
+    if observed_indicators != config.indicators:
+        raise RuntimeError(
+            "NBS macro release acceptance requires one observation for every configured indicator"
+        )
+    journal_result = ProspectiveDataJournal(store).record_snapshot(snapshot, policy=policy)
+
+    rights_response = client.get(
+        config.rights_basis_url,
+        max_response_bytes=config.max_article_bytes,
+    )
+    if rights_response.final_url != config.rights_basis_url:
+        raise ValueError("NBS macro release rights evidence redirect target drifted")
+    if rights_response.content_type.casefold().split(";", 1)[0].strip() != "text/html":
+        raise ValueError("NBS macro release rights evidence content type drifted")
+    current_time = datetime.now(UTC) if clock is None else clock()
+    if current_time.utcoffset() != UTC.utcoffset(current_time):
+        raise ValueError("NBS macro release acceptance clock must use UTC")
+    rights_hash = store.put_raw(rights_response.body)
+    rights_evidence = SourceRightsEvidence.build(
+        source_ref=config.rights_basis_url,
+        final_url=rights_response.final_url,
+        retrieved_at=current_time,
+        raw_content_hash=rights_hash,
+    )
+    declaration = SourceRouteAcceptanceDeclaration.build(
+        provider_id=provider.manifest.provider_id,
+        provider_version=provider.manifest.provider_version,
+        provider_manifest_hash=manifest_hash,
+        source_config_hash=config.artifact_hash,
+        upstream_source=config.source_id,
+        capability=ObservationCapability.MACRO_VINTAGE,
+        rights_basis_url=config.rights_basis_url,
+        rights_reviewed_at=config.rights_reviewed_at,
+        permitted_use="private_research",
+        retention_scope="private_raw_and_normalized",
+        redistribution_allowed=config.redistribution_allowed,
+        semantic_scope=NBS_MACRO_RELEASE_SEMANTIC_SCOPE,
+        revision_strategy=NBS_MACRO_RELEASE_REVISION_STRATEGY,
+    )
+
+    state_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=".nbs-macro-release-acceptance-replay-",
+        dir=state_root,
+    ) as replay_root:
+        replay_store = LocalDataSnapshotStore(Path(replay_root))
+
+        def replay_from_stored_artifacts(
+            request: SourceRouteReplayRequest,
+        ) -> SourceRouteReplayResult:
+            if request.source_snapshot_id != snapshot.snapshot_id:
+                raise ValueError("NBS macro release replay source Snapshot identity mismatch")
+            stored_capture = load_nbs_macro_release_capture_bundle(
+                request.raw_response_payload,
+                config=config,
+                retrieved_at=snapshot.attempts[0].retrieved_at,
+            )
+            replay_harness = DataInputHarness(
+                replay_store,
+                provider_timeout_seconds=provider_timeout_seconds,
+            )
+            replay_harness.register(provider.replay((stored_capture,)))
+            replay_snapshot = asyncio.run(
+                replay_harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING)
+            )
+            return SourceRouteReplayResult(
+                snapshot_id=replay_snapshot.snapshot_id,
+                store=replay_store,
+            )
+
+        report = qualify_source_route(
+            declaration=declaration,
+            rights_evidence=rights_evidence,
+            snapshot=snapshot,
+            source_store=store,
+            replay_from_stored_artifacts=replay_from_stored_artifacts,
+            evaluated_at=current_time,
+        )
+    report_path = write_source_route_acceptance_report(
+        report,
+        state_root / "source-acceptance",
+    )
+    return {
+        "accepted": report.accepted,
+        "source_route_acceptance_report_id": report.report_id,
+        "source_route_acceptance_report_path": report_path.as_posix(),
+        "collection_policy_id": policy.policy_id,
+        "journal": journal_result.to_dict(),
+        "data_snapshot_id": snapshot.snapshot_id,
+        "capture_cutoff_at": _utc_timestamp(snapshot.query.as_of),
+        "coverage_complete": snapshot.coverage_complete,
+        "observation_count": len(snapshot.observations),
+        "gates": [item.to_dict() for item in report.gates],
+        "semantic_scope": NBS_MACRO_RELEASE_SEMANTIC_SCOPE,
+        "revision_strategy": NBS_MACRO_RELEASE_REVISION_STRATEGY,
+        "historical_pit_claim": report.historical_pit_claim,
+        "evidence_promoted": report.evidence_promoted,
+        "execution_capability": report.execution_capability,
+    }
+
+
 def accept_tushare_observation_source(
     *,
     token: str,
@@ -1931,6 +2140,16 @@ def _prospective_collection_source_binding(
             config.to_dict(),
             provider.manifest,
             ObservationCapability.EVENT_REVELATION,
+            config.source_id,
+            config.artifact_hash,
+        )
+    if adapter_kind is ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE:
+        config = load_nbs_macro_release_source(source_config_path)
+        provider = NbsMacroReleaseProvider((config,))
+        return (
+            config.to_dict(),
+            provider.manifest,
+            ObservationCapability.MACRO_VINTAGE,
             config.source_id,
             config.artifact_hash,
         )
@@ -2802,6 +3021,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 window_start=args.window_start,
                 keywords=tuple(args.keyword),
                 max_items=args.max_items,
+                state_root=args.state_root,
+                provider_timeout_seconds=args.provider_timeout_seconds,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["accepted"] is True else 1
+    if args.command == "data" and args.data_command == "accept-nbs-macro-release":
+        try:
+            result = accept_nbs_macro_release_source(
+                source_config_path=args.source_config,
+                window_start=args.window_start,
+                indicators=tuple(args.indicator),
+                poll_interval_seconds=args.poll_interval_seconds,
+                maximum_gap_seconds=args.maximum_gap_seconds,
                 state_root=args.state_root,
                 provider_timeout_seconds=args.provider_timeout_seconds,
             )

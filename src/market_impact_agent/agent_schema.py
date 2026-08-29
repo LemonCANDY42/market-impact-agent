@@ -14,6 +14,7 @@ AGENT_SCHEMA_FILES = (
     "data-snapshot.schema.json",
     "syndication-feed-source.schema.json",
     "csrc-news-source.schema.json",
+    "nbs-macro-release-source.schema.json",
     "tushare-observation-source.schema.json",
     "source-route-acceptance-report.schema.json",
     "attention-watch-policy.schema.json",

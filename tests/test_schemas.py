@@ -25,6 +25,7 @@ class Validator(Protocol):
         "data-snapshot.schema.json",
         "syndication-feed-source.schema.json",
         "csrc-news-source.schema.json",
+        "nbs-macro-release-source.schema.json",
         "tushare-observation-source.schema.json",
         "source-route-acceptance-report.schema.json",
         "attention-watch-policy.schema.json",
@@ -108,6 +109,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/providers/veighna-external-bridge.json",
         "examples/providers/federal-reserve-press-feed-v1.json",
         "examples/providers/csrc-official-news-v1.json",
+        "examples/providers/nbs-macro-release-cpi-ppi-v1.json",
         "examples/providers/tushare-observation-cn-schedule-v1.json",
         "examples/providers/tushare-observation-etf-basic-v1.json",
         "examples/providers/tushare-observation-fund-daily-v1.json",
@@ -209,6 +211,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "syndication-feed-source.schema.json"
     elif example_path.endswith("csrc-official-news-v1.json"):
         schema_name = "csrc-news-source.schema.json"
+    elif example_path.endswith("nbs-macro-release-cpi-ppi-v1.json"):
+        schema_name = "nbs-macro-release-source.schema.json"
     elif Path(example_path).name.startswith("tushare-observation-"):
         schema_name = "tushare-observation-source.schema.json"
     else:

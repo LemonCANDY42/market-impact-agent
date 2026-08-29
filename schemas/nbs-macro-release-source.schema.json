@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/nbs-macro-release-source.schema.json",
+  "title": "Market Impact NBS Macro Release Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_config_id",
+    "source_id",
+    "feed_url",
+    "publisher",
+    "published_timezone",
+    "indicators",
+    "rights_basis_url",
+    "rights_reviewed_at",
+    "license_scope",
+    "content_scope",
+    "redistribution_allowed",
+    "require_spreadsheet",
+    "max_feed_bytes",
+    "max_article_bytes",
+    "max_attachment_bytes",
+    "max_capture_bytes"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.nbs-macro-release-source.v1"},
+    "source_config_id": {
+      "type": "string",
+      "pattern": "^nbs-macro-release-source-[0-9a-f]{64}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "feed_url": {"const": "https://www.stats.gov.cn/sj/zxfb/rss.xml"},
+    "publisher": {"const": "国家统计局"},
+    "published_timezone": {"const": "Asia/Shanghai"},
+    "indicators": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"enum": ["cpi", "ppi"]}
+    },
+    "rights_basis_url": {
+      "const": "https://www.stats.gov.cn/wzgl/202302/t20230217_1912857.html"
+    },
+    "rights_reviewed_at": {"type": "string", "format": "date-time"},
+    "license_scope": {
+      "const": "official_public_private_research_no_redistribution"
+    },
+    "content_scope": {
+      "const": "official_nbs_cpi_ppi_original_release_private_research"
+    },
+    "redistribution_allowed": {"const": false},
+    "require_spreadsheet": {"const": true},
+    "max_feed_bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+    "max_article_bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+    "max_attachment_bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+    "max_capture_bytes": {"type": "integer", "minimum": 1, "maximum": 268435456}
+  }
+}

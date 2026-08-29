@@ -22,7 +22,9 @@ Harness and Snapshot contract and accepts prospective private-research collectio
 `tushare-observation` Provider adds fourteen separately configured private routes for news, market,
 instrument, industry, positioning, macro-schedule, and analyst-forecast observations. Each route
 has its own content identity and acceptance report; sharing one transport never merges their
-semantics or acceptance.
+semantics or acceptance. The `nbs-macro-release` Provider uses the exact official latest-release
+RSS only for discovery and retains each selected direct CPI/PPI article plus its required XLSX as
+the original-release authority. It makes no correction or revision-lineage assertion.
 
 ## Bounded-context canvas
 
@@ -352,15 +354,55 @@ The report explicitly fixes `historical_pit_claim`, `evidence_promoted`, and
 redistribution; it does not accept CSRC as a complete news source or fill the other A-share data
 families.
 
+## NBS CPI/PPI original-release route
+
+The NBS Provider fetches exactly `https://www.stats.gov.cn/sj/zxfb/rss.xml`, rejects redirects,
+origin/path or media-type drift, DTD/entity declarations, malformed XML, and incomplete publication-
+date window coverage, then chooses the newest matching CPI and/or PPI item. The RSS remains
+discovery metadata. For each selected item, the Provider requires one matching official direct
+article, a unique `ArticleTitle`, a unique visibly corroborated `PubDate` to the minute, and exactly
+one unique same-directory XLSX whose ZIP contains the OpenXML content-types and workbook members.
+Missing or mismatched authority is a typed source error; truncated or structurally incomplete HTML
+is rejected. A fully covered feed with no matching post-window item is completed `NO_DATA` with the
+feed bytes retained, while a partially matching configured CPI+PPI scope is a typed source error.
+RSS descriptions remain discovery-only and cannot change normalized release identity.
+
+Run the bounded acceptance trial with:
+
+```bash
+market-impact data accept-nbs-macro-release \
+  --source-config examples/providers/nbs-macro-release-cpi-ppi-v1.json \
+  --window-start 2026-08-01T00:00:00Z
+```
+
+The private binary capture bundle deterministically frames the exact RSS, article, and XLSX bytes;
+stored-bundle replay must reproduce the same Snapshot. Direct article `PubDate` is retained as
+`occurred_at` and `published_at`; `source_updated_at` remains null because the article exposes no
+separate update time. Meanwhile,
+`available_at == authority_at == retrieved_at` records first actual receipt. The normalized
+`original_release` projects to a checkpoint `macro_original_release` with the current observation
+as `original_release_observation_id`; only `revision_lineage_missing` remains. Schedule observations
+retain the legacy `original_release_missing` plus `revision_lineage_missing` gaps.
+
+Acceptance is bound to exactly the configured CPI+PPI route and requires one observation for each
+indicator; a CLI subset or missing release cannot qualify the broader route. The corrected
+2026-08-29 canonical private-state run selected two observations and passed all seven gates in
+`source-route-acceptance-report-0f7416edc7faa22e04835f60d74b118e249dc2aa2d75afc399450aec4a68e7d6`,
+binding Snapshot
+`data-snapshot-4d2ee53f32618314c3075636989815d2ce75f7b61d07ff24ab8d2c863131d00e`.
+The revision strategy still appends content versions without asserting a revision relation;
+historical PIT, Evidence promotion, paper, and live execution remain false.
+
 ## Continuous prospective collection
 
 For future PIT evidence, repeat the one-shot capture under a content-identified collection policy
 and append every result to the local Prospective Receipt Journal:
 
-Accepted CSRC and Tushare routes can also be registered as content-identified Collection Jobs. The
-Harness, rather than an OS scheduler, owns cadence, due time, retry/misfire semantics, Provider
-binding, and logical opportunity identity. `collection-run-due` is deliberately one-shot so a later
-authorized host supervisor only starts or restarts a bounded process. Concurrent invocations share
+Accepted CSRC, Tushare, and NBS macro-release routes can also be registered as content-identified
+Collection Jobs. The Harness, rather than an OS scheduler, owns cadence, due time, retry/misfire
+semantics, Provider binding, and logical opportunity identity. `collection-run-due` is deliberately
+one-shot so a later authorized host supervisor only starts or restarts a bounded process.
+Concurrent invocations share
 an expiring lease; restart resumes staged data, and every due opportunity remains inspectable via
 `collection-health`. `SIGINT` or `SIGTERM` requests are checked before Provider collection and
 again before the Journal commit. An in-flight Provider request is still bounded by its timeout; a

@@ -89,9 +89,18 @@ def checkpoint_decision_input_from_dict(value: object) -> dict[str, object]:
     gaps = _string_list(payload["completeness_gaps"], "checkpoint decision input gaps")
     if gaps != sorted(set(gaps)):
         raise ValueError("checkpoint decision input gaps must be sorted and unique")
-    _string_object(payload["source"], "checkpoint decision input source")
+    source = _string_object(payload["source"], "checkpoint decision input source")
     times = _string_object(payload["times"], "checkpoint decision input times")
-    _string_object(payload["data"], "checkpoint decision input data")
+    data = _string_object(payload["data"], "checkpoint decision input data")
+    if payload["record_type"] == "macro_original_release":
+        if data.get("original_release_observation_id") != payload["observation_id"]:
+            raise ValueError(
+                "checkpoint macro original release observation ID must match its source observation"
+            )
+        if data.get("release_url") != source.get("source_ref"):
+            raise ValueError(
+                "checkpoint macro original release URL must match its direct source reference"
+            )
     if payload["price_basis"] is not None:
         _string_object(payload["price_basis"], "checkpoint decision input price basis")
     if any(
@@ -394,6 +403,28 @@ def _project_payload(
             ),
         )
     if observation.capability is ObservationCapability.MACRO_VINTAGE:
+        if payload.get("record_type") == "original_release":
+            attachments = payload.get("attachments")
+            return (
+                "macro_original_release",
+                {
+                    "indicator": _first(payload, record, "indicator"),
+                    "issuing_organization": None,
+                    "original_release_observation_id": observation.observation_id,
+                    "publisher": _first(payload, record, "publisher", "upstream_publisher"),
+                    "reference_period": _first(
+                        payload, record, "reference_period", "month", "quarter"
+                    ),
+                    "release_date": _first(payload, record, "published_at", "release_date"),
+                    "release_title": _first(payload, record, "release_title", "title"),
+                    "revision_lineage": [],
+                    "release_summary": _first(payload, record, "release_summary"),
+                    "release_url": _first(payload, record, "release_url") or observation.source_ref,
+                    "attachments": attachments if isinstance(attachments, list) else [],
+                },
+                None,
+                ("revision_lineage_missing",),
+            )
         return (
             "macro_release_schedule",
             {
