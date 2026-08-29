@@ -220,6 +220,9 @@ secrets/
 *.sqlite
 *.sqlite3
 
+# Local Understand Anything knowledge graph and dashboard state
+.ua/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
