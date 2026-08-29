@@ -32,7 +32,7 @@
         "prediction_market_history"
       ]
     },
-    "pit_lane": {"enum": ["strict", "modeled", "prospective"]},
+    "pit_lane": {"enum": ["strict", "modeled", "prospective", "retrospective"]},
     "as_of": {"type": "string", "format": "date-time"},
     "window_start": {
       "oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]

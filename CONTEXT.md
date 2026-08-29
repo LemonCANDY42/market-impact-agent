@@ -173,6 +173,15 @@ opened checkpoints can be replayed under frozen visibility assumptions and repor
 failures alongside them. Strict and modeled qualification reports are not interchangeable.
 _Avoid_: Relaxed strict report, alpha evidence, execution gate
 
+**Retrospective Data Lane**:
+A content-identified archive lane for historical material first obtained after the decision time or
+whose historical availability/authority cannot be proven. It preserves the source's old occurrence,
+publication, and update times while recording the real later receipt and unresolved authority gap.
+It may support postmortem and decision-process analysis, but it is excluded from strict backtest
+inputs, strategy promotion, prospective Judgment inputs, and order generation. Modeled-PIT is one
+explicit reconstruction method; it is not a synonym for every retrospective record.
+_Avoid_: Relaxed PIT, backdated receipt, alpha evidence, trading input
+
 **Prospective Actual Receipt**:
 A future Source Observation whose immutable local retrieval is the strategy's first proven receipt,
 so `available_at` and `authority_at` both equal `retrieved_at`. The existing source/provider/version,
@@ -211,7 +220,10 @@ different event mechanisms. It fixes each checkpoint's end-of-day cutoff constru
 capability applicability, route-kind and source-diversity minima, cadence/gap/freshness limits,
 eligible venues and instruments, candidate horizons, paired Agent arms, three replicates, aggregate
 model budget, hidden-outcome rule, and stop/go conditions before new acquisition or inference. It
-selects requirements, not Providers, observations, outcomes, or trades.
+selects requirements, not Providers, observations, outcomes, or trades. Schema v1 preserves the
+original all-required diagnostic. Schema v2 requires an actual-receipt event trigger while allowing
+the other declared information capabilities to be optional observed context whose absence must stay
+visible to the Agent and evaluator.
 _Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
 
 **Prospective Checkpoint Snapshot Set**:
@@ -219,9 +231,20 @@ A content-identified reconciliation of one registered checkpoint's immutable bar
 accepted route reports, Collection Policies, complete Journal-frozen Data Snapshots, raw response
 hashes, and capability-specific read-only Agent tools required by that registration. It authorizes
 the exact Snapshot ID set through `FrozenDataSnapshotInput` without becoming a composite evidence or
-data authority. A missing, stale, unaccepted, or post-hoc `not_applicable` slot leaves the checkpoint
-ineligible.
+data authority. Schema v2 preserves the original capability-complete contract. Schema v3 may retain
+an incomplete registered coverage target through explicit `capability_gaps`: structurally valid
+present Snapshots remain usable, missing optional information remains visible, and no absent or
+unaccepted source is fabricated.
 _Avoid_: Composite Data Snapshot, Evidence Pack, Provider fallback, execution approval
+
+**Prospective Query Gate Result**:
+A content-identified preflight binding one v2 registration, checkpoint Snapshot Set, Evidence Pack,
+Agent Execution Binding, model profile, cost ceiling, and exact authorized Snapshot IDs. Missing
+required trigger or structural input is blocking; missing optional information and unmet
+corroboration targets are nonblocking gaps passed into the Judgment Run. It grants one bounded
+process-diagnostic model run only, never historical PIT, strategy promotion, paper/live execution,
+or an alpha claim.
+_Avoid_: Information-completeness score, strategy admission, order approval
 
 **Checkpoint Decision Input**:
 A deterministic, content-identified, Provider-neutral read-only projection of one Source Observation
@@ -532,6 +555,15 @@ _Avoid_: Trade, recommendation
 An idempotently identified request to evaluate a specific order against policy
 and approval. It is not proof of broker acceptance.
 _Avoid_: Order, execution
+
+**Experimental Paper Admission**:
+A content-identified provenance binding from one eligible Prospective Query Gate Result and its exact
+Evidence Pack through an exact Signal Intent to an exact paper Order Intent. It may be persisted beside the durable mock/paper
+outbox so execution mechanics can be tested before strategy promotion. It remains
+`execution_diagnostic_only`, carries no Strategy Admission, alpha claim, live capability, credential
+access, or authority to bypass Trading Mandate, price, policy, approval, Provider, and reconciliation
+gates.
+_Avoid_: Strategy promotion, broker acceptance, live mandate, Agent execution tool
 
 **Trading Mandate**:
 A versioned, expiring grant that defines the accounts, environments,

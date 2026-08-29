@@ -93,7 +93,10 @@ retry creates another immutable snapshot instead of rewriting the failure.
 The query selects one explicit PIT lane. `strict` rejects modeled-latency availability and requires
 `available_at <= authority_at <= cutoff`; `modeled` preserves the authority gap for process
 diagnostics; `prospective` requires `available_at == authority_at == retrieved_at` under actual
-receipt. The lanes share the record shape but cannot satisfy one another's claim gates.
+receipt. `retrospective` archives material first received later at its real receipt time, with any
+historical authority gap intact, for postmortem analysis only. The lanes share the record shape but
+cannot satisfy one another's claim gates; retrospective material is never a strict or prospective
+strategy input.
 
 The prospective syndication command uses two phases. It first collects each registered HTTP response
 and freezes its exact actual receipt timestamp. It then builds a query whose `as_of` is the latest
@@ -167,19 +170,28 @@ vendor field would hide an inference inside the data plane.
 ### Prospective diagnostic binding
 
 The `Prospective Diagnostic Registration` freezes requirements before acquisition. It names three
-first-eligible future event mechanisms and fixes each cutoff rule, all six capability slots,
-route/source minima, freshness and gap limits, allowed instruments, horizons, paired arms, three
-replicates, the aggregate model budget, hidden-outcome rule, and stop/go conditions. It deliberately
-contains no Provider IDs and grants no model or execution authority.
+first-eligible future event mechanisms and fixes each cutoff rule, all six declared capability
+slots, route/source targets, freshness and gap limits, allowed instruments, horizons, paired arms,
+three replicates, the aggregate model budget, hidden-outcome rule, and stop/go conditions. It
+deliberately contains no Provider IDs and grants no model or execution authority. The immutable v1
+registration retains its original all-required semantics. The superseding v2 registration requires
+only the actual-receipt event trigger for model dispatch; expectation, market, exposure, positioning,
+and macro slots are optional observed information whose absence remains part of the input.
 
-`ProspectiveCheckpointSnapshotSet` is the later non-authoritative barrier reconciliation. For every
-required slot it requires accepted route identity, the exact Collection Policy, a complete
-Journal-frozen prospective Snapshot, raw response hashes, source diversity, observation minima, and
-freshness at one immutable barrier. It then authorizes the exact Snapshot ID set through
-`FrozenDataSnapshotInput` and materializes the six capability-specific read-only tools. It never
-combines the underlying observations or their Checkpoint Decision Input projections into a new data
-authority. A missing, stale, unaccepted, or post-hoc `not_applicable` slot makes the checkpoint
-ineligible.
+`ProspectiveCheckpointSnapshotSet` is the later non-authoritative barrier reconciliation. Every
+selected input must still bind an accepted route, exact Collection Policy, complete Journal-frozen
+prospective Snapshot, raw response hash, and immutable barrier. Schema v2 retains the original
+capability-complete artifact. Schema v3 can freeze a partial set, carries every unmet route,
+diversity, observation, and freshness target as `capability_gaps`, authorizes only the Snapshots that
+actually passed structural validation, and materializes tools only for present capabilities. It
+never combines observations into a new data authority.
+
+`ProspectiveQueryGateResult` classifies those gaps. A missing required event trigger, invalid
+cutoff/Snapshot identity, or failure of a registered dispatch minimum blocks the model call. Missing
+optional information, missing corroborating routes after one valid trigger, and Evidence Pack data
+gaps are passed through as nonblocking context. The Agent may propose or abstain under partial
+observation; evaluation stratifies results by the frozen missingness rather than silently treating
+coverage as complete.
 
 For frozen historical experiments the tool mode is `cache_only`. A scheduler or Harness operation
 must acquire and freeze the snapshot before the Judgment Run. Prospective collectors first freeze
@@ -272,14 +284,17 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 ## Acceptance sequence
 
-PDI-01 now freezes three first-eligible EOD checkpoints with policy/regulation,
-earnings-expectation-delta, and macro-cycle mechanisms. The current Tushare Observation Provider has
+PDI-01 v1 remains immutable. The v2 registration
+`prospective-diagnostic-registration-19ef4193130c0121527a75f3235505c4eec708495e8848588e8ac344e90bc426`
+freezes the same three first-eligible EOD mechanisms while separating the required event trigger from
+optional observed information. The current Tushare Observation Provider has
 fourteen route-level seven-gate acceptance reports, and the CSRC official-event route remains
 accepted.
 These are route contracts, not complete checkpoint sets: direct publisher coverage, complete market
 semantics, tradability fields, taxonomy effective intervals, official macro release/revision
 lineage, and future post-registration receipts still have to reconcile at each checkpoint barrier.
-No model call begins until that Query Gate passes.
+Those gaps limit coverage claims and later execution where relevant; they no longer all block a
+prospective process diagnostic. No model call begins until the structural Query Gate passes.
 
 In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` and start prospective
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or

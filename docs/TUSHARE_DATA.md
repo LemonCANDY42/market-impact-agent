@@ -103,8 +103,9 @@ passed all seven gates. Of 1,631 ETFs with an `index_code`, zero exactly matched
 SW2021 Level-1 taxonomy codes. That rules out treating the current Tushare ETF master plus SW2021
 classification as a proven direct industry-to-ETF relation. The Harness records the missing mapping;
 it does not derive one from similar names or silently substitute another taxonomy.
-No Checkpoint Decision Input was created from this isolated probe because no complete registered
-six-slot Prospective Checkpoint Snapshot Set existed at its receipt barrier.
+No Checkpoint Decision Input was created from this isolated probe because it was not bound to a
+registered event checkpoint or barrier. Under the later v2 partial-observation contract, the missing
+cross-taxonomy relation would remain an explicit optional gap rather than a global model blocker.
 
 The accepted PCF routes close the earlier cross-taxonomy ETF mapping blocker without weakening that
 Snapshot-set boundary. `etf_sh_cons` and `etf_sz_cons` expose an exchange PCF's ETF code and exact

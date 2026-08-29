@@ -75,25 +75,34 @@ Stage 0 — resolve high-impact uncertainty:
 Stage 1 — freeze requirements:
 
 - [x] `PDI-01` Freeze the three-checkpoint prospective diagnostic registration before new
-  acquisition, model calls, or outcome opening. Registration
+  acquisition, model calls, or outcome opening. The immutable v1 registration
   `prospective-diagnostic-registration-fc975cf2ca4280837f64528720b447615de74b445f21fdc9045465c36d9e9dfd`
   fixes first-eligible policy, earnings-expectation, and macro mechanisms; EOD cutoffs; all six
   required capability slots and their route/cadence/freshness minima; target venues/classes;
   horizons; paired arms; three replicates; the USD 20 aggregate ceiling; hidden outcomes; and exact
   stop/go rules. It grants no model, historical-PIT, or execution authority.
+  - [x] Preserve v1 as historical pre-registration evidence and supersede its global completeness
+    gate with v2 registration
+    `prospective-diagnostic-registration-19ef4193130c0121527a75f3235505c4eec708495e8848588e8ac344e90bc426`.
+    V2 requires one actual-receipt event trigger and treats expectation, market, exposure,
+    positioning, macro, and additional corroboration as explicit optional information. It retains
+    the same paired arms, three replicates, USD 20 ceiling, hidden outcomes, and no-alpha/no-execution
+    claim scope.
 
-Stage 2 — accept capability-complete data slices:
+Stage 2 — accept source slices and measure coverage:
 
 - [ ] `PDI-10` Accept checkpoint-relevant official-event and established-news routes.
   - [x] Accept the CSRC official-event route and the Tushare/Sina prospective aggregator route.
   - [ ] Accept the direct publisher coverage required by each registered checkpoint; aggregator
-    receipt cannot substitute for publisher authority.
+    receipt cannot substitute for publisher authority. Under v2 this is a coverage/corroboration
+    target after one valid trigger, not a global model-dispatch blocker.
 - [ ] `PDI-11` Accept the registered A-share market/index/ETF context route.
   - [x] Accept route-level Tushare `index_daily`, `fund_daily`, and `trade_cal` captures and replay.
   - [x] Bind the three price/calendar record kinds into a content-identified checkpoint market-
     universe view without converting index or adjusted research prices into executable prices.
   - [ ] Prove registered breadth/volatility/liquidity, sequence completeness, and corporate-action
-    semantics at the future checkpoint barrier.
+    semantics at the future checkpoint barrier. Missing values remain research-quality gaps rather
+    than suppressing the whole Judgment Run.
 - [ ] `PDI-12` Accept an effective-dated tradable instrument and universe route.
   - [x] Accept route-level `etf_basic`, `stock_basic`, and `stk_limit` captures and replay.
   - [x] Bind content-identified SSE/SZSE lot/tick rules effective from 2026-07-06 into the checkpoint
@@ -102,7 +111,8 @@ Stage 2 — accept capability-complete data slices:
     account lacks `rt_etf_k`, a recent bar proves activity rather than future order acceptance, and
     positive exchange suspension notices do not prove a complete two-venue absence/status view.
   - [ ] Add decision-time suspension/status evidence; listing lifecycle plus a daily bar is research-
-    eligible but cannot prove the instrument is presently tradable.
+    eligible but cannot prove the instrument is presently tradable. This is soft for Judgment and
+    hard before admitting an actual paper/live Order Intent.
 - [ ] `PDI-13` Accept an effective-dated industry taxonomy, membership, and exposure route.
   - [x] Accept route-level SW2021 `index_classify` and `index_member_all` captures and replay.
   - [x] Implement an exact-code, source-identity-preserving join from current-as-received taxonomy,
@@ -111,7 +121,8 @@ Stage 2 — accept capability-complete data slices:
     ETF → PCF constituent → current effective SW member → SW2021 taxonomy. The real 2026-08-29
     probes matched 211/300 SSE and 98/99 SZSE PCF rows without using names.
   - [ ] Prove the taxonomy effective interval and rebalance/classification-revision lineage; the
-    observed current relation cannot be back-applied as a historical mapping.
+    observed current relation cannot be back-applied as a historical mapping. Prospective mappings
+    remain usable from their real receipt forward with this gap attached.
 - [ ] `PDI-14` Accept the registered positioning route.
   - [x] Accept the route-level Tushare exchange-margin capture and replay.
   - [ ] Freeze units, publication cadence, revision behavior, and checkpoint-aligned no-data rules.
@@ -127,7 +138,7 @@ Stage 2 — accept capability-complete data slices:
   - [x] Accept the route-level Tushare `report_rc` forecast-observation capture and replay.
   - [ ] Freeze and verify the registered as-of population, source-diversity, unit, and consensus
     derivation contract at the checkpoint barrier.
-- [ ] `PDI-17` Freeze and reconcile the complete multi-Snapshot checkpoint input sets.
+- [ ] `PDI-17` Freeze and reconcile observed checkpoint Snapshot sets with explicit coverage gaps.
   - [x] Implement the non-authoritative reconciliation contract and capability-specific read-only
     tools: accepted routes, Collection Policies, Journal-frozen Snapshots, raw hashes, a shared
     barrier, freshness/coverage, and `FrozenDataSnapshotInput` must reconcile. Tool manifest v2
@@ -173,13 +184,18 @@ Stage 3 — operate continuous collection:
     Its backup verification passed; an unpersisted clean-root restore reproduced the state but is
     runtime evidence only. These finite-window Jobs are not the registered PDI-22 soak and do not
     prove an indefinite rolling-date contract.
-  - [ ] Complete PDI-17 checkpoint Snapshot sets, bind the final registration to them and the
+  - [ ] Complete PDI-17 observed checkpoint Snapshot sets, bind the v2 registration to them and the
     accepted supervisor receipt, then run the registered multi-policy soak and fault matrix.
 
-Stage 4 — prove complete Judgment inputs before automatic dispatch:
+Stage 4 — prove bounded Judgment inputs before automatic dispatch:
 
-- [ ] `PDI-30` Assemble one complete prospective Event Envelope/Evidence Pack and frozen tool set.
+- [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
+  information actually observed, with every optional gap retained.
 - [ ] `PDI-31` Pass Query Gate preflight for two or three registered checkpoints.
+  - [x] Implement the content-identified v2 Query Gate contract: required trigger/structural gaps
+    block without model cost; optional and corroboration gaps remain nonblocking Agent inputs; the
+    result grants no PIT, alpha, strategy, paper, or live authority.
+  - [ ] Freeze and pass the gate for two or three real post-v2 checkpoints.
 - [ ] `PDI-32` Run three paired replicates per checkpoint under the frozen stop and cost rules.
 
 Stage 5 — automate bounded follow-up and open registered outcomes:
@@ -208,11 +224,11 @@ broker or backtest mutation is reachable from the research skill.
 
 ## Phase 2 — Historical replay and calibration
 
-Status: blocked by a valid negative result. Deterministic replay works, but the first
-pre-registered real calibration cohort failed its exit gate. Phase 3 strategy promotion and
-Agent-directed paper dispatch remain closed; the opened cohort cannot be retuned and relabeled
-as unseen evidence. Provider-neutral mock execution infrastructure may proceed independently,
-but it grants neither strategy admission nor paper-provider authority.
+Status: blocked for strategy promotion by a valid negative result. Deterministic replay works, but
+the first pre-registered real calibration cohort failed its exit gate and cannot be retuned and
+relabeled as unseen evidence. This does not block clearly labeled experimental mock/paper execution
+diagnostics after a prospective Query Gate pass. It still grants neither strategy admission nor
+paper-provider/live authority.
 
 - [x] Compare stable Nautilus `1.231.0` with `2.0.0rc3` on Python 3.13/3.14;
   select `1.231.0` as the first implementation candidate and keep the RC comparison-only.
@@ -461,16 +477,22 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   ambiguous-submit `unknown`, provider acknowledgement without fill inference, mock-provider
   durability, global reconciliation blocking, duplicate identity rejection, and complete-snapshot
   recovery pass locally. This is mock contract acceptance only: it exposes no Agent execution tool,
-  account capability, IBKR route, or paper admission.
+  account capability, IBKR route, or broker-paper acceptance.
+- [x] Add content-identified experimental Agent paper admission binding an eligible prospective
+  Query Gate and exact Evidence Pack to the exact Signal and paper Order Intent. Persist its hash with the durable outbox
+  while keeping the low-level mock contract seam available for lifecycle tests. The admission is
+  explicitly no-alpha, no-strategy-promotion, no-live, and cannot bypass mandate, price, policy,
+  approval, Provider capability, or reconciliation.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
   engine and official IB adapter; create a direct IBKR Provider only if that path cannot
   pass lifecycle and reconciliation acceptance.
 - Add CLI, MCP approval tools, generic webhook, and macOS notifications.
 - Pass crash/restart/reconciliation and duplicate-order acceptance.
 
-Exit gate: the prospective Query/strategy gates admit Agent-directed paper operation and paper
-state reconciles with IBKR after every injected failure. Mock contract acceptance does not satisfy
-this gate.
+Exit gate: a prospective Query Gate may admit experimental Agent-directed paper operation under
+partial observation; strategy-labeled paper additionally requires strategy promotion. In both
+cases, paper state must reconcile with IBKR after every injected failure. Mock contract acceptance
+does not satisfy IBKR acceptance.
 
 IBKR Paper acceptance covers Harness-to-Nautilus-to-IB order identity, ambiguous submit
 outcomes, partial and duplicate fills, disconnects, gateway and process restart, external

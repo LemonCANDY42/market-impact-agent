@@ -14,13 +14,15 @@ Approval is a policy state machine, not a conversational promise.
 
 ## Decision order
 
-1. Validate the `OrderIntent`, including its explicit creation-to-expiry window, and its
+1. For an Agent-originated experimental paper order, validate and persist the exact eligible
+   Prospective Query Gate→Evidence Pack→Signal→Order binding. This provenance grants no execution authority.
+2. Validate the `OrderIntent`, including its explicit creation-to-expiry window, and its
    parent signal/evidence references.
-2. Evaluate non-overridable hard rules.
-3. Return `DENY`, `REQUIRE_MANUAL`, or `ELIGIBLE`.
-4. Only an `ELIGIBLE` intent may reach a configured semantic auto approver.
-5. Atomically queue an approved intent in the durable paper outbox.
-6. Record every submission attempt, provider acknowledgement, execution event, and
+3. Evaluate non-overridable hard rules.
+4. Return `DENY`, `REQUIRE_MANUAL`, or `ELIGIBLE`.
+5. Only an `ELIGIBLE` intent may reach a configured semantic auto approver.
+6. Atomically queue an approved intent in the durable paper outbox.
+7. Record every submission attempt, provider acknowledgement, execution event, and
    reconciliation result without inferring a fill from acknowledgement.
 
 Hard rules include order-intent and mandate time bounds, account and environment matching,
@@ -46,7 +48,10 @@ lease produces `unknown`, never an automatic retry. Provider `accepted` is an ac
 not a fill. `unknown` and `accepted` block further admission and dispatch until a complete
 provider reconciliation snapshot accounts for every known and external order without gaps.
 
-Immutable contracts live in a content-addressed store. SQLite owns the current approval,
+Immutable contracts live in a content-addressed store. For the experimental Agent path the outbox
+row additionally binds the `ExperimentalPaperAdmission` artifact hash; a low-level mock-only
+admission remains available for isolated lifecycle contract tests and cannot be rebound later to an
+Agent admission with the same client order identity. SQLite owns the current approval,
 outbox, attempt, event, reconciliation, and global-gate state with WAL, full synchronous
 writes, and immediate transactions around claims and transitions. The data-input receipt
 journal and Attention Watch outbox are deliberately not execution authorities.
@@ -60,8 +65,10 @@ expiry, mandate, and actor. Editing an intent invalidates its approval.
 ## Initial safety state
 
 The bootstrap contains no live provider, credential loader, autonomous approver, Agent-facing
-execution tool, or notification click-to-trade path. The only executable provider is a
+execution tool, automatic Judgment-to-paper dispatcher, or notification click-to-trade path. It has
+a typed experimental Agent paper admission seam, but no real checkpoint has yet passed the v2 Query
+Gate. The only executable provider is a
 paper-only mock whose optional SQLite truth survives restart for contract tests and exposes no
-account capability. Local mock acceptance does not admit Agent-directed paper dispatch or
-upgrade any external provider. These omissions are acceptance criteria, not unfinished
+account capability. Local mock acceptance and the experimental provenance contract do not upgrade
+any external Provider or authorize live. These omissions are acceptance criteria, not unfinished
 shortcuts.

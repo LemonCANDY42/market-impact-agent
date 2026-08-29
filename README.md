@@ -34,8 +34,10 @@ The bootstrap implements:
 - canonical domain contracts for signals, order intents, mandates, and approval;
 - a Harness-owned durable paper-execution contract slice that freezes exact intent/mandate/price/
   policy/approval identities, atomically queues approved mock intents, treats lost acknowledgements
-  and expired leases as `unknown`, and requires complete reconciliation before continuing; it has
-  no Agent tool, account capability, broker connection, or live path;
+  and expired leases as `unknown`, and requires complete reconciliation before continuing; a
+  separate experimental admission can now persist an eligible prospective Query Gate→Evidence Pack→Signal→paper
+  Order provenance hash without claiming strategy promotion or execution authority. There is still
+  no Agent execution tool, account capability, broker connection, or live path;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
 - a separate read-only Observation Provider contract plus current public Polymarket and
@@ -43,7 +45,7 @@ The bootstrap implements:
   content-addressed raw/normalized JSON bundles with explicit occurrence, publication,
   update, availability, aggregator-fetch, and retrieval semantics;
 - a Provider-neutral [Data Input Harness](docs/DATA_INPUT_HARNESS.md) with content-identified
-  semantic queries, strict/modeled/prospective PIT lanes, frozen Provider-manifest/source routes,
+  semantic queries, strict/modeled/prospective/retrospective lanes, frozen Provider-manifest/source routes,
   concurrent reads, typed degradation, raw-response retention, cutoff filtering, immutable
   Data Snapshots, persistent complete-snapshot caching, and bound read-only Agent tools whose
   checkpoint results are content-identified Provider-neutral decision inputs with explicit source,
@@ -51,7 +53,10 @@ The bootstrap implements:
   Checkpoint Market Universe View can deterministically join one frozen checkpoint's market,
   instrument, taxonomy, membership, and ETF-mapping inputs—including exact daily exchange-PCF
   constituent links—with versioned SSE/SZSE lot/tick rules while keeping suspension,
-  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps fail-closed; the
+  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps explicit; the v2 prospective
+  registration and Query Gate block missing trigger/structural inputs while allowing the Agent to
+  reason or abstain with optional information missing. Order-time tradability and risk remain
+  independently fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte
   retention, and records actual receipt without claiming historical PIT or article-body rights;
@@ -388,7 +393,7 @@ uv run market-impact backtest phase2-run --registration PRIVATE_REGISTRATION.jso
   --data-snapshot-root .market-impact/tushare --output-dir PRIVATE_OUTPUT_DIRECTORY
 uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
 uv run market-impact data validate-prospective-diagnostic \
-  --registration examples/research/prospective-diagnostic-registration-v1.json
+  --registration examples/research/prospective-diagnostic-registration-v2.json
 uv run market-impact data accept-tushare-observation \
   --source-config examples/providers/tushare-observation-index-daily-v1.json \
   --parameters-json '{"ts_code":"000300.SH","start_date":"20260827","end_date":"20260827"}' \
@@ -402,6 +407,10 @@ uv run ruff format --check .
 uv run pyright
 uv run pytest
 ```
+
+The immutable v1 prospective registration remains beside v2 as the original
+all-slots-required diagnostic. V2 is the current partial-observation contract for future
+checkpoints; validating it does not itself authorize a model call or paper order.
 
 Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment. Historical
 bundles remain under ignored `.market-impact/tushare/`; prospective observations, Journals, route

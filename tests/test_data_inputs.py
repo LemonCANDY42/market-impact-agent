@@ -565,6 +565,54 @@ def test_strict_modeled_and_prospective_lanes_are_distinct(tmp_path: Path) -> No
     assert prospective.observations == (actual,)
 
 
+def test_retrospective_lane_archives_late_receipt_without_historical_pit_claim(
+    tmp_path: Path,
+) -> None:
+    published_at = datetime(2024, 9, 24, 0, 55, tzinfo=UTC)
+    times = ObservationTimes(
+        occurred_at=published_at,
+        published_at=published_at,
+        available_at=RETRIEVED,
+        source_updated_at=published_at,
+        aggregator_fetched_at=None,
+        retrieved_at=RETRIEVED,
+        occurrence_basis=OccurrenceBasis.SOURCE_REPORTED,
+        availability_basis=AvailabilityBasis.ACTUAL_RECEIPT,
+    )
+    late_receipt = SourceObservation.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="official-feed",
+        provider_version="2024-09",
+        upstream_source="official.example",
+        upstream_record_id="historical-release-seen-late",
+        source_ref="https://official.example/releases/historical",
+        lineage_id="historical-release-seen-late",
+        times=times,
+        authority_at=None,
+        authority_kind=None,
+        raw_content_hash=sha256_bytes(b"late-body"),
+        normalized_payload={
+            "headline": "Historical release retrieved later",
+            "retrospective_only": True,
+        },
+        license_scope="private_research",
+    )
+    harness = DataInputHarness(LocalDataSnapshotStore(tmp_path / "retrospective"))
+    harness.register(FixtureProvider(_manifest(), _response(late_receipt, raw_body=b"late-body")))
+
+    snapshot = asyncio.run(
+        harness.execute(
+            _query(pit_lane=DataPITLane.RETROSPECTIVE, as_of=RETRIEVED),
+            mode=DataQueryMode.FETCH_IF_MISSING,
+        )
+    )
+
+    assert snapshot.coverage_complete is True
+    assert snapshot.query.pit_lane is DataPITLane.RETROSPECTIVE
+    assert snapshot.observations == (late_receipt,)
+    assert snapshot.observations[0].authority_at is None
+
+
 def test_prospective_snapshot_before_cutoff_is_incomplete_and_not_cached(tmp_path: Path) -> None:
     actual_times = ObservationTimes(
         occurred_at=RETRIEVED,

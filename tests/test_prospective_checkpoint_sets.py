@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 from typing import cast
 
 import pytest
 
-from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_contracts import EvidencePack, EvidenceReference, canonical_hash
+from market_impact_agent.agent_engine import AgentExecutionBinding
 from market_impact_agent.agent_runtime import ToolSideEffect
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.checkpoint_decision_inputs import project_checkpoint_observation
@@ -39,6 +42,7 @@ from market_impact_agent.prospective_data import (
     ProspectiveDataJournal,
 )
 from market_impact_agent.prospective_diagnostic import (
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     DiagnosticCapabilitySlot,
@@ -47,6 +51,8 @@ from market_impact_agent.prospective_diagnostic import (
     ProspectiveDiagnosticCheckpoint,
     ProspectiveDiagnosticRegistration,
 )
+from market_impact_agent.prospective_query_gate import evaluate_prospective_query_gate
+from market_impact_agent.research import EvidenceTier
 from market_impact_agent.source_acceptance import (
     SourceAcceptanceGate,
     SourceAcceptanceGateResult,
@@ -164,6 +170,107 @@ def _registration(
         stop_conditions=("required_snapshot_incomplete",),
         go_conditions=("all_required_slots_reconciled",),
         claim_scope="process_diagnostic_only_no_alpha_or_execution_claim",
+    )
+
+
+def _v2_partial_registration() -> ProspectiveDiagnosticRegistration:
+    def checkpoint(key: str, mechanism: DiagnosticMechanism) -> ProspectiveDiagnosticCheckpoint:
+        return ProspectiveDiagnosticCheckpoint(
+            checkpoint_key=key,
+            name=key.replace("-", " "),
+            mechanism=mechanism,
+            selection_rule="first_eligible_after_registration",
+            eligibility_rule="First actual-receipt event after registration.",
+            eligibility_source_classes=("observed_source",),
+            exclusion_rules=("Exclude observations received after cutoff.",),
+            cutoff=DiagnosticCutoffRule(
+                timezone="Asia/Shanghai",
+                session_boundary="after_market_close",
+                market_close_local="15:00:00",
+                decision_delay_seconds=1800,
+            ),
+            capability_slots=tuple(
+                DiagnosticCapabilitySlot(
+                    capability=capability,
+                    applicability=(
+                        CapabilityApplicability.REQUIRED
+                        if capability is ObservationCapability.EVENT_REVELATION
+                        else CapabilityApplicability.OPTIONAL
+                    ),
+                    not_applicable_reason=None,
+                    required_route_kinds=(
+                        ("official_event", "established_news")
+                        if capability is ObservationCapability.EVENT_REVELATION
+                        else (f"{capability.value}_observation",)
+                    ),
+                    minimum_data_sources=1,
+                    minimum_observations=1,
+                    poll_interval_seconds=60,
+                    maximum_gap_seconds=3600,
+                    maximum_age_seconds=3600,
+                )
+                for capability in sorted(
+                    REQUIRED_DIAGNOSTIC_CAPABILITIES,
+                    key=lambda item: item.value,
+                )
+            ),
+            target_venues=("XSHG", "XSHE"),
+            allowed_instrument_classes=("exchange_traded_fund",),
+            candidate_horizon_sessions=(1, 5, 20),
+        )
+
+    return ProspectiveDiagnosticRegistration.build(
+        registered_at=REGISTERED,
+        checkpoints=(
+            checkpoint("policy-event-v2", DiagnosticMechanism.POLICY_REGULATION),
+            checkpoint("macro-event-v2", DiagnosticMechanism.MACRO_CYCLE),
+        ),
+        paired_arms=("structured_agent_core", "structured_agent_plus_routed_methods"),
+        replicates_per_arm=3,
+        model_profile_id="cliproxyapi-luna-xhigh-v1",
+        aggregate_model_cost_limit_usd="20.00",
+        outcome_opening_rule="do_not_open_until_all_paired_judgments_are_sealed",
+        stop_conditions=("structural_query_gate_failed",),
+        go_conditions=("actual_receipt_event_trigger_available",),
+        claim_scope="process_diagnostic_only_no_alpha_or_execution_claim",
+        schema_version=PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    )
+
+
+def _evidence_pack() -> EvidencePack:
+    return EvidencePack.build(
+        event_id="policy-event-v2",
+        as_of=BARRIER,
+        research_question="What can be inferred from the information actually observed?",
+        evidence=(
+            EvidenceReference(
+                evidence_id="prospective-event-observation",
+                claim_id="observed-event",
+                source_ref="https://official.example/event",
+                source_tier=EvidenceTier.OFFICIAL,
+                available_at=RECEIVED,
+                content_hash=sha256(b"event").hexdigest(),
+                summary="An event was observed before the checkpoint barrier.",
+            ),
+        ),
+        pattern_packs=(),
+        allowed_targets=("510300.XSHG",),
+        data_gaps=("prior_expectation unavailable",),
+    )
+
+
+def _execution_binding() -> AgentExecutionBinding:
+    digest = canonical_hash({"fixture": "query-gate"})
+    return AgentExecutionBinding(
+        runtime_ref="market-impact-agent-runtime-v1",
+        runtime_config_hash=digest,
+        prompt_hash=digest,
+        skill_hashes=(),
+        tool_manifest_hashes=(digest,),
+        tool_surface_hash=digest,
+        mcp_server_hashes=(),
+        context_estimator_id="context-estimator-v1",
+        compactor_id="compactor-v1",
     )
 
 
@@ -1114,3 +1221,120 @@ def test_index_projection_keeps_research_and_execution_price_bases_separate(
     assert times["available_at"] == "2026-08-28T05:30:00Z"
     assert times["authority_at"] == "2026-08-28T05:30:00Z"
     assert times["retrieved_at"] == "2026-08-28T05:30:00Z"
+
+
+def test_partial_v2_snapshot_set_keeps_optional_gaps_without_blocking_model_run(
+    tmp_path: Path,
+) -> None:
+    store, journal, policy, frozen, report = _fixture(tmp_path)
+    registration = _v2_partial_registration()
+    snapshot_set = reconcile_prospective_checkpoint_snapshot_set(
+        registration=registration,
+        checkpoint_key="policy-event-v2",
+        barrier_at=BARRIER,
+        selections=(
+            CheckpointRouteSelection(
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="official_event",
+                snapshot_id=frozen.snapshot_id,
+                collection_policy_id=policy.policy_id,
+                source_acceptance_report_id=report.report_id,
+            ),
+        ),
+        store=store,
+        journal=journal,
+        policies={policy.policy_id: policy},
+        acceptance_reports={report.report_id: report},
+        reconciled_at=BARRIER + timedelta(minutes=1),
+        allow_partial=True,
+    )
+
+    assert snapshot_set.complete is False
+    assert len(snapshot_set.capability_gaps) == 6
+    assert (
+        validate_agent_contract(
+            snapshot_set.to_dict(),
+            "prospective-checkpoint-snapshot-set.schema.json",
+        )
+        == ()
+    )
+    gate = evaluate_prospective_query_gate(
+        registration=registration,
+        snapshot_set=snapshot_set,
+        evidence_pack=_evidence_pack(),
+        execution_binding=_execution_binding(),
+        model_profile_id=registration.model_profile_id,
+        model_cost_limit_usd=Decimal("5.00"),
+        evaluated_at=BARRIER + timedelta(minutes=2),
+    )
+
+    assert gate.model_run_eligible is True
+    assert gate.blocking_required_gaps == ()
+    assert len(gate.nonblocking_information_gaps) == 7
+    assert (
+        "event_revelation:missing_registered_routes:established_news"
+        in gate.nonblocking_information_gaps
+    )
+    assert gate.historical_pit_claim is False
+    assert gate.execution_capability is False
+    assert gate.frozen_input.authorized_snapshot_ids == frozenset({frozen.snapshot_id})
+    assert (
+        validate_agent_contract(
+            gate.to_dict(),
+            "prospective-query-gate-result.schema.json",
+        )
+        == ()
+    )
+
+
+def test_partial_v2_query_gate_blocks_missing_trigger_but_not_optional_information(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    registration = _v2_partial_registration()
+    snapshot_set = reconcile_prospective_checkpoint_snapshot_set(
+        registration=registration,
+        checkpoint_key="policy-event-v2",
+        barrier_at=BARRIER,
+        selections=(),
+        store=store,
+        journal=ProspectiveDataJournal(store),
+        policies={},
+        acceptance_reports={},
+        reconciled_at=BARRIER + timedelta(minutes=1),
+        allow_partial=True,
+    )
+
+    gate = evaluate_prospective_query_gate(
+        registration=registration,
+        snapshot_set=snapshot_set,
+        evidence_pack=_evidence_pack(),
+        execution_binding=_execution_binding(),
+        model_profile_id=registration.model_profile_id,
+        model_cost_limit_usd=Decimal("5.00"),
+        evaluated_at=BARRIER + timedelta(minutes=2),
+    )
+
+    assert gate.model_run_eligible is False
+    assert gate.blocking_required_gaps == (
+        "event_revelation:missing_registered_routes:established_news,official_event",
+    )
+    assert all(not gap.startswith("event_revelation:") for gap in gate.nonblocking_information_gaps)
+
+
+def test_v1_snapshot_reconciliation_remains_fail_closed_when_routes_are_missing(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    with pytest.raises(ValueError, match="selections do not match registered route kinds"):
+        reconcile_prospective_checkpoint_snapshot_set(
+            registration=_registration(),
+            checkpoint_key="policy-event",
+            barrier_at=BARRIER,
+            selections=(),
+            store=store,
+            journal=ProspectiveDataJournal(store),
+            policies={},
+            acceptance_reports={},
+            reconciled_at=BARRIER + timedelta(minutes=1),
+        )

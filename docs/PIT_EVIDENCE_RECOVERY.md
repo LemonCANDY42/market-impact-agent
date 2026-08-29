@@ -185,6 +185,13 @@ authority, license, and revision-lineage fields once. The lane-specific qualifie
 claim that evidence may support. Vendor backfills, web archives, and future streaming sources do not
 need parallel schemas or independent orchestration authority.
 
+Material that remains historically unqualified is not discarded. The generic `retrospective` Data
+PIT lane archives it using the real later receipt time and preserves the missing `authority_at` as a
+gap. Postmortem tools may compare that later context with the original decision, but strict
+backtests, prospective Judgment inputs, strategy promotion, and order creation cannot consume it.
+`modeled` remains a distinct frozen visibility assumption for process diagnostics rather than a
+catch-all label for hindsight material.
+
 ## Price basis
 
 “Adjusted price” has different meanings by instrument and use:

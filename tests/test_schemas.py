@@ -36,9 +36,11 @@ class Validator(Protocol):
         "prospective-dataset-manifest.schema.json",
         "prospective-diagnostic-registration.schema.json",
         "prospective-checkpoint-snapshot-set.schema.json",
+        "prospective-query-gate-result.schema.json",
         "checkpoint-decision-input.schema.json",
         "exchange-instrument-rule-set.schema.json",
         "checkpoint-market-universe-view.schema.json",
+        "experimental-paper-admission.schema.json",
         "event-transmission.schema.json",
         "backtest-request.schema.json",
         "backtest-result.schema.json",
@@ -147,6 +149,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/regime-modeled-pit-policy-v1.json",
         "examples/research/regime-modeled-pit-agent-validation-v1.json",
         "examples/research/prospective-diagnostic-registration-v1.json",
+        "examples/research/prospective-diagnostic-registration-v2.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -205,7 +208,12 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         schema_name = "regime-modeled-pit-agent-validation-registration.schema.json"
     elif example_path.endswith("regime-agent-validation-v1.json"):
         schema_name = "regime-agent-validation-registration.schema.json"
-    elif example_path.endswith("prospective-diagnostic-registration-v1.json"):
+    elif example_path.endswith(
+        (
+            "prospective-diagnostic-registration-v1.json",
+            "prospective-diagnostic-registration-v2.json",
+        )
+    ):
         schema_name = "prospective-diagnostic-registration.schema.json"
     elif example_path.endswith("federal-reserve-press-feed-v1.json"):
         schema_name = "syndication-feed-source.schema.json"
@@ -251,6 +259,31 @@ def test_order_intent_schema_requires_explicit_expiry() -> None:
 
     with pytest.raises(ValidationError, match="'expires_at' is a required property"):
         cast(Validator, validator).validate(order)
+
+
+def test_prospective_diagnostic_schema_matches_versioned_capability_rules() -> None:
+    validator = Draft202012Validator(
+        load_json(ROOT / "schemas" / "prospective-diagnostic-registration.schema.json"),
+        format_checker=FormatChecker(),
+    )
+    v1_optional = load_json(ROOT / "examples/research/prospective-diagnostic-registration-v1.json")
+    v1_checkpoints = cast(list[dict[str, Any]], v1_optional["checkpoints"])
+    first_v1_slot = cast(list[dict[str, Any]], v1_checkpoints[0]["capability_slots"])[0]
+    first_v1_slot["applicability"] = "optional"
+
+    with pytest.raises(ValidationError):
+        cast(Validator, validator).validate(v1_optional)
+
+    v2_missing_trigger = load_json(
+        ROOT / "examples/research/prospective-diagnostic-registration-v2.json"
+    )
+    for checkpoint in cast(list[dict[str, Any]], v2_missing_trigger["checkpoints"]):
+        for slot in cast(list[dict[str, Any]], checkpoint["capability_slots"]):
+            if slot["capability"] == "event_revelation":
+                slot["applicability"] = "optional"
+
+    with pytest.raises(ValidationError):
+        cast(Validator, validator).validate(v2_missing_trigger)
 
 
 def test_event_schema_requires_values_for_known_expectation_delta() -> None:

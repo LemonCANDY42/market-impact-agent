@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-query-gate-result.schema.json",
+  "title": "Market Impact Prospective Query Gate Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result_id",
+    "registration_id",
+    "checkpoint_key",
+    "checkpoint_snapshot_set_id",
+    "evidence_pack_id",
+    "agent_execution_binding_hash",
+    "model_profile_id",
+    "model_cost_limit_usd",
+    "barrier_at",
+    "evaluated_at",
+    "authorized_snapshot_ids",
+    "blocking_required_gaps",
+    "nonblocking_information_gaps",
+    "model_run_eligible",
+    "claim_scope",
+    "historical_pit_claim",
+    "strategy_promotion_claim",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-query-gate-result.v1"},
+    "result_id": {
+      "type": "string",
+      "pattern": "^prospective-query-gate-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "checkpoint_snapshot_set_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-snapshot-set-[0-9a-f]{64}$"
+    },
+    "evidence_pack_id": {
+      "type": "string",
+      "pattern": "^evidence-pack-[0-9a-f]{64}$"
+    },
+    "agent_execution_binding_hash": {"$ref": "#/$defs/sha256"},
+    "model_profile_id": {"type": "string", "minLength": 1},
+    "model_cost_limit_usd": {"type": "string", "pattern": "^[0-9]+[.][0-9]{2}$"},
+    "barrier_at": {"type": "string", "format": "date-time"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "authorized_snapshot_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^data-snapshot-[0-9a-f]{64}$"
+      }
+    },
+    "blocking_required_gaps": {"$ref": "#/$defs/gaps"},
+    "nonblocking_information_gaps": {"$ref": "#/$defs/gaps"},
+    "model_run_eligible": {"type": "boolean"},
+    "claim_scope": {"const": "process_diagnostic_only_no_alpha_or_execution_claim"},
+    "historical_pit_claim": {"const": false},
+    "strategy_promotion_claim": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

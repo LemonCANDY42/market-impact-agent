@@ -7,8 +7,10 @@ import pytest
 from market_impact_agent.cli import main
 
 
+@pytest.mark.parametrize("version", ["v1", "v2"])
 def test_cli_validates_frozen_prospective_diagnostic_registration(
     capsys: pytest.CaptureFixture[str],
+    version: str,
 ) -> None:
     assert (
         main(
@@ -16,7 +18,7 @@ def test_cli_validates_frozen_prospective_diagnostic_registration(
                 "data",
                 "validate-prospective-diagnostic",
                 "--registration",
-                "examples/research/prospective-diagnostic-registration-v1.json",
+                f"examples/research/prospective-diagnostic-registration-{version}.json",
             ]
         )
         == 0

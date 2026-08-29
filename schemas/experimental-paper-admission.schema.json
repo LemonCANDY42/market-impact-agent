@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/experimental-paper-admission.schema.json",
+  "title": "Market Impact Experimental Paper Admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "admission_id",
+    "query_gate_result_id",
+    "query_gate_result_hash",
+    "evidence_pack_id",
+    "evidence_pack_hash",
+    "signal_id",
+    "signal_intent_hash",
+    "order_intent_hash",
+    "created_at",
+    "strategy_admission_id",
+    "claim_scope",
+    "alpha_claim",
+    "live_capability",
+    "execution_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.experimental-paper-admission.v1"},
+    "admission_id": {
+      "type": "string",
+      "pattern": "^experimental-paper-admission-[0-9a-f]{64}$"
+    },
+    "query_gate_result_id": {
+      "type": "string",
+      "pattern": "^prospective-query-gate-[0-9a-f]{64}$"
+    },
+    "query_gate_result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_pack_id": {
+      "type": "string",
+      "pattern": "^evidence-pack-[0-9a-f]{64}$"
+    },
+    "evidence_pack_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "signal_id": {"type": "string", "pattern": "^signal-.+$"},
+    "signal_intent_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "order_intent_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "strategy_admission_id": {"type": "null"},
+    "claim_scope": {"const": "execution_diagnostic_only_no_alpha_or_live_claim"},
+    "alpha_claim": {"const": false},
+    "live_capability": {"const": false},
+    "execution_authority": {"const": false}
+  }
+}

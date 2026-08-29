@@ -36,6 +36,12 @@ path can issue a sealed submission capability containing those hashes and a uniq
 attempt identity. The provider contract accepts that capability rather than a raw intent. No
 live gateway exists in the bootstrap.
 
+For experimental Agent paper flow, the Harness may first persist an
+`ExperimentalPaperAdmission` binding an eligible prospective Query Gate, Evidence Pack, Signal, and exact paper
+Order. Providers never see or validate that research provenance, and it grants no submission
+capability. The unchanged mandate, hard policy, approval, durable outbox, sealed capability, and
+reconciliation path still decides whether an order can reach a provider.
+
 The provider owns broker-specific translation and execution facts. The harness owns
 policy, approval, evidence, and the immutable decision trail.
 

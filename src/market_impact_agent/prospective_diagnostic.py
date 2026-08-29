@@ -12,7 +12,20 @@ from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.domain import require_aware
 from market_impact_agent.observations import ObservationCapability
 
-PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = "market-impact.prospective-diagnostic-registration.v1"
+PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1 = (
+    "market-impact.prospective-diagnostic-registration.v1"
+)
+PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2 = (
+    "market-impact.prospective-diagnostic-registration.v2"
+)
+# Backward-compatible default; v2 must be selected explicitly.
+PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1
+_SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
+    {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    }
+)
 
 REQUIRED_DIAGNOSTIC_CAPABILITIES = frozenset(
     {
@@ -34,6 +47,7 @@ class DiagnosticMechanism(StrEnum):
 
 class CapabilityApplicability(StrEnum):
     REQUIRED = "required"
+    OPTIONAL = "optional"
     NOT_APPLICABLE = "not_applicable"
 
 
@@ -94,19 +108,19 @@ class DiagnosticCapabilitySlot:
                 raise ValueError("not_applicable slots cannot carry collection requirements")
             return
         if self.not_applicable_reason is not None:
-            raise ValueError("required capability slots cannot carry not_applicable reason")
+            raise ValueError("applicable capability slots cannot carry not_applicable reason")
         if not self.required_route_kinds:
-            raise ValueError("required capability slot needs at least one route kind")
+            raise ValueError("applicable capability slot needs at least one route kind")
         if not 1 <= self.minimum_data_sources <= len(self.required_route_kinds):
             raise ValueError("minimum_data_sources must fit the registered route kinds")
         if self.minimum_observations < 1:
-            raise ValueError("required capability slot needs at least one observation")
+            raise ValueError("applicable capability slot needs at least one observation")
         if self.poll_interval_seconds < 1:
-            raise ValueError("required capability slot poll interval must be positive")
+            raise ValueError("applicable capability slot poll interval must be positive")
         if self.maximum_gap_seconds < self.poll_interval_seconds:
             raise ValueError("maximum gap cannot be shorter than the poll interval")
         if self.maximum_age_seconds < 1:
-            raise ValueError("required capability slot maximum age must be positive")
+            raise ValueError("applicable capability slot maximum age must be positive")
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -206,8 +220,21 @@ class ProspectiveDiagnosticRegistration:
     schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA:
+        if self.schema_version not in _SUPPORTED_REGISTRATION_SCHEMAS:
             raise ValueError("unsupported prospective diagnostic registration schema")
+        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1 and any(
+            slot.applicability is CapabilityApplicability.OPTIONAL
+            for checkpoint in self.checkpoints
+            for slot in checkpoint.capability_slots
+        ):
+            raise ValueError("prospective diagnostic v1 does not support optional capability slots")
+        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2:
+            for checkpoint in self.checkpoints:
+                if (
+                    checkpoint.slot(ObservationCapability.EVENT_REVELATION).applicability
+                    is not CapabilityApplicability.REQUIRED
+                ):
+                    raise ValueError("prospective diagnostic v2 event_revelation must be required")
         require_aware(self.registered_at, "prospective diagnostic registered_at")
         if self.registered_at.utcoffset() != UTC.utcoffset(self.registered_at):
             raise ValueError("prospective diagnostic registered_at must use UTC")
@@ -287,9 +314,10 @@ class ProspectiveDiagnosticRegistration:
         stop_conditions: tuple[str, ...],
         go_conditions: tuple[str, ...],
         claim_scope: str,
+        schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
     ) -> ProspectiveDiagnosticRegistration:
         core = {
-            "schema_version": PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA,
+            "schema_version": schema_version,
             "registered_at": _timestamp(registered_at),
             "checkpoints": [item.to_dict() for item in checkpoints],
             "paired_arms": list(paired_arms),
@@ -313,6 +341,7 @@ class ProspectiveDiagnosticRegistration:
             stop_conditions=stop_conditions,
             go_conditions=go_conditions,
             claim_scope=claim_scope,
+            schema_version=schema_version,
         )
 
 

@@ -415,8 +415,10 @@ Requirements are controlled as follows:
    adjusted research series.
 5. Missing receipts, source drift, sequence gaps, restore mismatches, and ambiguous dispatch remain
    visible and fail closed. Later data cannot silently heal an earlier gap.
-6. No model diagnostic begins until every registered input slot passes PDI-31 Query Gate preflight.
-   A failed preflight consumes no model budget.
+6. No model diagnostic begins until PDI-31 validates the required actual-receipt trigger, immutable
+   cutoff/Snapshot identities, frozen tool/runtime/model surface, and cost ceiling. Optional
+   information gaps remain explicit inputs and evaluation strata; they are not global dispatch
+   blockers. A failed structural preflight consumes no model budget.
 
 ### Dependency map
 
@@ -427,13 +429,13 @@ flowchart LR
     R --> D[PDI-10 and PDI-12..16 accept other routes]
     R --> O[PDI-20 collection supervisor]
     M --> O
-    M --> F[PDI-17 freeze checkpoint Snapshot sets]
-    D --> F[PDI-17 freeze checkpoint Snapshot sets]
+    M --> F[PDI-17 freeze observed checkpoint Snapshot sets]
+    D --> F[PDI-17 freeze observed checkpoint Snapshot sets]
     O --> I[PDI-21 install host supervisor]
     I --> H[PDI-22 operations and restore gate]
     F --> H
     F --> J[PDI-30 assemble Judgment inputs]
-    J --> Q[PDI-31 Query Gate preflight]
+    J --> Q[PDI-31 structural Query Gate plus explicit gaps]
     Q --> E[PDI-32 paired process diagnostic]
     F --> W[PDI-40 admit bounded Watch proposals]
     H --> W
@@ -472,7 +474,7 @@ three replicates per arm, shared USD 20.00 ceiling, hidden outcomes, and process
 scope are fixed. This completion authorizes source acquisition against the registration; it does not
 authorize a model call or outcome opening.
 
-### Stage 2 — Accept capability-complete prospective data slices
+### Stage 2 — Accept prospective source slices and measure coverage
 
 The route Tasks may proceed independently after PDI-01. A checkpoint may bind more than one route,
 but an implicit Provider fallback is never allowed.
@@ -573,7 +575,7 @@ and `source-route-acceptance-report-50c86e9eda5cc290c0a59b07d34b1c7edd68e16264c9
 This closes the non-empty current mapping sub-gate but does not prove taxonomy effective intervals,
 PCF publication time/weights, or rebalance and classification-revision lineage.
 The probe did not manufacture a Prospective Checkpoint Snapshot Set or Checkpoint Decision Input:
-those artifacts remain blocked on a real registered checkpoint with all six capability slots. The
+those artifacts remain blocked on a real registered checkpoint trigger. The
 new view contract is therefore implementation evidence plus negative real-input compatibility
 evidence, not a PDI-17 or Query Gate pass.
 
@@ -613,32 +615,37 @@ Deliver a cited consensus, forecast, positioning, survey, or market-implied base
 units, revision policy, and source diversity. The Provider supplies the baseline observations; only
 the Agent may form an evidence-linked Expectation Delta.
 
-#### PDI-17 — Freeze complete checkpoint Snapshot sets
+#### PDI-17 — Freeze observed checkpoint Snapshot sets with explicit coverage gaps
 
-**Blocked by:** PDI-10 through PDI-16 as required by PDI-01. As of 2026-08-29, the new PCF inputs do
-not change that result: no complete checkpoint Snapshot Set is frozen and no paired Agent model call
-is authorized.
+**Blocked by:** a first-eligible trigger under the v2 registration. PDI-10 through PDI-16 remain
+coverage and semantic-quality dependencies, but optional slots do not all have to complete before a
+process-diagnostic Judgment Run. As of 2026-08-29, no post-v2 trigger Snapshot Set is frozen and no
+paired Agent model call is authorized.
 
-**Acceptance:** each registered capability has a complete prospective Data Snapshot with actual-
-receipt authority at the checkpoint cutoff; all route acceptance IDs, Snapshot IDs, source-policy
-IDs, raw hashes, coverage results, and semantic tool manifests reconcile. The existing
-`FrozenDataSnapshotInput` binds the exact set without creating a composite data authority.
+**Acceptance:** every present capability has a structurally complete prospective Data Snapshot with
+actual-receipt authority at the checkpoint cutoff; all selected route acceptance IDs, Snapshot IDs,
+source-policy IDs, raw hashes, coverage results, and semantic tool manifests reconcile. Missing,
+stale, or below-target capability coverage is frozen as an explicit gap. The existing
+`FrozenDataSnapshotInput` binds only the accepted present set without creating a composite authority.
 
-**Stage exit — Capability Coverage Gate:** every registered slot passes, or the checkpoint remains
-ineligible. `not_applicable` is allowed only when frozen in PDI-01, never invented after collection.
+**Stage exit — Observation Integrity Gate:** selected inputs pass identity, cutoff, receipt, and route
+acceptance checks. Missing required trigger data blocks PDI-31; missing optional information is
+retained. `not_applicable` is allowed only when frozen in registration, never invented afterward.
 
 The contract implementation now validates the immutable barrier, Journal provenance, route report
 identity, source configuration and Provider hashes, cadence/gap/freshness minima, observation/source
 coverage, raw response hashes, and the exact `FrozenDataSnapshotInput`. It emits one read-only
-capability tool per required slot. New Snapshot Set schema v2 artifacts use tool manifest v2 to
+capability tool per present slot. Snapshot Set schema v2 preserves the original all-complete
+contract. Schema v3 adds content-identified `capability_gaps` and permits partial registered
+coverage without accepting an incomplete selected Snapshot. Both use tool manifest v2 to
 deterministically project each bound Source Observation into a content-identified Provider-neutral
 Checkpoint Decision Input; the schema still validates legacy schema-v1/manifest-v1 artifacts as
 their original contract. The projection
 preserves source/time/authority identity, separates research and execution price bases, and carries
 unresolved unit, consensus, revision, taxonomy, total-return, and tradability gaps without inventing
-an inference or new authority. This is implementation evidence only: PDI-17 remains open until the
-registered future events occur and every required route has produced accepted post-registration
-actual receipts at the same checkpoint barrier.
+an inference or new authority. This is implementation evidence only: PDI-17 remains open until a
+registered future event occurs and its required trigger route produces an accepted post-registration
+actual receipt at the checkpoint barrier.
 
 ### Stage 3 — Operate continuous collection safely
 
@@ -755,7 +762,7 @@ Snapshot reconstruction, and dataset row counts match exactly.
 an installed process alone is not acceptance.
 
 **Repository recovery status, 2026-08-28:** the operations registration freezes Job IDs, an accepted
-supervisor receipt, complete checkpoint Snapshot-set IDs, the six required faults, soak duration,
+supervisor receipt, checkpoint Snapshot-set IDs, the six required faults, soak duration,
 state/lag/latency/compression limits, and backup retention count. State metrics reconcile terminal,
 recoverable, and unknown opportunity states and expose CAS/Parquet/SQLite usage. Disk-budget
 pressure raises a typed fail-closed error; it never deletes an authoritative receipt or revision.
@@ -787,24 +794,26 @@ integrity. A separate transient clean-root restore reproduced both Jobs and that
 no persistent restore receipt is bound to this manifest; the restore is runtime evidence only.
 These are bounded finite-window policies, not an accepted indefinite rolling-date design or the
 registered PDI-22 soak. PDI-22 remains open pending the Tushare receipt, the registered soak and
-fault matrix, and complete PDI-17 checkpoint Snapshot sets.
+fault matrix, and accepted PDI-17 observed checkpoint Snapshot sets.
 
-### Stage 4 — Prove complete Judgment inputs before automating model dispatch
+### Stage 4 — Prove bounded Judgment inputs before automating model dispatch
 
-#### PDI-30 — Assemble complete prospective Judgment inputs
+#### PDI-30 — Assemble bounded prospective Judgment inputs
 
 Promote only policy-admitted observations into the existing Event Envelope/Evidence Pack, bind all
 authorized Snapshot IDs through `FrozenDataSnapshotInput`, and construct the semantic tools and
-Agent Execution Binding for one checkpoint. Tests reject cutoff drift, undeclared Snapshots,
-Provider-selected targets, missing capability slots, future evidence, and mismatched tool hashes.
+Agent Execution Binding for one checkpoint. Missing optional slots and semantic gaps are included in
+the Evidence Pack rather than fabricated. Tests reject cutoff drift, undeclared Snapshots,
+Provider-selected targets, missing required trigger, future evidence, and mismatched tool hashes.
 
 **Blocked by:** PDI-17.
 
 #### PDI-31 — Qualify two or three registered checkpoints
 
-Recompute PDI-01 requirements from immutable artifacts. All capability, cutoff, source diversity,
-Snapshot completeness, tool binding, event revelation, expectation baseline, horizon, target, model
-profile, cost, and future-outcome gates must pass before a model process starts.
+Recompute the v2 registration from immutable artifacts. Required trigger, cutoff, selected-Snapshot
+integrity, tool binding, horizon, target scope, model profile, cost, and future-outcome gates must
+pass before a model process starts. Optional expectation, market, exposure, positioning, macro, and
+corroboration gaps are reported as `nonblocking_information_gaps` and passed to both paired arms.
 
 **Blocked by:** PDI-30.
 
@@ -817,9 +826,10 @@ expand to more checkpoints when the same input blockers persist.
 
 **Blocked by:** PDI-31.
 
-**Stage exit — Query Gate:** determine whether data/tool blockers were removed and whether
-abstention is now evidence-based rather than an input-contract failure. Failure returns work to the
-specific data or input Task and keeps automatic model dispatch closed.
+**Stage exit — Query Gate:** determine whether structural blockers were removed and whether the Agent
+can make or abstain from a decision under the information actually observed. Missingness is an
+evaluation dimension, not silently completed. Required-gate failure returns work to its owning data
+or input Task and keeps automatic dispatch closed.
 
 ### Stage 5 — Automate bounded follow-up and open registered outcomes
 
@@ -882,10 +892,12 @@ larger prospective study is justified; a pass authorizes that next research regi
   installed scheduler or Agent-run dispatcher. An external supervisor must call it, and only the
   new-observation-version trigger is accepted.
 - CSRC and fourteen Tushare route-level contracts are accepted for prospective private research, but
-  this is not a capability-complete A-share decision feed. Registered direct-publisher coverage,
+  this is not a globally complete A-share decision feed. Registered direct-publisher coverage,
   total-return/as-of price semantics, then-effective taxonomy and tradability, positioning units and
   cadence, original macro releases and revision lineage, prior-expectation population/units/
-  consensus, and a complete checkpoint-barrier reconciliation remain open.
+  consensus, and the first post-v2 checkpoint-barrier reconciliation remain open. These gaps bound
+  data-quality and execution claims; optional gaps do not globally block prospective Agent research.
 - Strict historical qualification remains unchanged until new historically authoritative records
   are materialized and requalified.
-- No model experiment, paper order, or live order is authorized by this data-platform slice.
+- No real checkpoint has yet passed the new Query Gate, so no model experiment or experimental paper
+  order is currently authorized by this data-platform slice. Live remains independently closed.

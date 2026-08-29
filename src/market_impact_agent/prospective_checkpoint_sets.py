@@ -22,13 +22,21 @@ from market_impact_agent.prospective_data import (
     ProspectiveDataJournal,
 )
 from market_impact_agent.prospective_diagnostic import (
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
 from market_impact_agent.source_acceptance import SourceRouteAcceptanceReport
 
-PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = "market-impact.prospective-checkpoint-snapshot-set.v2"
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2 = (
+    "market-impact.prospective-checkpoint-snapshot-set.v2"
+)
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3 = (
+    "market-impact.prospective-checkpoint-snapshot-set.v3"
+)
+# Backward-compatible default; partial sets select v3 explicitly.
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2
 
 _TOOL_NAMES = {
     ObservationCapability.EVENT_REVELATION: "lookup_event_revelation",
@@ -175,6 +183,33 @@ class CheckpointCapabilityBinding:
     routes: tuple[CheckpointRouteReconciliation, ...]
     tool_manifest: CheckpointToolManifest | None
 
+    def __post_init__(self) -> None:
+        route_kinds = tuple(item.route_kind for item in self.routes)
+        if len(route_kinds) != len(set(route_kinds)):
+            raise ValueError("checkpoint capability route kinds must be unique")
+        if self.applicability is CapabilityApplicability.NOT_APPLICABLE:
+            if self.not_applicable_reason is None:
+                raise ValueError("not_applicable checkpoint binding requires a reason")
+            _trimmed(self.not_applicable_reason, "checkpoint not_applicable reason")
+            if self.routes or self.tool_manifest is not None:
+                raise ValueError("not_applicable checkpoint binding cannot expose routes or tools")
+            return
+        if self.not_applicable_reason is not None:
+            raise ValueError("applicable checkpoint binding cannot carry a not_applicable reason")
+        if not self.routes:
+            if self.tool_manifest is not None:
+                raise ValueError("checkpoint binding without routes cannot expose a tool")
+            return
+        if self.tool_manifest is None:
+            raise ValueError("checkpoint binding routes require an exact tool manifest")
+        expected_snapshot_ids = tuple(sorted({item.snapshot_id for item in self.routes}))
+        if self.tool_manifest.snapshot_ids != expected_snapshot_ids:
+            raise ValueError("checkpoint tool Snapshot IDs do not match selected routes")
+        if self.tool_manifest.name != _TOOL_NAMES[self.capability]:
+            raise ValueError("checkpoint tool name does not match its capability")
+        if self.tool_manifest.side_effect != "read_only":
+            raise ValueError("checkpoint capability tools must remain read-only")
+
     def to_dict(self) -> dict[str, object]:
         return {
             "capability": self.capability.value,
@@ -195,12 +230,16 @@ class ProspectiveCheckpointSnapshotSet:
     capability_bindings: tuple[CheckpointCapabilityBinding, ...]
     authorized_snapshot_ids: tuple[str, ...]
     complete: bool
+    capability_gaps: tuple[str, ...] = ()
     historical_pit_claim: bool = False
     execution_capability: bool = False
     schema_version: str = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA:
+        if self.schema_version not in {
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2,
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
+        }:
             raise ValueError("unsupported prospective checkpoint Snapshot Set schema")
         _prefixed(
             self.registration_id,
@@ -230,6 +269,16 @@ class ProspectiveCheckpointSnapshotSet:
         )
         if self.authorized_snapshot_ids != expected_ids:
             raise ValueError("checkpoint set authorized Snapshot IDs do not reconcile")
+        if self.capability_gaps != tuple(sorted(set(self.capability_gaps))):
+            raise ValueError("checkpoint set capability gaps must be sorted and unique")
+        capability_values = {item.value for item in REQUIRED_DIAGNOSTIC_CAPABILITIES}
+        if any(
+            len(parts := gap.split(":", maxsplit=1)) != 2
+            or parts[0] not in capability_values
+            or not parts[1]
+            for gap in self.capability_gaps
+        ):
+            raise ValueError("checkpoint set capability gap is invalid")
         expected_complete = all(
             (
                 binding.applicability is CapabilityApplicability.NOT_APPLICABLE
@@ -237,14 +286,25 @@ class ProspectiveCheckpointSnapshotSet:
                 and binding.tool_manifest is None
             )
             or (
-                binding.applicability is CapabilityApplicability.REQUIRED
+                binding.applicability
+                in {
+                    CapabilityApplicability.REQUIRED,
+                    CapabilityApplicability.OPTIONAL,
+                }
                 and bool(binding.routes)
                 and binding.tool_manifest is not None
             )
             for binding in self.capability_bindings
         )
-        if not self.complete or not expected_complete:
-            raise ValueError("checkpoint set requires complete registered capability coverage")
+        if self.schema_version == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2:
+            if self.capability_gaps:
+                raise ValueError("v2 checkpoint sets cannot carry capability gaps")
+            if not self.complete or not expected_complete:
+                raise ValueError(
+                    "v2 checkpoint set requires complete registered capability coverage"
+                )
+        elif self.complete != (expected_complete and not self.capability_gaps):
+            raise ValueError("checkpoint set complete flag does not match registered coverage")
         if self.historical_pit_claim or self.execution_capability:
             raise ValueError("checkpoint set cannot grant historical PIT or execution authority")
         if self.snapshot_set_id != self.expected_snapshot_set_id:
@@ -261,7 +321,7 @@ class ProspectiveCheckpointSnapshotSet:
         return f"prospective-checkpoint-snapshot-set-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "registration_id": self.registration_id,
             "checkpoint_key": self.checkpoint_key,
@@ -273,6 +333,9 @@ class ProspectiveCheckpointSnapshotSet:
             "historical_pit_claim": self.historical_pit_claim,
             "execution_capability": self.execution_capability,
         }
+        if self.schema_version == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3:
+            payload["capability_gaps"] = list(self.capability_gaps)
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "snapshot_set_id": self.snapshot_set_id}
@@ -289,6 +352,7 @@ def reconcile_prospective_checkpoint_snapshot_set(
     policies: Mapping[str, ProspectiveCollectionPolicy],
     acceptance_reports: Mapping[str, SourceRouteAcceptanceReport],
     reconciled_at: datetime,
+    allow_partial: bool = False,
 ) -> ProspectiveCheckpointSnapshotSet:
     _strict_utc(barrier_at, "checkpoint reconciliation barrier_at")
     _strict_utc(reconciled_at, "checkpoint reconciliation reconciled_at")
@@ -296,12 +360,18 @@ def reconcile_prospective_checkpoint_snapshot_set(
         raise ValueError("checkpoint barrier must follow prospective registration")
     if reconciled_at < barrier_at:
         raise ValueError("checkpoint reconciliation cannot precede the barrier")
+    if (
+        allow_partial
+        and registration.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2
+    ):
+        raise ValueError("partial checkpoint reconciliation requires a v2 registration")
     checkpoint = registration.checkpoint(checkpoint_key)
     selection_keys = tuple((item.capability, item.route_kind) for item in selections)
     if len(selection_keys) != len(set(selection_keys)):
         raise ValueError("checkpoint route selections must be unique")
 
     bindings: list[CheckpointCapabilityBinding] = []
+    capability_gaps: list[str] = []
     for capability in sorted(REQUIRED_DIAGNOSTIC_CAPABILITIES, key=lambda item: item.value):
         slot = checkpoint.slot(capability)
         selected = tuple(item for item in selections if item.capability is capability)
@@ -318,8 +388,28 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 )
             )
             continue
-        if {item.route_kind for item in selected} != set(slot.required_route_kinds):
+        selected_route_kinds = {item.route_kind for item in selected}
+        registered_route_kinds = set(slot.required_route_kinds)
+        if not selected_route_kinds <= registered_route_kinds:
+            raise ValueError("checkpoint selections contain an unregistered route kind")
+        if not allow_partial and selected_route_kinds != registered_route_kinds:
             raise ValueError("checkpoint selections do not match registered route kinds")
+        missing_route_kinds = tuple(sorted(registered_route_kinds - selected_route_kinds))
+        if missing_route_kinds:
+            capability_gaps.append(
+                f"{capability.value}:missing_registered_routes:{','.join(missing_route_kinds)}"
+            )
+        if not selected:
+            bindings.append(
+                CheckpointCapabilityBinding(
+                    capability=capability,
+                    applicability=slot.applicability,
+                    not_applicable_reason=None,
+                    routes=(),
+                    tool_manifest=None,
+                )
+            )
+            continue
 
         reconciled_routes: list[CheckpointRouteReconciliation] = []
         observation_ids: set[str] = set()
@@ -398,8 +488,12 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 and item.provider_version == declaration.provider_version
                 and item.upstream_source == declaration.upstream_source
             )
-            if not matching_observations:
+            if not matching_observations and not allow_partial:
                 raise ValueError("each selected route requires an observation at the barrier")
+            if not matching_observations:
+                capability_gaps.append(
+                    f"{capability.value}:route_without_observation:{selection.route_kind}"
+                )
             route_latest_available_at: datetime | None = None
             for observation in matching_observations:
                 observation_ids.add(observation.observation_id)
@@ -415,7 +509,11 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 or (barrier_at - route_latest_available_at).total_seconds()
                 > slot.maximum_age_seconds
             ):
-                raise ValueError("each selected route requires a fresh observation at the barrier")
+                if not allow_partial:
+                    raise ValueError(
+                        "each selected route requires a fresh observation at the barrier"
+                    )
+                capability_gaps.append(f"{capability.value}:stale_route:{selection.route_kind}")
             source_keys.add(matching_sources[0].source_key)
             reconciled_routes.append(
                 CheckpointRouteReconciliation(
@@ -437,14 +535,26 @@ def reconcile_prospective_checkpoint_snapshot_set(
         ):
             raise ValueError("checkpoint Snapshot contains unselected or unaccepted sources")
         if len(source_keys) < slot.minimum_data_sources:
-            raise ValueError("checkpoint source diversity minimum is not met")
+            if not allow_partial:
+                raise ValueError("checkpoint source diversity minimum is not met")
+            capability_gaps.append(
+                f"{capability.value}:source_diversity:{len(source_keys)}/{slot.minimum_data_sources}"
+            )
         if len(observation_ids) < slot.minimum_observations:
-            raise ValueError("checkpoint observation minimum is not met")
+            if not allow_partial:
+                raise ValueError("checkpoint observation minimum is not met")
+            capability_gaps.append(
+                f"{capability.value}:observation_count:{len(observation_ids)}/{slot.minimum_observations}"
+            )
         if (
             latest_available_at is None
             or (barrier_at - latest_available_at).total_seconds() > slot.maximum_age_seconds
         ):
-            raise ValueError("checkpoint observations are stale at the barrier")
+            if not allow_partial:
+                raise ValueError("checkpoint observations are stale at the barrier")
+            aggregate_stale_gap = f"{capability.value}:observations_stale"
+            if aggregate_stale_gap not in capability_gaps:
+                capability_gaps.append(aggregate_stale_gap)
         snapshot_ids = tuple(sorted({item.snapshot_id for item in reconciled_routes}))
         bindings.append(
             CheckpointCapabilityBinding(
@@ -464,18 +574,27 @@ def reconcile_prospective_checkpoint_snapshot_set(
     authorized_snapshot_ids = tuple(
         sorted({route.snapshot_id for binding in bindings for route in binding.routes})
     )
-    core = {
-        "schema_version": PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA,
+    sorted_capability_gaps = tuple(sorted(set(capability_gaps)))
+    complete = not sorted_capability_gaps
+    snapshot_set_schema = (
+        PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3
+        if allow_partial
+        else PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2
+    )
+    core: dict[str, object] = {
+        "schema_version": snapshot_set_schema,
         "registration_id": registration.registration_id,
         "checkpoint_key": checkpoint_key,
         "barrier_at": _timestamp(barrier_at),
         "reconciled_at": _timestamp(reconciled_at),
         "capability_bindings": [item.to_dict() for item in bindings],
         "authorized_snapshot_ids": list(authorized_snapshot_ids),
-        "complete": True,
+        "complete": complete,
         "historical_pit_claim": False,
         "execution_capability": False,
     }
+    if snapshot_set_schema == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3:
+        core["capability_gaps"] = list(sorted_capability_gaps)
     return ProspectiveCheckpointSnapshotSet(
         snapshot_set_id=(f"prospective-checkpoint-snapshot-set-{canonical_hash(core)}"),
         registration_id=registration.registration_id,
@@ -484,7 +603,9 @@ def reconcile_prospective_checkpoint_snapshot_set(
         reconciled_at=reconciled_at,
         capability_bindings=tuple(bindings),
         authorized_snapshot_ids=authorized_snapshot_ids,
-        complete=True,
+        complete=complete,
+        capability_gaps=sorted_capability_gaps,
+        schema_version=snapshot_set_schema,
     )
 
 

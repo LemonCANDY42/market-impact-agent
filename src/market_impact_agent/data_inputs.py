@@ -53,6 +53,7 @@ class DataPITLane(StrEnum):
     STRICT = "strict"
     MODELED = "modeled"
     PROSPECTIVE = "prospective"
+    RETROSPECTIVE = "retrospective"
 
 
 @dataclass(frozen=True, slots=True)

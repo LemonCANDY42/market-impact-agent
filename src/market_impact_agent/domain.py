@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -72,6 +72,19 @@ class SignalIntent:
         if len(self.invalidation_conditions) != len(set(self.invalidation_conditions)):
             raise ValueError("signal intent invalidation conditions must be unique")
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.signal-intent.v1",
+            "signal_id": self.signal_id,
+            "event_id": self.event_id,
+            "instrument_id": self.instrument_id,
+            "side": self.side.value,
+            "valid_from": _timestamp(self.valid_from),
+            "expires_at": _timestamp(self.expires_at),
+            "evidence_refs": list(self.evidence_refs),
+            "invalidation_conditions": list(self.invalidation_conditions),
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class OrderIntent:
@@ -102,6 +115,22 @@ class OrderIntent:
             not self.limit_price.is_finite() or self.limit_price <= 0
         ):
             raise ValueError("limit_price must be finite and positive")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.order-intent.v1",
+            "client_order_id": self.client_order_id,
+            "signal_id": self.signal_id,
+            "account_id": self.account_id,
+            "environment": self.environment.value,
+            "instrument_id": self.instrument_id,
+            "side": self.side.value,
+            "quantity": str(self.quantity),
+            "order_kind": self.order_kind.value,
+            "limit_price": str(self.limit_price) if self.limit_price is not None else None,
+            "created_at": _timestamp(self.created_at),
+            "expires_at": _timestamp(self.expires_at),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,3 +173,7 @@ class ExecutionReceipt:
 
     def __post_init__(self) -> None:
         require_aware(self.observed_at, "observed_at")
+
+
+def _timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

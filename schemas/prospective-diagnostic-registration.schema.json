@@ -19,7 +19,12 @@
     "claim_scope"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-diagnostic-registration.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.prospective-diagnostic-registration.v1",
+        "market-impact.prospective-diagnostic-registration.v2"
+      ]
+    },
     "registration_id": {
       "type": "string",
       "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
@@ -47,6 +52,64 @@
     "go_conditions": {"$ref": "#/$defs/nonempty_unique_strings"},
     "claim_scope": {"const": "process_diagnostic_only_no_alpha_or_execution_claim"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-diagnostic-registration.v1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "checkpoints": {
+            "items": {
+              "properties": {
+                "capability_slots": {
+                  "items": {
+                    "properties": {
+                      "applicability": {
+                        "enum": ["required", "not_applicable"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-diagnostic-registration.v2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "checkpoints": {
+            "items": {
+              "properties": {
+                "capability_slots": {
+                  "contains": {
+                    "properties": {
+                      "capability": {"const": "event_revelation"},
+                      "applicability": {"const": "required"}
+                    },
+                    "required": ["capability", "applicability"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "nonempty_unique_strings": {
       "type": "array",
@@ -149,7 +212,7 @@
             "macro_vintage"
           ]
         },
-        "applicability": {"enum": ["required", "not_applicable"]},
+        "applicability": {"enum": ["required", "optional", "not_applicable"]},
         "not_applicable_reason": {"type": ["string", "null"]},
         "required_route_kinds": {
           "type": "array",

@@ -11,17 +11,24 @@ from enum import StrEnum
 from pathlib import Path
 from typing import cast
 
-from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_contracts import (
+    EvidencePack,
+    canonical_hash,
+    evidence_pack_from_dict,
+)
 from market_impact_agent.domain import (
     ApprovalMode,
     ExecutionReceipt,
     HardPolicyOutcome,
     OrderIntent,
+    SignalIntent,
     TradingEnvironment,
     TradingMandate,
     require_aware,
 )
+from market_impact_agent.experimental_paper_admission import ExperimentalPaperAdmission
 from market_impact_agent.policy import HardPolicyEvaluator
+from market_impact_agent.prospective_query_gate import ProspectiveQueryGateResult
 from market_impact_agent.providers import (
     Capability,
     ExecutionProvider,
@@ -98,6 +105,7 @@ class PriceBasis:
 class PaperIntentRecord:
     client_order_id: str
     order_hash: str
+    agent_admission_hash: str | None
     mandate_hash: str
     price_basis_hash: str
     policy_evaluation_hash: str
@@ -171,6 +179,41 @@ class PaperExecutionService:
         return bool(row["blocked"])
 
     def admit(self, order: OrderIntent) -> PaperIntentRecord:
+        return self._admit(order, agent_admission_hash=None)
+
+    def admit_experimental(
+        self,
+        order: OrderIntent,
+        admission: ExperimentalPaperAdmission,
+        *,
+        query_gate: ProspectiveQueryGateResult,
+        evidence_pack: EvidencePack,
+        signal: SignalIntent,
+    ) -> PaperIntentRecord:
+        admission.assert_matches(
+            query_gate=query_gate,
+            evidence_pack=evidence_pack,
+            signal=signal,
+            order=order,
+        )
+        query_gate_artifact = self.artifacts.put_json(query_gate.to_dict())
+        evidence_pack_artifact = self.artifacts.put_json(evidence_pack.to_dict())
+        signal_artifact = self.artifacts.put_json(signal.to_dict())
+        if query_gate_artifact.content_hash != admission.query_gate_result_hash:
+            raise ValueError("experimental paper admission Query Gate hash is not exact")
+        if signal_artifact.content_hash != admission.signal_intent_hash:
+            raise ValueError("experimental paper admission Signal hash is not exact")
+        if evidence_pack_artifact.content_hash != admission.evidence_pack_hash:
+            raise ValueError("experimental paper admission Evidence Pack hash is not exact")
+        admission_artifact = self.artifacts.put_json(admission.to_dict())
+        return self._admit(order, agent_admission_hash=admission_artifact.content_hash)
+
+    def _admit(
+        self,
+        order: OrderIntent,
+        *,
+        agent_admission_hash: str | None,
+    ) -> PaperIntentRecord:
         now = self.clock()
         require_aware(now, "now")
         if order.environment is not TradingEnvironment.PAPER:
@@ -188,6 +231,7 @@ class PaperExecutionService:
                 existing,
                 order_hash=order_artifact.content_hash,
                 mandate_hash=mandate_artifact.content_hash,
+                agent_admission_hash=agent_admission_hash,
             )
 
         basis = self.price_source(order)
@@ -240,6 +284,7 @@ class PaperExecutionService:
                     existing,
                     order_hash=order_artifact.content_hash,
                     mandate_hash=mandate_artifact.content_hash,
+                    agent_admission_hash=agent_admission_hash,
                 )
             gate = connection.execute(
                 "SELECT blocked FROM paper_execution_gate WHERE singleton = 1"
@@ -275,16 +320,18 @@ class PaperExecutionService:
             connection.execute(
                 """
                 INSERT INTO paper_intents (
-                    client_order_id, order_hash, mandate_hash, price_basis_hash,
+                    client_order_id, order_hash, agent_admission_hash,
+                    mandate_hash, price_basis_hash,
                     policy_evaluation_hash, approval_hash, approval_state,
                     outbox_state, provider_order_id, provider_status, fill_status,
                     order_expires_at, mandate_expires_at, price_valid_until, lease_token,
                     lease_expires_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL, NULL, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL, NULL, ?, ?)
                 """,
                 (
                     order.client_order_id,
                     order_artifact.content_hash,
+                    agent_admission_hash,
                     mandate_artifact.content_hash,
                     price_artifact.content_hash,
                     policy_artifact.content_hash,
@@ -586,11 +633,14 @@ class PaperExecutionService:
         *,
         order_hash: str,
         mandate_hash: str,
+        agent_admission_hash: str | None,
     ) -> PaperIntentRecord:
         if cast(str, row["order_hash"]) != order_hash:
             raise ValueError("client_order_id already binds different content")
         if cast(str, row["mandate_hash"]) != mandate_hash:
             raise ValueError("client_order_id already binds a different binding")
+        if cast(str | None, row["agent_admission_hash"]) != agent_admission_hash:
+            raise ValueError("client_order_id already binds a different Agent admission binding")
         self._validate_binding_artifacts(row)
         return _record(row)
 
@@ -650,6 +700,80 @@ class PaperExecutionService:
         approval_hash = cast(str | None, row["approval_hash"])
         if approval_hash is not None:
             self.artifacts.get(approval_hash, media_type="application/json")
+        agent_admission_hash = cast(str | None, row["agent_admission_hash"])
+        if agent_admission_hash is not None:
+            admission_payload = _json_object(
+                self.artifacts.read_json(agent_admission_hash),
+                "experimental paper admission artifact",
+            )
+            query_gate_hash = _json_string(
+                admission_payload,
+                "query_gate_result_hash",
+            )
+            evidence_pack_hash = _json_string(
+                admission_payload,
+                "evidence_pack_hash",
+            )
+            signal_hash = _json_string(admission_payload, "signal_intent_hash")
+            query_gate_payload = _json_object(
+                self.artifacts.read_json(query_gate_hash),
+                "prospective Query Gate artifact",
+            )
+            evidence_pack = evidence_pack_from_dict(self.artifacts.read_json(evidence_pack_hash))
+            signal_payload = _json_object(
+                self.artifacts.read_json(signal_hash),
+                "Signal Intent artifact",
+            )
+            order_payload = _json_object(
+                self.artifacts.read_json(cast(str, row["order_hash"])),
+                "Order Intent artifact",
+            )
+            if _json_string(admission_payload, "query_gate_result_id") != _json_string(
+                query_gate_payload,
+                "result_id",
+            ):
+                raise ValueError("experimental paper admission Query Gate identity is not exact")
+            if _json_string(query_gate_payload, "evidence_pack_id") != evidence_pack.pack_id:
+                raise ValueError(
+                    "experimental paper admission Query Gate Evidence Pack is not exact"
+                )
+            if _json_string(admission_payload, "evidence_pack_id") != evidence_pack.pack_id:
+                raise ValueError("experimental paper admission Evidence Pack identity is not exact")
+            if _json_string(admission_payload, "signal_id") != _json_string(
+                signal_payload,
+                "signal_id",
+            ) or _json_string(signal_payload, "signal_id") != _json_string(
+                order_payload,
+                "signal_id",
+            ):
+                raise ValueError("experimental paper admission Signal identity is not exact")
+            if _json_string(admission_payload, "order_intent_hash") != cast(
+                str,
+                row["order_hash"],
+            ):
+                raise ValueError("experimental paper admission Order Intent hash is not exact")
+            if _json_string(signal_payload, "event_id") != evidence_pack.event_id:
+                raise ValueError(
+                    "experimental paper admission Signal event is not in the Evidence Pack"
+                )
+            if not set(_json_string_list(signal_payload, "evidence_refs")) <= {
+                item.evidence_id for item in evidence_pack.evidence
+            }:
+                raise ValueError(
+                    "experimental paper admission Signal evidence_refs are not in the Evidence Pack"
+                )
+            if _json_string(signal_payload, "instrument_id") not in evidence_pack.allowed_targets:
+                raise ValueError(
+                    "experimental paper admission Signal instrument is not an allowed "
+                    "Evidence Pack target"
+                )
+            if _json_string(signal_payload, "instrument_id") != _json_string(
+                order_payload,
+                "instrument_id",
+            ):
+                raise ValueError(
+                    "experimental paper admission Signal instrument differs from Order Intent"
+                )
 
     def _initialize(self) -> None:
         with self._connect() as connection:
@@ -658,6 +782,7 @@ class PaperExecutionService:
                 CREATE TABLE IF NOT EXISTS paper_intents (
                     client_order_id TEXT PRIMARY KEY,
                     order_hash TEXT NOT NULL,
+                    agent_admission_hash TEXT,
                     mandate_hash TEXT NOT NULL,
                     price_basis_hash TEXT NOT NULL,
                     policy_evaluation_hash TEXT NOT NULL,
@@ -708,6 +833,12 @@ class PaperExecutionService:
                 ) VALUES (1, 0, NULL, '1970-01-01T00:00:00Z');
                 """
             )
+            columns = {
+                cast(str, row["name"])
+                for row in connection.execute("PRAGMA table_info(paper_intents)").fetchall()
+            }
+            if "agent_admission_hash" not in columns:
+                connection.execute("ALTER TABLE paper_intents ADD COLUMN agent_admission_hash TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=30)
@@ -950,6 +1081,7 @@ def _record(row: sqlite3.Row) -> PaperIntentRecord:
     return PaperIntentRecord(
         client_order_id=cast(str, row["client_order_id"]),
         order_hash=cast(str, row["order_hash"]),
+        agent_admission_hash=cast(str | None, row["agent_admission_hash"]),
         mandate_hash=cast(str, row["mandate_hash"]),
         price_basis_hash=cast(str, row["price_basis_hash"]),
         policy_evaluation_hash=cast(str, row["policy_evaluation_hash"]),
@@ -964,20 +1096,32 @@ def _record(row: sqlite3.Row) -> PaperIntentRecord:
 
 
 def _order_dict(order: OrderIntent) -> dict[str, object]:
-    return {
-        "schema_version": "market-impact.order-intent.v1",
-        "client_order_id": order.client_order_id,
-        "signal_id": order.signal_id,
-        "account_id": order.account_id,
-        "environment": order.environment.value,
-        "instrument_id": order.instrument_id,
-        "side": order.side.value,
-        "quantity": str(order.quantity),
-        "order_kind": order.order_kind.value,
-        "limit_price": str(order.limit_price) if order.limit_price is not None else None,
-        "created_at": _timestamp(order.created_at),
-        "expires_at": _timestamp(order.expires_at),
-    }
+    return order.to_dict()
+
+
+def _json_object(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{name} must be an object")
+    return cast(dict[str, object], value)
+
+
+def _json_string(payload: dict[str, object], field: str) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str):
+        raise ValueError(f"artifact lacks string {field}")
+    return value
+
+
+def _json_string_list(payload: dict[str, object], field: str) -> tuple[str, ...]:
+    value = payload.get(field)
+    if not isinstance(value, list):
+        raise ValueError(f"artifact lacks string list {field}")
+    items: list[str] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, str):
+            raise ValueError(f"artifact lacks string list {field}")
+        items.append(item)
+    return tuple(items)
 
 
 def _order_from_dict(payload: object) -> OrderIntent:

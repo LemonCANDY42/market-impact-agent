@@ -17,7 +17,8 @@ Observation adapters (aggregated discovery + direct sources)
          -> Backtest Request -> engine-neutral backtest port
               -> Nautilus backtest bridge -> independent horizon replays and results
               -> calibration gate -> baseline/out-of-sample accept or reject
-         -> Order Intent -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
+         -> Experimental Paper Admission or later Strategy Admission
+              -> Order Intent -> Hard Policy: DENY | REQUIRE_MANUAL | ELIGIBLE
               -> Semantic Auto Approver (optional; cannot override hard policy)
               -> Approval Decision -> durable outbox
               -> paper execution gateway -> sealed submission capability
@@ -66,12 +67,30 @@ registered Data Query + accepted Source Route
     -> per-observation Checkpoint Decision Inputs
     -> non-authoritative Checkpoint Market Universe View
          = same-set market/exposure inputs + versioned exchange rules
-         -> explicit semantic gaps -> later Query Gate
+         -> explicit capability and semantic gaps
+         -> Prospective Query Gate
+              required trigger/structural failure -> no model call
+              eligible with optional gaps -> bounded Judgment Run
 ```
 
 The Market Universe View is a deterministic relationship projection, not another acquisition
 aggregate. It cannot replace any input Snapshot, promote Evidence, prove a historical taxonomy,
 authorize a model call, or become the broker instrument master.
+
+The four evidence lanes are intentionally asymmetric:
+
+```text
+strict historical       -> cutoff authority proven       -> alpha/backtest claim eligible
+modeled historical      -> frozen visibility assumption  -> process diagnostic only
+retrospective           -> real later receipt preserved  -> postmortem only
+prospective             -> actual receipt at decision    -> current Judgment input eligible
+```
+
+Absence is data, not fabricated coverage. A v2 prospective checkpoint requires an observed event
+trigger and structural identities, while expectation, market, exposure, positioning, macro, and
+additional corroboration may remain explicitly missing. These research gaps do not weaken the
+separate order-time requirements for raw price, tradability, Trading Mandate, hard policy, approval,
+Provider capability, idempotency, and reconciliation.
 
 An Observation records occurrence, source publication/update, optional aggregator fetch,
 strategy availability, and local retrieval separately. Historical replay uses source
@@ -79,7 +98,10 @@ availability or a frozen delivery-latency model; local backfill retrieval time i
 metadata and never substitutes for historical visibility. See
 [`docs/OBSERVATION_DATA.md`](docs/OBSERVATION_DATA.md).
 
-The bootstrap exposes one composed `PaperExecutionGateway`. It re-evaluates hard
+The bootstrap exposes one composed `PaperExecutionGateway`. Its experimental Agent entry binds the
+eligible Query Gate, exact Evidence Pack, exact Signal, and exact paper Order through an `ExperimentalPaperAdmission`
+artifact persisted with the outbox. That artifact grants no strategy or execution authority. The
+gateway still re-evaluates hard
 policy and provider capability before issuing the sealed input accepted by an
 execution provider. Providers do not accept a raw `OrderIntent`, and no
 equivalent live gateway exists.
