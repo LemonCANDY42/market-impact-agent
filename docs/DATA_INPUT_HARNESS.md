@@ -135,6 +135,24 @@ expectation surprise, causal direction, then-effective taxonomy when the source 
 total return, or execution eligibility. The enclosing tool result is also content-identified and
 remains bound to the immutable checkpoint barrier and authorized Snapshot set.
 
+`CheckpointMarketUniverseView` is the narrow multi-record consumer for PDI-11 through PDI-13. It
+accepts only validated Checkpoint Decision Inputs from one Snapshot Set and one content-identified
+exchange rule set. It may join an ETF master `index_code` to a taxonomy observation and count
+effective membership rows, normalize SSE/SZSE venue aliases, and attach the general auction buy-lot
+and tick rules effective at the barrier. It does not rewrite the source records or create a composite
+Snapshot. A current SW2021 observation is reported as `observed_at_barrier`; without an effective
+taxonomy interval its `effective_at_barrier` remains unknown. Likewise, an eligible listed ETF with
+a raw daily bar remains decision-time-tradability `unverified` until suspension/status evidence is
+present. Index prices remain non-executable, and raw fund prices do not become adjusted or total-
+return research series.
+
+The bundled 2026 exchange rule set cites the current
+[SSE trading rules](https://www.sse.com.cn/lawandrules/sselawsrules2025/stocks/exchange/c/c_20260424_10816482.shtml)
+and [SZSE trading rules](https://www.szse.cn/lawrules/rule/trade/current/t20260424_620190.html),
+effective 2026-07-06. It covers ordinary auction buy orders only: 100 shares/units for A-shares and
+funds, with CNY ticks of 0.01 and 0.001 respectively. Instrument-specific exceptions, odd-lot sales,
+and later exchange adjustments remain explicit exceptions rather than inferred defaults.
+
 A Transmission Path remains a cited Judgment output assembled from facts and exposure evidence. A
 mechanism-appropriate horizon set remains a versioned research-method input. Treating either as a
 vendor field would hide an inference inside the data plane.

@@ -90,15 +90,24 @@ Stage 2 — accept capability-complete data slices:
     receipt cannot substitute for publisher authority.
 - [ ] `PDI-11` Accept the registered A-share market/index/ETF context route.
   - [x] Accept route-level Tushare `index_daily`, `fund_daily`, and `trade_cal` captures and replay.
+  - [x] Bind the three price/calendar record kinds into a content-identified checkpoint market-
+    universe view without converting index or adjusted research prices into executable prices.
   - [ ] Prove registered breadth/volatility/liquidity, sequence completeness, and corporate-action
     semantics at the future checkpoint barrier.
 - [ ] `PDI-12` Accept an effective-dated tradable instrument and universe route.
   - [x] Accept route-level `etf_basic`, `stock_basic`, and `stk_limit` captures and replay.
-  - [ ] Bind lot/tick rules and decision-time tradability into one effective-dated universe.
+  - [x] Bind content-identified SSE/SZSE lot/tick rules effective from 2026-07-06 into the checkpoint
+    market-universe view, scoped to registered venues/classes and explicit exchange-rule exceptions.
+  - [ ] Add decision-time suspension/status evidence; listing lifecycle plus a daily bar is research-
+    eligible but cannot prove the instrument is presently tradable.
 - [ ] `PDI-13` Accept an effective-dated industry taxonomy, membership, and exposure route.
   - [x] Accept route-level SW2021 `index_classify` and `index_member_all` captures and replay.
-  - [ ] Bind taxonomy version, historical membership, rebalance lineage, and industry-to-tradable-ETF
-    exposure without back-applying current classification.
+  - [x] Implement an exact-code, source-identity-preserving join from current-as-received taxonomy,
+    effective membership, and ETF `index_code` observations; an absent join remains an explicit gap.
+  - [ ] Accept a non-empty current industry-to-tradable-ETF relation. The 2026-08-29 all-listed-ETF
+    probe found no exact SW2021 `index_code` match, so name-based inference remains prohibited.
+  - [ ] Prove the taxonomy effective interval and rebalance/classification-revision lineage; the
+    observed current relation cannot be back-applied as a historical mapping.
 - [ ] `PDI-14` Accept the registered positioning route.
   - [x] Accept the route-level Tushare exchange-margin capture and replay.
   - [ ] Freeze units, publication cadence, revision behavior, and checkpoint-aligned no-data rules.

@@ -29,6 +29,8 @@ AGENT_SCHEMA_FILES = (
     "prospective-diagnostic-registration.schema.json",
     "prospective-checkpoint-snapshot-set.schema.json",
     "checkpoint-decision-input.schema.json",
+    "exchange-instrument-rule-set.schema.json",
+    "checkpoint-market-universe-view.schema.json",
     "order-intent.schema.json",
     "trading-mandate.schema.json",
     "price-basis.schema.json",

@@ -47,7 +47,10 @@ The bootstrap implements:
   concurrent reads, typed degradation, raw-response retention, cutoff filtering, immutable
   Data Snapshots, persistent complete-snapshot caching, and bound read-only Agent tools whose
   checkpoint results are content-identified Provider-neutral decision inputs with explicit source,
-  time, authority, price-basis, and completeness-gap fields; the
+  time, authority, price-basis, and completeness-gap fields; a separate content-identified
+  Checkpoint Market Universe View can deterministically join one frozen checkpoint's market,
+  instrument, taxonomy, membership, and ETF-mapping inputs with versioned SSE/SZSE lot/tick rules
+  while keeping suspension, corporate-action, taxonomy-interval, and rebalance gaps fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
   configuration, validates redirect identity, rejects full-content feed elements before raw-byte
   retention, and records actual receipt without claiming historical PIT or article-body rights;

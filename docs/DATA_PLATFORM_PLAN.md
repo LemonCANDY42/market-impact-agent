@@ -525,6 +525,30 @@ mapping through `lookup_exposure_candidates`. Acceptance prevents a current SW/C
 being back-applied, distinguishes research opportunity bounds from tradable exposures, and records
 rebalances and classification revisions.
 
+**Semantic-join implementation checkpoint, 2026-08-29:** `CheckpointMarketUniverseView` now binds
+validated market/exposure Checkpoint Decision Inputs from exactly one Snapshot Set to a versioned,
+content-identified SSE/SZSE ordinary-auction rule set. The view keeps index and fund price bases
+separate, scopes instrument candidates to the registration's venues/classes, attaches effective
+lot/tick rules, and joins current-as-received taxonomy plus effective membership to ETF `index_code`
+relationships. It is deliberately non-authoritative and always denies model/execution admission.
+PDI-11 remains open for breadth/volatility/liquidity, sequence and corporate actions; PDI-12 remains
+open for decision-time suspension/status; PDI-13 remains open for taxonomy effective intervals and
+rebalance/revision lineage. A current SW2021 receipt is never back-applied to an older barrier.
+
+The isolated real-receipt probe captured all 1,658 listed ETF master rows at
+`2026-08-29T03:03:43.118883Z` into complete prospective Snapshot
+`data-snapshot-0f99e095245aac464aba334b58d541675c8452acf9f6ffd19bb6236614d9da2d`;
+all seven generic route gates passed in private report
+`source-route-acceptance-report-954cc5b8100c884dc82da1cbb5fdeefa2778a966c172ea1115791a69f5eea9f3`.
+Of 1,631 ETF rows carrying an `index_code`, none exactly matched the 31 accepted SW2021 Level-1
+taxonomy codes. This is negative acceptance evidence: the exact join correctly returns no exposure
+and `industry_to_tradable_mapping_missing`. No name/similarity inference is allowed in the data
+plane; PDI-13 needs an accepted cross-taxonomy/index relationship or a direct authoritative mapping.
+The probe did not manufacture a Prospective Checkpoint Snapshot Set or Checkpoint Decision Input:
+those artifacts remain blocked on a real registered checkpoint with all six capability slots. The
+new view contract is therefore implementation evidence plus negative real-input compatibility
+evidence, not a PDI-17 or Query Gate pass.
+
 #### PDI-14 — Accept a positioning route
 
 Deliver the registered financing/margin, holdings, flow, shorting, or market-implied positioning

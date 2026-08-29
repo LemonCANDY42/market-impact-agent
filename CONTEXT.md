@@ -232,6 +232,15 @@ does not create another Snapshot, infer consensus or causality, promote Evidence
 PIT, or grant execution authority.
 _Avoid_: Provider row, normalized conclusion, composite Snapshot, fill price
 
+**Checkpoint Market Universe View**:
+A content-identified, non-authoritative deterministic join of market and exposure Checkpoint
+Decision Inputs from one Prospective Checkpoint Snapshot Set with one versioned exchange-instrument
+rule set. It binds research price bases, effective instrument candidates, lot/tick rules, and
+observed industry-to-tradable mappings while retaining every unresolved availability, taxonomy,
+rebalance, suspension, and corporate-action gap; it is not a Snapshot, Evidence, Query Gate pass, or
+execution admission.
+_Avoid_: Composite Data Snapshot, executable universe, historical industry map, broker instrument
+
 **Attention Watch**:
 A Harness-approved, content-identified, expiring read-only policy that periodically reuses registered
 Data Queries and Providers for one event or entity, evaluates deterministic new-information

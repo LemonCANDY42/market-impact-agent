@@ -89,6 +89,18 @@ unless the registered population/window/method derives one. Listing, ETF, limit,
 also do not by themselves prove lot/tick size, decision-time tradability, full market completeness,
 or an effective industry-to-tradable-ETF mapping.
 
+On 2026-08-29 a separate isolated semantic probe captured all 1,658 listed `etf_basic` rows into
+complete prospective Snapshot
+`data-snapshot-0f99e095245aac464aba334b58d541675c8452acf9f6ffd19bb6236614d9da2d`;
+private route report
+`source-route-acceptance-report-954cc5b8100c884dc82da1cbb5fdeefa2778a966c172ea1115791a69f5eea9f3`
+passed all seven gates. Of 1,631 ETFs with an `index_code`, zero exactly matched the 31 accepted
+SW2021 Level-1 taxonomy codes. That rules out treating the current Tushare ETF master plus SW2021
+classification as a proven direct industry-to-ETF relation. The Harness records the missing mapping;
+it does not derive one from similar names or silently substitute another taxonomy.
+No Checkpoint Decision Input was created from this isolated probe because no complete registered
+six-slot Prospective Checkpoint Snapshot Set existed at its receipt barrier.
+
 The accepted `index_daily` route also participates in the first PDI-20 scheduled collection tracer.
 On 2026-08-28 the Harness-owned one-shot worker captured 20 CSI 300 observations into complete
 prospective Snapshot

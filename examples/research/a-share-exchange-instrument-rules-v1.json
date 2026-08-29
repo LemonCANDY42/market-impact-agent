@@ -1,0 +1,85 @@
+{
+  "schema_version": "market-impact.exchange-instrument-rule-set.v1",
+  "rule_set_id": "exchange-instrument-rule-set-14403e8f5ed059487586beacf06cbc4f6983a091e712017b376fd8429e6bad82",
+  "effective_from": "2026-07-06",
+  "source_documents": [
+    {
+      "venue": "XSHG",
+      "issuer": "Shanghai Stock Exchange",
+      "notice_id": "SSE [2026] 41",
+      "published_on": "2026-04-24",
+      "effective_from": "2026-07-06",
+      "source_ref": "https://www.sse.com.cn/lawandrules/sselawsrules2025/stocks/exchange/c/c_20260424_10816482.shtml",
+      "rule_references": ["3.3.8", "3.3.11"]
+    },
+    {
+      "venue": "XSHE",
+      "issuer": "Shenzhen Stock Exchange",
+      "notice_id": "SZSE [2026] 551",
+      "published_on": "2026-04-24",
+      "effective_from": "2026-07-06",
+      "source_ref": "https://www.szse.cn/lawrules/rule/trade/current/t20260424_620190.html",
+      "rule_references": ["3.3.8", "3.3.11"]
+    }
+  ],
+  "rules": [
+    {
+      "rule_key": "xshg-a-share-auction",
+      "venue": "XSHG",
+      "instrument_class": "equity",
+      "buy_lot_size": 100,
+      "price_tick": 0.01,
+      "currency": "CNY",
+      "scope": "ordinary_auction_buy_order",
+      "exceptions": [
+        "odd_lot_sale",
+        "instrument_specific_exchange_rule",
+        "exchange_rule_adjustment"
+      ]
+    },
+    {
+      "rule_key": "xshg-fund-auction",
+      "venue": "XSHG",
+      "instrument_class": "exchange_traded_fund",
+      "buy_lot_size": 100,
+      "price_tick": 0.001,
+      "currency": "CNY",
+      "scope": "ordinary_auction_buy_order",
+      "exceptions": [
+        "odd_lot_sale",
+        "instrument_specific_exchange_rule",
+        "exchange_rule_adjustment"
+      ]
+    },
+    {
+      "rule_key": "xshe-a-share-auction",
+      "venue": "XSHE",
+      "instrument_class": "equity",
+      "buy_lot_size": 100,
+      "price_tick": 0.01,
+      "currency": "CNY",
+      "scope": "ordinary_auction_buy_order",
+      "exceptions": [
+        "odd_lot_sale",
+        "instrument_specific_exchange_rule",
+        "exchange_rule_adjustment"
+      ]
+    },
+    {
+      "rule_key": "xshe-fund-auction",
+      "venue": "XSHE",
+      "instrument_class": "exchange_traded_fund",
+      "buy_lot_size": 100,
+      "price_tick": 0.001,
+      "currency": "CNY",
+      "scope": "ordinary_auction_buy_order",
+      "exceptions": [
+        "odd_lot_sale",
+        "instrument_specific_exchange_rule",
+        "exchange_rule_adjustment"
+      ]
+    }
+  ],
+  "historical_pit_claim": false,
+  "execution_capability": false
+}

@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/checkpoint-market-universe-view.schema.json",
+  "title": "Market Impact Checkpoint Market Universe View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "view_id",
+    "checkpoint_snapshot_set_id",
+    "checkpoint_key",
+    "barrier_at",
+    "input_record_ids",
+    "instrument_rule_set_id",
+    "target_venues",
+    "allowed_instrument_classes",
+    "market_inputs",
+    "instruments",
+    "industry_exposures",
+    "completeness_gaps",
+    "historical_pit_claim",
+    "evidence_promoted",
+    "execution_capability",
+    "model_call_authorized"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.checkpoint-market-universe-view.v1"},
+    "view_id": {
+      "type": "string",
+      "pattern": "^checkpoint-market-universe-view-[0-9a-f]{64}$"
+    },
+    "checkpoint_snapshot_set_id": {
+      "type": "string",
+      "pattern": "^prospective-checkpoint-snapshot-set-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "barrier_at": {"type": "string", "format": "date-time"},
+    "input_record_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/decision_input_id"}
+    },
+    "instrument_rule_set_id": {
+      "type": "string",
+      "pattern": "^exchange-instrument-rule-set-[0-9a-f]{64}$"
+    },
+    "target_venues": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["XSHG", "XSHE"]}
+    },
+    "allowed_instrument_classes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["equity", "exchange_traded_fund"]}
+    },
+    "market_inputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/market_input"}
+    },
+    "instruments": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/instrument"}
+    },
+    "industry_exposures": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/industry_exposure"}
+    },
+    "completeness_gaps": {"$ref": "#/$defs/gaps"},
+    "historical_pit_claim": {"const": false},
+    "evidence_promoted": {"const": false},
+    "execution_capability": {"const": false},
+    "model_call_authorized": {"const": false}
+  },
+  "$defs": {
+    "scalar": {"type": ["string", "number", "integer", "boolean", "null"]},
+    "nullable_string": {"type": ["string", "null"]},
+    "decision_input_id": {
+      "type": "string",
+      "pattern": "^checkpoint-decision-input-[0-9a-f]{64}$"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "price_basis": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "as_of_adjusted",
+            "execution_basis",
+            "execution_eligible",
+            "instrument_type",
+            "research_basis",
+            "total_return"
+          ],
+          "properties": {
+            "as_of_adjusted": {"type": "boolean"},
+            "execution_basis": {"$ref": "#/$defs/nullable_string"},
+            "execution_eligible": {"const": false},
+            "instrument_type": {"type": "string", "minLength": 1},
+            "research_basis": {"type": "string", "minLength": 1},
+            "total_return": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "market_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "record_type",
+        "snapshot_id",
+        "index_code",
+        "instrument_code",
+        "market",
+        "trade_date",
+        "price_basis",
+        "completeness_gaps"
+      ],
+      "properties": {
+        "record_id": {"$ref": "#/$defs/decision_input_id"},
+        "record_type": {
+          "enum": [
+            "trading_calendar_session",
+            "index_price_bar",
+            "fund_price_bar",
+            "market_price_bar"
+          ]
+        },
+        "snapshot_id": {"$ref": "#/$defs/snapshot_id"},
+        "index_code": {"$ref": "#/$defs/scalar"},
+        "instrument_code": {"$ref": "#/$defs/scalar"},
+        "market": {"$ref": "#/$defs/scalar"},
+        "trade_date": {"$ref": "#/$defs/scalar"},
+        "price_basis": {"$ref": "#/$defs/price_basis"},
+        "completeness_gaps": {"$ref": "#/$defs/gaps"}
+      }
+    },
+    "instrument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instrument_code",
+        "instrument_name",
+        "instrument_class",
+        "venue",
+        "index_code",
+        "list_status",
+        "effective_from",
+        "effective_to",
+        "effective_at_barrier",
+        "buy_lot_size",
+        "price_tick",
+        "currency",
+        "rule_key",
+        "rule_exceptions",
+        "research_eligible",
+        "decision_time_tradability",
+        "raw_price_record_id",
+        "daily_limit_record_ids",
+        "input_record_ids",
+        "completeness_gaps"
+      ],
+      "properties": {
+        "instrument_code": {"type": "string", "minLength": 1},
+        "instrument_name": {"$ref": "#/$defs/scalar"},
+        "instrument_class": {"enum": ["equity", "exchange_traded_fund"]},
+        "venue": {"enum": ["XSHG", "XSHE"]},
+        "index_code": {"$ref": "#/$defs/scalar"},
+        "list_status": {"$ref": "#/$defs/scalar"},
+        "effective_from": {"$ref": "#/$defs/scalar"},
+        "effective_to": {"$ref": "#/$defs/scalar"},
+        "effective_at_barrier": {"type": ["boolean", "null"]},
+        "buy_lot_size": {"type": ["integer", "null"], "minimum": 1},
+        "price_tick": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "currency": {"$ref": "#/$defs/nullable_string"},
+        "rule_key": {"$ref": "#/$defs/nullable_string"},
+        "rule_exceptions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "research_eligible": {"type": "boolean"},
+        "decision_time_tradability": {"enum": ["unverified", "ineligible"]},
+        "raw_price_record_id": {
+          "oneOf": [{"$ref": "#/$defs/decision_input_id"}, {"type": "null"}]
+        },
+        "daily_limit_record_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/decision_input_id"}
+        },
+        "input_record_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/decision_input_id"}
+        },
+        "completeness_gaps": {"$ref": "#/$defs/gaps"}
+      }
+    },
+    "industry_exposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taxonomy_source",
+        "taxonomy_version",
+        "taxonomy_level",
+        "industry_code",
+        "industry_name",
+        "index_code",
+        "instrument_code",
+        "observed_at_barrier",
+        "effective_at_barrier",
+        "constituent_count",
+        "input_record_ids",
+        "completeness_gaps"
+      ],
+      "properties": {
+        "taxonomy_source": {"$ref": "#/$defs/scalar"},
+        "taxonomy_version": {"$ref": "#/$defs/scalar"},
+        "taxonomy_level": {"$ref": "#/$defs/scalar"},
+        "industry_code": {"type": "string", "minLength": 1},
+        "industry_name": {"$ref": "#/$defs/scalar"},
+        "index_code": {"type": "string", "minLength": 1},
+        "instrument_code": {"type": "string", "minLength": 1},
+        "observed_at_barrier": {"const": true},
+        "effective_at_barrier": {"type": "null"},
+        "constituent_count": {"type": "integer", "minimum": 0},
+        "input_record_ids": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/decision_input_id"}
+        },
+        "completeness_gaps": {"$ref": "#/$defs/gaps"}
+      }
+    }
+  }
+}

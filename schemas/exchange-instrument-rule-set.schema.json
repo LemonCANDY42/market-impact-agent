@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/exchange-instrument-rule-set.schema.json",
+  "title": "Market Impact Exchange Instrument Rule Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rule_set_id",
+    "effective_from",
+    "source_documents",
+    "rules",
+    "historical_pit_claim",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.exchange-instrument-rule-set.v1"},
+    "rule_set_id": {
+      "type": "string",
+      "pattern": "^exchange-instrument-rule-set-[0-9a-f]{64}$"
+    },
+    "effective_from": {"type": "string", "format": "date"},
+    "source_documents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/source_document"}
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/rule"}
+    },
+    "historical_pit_claim": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "venue": {"enum": ["XSHG", "XSHE"]},
+    "instrument_class": {"enum": ["equity", "exchange_traded_fund"]},
+    "source_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "venue",
+        "issuer",
+        "notice_id",
+        "published_on",
+        "effective_from",
+        "source_ref",
+        "rule_references"
+      ],
+      "properties": {
+        "venue": {"$ref": "#/$defs/venue"},
+        "issuer": {"type": "string", "minLength": 1},
+        "notice_id": {"type": "string", "minLength": 1},
+        "published_on": {"type": "string", "format": "date"},
+        "effective_from": {"type": "string", "format": "date"},
+        "source_ref": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "rule_references": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_key",
+        "venue",
+        "instrument_class",
+        "buy_lot_size",
+        "price_tick",
+        "currency",
+        "scope",
+        "exceptions"
+      ],
+      "properties": {
+        "rule_key": {"type": "string", "minLength": 1},
+        "venue": {"$ref": "#/$defs/venue"},
+        "instrument_class": {"$ref": "#/$defs/instrument_class"},
+        "buy_lot_size": {"type": "integer", "minimum": 1},
+        "price_tick": {"type": "number", "exclusiveMinimum": 0},
+        "currency": {"const": "CNY"},
+        "scope": {"const": "ordinary_auction_buy_order"},
+        "exceptions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

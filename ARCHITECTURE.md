@@ -57,6 +57,22 @@ the aggregator identity and original upstream identity, then uses direct adapter
 rules, revision history, market identifiers, or historical series matter. Copies of one
 upstream record share a claim identity and do not become independent corroboration.
 
+Prospective research data follows a separate read-only path before Evidence promotion:
+
+```text
+registered Data Query + accepted Source Route
+    -> Source Observation -> append-only Prospective Receipt Journal
+    -> immutable Data Snapshot -> Prospective Checkpoint Snapshot Set
+    -> per-observation Checkpoint Decision Inputs
+    -> non-authoritative Checkpoint Market Universe View
+         = same-set market/exposure inputs + versioned exchange rules
+         -> explicit semantic gaps -> later Query Gate
+```
+
+The Market Universe View is a deterministic relationship projection, not another acquisition
+aggregate. It cannot replace any input Snapshot, promote Evidence, prove a historical taxonomy,
+authorize a model call, or become the broker instrument master.
+
 An Observation records occurrence, source publication/update, optional aggregator fetch,
 strategy availability, and local retrieval separately. Historical replay uses source
 availability or a frozen delivery-latency model; local backfill retrieval time is audit
