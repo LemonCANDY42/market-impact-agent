@@ -278,7 +278,7 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       Report exists, the batch gate is false with `triage_arm_not_completed`, and no candidate or
       downstream authority was produced. Preserve this as real negative capacity evidence; do not
       retry the ambiguous baseline request or repair it by merely increasing budgets.
-  - [ ] `PDI-29E` Add a content-identified Work Manifest before recovering the failed real batch.
+  - [x] `PDI-29E` Add a content-identified Work Manifest before recovering the failed real batch.
     Deterministically collapse exact content duplicates, retain every version identity, and split
     work in receipt order under frozen candidate-count and estimated-prompt ceilings. Baseline and
     treatment must share the same manifest; partitions must be exhaustive, disjoint and stable;
@@ -300,8 +300,16 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       evidence for a definite multi-atom merge, and retains uncertain grouping as `needs_review`.
       Both artifacts are content-identified, cap retained candidate identities at 128, and reject
       reserved label/route/authority control tokens in narrative fields. They contain no typed
-      labels, eligibility, route, PIT, Judgment or execution authority. Provider execution and
-      per-unit Run/Usage reopening remain the next gate.
+      labels, eligibility, route, PIT, Judgment or execution authority.
+    - [x] Add the Manifest-bound v2 Work Execution Plan and bounded map/partition/classify runtime.
+      It fixes both arms, Skills, prompts, output contracts and per-unit/phase/aggregate budgets;
+      journals dispatch before every Provider call; gives one crash-safe process exclusive
+      ownership; never retries an ambiguous request; reconstructs every correction turn; accounts
+      returned Provider Usage before output validation; and fully reopens each completed member
+      before its output can reach a downstream phase. Scripted 121-candidate acceptance covers both
+      arms, a cross-Work-Unit cluster, restart, concurrency, budget failure and artifact/event/
+      terminal/Usage tamper. This accepts mechanics only. The original real Candidate Set still has
+      no completed v2 arm or semantic Comparison Report; that replay remains under PDI-29D.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan

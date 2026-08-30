@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
 import sqlite3
 import tempfile
+import threading
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -77,6 +79,36 @@ class RunRecord:
     created_at: datetime
     updated_at: datetime
     terminal_artifact_id: str | None
+
+
+_PROCESS_CLAIMS_GUARD = threading.Lock()
+_PROCESS_CLAIMS: set[str] = set()
+
+
+class RunClaim:
+    """Crash-safe, non-blocking ownership of one Run Journal run_id."""
+
+    def __init__(self, *, key: str, descriptor: int) -> None:
+        self._key = key
+        self._descriptor = descriptor
+        self._released = False
+
+    def release(self) -> None:
+        if self._released:
+            return
+        self._released = True
+        try:
+            fcntl.flock(self._descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(self._descriptor)
+            with _PROCESS_CLAIMS_GUARD:
+                _PROCESS_CLAIMS.remove(self._key)
+
+    def __enter__(self) -> RunClaim:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.release()
 
 
 class ArtifactStore:
@@ -184,6 +216,34 @@ class RunJournal:
                     ON events(run_id, sequence);
                 """
             )
+
+    def try_claim_run(self, run_id: str) -> RunClaim | None:
+        """Return exclusive process ownership, or None when another caller owns the run."""
+
+        _identifier(run_id, "run_id")
+        claim_root = self.path.parent / f".{self.path.name}.run-claims"
+        claim_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(claim_root, 0o700)
+        key = f"{self.path}:{run_id}"
+        with _PROCESS_CLAIMS_GUARD:
+            if key in _PROCESS_CLAIMS:
+                return None
+            _PROCESS_CLAIMS.add(key)
+        claim_path = claim_root / sha256(run_id.encode()).hexdigest()
+        try:
+            descriptor = os.open(claim_path, os.O_CREAT | os.O_RDWR, 0o600)
+        except Exception:
+            with _PROCESS_CLAIMS_GUARD:
+                _PROCESS_CLAIMS.remove(key)
+            raise
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(descriptor)
+            with _PROCESS_CLAIMS_GUARD:
+                _PROCESS_CLAIMS.remove(key)
+            return None
+        return RunClaim(key=key, descriptor=descriptor)
 
     def start_run(
         self,

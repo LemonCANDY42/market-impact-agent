@@ -72,8 +72,9 @@ The bootstrap implements:
   no-tool Model Provider runtime now freezes coordinator-only and bounded-specialist comparison
   arms, budgets, restart behavior and pre-reveal evaluation mechanics. The first sealed real
   121-version comparison attempt stopped fail-closed on timeout/budget capacity before producing a
-  report; an arm-neutral Work Manifest now partitions the exact input into eleven bounded units,
-  but those units are not yet wired into runtime execution. Typed position/historical-context
+  report; an arm-neutral Work Manifest partitions the exact input into eleven bounded units, and a
+  Manifest-bound v2 runtime now executes fail-closed map, partition, and per-cluster classification
+  units with authoritative restart and Usage reopening. Typed position/historical-context
   payloads, completed real comparison arms and passing blind semantic results remain open acceptance
   work. Order-time
   tradability and risk remain

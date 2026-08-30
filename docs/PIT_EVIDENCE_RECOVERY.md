@@ -259,6 +259,15 @@ The package preserves official URLs, aggregate reactions, confounders and PIT ga
 omits licensed market rows, so its exact price calculations cannot be reproduced from that package
 alone. It is a discovery pool, not a backtest corpus or causal ranking.
 
+A follow-up two-route audit preserved that 20-candidate denominator. The routes assigned a broad
+event family to 14 and 16 candidates; their intersection was 13 and union 17, but only ten had both
+routes, a nearby date and first-party metadata. Those figures are not blind-recall estimates: the
+source candidate IDs and event anchors exposed event names before external lookup, so the audit is
+label-leakage-contaminated. Strict PIT remained 0/20. A valid repeat requires a pristine batch whose
+human-readable anchors, families and URLs are sealed behind irreversible anonymous identities before
+either discovery route starts, plus a frozen source index for comparable date-placebo opportunity
+rates.
+
 A separate leave-block-out transfer audit used 14 event-archetype folds and ten year folds. Across
 17 events and 37 paths it formed 26 conditional hypotheses; after outcomes were opened, 18 retained
 the predicted sign and eight were opposite or zero, while 48 insufficiently supported paths
@@ -273,6 +282,26 @@ zero outcomes and 50 abstentions; in 499 within-cell outcome-sign permutations, 
 and 18 same-sign outcomes fell inside their random-label reference intervals. The current rule set
 therefore remains a hypothesis-generation and abstention aid, not demonstrated generalizable event
 logic. The hidden cases stayed outside the population, folds, permutations and code constants.
+
+An independent falsification pass then froze and recomputed the same 17-cluster/37-exposure
+outcome-opened denominator. It reproduced the five-session signed mean of 3.38%, but classified the
+directory as `NO_GO` for strategy, alpha, causality, tradability or backtest promotion. No member has
+decision-time `available_at` or `authority_at`; the package also lacks a cutoff-valid security
+universe, original executable prices separated from research adjustments, corporate actions,
+trading status/limits, order-side liquidity, fees, slippage, capacity and turnover. Date jitter,
+random-date anchors and leave-block-out results remain descriptive because the directory, direction,
+date and window were opened after outcomes. The minimum scientifically interpretable next slice is
+therefore one future pre-registered event through the existing Data Snapshot, Pre-event Universe,
+Method Quality Market Snapshot, Outcome Seal and Outcome Opening sequence, with actual receipt and
+raw execution inputs frozen before opening results.
+
+A separate two-case Strict-PIT recovery probe reached the same boundary from source authority. The
+2024-09-24 pre-open policy package failed because the verified official replay identities were later
+than the 09:25 Asia/Shanghai cutoff. For the 2021-10-19 NDRC coal-price intervention, one official
+event source passed with a 2021-10-19T13:55:12Z immutable replay, but the complete mechanism still
+failed because the market series, coal-industry series and then-effective taxonomy lacked
+cutoff-valid authority. Both cases may remain content-identified retrospective context; neither is
+admitted to Strict-PIT, and this probe did not create a separate Modeled-PIT availability policy.
 
 These artifacts may refine general event structure, transmission, countercase and abstention Skills.
 They may not enter strict historical inputs, retroactively grant authority, tune an opened cohort

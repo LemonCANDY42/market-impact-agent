@@ -205,3 +205,14 @@ def test_run_journal_rejects_tampered_rows_during_lookup_and_recovery(
             config_hash=config_hash,
             created_at=NOW + timedelta(minutes=1),
         )
+
+
+def test_run_journal_run_claim_is_nonblocking_and_releasable(tmp_path: Path) -> None:
+    journal = RunJournal(tmp_path / "journal.sqlite")
+    first = journal.try_claim_run("claimed-run")
+    assert first is not None
+    assert journal.try_claim_run("claimed-run") is None
+    first.release()
+    reopened = journal.try_claim_run("claimed-run")
+    assert reopened is not None
+    reopened.release()

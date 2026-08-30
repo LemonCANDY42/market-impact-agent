@@ -874,6 +874,15 @@ append-only, Harness-clock pre-reveal comparison/scoring registration that rejec
 pre-registration arm starts or caller-supplied cost drift. All current execution and comparison
 evidence is fixture acceptance, not classifier quality.
 
+PDI-29E also implements the separate Manifest-bound v2 work runtime: deterministic bounded map
+roles per Work Unit, exhaustive Digest-only partition, raw-content reopening only per Cluster Seed,
+Harness assembly of the unchanged full Proposal, request-dispatched journaling before every Provider
+call, crash-safe exclusive Run ownership, no-retry ambiguous recovery, repeated-role Run identity,
+exact multi-turn correction reconstruction, pre-validation Provider usage accounting, and exact
+prompt/response/artifact/metric/Usage reopening before every downstream boundary. Its 121-candidate,
+cross-Work-Unit and both-arm acceptance is scripted
+mechanics evidence; no real model or comparison arm has completed through this path yet.
+
 **Blocked by:** typed Position Snapshot and Historical Analogy Pack payload bindings before their
 optional roles can be enabled; labels sealed before execution; replay of the current unclassified
 versions through both arms; a second pristine blind batch; and passing semantic metrics. Opaque

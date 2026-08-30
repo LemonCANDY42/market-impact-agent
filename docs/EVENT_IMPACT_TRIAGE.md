@@ -107,9 +107,37 @@ Usage record; one failed or ambiguous unit blocks the arm rather than allowing p
 The v1 Manifest contract has passed both a synthetic 121-version test and the exact private real
 Candidate Set preflight. The real Manifest contains 121 distinct atoms and eleven work units: ten
 units of 12 versions and one of one. Their conservative canonical-JSON UTF-8 size bounds are all
-below the frozen 32,768 ceiling. No payload or label is present in the Manifest. This proves only
-that the current input can be partitioned deterministically; runtime phase binding, per-unit Usage
-authority and completed comparison arms remain unimplemented.
+below the frozen 32,768 ceiling. No payload or label is present in the Manifest.
+
+The v2 Work Execution Plan and runtime now bind that Manifest before any model request. The Plan is
+content identified over the exact Candidate Set and Manifest hashes, comparison arm, Model Provider
+Profile, Skill and prompt/output contracts, stable map graph, maximum classify fan-out and
+per-phase/aggregate run, token and cost ceilings. Baseline maps each Work Unit through one
+coordinator; treatment fixes fact verification, transmission mapping and countercase review before
+the Work Unit coordinator. One partition coordinator consumes only the complete Digest set, and
+one classify coordinator per Cluster Seed reopens only that seed's frozen raw content. The Harness
+then assembles the unchanged full Proposal and validates exact Candidate Set coverage.
+
+Every Provider call has a durable request-dispatched event first. A timeout or process interruption
+after dispatch without a completed response becomes `human_input_required`; restart never sends
+that request again. Completed units reopen without a Provider call. Run identity includes phase,
+Work Unit or Cluster Seed, and role, so the treatment may repeat the same role across bounded units
+without weakening identity. Authority recomputes the expected graph and reopens every prompt,
+response, transcript, terminal artifact, metric and exact per-unit Usage record. One missing,
+ambiguous, over-budget or tampered unit blocks all downstream phases and produces no Proposal.
+An exclusive crash-safe claim rooted beside the Run Journal gives exactly one process ownership of a
+Run while it may dispatch; a concurrent same-plan caller returns fail-closed without calling the
+Provider. Every correction turn binds its own dispatch prompt to the preceding invalid assistant
+response and deterministic Harness correction. Terminal output, transcript and raw response must
+match the last completed response and validation event exactly. Returned Provider usage is journaled
+before model/tool/secret validation; secret-bearing response bodies are never persisted. Each
+completed predecessor passes this full reopening gate before its output may enter a later phase.
+Scripted-provider acceptance covers 121 candidates, a cluster spanning the first and last Work
+Units, exact final coverage, both arms, restart without repeated calls, ambiguous dispatch,
+Provider-reported budget excess, concurrent ownership, multi-turn correction, invalid Provider
+identity/tool/secret responses, cross-Manifest input and artifact/event/pointer/Usage tamper or
+predecessor corruption rejection. This is mechanics evidence only; no real model run or semantic
+quality claim has been made.
 
 The map/partition artifact layer is also closed. One Candidate Digest binds one exact Manifest atom
 and may record bounded supported facts, conflicts, transmission hypotheses, countercases,
@@ -118,8 +146,9 @@ supported; the contract never forces the model to invent a fact. A Cluster Parti
 every Digest and atom exactly once. It may join atoms from different Work Units, requires evidence
 for a definite multi-atom merge, and represents an unresolved grouping as `needs_review`. Neither
 artifact contains labels, eligibility, impact route, PIT, Judgment or execution authority. Their
-schemas and deterministic assembly tests pass, but no Provider run has produced a real Digest or
-Partition yet. The batch, atom, work-unit, Digest and Cluster surfaces all cap retained candidate
+schemas, deterministic assembly tests and scripted-provider runtime tests pass, but no real Provider
+run has produced a Digest or Partition yet. The batch, atom, work-unit, Digest and Cluster surfaces
+all cap retained candidate
 identities at 128. Digest and merge narratives reject reserved label, route and authority control
 tokens; arbitrary semantic paraphrases still require the later typed classifier and Harness
 validation rather than being treated as structurally impossible.

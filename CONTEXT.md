@@ -286,6 +286,15 @@ fact/transmission/countercase specialists plus coordinator; an interrupted infer
 automatically. It grants no PIT, Judgment, or execution authority.
 _Avoid_: Dynamic debate, opaque Agent team, retry policy, trading plan
 
+**Event Impact Triage Work Execution Plan**:
+A content-identified v2 pre-model binding of the exact Candidate Set and Work Manifest hashes to one
+comparison arm and Model Provider Profile. It freezes the repeated map roles per Work Unit, one
+partition coordinator, bounded classify fan-out, exact Skill/prompt/output contracts and per-unit,
+per-phase and aggregate request/token/cost ceilings. Run identity is phase plus Work Unit or Cluster
+Seed plus role. Labels, tools, PIT, Judgment and execution remain absent, and an ambiguous dispatched
+request is never retried automatically.
+_Avoid_: Scheduler, dynamic role discovery, label-bearing plan, best-effort partial proposal
+
 **Event Impact Triage Work Manifest**:
 An arm-neutral, content-identified pre-model partition of one exact Candidate Set. It collapses only
 byte-identical normalized payloads into atoms while retaining every Observation Version identity,

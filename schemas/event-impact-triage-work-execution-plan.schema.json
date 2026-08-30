@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-work-execution-plan.schema.json",
+  "title": "Market Impact Event Impact Triage Work Execution Plan v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "candidate_set_id",
+    "candidate_set_hash",
+    "work_manifest_id",
+    "work_manifest_hash",
+    "registration_id",
+    "checkpoint_key",
+    "checkpoint_contract_hash",
+    "arm",
+    "model_profile_alias",
+    "model_provider_profile",
+    "map_bindings",
+    "partition_binding",
+    "classify_binding",
+    "ordered_map_work_unit_ids",
+    "max_classify_clusters",
+    "phase_ceilings",
+    "max_total_runs",
+    "max_total_input_tokens",
+    "max_total_output_tokens",
+    "max_total_estimated_cost_microusd",
+    "allowed_tools",
+    "allowed_mcp_servers",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.event-impact-triage-work-execution-plan.v2"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-work-execution-plan-[0-9a-f]{64}$"
+    },
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "candidate_set_hash": {"$ref": "#/$defs/sha256"},
+    "work_manifest_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-work-manifest-[0-9a-f]{64}$"
+    },
+    "work_manifest_hash": {"$ref": "#/$defs/sha256"},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "checkpoint_contract_hash": {"$ref": "#/$defs/sha256"},
+    "arm": {"enum": ["coordinator_only", "bounded_specialists"]},
+    "model_profile_alias": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "model_provider_profile": {
+      "$ref": "https://schemas.market-impact-agent.local/model-provider-profile.schema.json"
+    },
+    "map_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/roleBinding"}
+    },
+    "partition_binding": {"$ref": "#/$defs/roleBinding"},
+    "classify_binding": {"$ref": "#/$defs/roleBinding"},
+    "ordered_map_work_unit_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^event-impact-triage-work-unit-[0-9a-f]{64}$"
+      }
+    },
+    "max_classify_clusters": {"type": "integer", "minimum": 1, "maximum": 128},
+    "phase_ceilings": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/phaseCeiling"}
+    },
+    "max_total_runs": {"type": "integer", "minimum": 3},
+    "max_total_input_tokens": {"type": "integer", "minimum": 1},
+    "max_total_output_tokens": {"type": "integer", "minimum": 1},
+    "max_total_estimated_cost_microusd": {"type": "integer", "minimum": 0},
+    "allowed_tools": {"type": "array", "maxItems": 0},
+    "allowed_mcp_servers": {"type": "array", "maxItems": 0},
+    "historical_pit_claim": {"const": false},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "roleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "role",
+        "requested_skills",
+        "resolved_skill_names",
+        "skill_manifest_hashes",
+        "prompt_template_id",
+        "output_contract_hash",
+        "max_turns",
+        "max_request_utf8_tokens",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_estimated_cost_microusd"
+      ],
+      "properties": {
+        "phase": {"enum": ["map", "partition", "classify"]},
+        "role": {
+          "enum": [
+            "coordinator",
+            "fact_verifier",
+            "transmission_mapper",
+            "countercase_reviewer"
+          ]
+        },
+        "requested_skills": {"$ref": "#/$defs/strings"},
+        "resolved_skill_names": {"$ref": "#/$defs/strings"},
+        "skill_manifest_hashes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "prompt_template_id": {"type": "string", "minLength": 1},
+        "output_contract_hash": {"$ref": "#/$defs/sha256"},
+        "max_turns": {"type": "integer", "minimum": 1},
+        "max_request_utf8_tokens": {"type": "integer", "minimum": 1},
+        "max_input_tokens": {"type": "integer", "minimum": 1},
+        "max_output_tokens": {"type": "integer", "minimum": 1},
+        "max_estimated_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    },
+    "phaseCeiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "max_runs",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_estimated_cost_microusd"
+      ],
+      "properties": {
+        "phase": {"enum": ["map", "partition", "classify"]},
+        "max_runs": {"type": "integer", "minimum": 1},
+        "max_input_tokens": {"type": "integer", "minimum": 1},
+        "max_output_tokens": {"type": "integer", "minimum": 1},
+        "max_estimated_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
