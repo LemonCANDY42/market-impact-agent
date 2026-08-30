@@ -329,6 +329,14 @@ market-impact data checkpoint-route-admit \
 ```
 
 Admission is idempotent and records only the Harness clock; readiness refuses an unadmitted plan.
+The checked-in v1 plan remains a readable legacy artifact. New route plans use schema v2 and must
+name `replaces_plan_id` when a current head exists. Admission validates every bound Job and accepted
+source contract before a single `BEGIN IMMEDIATE` transaction closes the predecessor's half-open
+effective interval and swaps the registration's current head. Two replacements from the same
+predecessor cannot both commit. Historical admissions, misses, receipts, and observations remain
+append-only. A headless legacy history requires explicit re-admission of the exact selected plan;
+the Harness never infers a winner from timestamps. Readiness checks route effectiveness at
+`evaluated_at`, and Event Impact Triage checks it again at `frozen_at`.
 Then run the non-mutating readiness audit:
 
 ```bash
@@ -473,7 +481,13 @@ overlap for `major_news`. Tushare documents pull queries, not a WebSocket/push s
 system describes this honestly as rolling polling plus event Wake.
 Concurrent invocations share
 an expiring lease; restart resumes staged data, and every due opportunity remains inspectable via
-`collection-health`. `SIGINT` or `SIGTERM` requests are checked before Provider collection and
+`collection-health`. Automatically selected due Jobs are ordered by the earliest absolute deadline
+(`next_due_at + misfire_grace_seconds`) and executed with bounded per-opportunity concurrency. The
+worker samples its Harness clock separately at each actual claim instead of reusing one stale batch
+start; explicit `--now` remains the deterministic replay/test clock. The concurrency bound is
+content-identified in supervisor plan v4, defaults to four, and is constrained to 1-16. This does
+not turn per-Job byte preflight into a global atomic byte reservation; disk-budget health and the
+existing fail-closed preflight remain separate controls. `SIGINT` or `SIGTERM` requests are checked before Provider collection and
 again before the Journal commit. An in-flight Provider request is still bounded by its timeout; a
 crash still relies on lease expiry and restart recovery. `--now` controls logical due, misfire,
 backoff, and scheduling decisions only; actual opportunity completion uses the runtime UTC clock
@@ -516,7 +530,8 @@ market-impact data collection-supervisor-plan \
   --environment-file /absolute/private/collection.env \
   --stdout-path /absolute/private/collection.log \
   --stderr-path /absolute/private/collection.err.log \
-  --maximum-state-bytes 10000000000
+  --maximum-state-bytes 10000000000 \
+  --maximum-concurrent-opportunities 4
 ```
 
 The plan is disabled and secret-free. Its plist carries `Disabled=true`. Disabled installation
@@ -528,7 +543,7 @@ paths, must remain disjoint, and reject symlinked files or ancestors. The value 
 Provider process and is not written to a Job, Snapshot, report, plist, or command output. Generating
 this plan does not install or enable launchd.
 
-The v3 plist launches through `/usr/bin/env -i`, explicitly restores only `PATH` and
+The v4 plist launches through `/usr/bin/env -i`, explicitly restores only `PATH` and
 `PYTHONUNBUFFERED`, and requires the worker to verify that no other host environment keys reached
 Python apart from macOS's two non-secret locale/text-encoding keys. A non-isolated process fails
 before the private Tushare file is read. PDI-21 acceptance is recorded only by a private,

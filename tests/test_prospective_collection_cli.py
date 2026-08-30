@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Barrier, Lock
 from typing import Any, cast
 
 import pytest
@@ -110,13 +111,16 @@ def test_collection_cli_freezes_registration_and_one_shot_worker_arguments() -> 
     assert run.data_command == "collection-run-due"
     assert run.now == datetime(2026, 8, 28, 14, 5, tzinfo=UTC)
     assert run.maximum_state_bytes == 10_000_000_000
+    assert run.maximum_concurrent_opportunities == 4
     assert tracer.data_command == "collection-qualify-tracer"
     assert len(tracer.job_id) == 2
     assert service.data_command == "collection-service-run"
     assert service.environment_file == Path("/tmp/market-impact.env")
     assert service.maximum_state_bytes == 10_000_000_000
+    assert service.maximum_concurrent_opportunities == 4
     assert supervisor.data_command == "collection-supervisor-plan"
     assert supervisor.invocation_interval_seconds == 60
+    assert supervisor.maximum_concurrent_opportunities == 4
 
 
 def test_one_shot_worker_and_health_are_safe_when_no_jobs_exist(
@@ -130,6 +134,7 @@ def test_one_shot_worker_and_health_are_safe_when_no_jobs_exist(
 
     assert result["job_count"] == 0
     assert result["results"] == []
+    assert result["maximum_concurrent_opportunities"] == 4
     assert result["execution_capability"] is False
 
     run_exit_code = main(
@@ -166,6 +171,102 @@ def test_one_shot_worker_and_health_are_safe_when_no_jobs_exist(
     assert output["job_count"] == 0
     assert output["health"] == []
     assert output["execution_capability"] is False
+
+
+def test_due_worker_runs_distinct_jobs_with_bounded_parallelism(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeStore:
+        def __init__(self, _path: Path) -> None:
+            pass
+
+    class FakeValue:
+        def __init__(self, job_id: str) -> None:
+            self.job_id = job_id
+            self.next_due_at = datetime(2026, 8, 28, 14, 5, tzinfo=UTC)
+            self.misfire_grace_seconds = 300 if job_id == "job-a" else 90
+
+        def to_dict(self) -> dict[str, object]:
+            return {"job_id": self.job_id, "outcome": "success"}
+
+    class FakeRuntime:
+        def __init__(self, _store: object, *, clock: Any) -> None:
+            self._clock = clock
+
+        def due_job_ids(self, *, now: datetime, limit: int) -> tuple[str, ...]:
+            assert now == datetime(2026, 8, 28, 14, 5, tzinfo=UTC)
+            assert limit == 100
+            return ("job-b", "job-a")
+
+        def job(self, job_id: str) -> FakeValue:
+            return FakeValue(job_id)
+
+        def run_due(
+            self,
+            job_id: str,
+            *,
+            now: datetime,
+            collector: Any,
+            cancelled: Any,
+        ) -> FakeValue:
+            del cancelled
+            with clock_lock:
+                claim_times[job_id] = now
+            collector(None, {}, now)
+            completed_at = self._clock()
+            with clock_lock:
+                completion_times[job_id] = completed_at
+            return FakeValue(job_id)
+
+        def health(self, job_id: str, *, now: datetime) -> FakeValue:
+            del now
+            return FakeValue(job_id)
+
+    rendezvous = Barrier(2)
+    claim_times: dict[str, datetime] = {}
+    completion_times: dict[str, datetime] = {}
+    clock_lock = Lock()
+    clock_ticks = 0
+
+    def clock() -> datetime:
+        nonlocal clock_ticks
+        with clock_lock:
+            value = datetime(2026, 8, 28, 14, 5, tzinfo=UTC).replace(microsecond=clock_ticks)
+            clock_ticks += 1
+            return value
+
+    def factory(_job: Any, _store: Any) -> Any:
+        def collector(_policy: Any, _config: Any, _scheduled_for: datetime) -> object:
+            rendezvous.wait(timeout=2)
+            return object()
+
+        return collector
+
+    monkeypatch.setattr(cli_module, "LocalDataSnapshotStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ProspectiveCollectionRuntime", FakeRuntime)
+    result = run_due_prospective_collection_jobs(
+        state_root=tmp_path / "state",
+        maximum_concurrent_opportunities=2,
+        collector_factory=factory,
+        clock=clock,
+    )
+
+    assert result["maximum_concurrent_opportunities"] == 2
+    assert [item["job_id"] for item in cast(list[dict[str, object]], result["results"])] == [
+        "job-b",
+        "job-a",
+    ]
+    worker_started_at = datetime.fromisoformat(cast(str, result["run_at"]).replace("Z", "+00:00"))
+    assert set(claim_times) == {"job-a", "job-b"}
+    assert all(value > worker_started_at for value in claim_times.values())
+    assert all(completion_times[job_id] >= claim_times[job_id] for job_id in claim_times)
+
+    with pytest.raises(ValueError, match="between 1 and 16"):
+        run_due_prospective_collection_jobs(
+            state_root=tmp_path / "state",
+            maximum_concurrent_opportunities=17,
+        )
 
 
 def test_service_worker_loads_token_from_private_file_without_echoing_it(

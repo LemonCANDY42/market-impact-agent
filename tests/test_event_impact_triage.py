@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -42,8 +43,11 @@ from market_impact_agent.observations import (
 )
 from market_impact_agent.prospective_checkpoint_readiness import (
     CheckpointReadinessStatus,
+    ProspectiveCheckpointAdmissionStore,
     ProspectiveCheckpointReadiness,
     ProspectiveCheckpointReadinessReport,
+    ProspectiveCheckpointRouteAdmission,
+    ProspectiveCheckpointRoutePlan,
 )
 from market_impact_agent.prospective_data import prospective_observation_version_id
 from market_impact_agent.research import (
@@ -201,13 +205,26 @@ def _readiness(snapshot: DataSnapshot) -> ProspectiveCheckpointReadinessReport:
     )
     checkpoints = tuple(sorted((candidate, waiting), key=lambda item: item.checkpoint_key))
     evaluated_at = ADMITTED_AT + timedelta(minutes=35)
-    route_plan_id = "prospective-checkpoint-route-plan-" + "3" * 64
-    route_admission_id = "prospective-checkpoint-route-admission-" + "4" * 64
     registration_id = "prospective-diagnostic-registration-" + "5" * 64
+    route_plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=registration_id,
+        bindings=(),
+    )
+    admission_core = {
+        "route_plan_id": route_plan.plan_id,
+        "registration_id": registration_id,
+        "recorded_at": ADMITTED_AT.isoformat().replace("+00:00", "Z"),
+    }
+    route_admission = ProspectiveCheckpointRouteAdmission(
+        admission_id="prospective-checkpoint-route-admission-" + canonical_hash(admission_core),
+        route_plan_id=route_plan.plan_id,
+        registration_id=registration_id,
+        recorded_at=ADMITTED_AT,
+    )
     core = {
         "schema_version": "market-impact.prospective-checkpoint-readiness-report.v1",
-        "route_plan_id": route_plan_id,
-        "route_admission_id": route_admission_id,
+        "route_plan_id": route_plan.plan_id,
+        "route_admission_id": route_admission.admission_id,
         "registration_id": registration_id,
         "admitted_at": ADMITTED_AT.isoformat().replace("+00:00", "Z"),
         "evaluated_at": evaluated_at.isoformat().replace("+00:00", "Z"),
@@ -221,8 +238,8 @@ def _readiness(snapshot: DataSnapshot) -> ProspectiveCheckpointReadinessReport:
     }
     return ProspectiveCheckpointReadinessReport(
         report_id=f"prospective-checkpoint-readiness-report-{canonical_hash(core)}",
-        route_plan_id=route_plan_id,
-        route_admission_id=route_admission_id,
+        route_plan_id=route_plan.plan_id,
+        route_admission_id=route_admission.admission_id,
         registration_id=registration_id,
         admitted_at=ADMITTED_AT,
         evaluated_at=evaluated_at,
@@ -236,13 +253,74 @@ def _readiness(snapshot: DataSnapshot) -> ProspectiveCheckpointReadinessReport:
 def _candidate_set(tmp_path: Path) -> EventImpactTriageCandidateSet:
     store = LocalDataSnapshotStore(tmp_path / "state")
     snapshot = _snapshot(store)
+    readiness = _readiness(snapshot)
     return freeze_event_impact_triage_candidate_set(
-        readiness_report=_readiness(snapshot),
+        readiness_report=readiness,
         checkpoint_key="next-a-share-policy-event",
         snapshot=snapshot,
         snapshot_store=store,
+        admission_store=_authorize_readiness(tmp_path / "state", readiness),
         frozen_at=FROZEN_AT,
     )
+
+
+def _authorize_readiness(
+    state_root: Path,
+    readiness: ProspectiveCheckpointReadinessReport,
+) -> ProspectiveCheckpointAdmissionStore:
+    authority = ProspectiveCheckpointAdmissionStore(state_root)
+    route_plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=readiness.registration_id,
+        bindings=(),
+    )
+    admission_core = {
+        "route_plan_id": route_plan.plan_id,
+        "registration_id": readiness.registration_id,
+        "recorded_at": ADMITTED_AT.isoformat().replace("+00:00", "Z"),
+    }
+    admission = ProspectiveCheckpointRouteAdmission(
+        admission_id="prospective-checkpoint-route-admission-" + canonical_hash(admission_core),
+        route_plan_id=route_plan.plan_id,
+        registration_id=readiness.registration_id,
+        recorded_at=ADMITTED_AT,
+    )
+    assert route_plan.plan_id == readiness.route_plan_id
+    assert admission.admission_id == readiness.route_admission_id
+    route_plan_artifact = authority.store.artifacts.put_json(route_plan.to_dict())
+    admission_artifact = authority.store.artifacts.put_json(admission.to_dict())
+    with sqlite3.connect(authority.index_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO prospective_checkpoint_route_admissions(
+                route_plan_id, admission_id, registration_id, artifact_hash, recorded_at,
+                route_plan_artifact_hash, superseded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                readiness.route_plan_id,
+                readiness.route_admission_id,
+                readiness.registration_id,
+                admission_artifact.content_hash,
+                ADMITTED_AT.isoformat().replace("+00:00", "Z"),
+                route_plan_artifact.content_hash,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO prospective_checkpoint_route_heads(
+                registration_id, route_plan_id, admission_id, effective_from,
+                route_plan_artifact_hash
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                readiness.registration_id,
+                readiness.route_plan_id,
+                readiness.route_admission_id,
+                ADMITTED_AT.isoformat().replace("+00:00", "Z"),
+                route_plan_artifact.content_hash,
+            ),
+        )
+    return authority
 
 
 def _run_evidence() -> TriageRunEvidence:
@@ -545,5 +623,49 @@ def test_triage_freeze_rejects_a_snapshot_that_omits_readiness_candidates(
             checkpoint_key="next-a-share-policy-event",
             snapshot=incomplete,
             snapshot_store=store,
+            admission_store=_authorize_readiness(tmp_path / "state", report),
+            frozen_at=FROZEN_AT,
+        )
+
+
+def test_triage_freeze_rechecks_route_effectiveness_after_readiness(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    snapshot = _snapshot(store)
+    report = _readiness(snapshot)
+    authority = _authorize_readiness(tmp_path / "state", report)
+    with sqlite3.connect(authority.index_path) as connection:
+        connection.execute(
+            """
+            UPDATE prospective_checkpoint_route_admissions
+            SET superseded_at = ?
+            WHERE route_plan_id = ?
+            """,
+            (FROZEN_AT.isoformat().replace("+00:00", "Z"), report.route_plan_id),
+        )
+        connection.execute(
+            """
+            UPDATE prospective_checkpoint_route_heads
+            SET route_plan_id = ?, admission_id = ?, effective_from = ?,
+                route_plan_artifact_hash = ?
+            WHERE registration_id = ?
+            """,
+            (
+                "prospective-checkpoint-route-plan-" + "6" * 64,
+                "prospective-checkpoint-route-admission-" + "7" * 64,
+                FROZEN_AT.isoformat().replace("+00:00", "Z"),
+                "8" * 64,
+                report.registration_id,
+            ),
+        )
+
+    with pytest.raises(ValueError, match="not effective"):
+        freeze_event_impact_triage_candidate_set(
+            readiness_report=report,
+            checkpoint_key="next-a-share-policy-event",
+            snapshot=snapshot,
+            snapshot_store=store,
+            admission_store=authority,
             frozen_at=FROZEN_AT,
         )

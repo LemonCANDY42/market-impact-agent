@@ -180,7 +180,7 @@ def _admissions(tmp_path: Path) -> ProspectiveCheckpointAdmissionStore:
         tmp_path / "state",
         clock=lambda: ADMITTED_AT,
     )
-    store.admit(route_plan=_plan(), registration=_registration())
+    store.admit(route_plan=_plan(), registration=_registration(), runtime=_runtime())
     return store
 
 
@@ -228,7 +228,7 @@ def test_route_plan_rejects_missing_or_legacy_admission_timing_protocol(
         load_prospective_checkpoint_route_plan(path)
 
 
-def test_new_protocol_admission_does_not_grandfather_or_overwrite_old_row(
+def test_new_protocol_admission_does_not_infer_a_head_from_legacy_rows(
     tmp_path: Path,
 ) -> None:
     plan = _plan()
@@ -269,11 +269,10 @@ def test_new_protocol_admission_does_not_grandfather_or_overwrite_old_row(
     with pytest.raises(KeyError, match="not durably admitted"):
         store.admission(plan.plan_id)
 
-    new_admission = store.admit(route_plan=plan, registration=_registration())
+    with pytest.raises(ValueError, match="explicitly re-admit one existing plan"):
+        store.admit(route_plan=plan, registration=_registration(), runtime=_runtime())
 
     assert plan.admission_timing_protocol == PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL
-    assert new_admission.route_plan_id == plan.plan_id
-    assert new_admission.route_plan_id != old_admission.route_plan_id
     assert store.admission(old_plan_id) == old_admission
 
 
@@ -283,11 +282,14 @@ def test_route_admission_uses_harness_clock_and_is_durable(tmp_path: Path) -> No
         clock=lambda: ADMITTED_AT,
     )
 
-    admission = store.admit(route_plan=_plan(), registration=_registration())
+    admission = store.admit(route_plan=_plan(), registration=_registration(), runtime=_runtime())
 
     assert admission.recorded_at == ADMITTED_AT
     assert store.admission(_plan().plan_id) == admission
-    assert store.admit(route_plan=_plan(), registration=_registration()) == admission
+    assert (
+        store.admit(route_plan=_plan(), registration=_registration(), runtime=_runtime())
+        == admission
+    )
 
 
 def test_route_admission_samples_harness_clock_only_after_write_lock(
@@ -307,7 +309,9 @@ def test_route_admission_samples_harness_clock_only_after_write_lock(
     def admit() -> None:
         worker_started.set()
         try:
-            result["admission"] = store.admit(route_plan=_plan(), registration=_registration())
+            result["admission"] = store.admit(
+                route_plan=_plan(), registration=_registration(), runtime=_runtime()
+            )
         except BaseException as exc:
             result["error"] = exc
         finally:
@@ -334,12 +338,284 @@ def test_route_admission_requires_its_cas_artifact(tmp_path: Path) -> None:
         tmp_path / "state",
         clock=lambda: ADMITTED_AT,
     )
-    admission = store.admit(route_plan=_plan(), registration=_registration())
+    admission = store.admit(route_plan=_plan(), registration=_registration(), runtime=_runtime())
     artifact = store.store.artifacts.put_json(admission.to_dict())
     artifact.path.unlink()
 
     with pytest.raises(FileNotFoundError):
         store.admission(_plan().plan_id)
+
+
+@pytest.mark.parametrize("artifact_column", ("artifact_hash", "route_plan_artifact_hash"))
+def test_assert_effective_requires_its_durable_admission_and_plan_artifacts(
+    tmp_path: Path,
+    artifact_column: str,
+) -> None:
+    store = _admissions(tmp_path)
+    plan = _plan()
+    admission = store.admission(plan.plan_id)
+    with sqlite3.connect(store.index_path) as connection:
+        artifact_hash = connection.execute(
+            f"SELECT {artifact_column} FROM prospective_checkpoint_route_admissions "
+            "WHERE route_plan_id = ?",
+            (plan.plan_id,),
+        ).fetchone()[0]
+    store.store.artifacts.get(artifact_hash, media_type="application/json").path.unlink()
+
+    with pytest.raises(FileNotFoundError):
+        store.assert_effective(
+            route_plan_id=plan.plan_id,
+            admission_id=admission.admission_id,
+            registration_id=plan.registration_id,
+            at=ADMITTED_AT,
+        )
+
+
+@pytest.mark.parametrize("artifact_column", ("artifact_hash", "route_plan_artifact_hash"))
+def test_assert_effective_rejects_corrupt_admission_and_plan_artifact_bindings(
+    tmp_path: Path,
+    artifact_column: str,
+) -> None:
+    store = _admissions(tmp_path)
+    plan = _plan()
+    admission = store.admission(plan.plan_id)
+    corrupt_artifact = store.store.artifacts.put_json({"corrupt": artifact_column})
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute(
+            f"UPDATE prospective_checkpoint_route_admissions SET {artifact_column} = ? "
+            "WHERE route_plan_id = ?",
+            (corrupt_artifact.content_hash, plan.plan_id),
+        )
+
+    with pytest.raises((TypeError, ValueError)):
+        store.assert_effective(
+            route_plan_id=plan.plan_id,
+            admission_id=admission.admission_id,
+            registration_id=plan.registration_id,
+            at=ADMITTED_AT,
+        )
+
+
+@pytest.mark.parametrize(
+    ("head_column", "replacement"),
+    (
+        ("route_plan_id", "prospective-checkpoint-route-plan-" + "0" * 64),
+        ("admission_id", "prospective-checkpoint-route-admission-" + "0" * 64),
+        ("route_plan_artifact_hash", "0" * 64),
+        (
+            "effective_from",
+            (ADMITTED_AT + timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+        ),
+    ),
+)
+def test_assert_effective_reconciles_the_current_head_to_durable_route_evidence(
+    tmp_path: Path,
+    head_column: str,
+    replacement: str,
+) -> None:
+    store = _admissions(tmp_path)
+    plan = _plan()
+    admission = store.admission(plan.plan_id)
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute(
+            f"UPDATE prospective_checkpoint_route_heads SET {head_column} = ? "
+            "WHERE registration_id = ?",
+            (replacement, plan.registration_id),
+        )
+
+    with pytest.raises(ValueError, match="head does not match"):
+        store.assert_effective(
+            route_plan_id=plan.plan_id,
+            admission_id=admission.admission_id,
+            registration_id=plan.registration_id,
+            at=ADMITTED_AT,
+        )
+
+
+def test_route_replacement_creates_fresh_effective_interval_and_lower_bound(
+    tmp_path: Path,
+) -> None:
+    initial = _plan()
+    replacement_at = ADMITTED_AT + timedelta(minutes=10)
+    clock_values = iter((ADMITTED_AT, replacement_at))
+    store = ProspectiveCheckpointAdmissionStore(
+        tmp_path / "state",
+        clock=lambda: next(clock_values),
+    )
+    initial_admission = store.admit(
+        route_plan=initial,
+        registration=_registration(),
+        runtime=_runtime(),
+    )
+    replacement = ProspectiveCheckpointRoutePlan.build(
+        registration_id=initial.registration_id,
+        bindings=initial.bindings,
+        replaces_plan_id=initial.plan_id,
+    )
+
+    replacement_admission = store.admit(
+        route_plan=replacement,
+        registration=_registration(),
+        runtime=_runtime(),
+    )
+
+    assert replacement.plan_id != initial.plan_id
+    assert replacement_admission.recorded_at == replacement_at
+    assert store.current_plan_id(initial.registration_id) == replacement.plan_id
+    store.assert_effective(
+        route_plan_id=initial.plan_id,
+        admission_id=initial_admission.admission_id,
+        registration_id=initial.registration_id,
+        at=replacement_at - timedelta(microseconds=1),
+    )
+    with pytest.raises(ValueError, match="not effective"):
+        store.assert_effective(
+            route_plan_id=initial.plan_id,
+            admission_id=initial_admission.admission_id,
+            registration_id=initial.registration_id,
+            at=replacement_at,
+        )
+    store.assert_effective(
+        route_plan_id=replacement.plan_id,
+        admission_id=replacement_admission.admission_id,
+        registration_id=replacement.registration_id,
+        at=replacement_at,
+    )
+
+    old_miss = _FakeOpportunity(
+        scheduled_for=ADMITTED_AT + timedelta(minutes=5),
+        outcome="missed",
+    )
+    report = evaluate_prospective_checkpoint_readiness(
+        registration=_registration(),
+        route_plan=replacement,
+        admission_store=store,
+        runtime=_runtime(opportunities=(old_miss,)),
+        evaluated_at=replacement_at + timedelta(minutes=1),
+    )
+    checkpoint = next(
+        item for item in report.checkpoints if item.checkpoint_key == "next-a-share-policy-event"
+    )
+    assert checkpoint.status is CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+    assert "event_revelation:post_admission_missed_opportunity" not in checkpoint.blocking_gaps
+    with pytest.raises(ValueError, match="not effective"):
+        evaluate_prospective_checkpoint_readiness(
+            registration=_registration(),
+            route_plan=initial,
+            admission_store=store,
+            runtime=_runtime(),
+            evaluated_at=replacement_at + timedelta(minutes=1),
+        )
+
+
+def test_historical_route_interval_requires_its_authenticated_successor(
+    tmp_path: Path,
+) -> None:
+    initial = _plan()
+    replacement_at = ADMITTED_AT + timedelta(minutes=10)
+    clock_values = iter((ADMITTED_AT, replacement_at))
+    store = ProspectiveCheckpointAdmissionStore(
+        tmp_path / "state",
+        clock=lambda: next(clock_values),
+    )
+    initial_admission = store.admit(
+        route_plan=initial,
+        registration=_registration(),
+        runtime=_runtime(),
+    )
+    replacement = ProspectiveCheckpointRoutePlan.build(
+        registration_id=initial.registration_id,
+        bindings=initial.bindings,
+        replaces_plan_id=initial.plan_id,
+    )
+    store.admit(
+        route_plan=replacement,
+        registration=_registration(),
+        runtime=_runtime(),
+    )
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute(
+            """
+            UPDATE prospective_checkpoint_route_admissions
+            SET superseded_at = ?
+            WHERE route_plan_id = ?
+            """,
+            (
+                (replacement_at + timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+                initial.plan_id,
+            ),
+        )
+
+    with pytest.raises(ValueError, match="authenticated successor"):
+        store.assert_effective(
+            route_plan_id=initial.plan_id,
+            admission_id=initial_admission.admission_id,
+            registration_id=initial.registration_id,
+            at=ADMITTED_AT + timedelta(minutes=1),
+        )
+
+
+def test_concurrent_route_replacements_use_current_head_compare_and_swap(
+    tmp_path: Path,
+) -> None:
+    clock_lock = threading.Lock()
+    clock_tick = 0
+
+    def clock() -> datetime:
+        nonlocal clock_tick
+        with clock_lock:
+            value = ADMITTED_AT + timedelta(seconds=clock_tick)
+            clock_tick += 1
+            return value
+
+    store = ProspectiveCheckpointAdmissionStore(tmp_path / "state", clock=clock)
+    initial = _plan()
+    store.admit(route_plan=initial, registration=_registration(), runtime=_runtime())
+    replacements = (
+        ProspectiveCheckpointRoutePlan.build(
+            registration_id=initial.registration_id,
+            bindings=initial.bindings,
+            replaces_plan_id=initial.plan_id,
+        ),
+        ProspectiveCheckpointRoutePlan.build(
+            registration_id=initial.registration_id,
+            bindings=(),
+            replaces_plan_id=initial.plan_id,
+        ),
+    )
+    rendezvous = threading.Barrier(2)
+    results: list[ProspectiveCheckpointRouteAdmission] = []
+    errors: list[BaseException] = []
+
+    def replace(plan: ProspectiveCheckpointRoutePlan) -> None:
+        rendezvous.wait(timeout=2)
+        try:
+            results.append(
+                store.admit(
+                    route_plan=plan,
+                    registration=_registration(),
+                    runtime=_runtime(),
+                )
+            )
+        except BaseException as exc:
+            errors.append(exc)
+
+    workers = tuple(threading.Thread(target=replace, args=(plan,)) for plan in replacements)
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=3)
+
+    assert len(results) == 1
+    assert len(errors) == 1
+    assert isinstance(errors[0], ValueError)
+    assert "predecessor is not current" in str(errors[0])
+    assert store.current_plan_id(initial.registration_id) == results[0].route_plan_id
+    with sqlite3.connect(store.index_path) as connection:
+        admission_count = connection.execute(
+            "SELECT COUNT(*) FROM prospective_checkpoint_route_admissions"
+        ).fetchone()[0]
+    assert admission_count == 2
 
 
 def test_route_admission_cli_exposes_no_caller_timestamp(
@@ -373,11 +649,11 @@ def test_route_admission_cli_exposes_no_caller_timestamp(
                 (tmp_path / "state").as_posix(),
             ]
         )
-        == 0
+        == 1
     )
-    output = json.loads(capsys.readouterr().out)
-    assert output["admitted"] is True
-    assert output["route_plan_id"].startswith("prospective-checkpoint-route-plan-")
+    error = json.loads(capsys.readouterr().err)
+    assert error["admitted"] is False
+    assert "unknown prospective collection job" in error["error"]
 
 
 def test_readiness_distinguishes_external_wait_from_structural_route_gaps(
@@ -460,15 +736,8 @@ def test_route_plan_rejects_unregistered_post_hoc_route_kind(tmp_path: Path) -> 
         ),
     )
     admissions = ProspectiveCheckpointAdmissionStore(tmp_path / "state", clock=lambda: ADMITTED_AT)
-    admissions.admit(route_plan=plan, registration=_registration())
     with pytest.raises(ValueError, match="unregistered route kind"):
-        evaluate_prospective_checkpoint_readiness(
-            registration=_registration(),
-            route_plan=plan,
-            admission_store=admissions,
-            runtime=_runtime(),
-            evaluated_at=ADMITTED_AT + timedelta(minutes=1),
-        )
+        admissions.admit(route_plan=plan, registration=_registration(), runtime=_runtime())
 
 
 @pytest.mark.parametrize(
@@ -495,15 +764,11 @@ def test_csrc_route_cannot_be_relabeled_as_another_event_semantic(
         ),
     )
     admissions = ProspectiveCheckpointAdmissionStore(tmp_path / "state", clock=lambda: ADMITTED_AT)
-    admissions.admit(route_plan=plan, registration=_registration())
-
     with pytest.raises(ValueError, match="accepted source semantics"):
-        evaluate_prospective_checkpoint_readiness(
-            registration=_registration(),
+        admissions.admit(
             route_plan=plan,
-            admission_store=admissions,
+            registration=_registration(),
             runtime=_runtime(),
-            evaluated_at=ADMITTED_AT + timedelta(minutes=1),
         )
 
 

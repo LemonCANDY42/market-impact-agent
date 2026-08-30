@@ -681,6 +681,14 @@ workers cannot double-advance logical state, every scheduled opportunity has a t
 missed receipt creates an observable incomplete interval. Repository acceptance and installation on
 a real host are reported separately; installing a host service requires explicit authorization.
 
+**Multi-policy drift repair, 2026-08-30:** the one-shot worker now orders automatically selected due
+Jobs by absolute deadline, samples a fresh Harness claim time inside each opportunity, and applies
+the supervisor plan's content-identified bounded concurrency (1-16, default 4). Deterministic tests
+prove the bound, deadline order, actual-claim clocks, and deterministic returned result order. This
+is repository acceptance only: the existing v3 host receipt remains valid historical evidence for
+that exact plan, while a v4 reload and several real two-minute cycles are required to accept the new
+runtime. Per-Job state-size preflight is not represented as a global atomic byte reservation.
+
 **Accepted in the repository on 2026-08-28:** the one-shot worker now persists content-identified
 Jobs and unique logical opportunities, uses expiring leases, resumes a staged Snapshot after a
 Journal interruption without refetching, classifies misses/failures/cancellation, applies bounded
@@ -949,6 +957,15 @@ report may identify an operational route waiting for the market without treating
 collector failure. It may also identify missing issuer or macro trigger infrastructure without
 blocking unrelated checkpoint mechanisms.
 
+Route plan v2 makes replacement explicit rather than treating one historical miss as a permanent
+registration failure. A replacement names the exact current predecessor, is structurally validated
+before cutover, and atomically closes the predecessor's `[effective_from, effective_to)` interval
+while installing one new current head. Old rows and failures remain append-only but do not move the
+new admission lower bound. Concurrent replacements use compare-and-swap. Headless legacy rows are
+never ordered by timestamp; an operator must re-admit one exact existing plan as the selected head.
+Readiness rejects a route outside its effective interval, and candidate freezing repeats the same
+check so a stale report cannot cross a later cutover.
+
 **Blocked by:** one PDI-29-selected post-route-admission trigger plus the Snapshot routes actually
 selected at its barrier. Optional slot absence is retained, not fabricated.
 
@@ -1003,7 +1020,7 @@ can make or abstain from a decision under the information actually observed. Mis
 evaluation dimension, not silently completed. Required-gate failure returns work to its owning data
 or input Task and keeps automatic dispatch closed.
 
-**Route-readiness status, 2026-08-30:** v3 route plan
+**Route-readiness status, 2026-08-30:** the private v3 route plan
 `prospective-checkpoint-route-plan-edbac9b9e7d2313fe61e6e0a69810779f109a372f3010c269cc3ca7be0ac1354`
 canonically binds `sqlite_begin_immediate_then_harness_clock_v1`. Any SQLite admission and readiness
 report for the retired pre-protocol plan remain historical rows only and cannot satisfy this plan's
@@ -1018,6 +1035,11 @@ sealed model/runtime and cost evidence. Issuer and macro trigger routes remain u
 still cannot be relabeled as `issuer_event` or `official_macro_release`. No formal eligibility
 selection, Snapshot Set, Evidence Pack, Query Gate pass, downstream model call, paper admission, or
 execution authority was created.
+
+The repository now contains the v2 replacement authority and supervisor v4 scheduling repair, but
+the private current head has not been changed and the host has not been reloaded. Those runtime
+actions require a content-distinct replacement plan plus fresh multi-cycle evidence; repository
+tests do not retroactively repair or erase the historical misses described above.
 
 ### Stage 5 — Automate bounded follow-up and open registered outcomes
 

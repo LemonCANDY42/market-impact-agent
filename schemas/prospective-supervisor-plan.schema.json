@@ -19,6 +19,7 @@
     "stderr_path",
     "invocation_interval_seconds",
     "maximum_state_bytes",
+    "maximum_concurrent_opportunities",
     "notification_policy",
     "process_environment_isolation",
     "process_environment",
@@ -29,7 +30,7 @@
     "rollback_commands"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-supervisor-plan.v3"},
+    "schema_version": {"const": "market-impact.prospective-supervisor-plan.v4"},
     "plan_id": {
       "type": "string",
       "pattern": "^prospective-supervisor-plan-[0-9a-f]{64}$"
@@ -49,6 +50,7 @@
     "stderr_path": {"type": "string", "pattern": "^/"},
     "invocation_interval_seconds": {"type": "integer", "minimum": 10},
     "maximum_state_bytes": {"type": "integer", "minimum": 1},
+    "maximum_concurrent_opportunities": {"type": "integer", "minimum": 1, "maximum": 16},
     "notification_policy": {"enum": ["health_log_only", "failed_runs_only"]},
     "process_environment_isolation": {"const": "clear_then_allowlist"},
     "process_environment": {

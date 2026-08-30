@@ -11,6 +11,7 @@ from market_impact_agent.domain import require_aware
 from market_impact_agent.observations import AvailabilityBasis, ObservationCapability
 from market_impact_agent.prospective_checkpoint_readiness import (
     CheckpointReadinessStatus,
+    ProspectiveCheckpointAdmissionStore,
     ProspectiveCheckpointReadinessReport,
 )
 from market_impact_agent.prospective_data import prospective_observation_version_id
@@ -797,6 +798,7 @@ def freeze_event_impact_triage_candidate_set(
     checkpoint_key: str,
     snapshot: DataSnapshot,
     snapshot_store: LocalDataSnapshotStore,
+    admission_store: ProspectiveCheckpointAdmissionStore,
     frozen_at: datetime,
 ) -> EventImpactTriageCandidateSet:
     """Freeze all readiness candidates for one checkpoint without semantic classification."""
@@ -804,6 +806,12 @@ def freeze_event_impact_triage_candidate_set(
     _strict_utc(frozen_at, "triage freeze frozen_at")
     if frozen_at < readiness_report.evaluated_at:
         raise ValueError("triage freeze cannot predate its readiness report")
+    admission_store.assert_effective(
+        route_plan_id=readiness_report.route_plan_id,
+        admission_id=readiness_report.route_admission_id,
+        registration_id=readiness_report.registration_id,
+        at=frozen_at,
+    )
     checkpoint = next(
         (item for item in readiness_report.checkpoints if item.checkpoint_key == checkpoint_key),
         None,

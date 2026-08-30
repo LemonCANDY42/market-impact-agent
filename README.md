@@ -113,11 +113,14 @@ The bootstrap implements:
   proved request/page/byte/row/latency totals and averages; a real CSRC-plus-Tushare
   market tracer and the authorized host process-supervisor acceptance have passed, while complete
   multi-policy operations, retention, and restore acceptance remains a separate gate. A 30 August
-  runtime audit found current route-plan drift: one serial worker can spend 291 seconds across
+  runtime audit found current route-plan drift: one serial worker could spend 291 seconds across
   thirteen due Jobs while two-minute news Jobs have a 90-second grace window, producing post-
-  admission misses and zero currently operational checkpoints. Bounded per-opportunity concurrency
-  and versioned replacement-route admission are the next mainline repair; the existing append-only
-  collector state remains intact and must not be restarted or discarded;
+  admission misses and zero currently operational checkpoints. The repository repair now orders
+  automatically selected work by absolute deadline, samples the Harness clock at each actual claim,
+  and runs a plan-bound maximum of four opportunities concurrently. Route-plan v2 adds an explicit
+  predecessor, one atomic current head, immutable effective intervals, and a freeze-time authority
+  recheck. Private host reload, a fresh route epoch, and multi-cycle runtime acceptance remain open;
+  the append-only collector state is not reset or discarded;
 - a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
   poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
   due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,

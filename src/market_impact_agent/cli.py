@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -469,6 +470,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     collection_run_parser.add_argument("--job-id", action="append", default=[])
     collection_run_parser.add_argument("--limit", type=int, default=100)
+    collection_run_parser.add_argument("--maximum-concurrent-opportunities", type=int, default=4)
     collection_run_parser.add_argument("--maximum-state-bytes", required=True, type=int)
     collection_run_parser.add_argument(
         "--now",
@@ -510,6 +512,9 @@ def build_parser() -> argparse.ArgumentParser:
     collection_service_parser.add_argument("--environment-file", required=True, type=Path)
     collection_service_parser.add_argument("--job-id", action="append", default=[])
     collection_service_parser.add_argument("--limit", type=int, default=100)
+    collection_service_parser.add_argument(
+        "--maximum-concurrent-opportunities", type=int, default=4
+    )
     collection_service_parser.add_argument("--maximum-state-bytes", required=True, type=int)
     collection_service_parser.add_argument("--require-clean-environment", action="store_true")
     collection_service_parser.add_argument("--now", type=_aware_timestamp)
@@ -537,6 +542,7 @@ def build_parser() -> argparse.ArgumentParser:
     supervisor_plan_parser.add_argument("--stderr-path", required=True, type=Path)
     supervisor_plan_parser.add_argument("--invocation-interval-seconds", type=int, default=60)
     supervisor_plan_parser.add_argument("--maximum-state-bytes", required=True, type=int)
+    supervisor_plan_parser.add_argument("--maximum-concurrent-opportunities", type=int, default=4)
     supervisor_plan_parser.add_argument(
         "--notification-policy",
         choices=("health_log_only", "failed_runs_only"),
@@ -1187,9 +1193,11 @@ def admit_prospective_checkpoint_routes(
 ) -> dict[str, object]:
     registration = load_prospective_diagnostic_registration(registration_path)
     route_plan = load_prospective_checkpoint_route_plan(route_plan_path)
+    store = LocalDataSnapshotStore(state_root)
     admission = ProspectiveCheckpointAdmissionStore(state_root).admit(
         route_plan=route_plan,
         registration=registration,
+        runtime=ProspectiveCollectionRuntime(store),
     )
     return admission.to_dict()
 
@@ -2082,6 +2090,7 @@ def run_due_prospective_collection_jobs(
     now: datetime | None = None,
     job_ids: tuple[str, ...] = (),
     limit: int = 100,
+    maximum_concurrent_opportunities: int = 4,
     tushare_token: str | None = None,
     collector_factory: Callable[
         [ProspectiveCollectionJob, LocalDataSnapshotStore], ScheduledCollector
@@ -2089,15 +2098,19 @@ def run_due_prospective_collection_jobs(
     | None = None,
     cancelled: Callable[[], bool] | None = None,
     maximum_state_bytes: int | None = None,
+    clock: Callable[[], datetime] | None = None,
 ) -> dict[str, object]:
     if maximum_state_bytes is not None and maximum_state_bytes < 1:
         raise ValueError("maximum state budget must be positive")
-    run_at = datetime.now(UTC) if now is None else now.astimezone(UTC)
+    if not 1 <= maximum_concurrent_opportunities <= 16:
+        raise ValueError("maximum concurrent collection opportunities must be between 1 and 16")
+    runtime_clock = (lambda: datetime.now(UTC)) if clock is None else clock
+    run_at = runtime_clock() if now is None else now.astimezone(UTC)
     store = LocalDataSnapshotStore(state_root)
-    runtime = ProspectiveCollectionRuntime(store)
+    runtime = ProspectiveCollectionRuntime(store, clock=runtime_clock)
     selected_job_ids = job_ids if job_ids else runtime.due_job_ids(now=run_at, limit=limit)
-    results: list[dict[str, object]] = []
-    for job_id in selected_job_ids:
+
+    def run_one(job_id: str) -> dict[str, object]:
         job = runtime.job(job_id)
         if collector_factory is None:
             collector = _bound_prospective_collector(
@@ -2113,19 +2126,32 @@ def run_due_prospective_collection_jobs(
                 state_root=state_root,
                 maximum_state_bytes=maximum_state_bytes,
             )
-        results.append(
-            runtime.run_due(
-                job_id,
-                now=run_at,
-                collector=collector,
-                cancelled=cancelled,
-            ).to_dict()
-        )
-    health = [runtime.health(job_id, now=run_at).to_dict() for job_id in selected_job_ids]
+        claim_at = run_at if now is not None else runtime_clock()
+        return runtime.run_due(
+            job_id,
+            now=claim_at,
+            collector=collector,
+            cancelled=cancelled,
+        ).to_dict()
+
+    worker_count = min(maximum_concurrent_opportunities, len(selected_job_ids))
+    if worker_count == 0:
+        results: list[dict[str, object]] = []
+    elif worker_count == 1:
+        results = [run_one(job_id) for job_id in selected_job_ids]
+    else:
+        with ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="prospective-collection",
+        ) as executor:
+            results = list(executor.map(run_one, selected_job_ids))
+    health_at = run_at if now is not None else runtime_clock()
+    health = [runtime.health(job_id, now=health_at).to_dict() for job_id in selected_job_ids]
     return {
         "completed": True,
         "run_at": _utc_timestamp(run_at),
         "job_count": len(selected_job_ids),
+        "maximum_concurrent_opportunities": maximum_concurrent_opportunities,
         "results": results,
         "health": health,
         "historical_pit_claim": False,
@@ -3266,6 +3292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     now=args.now,
                     job_ids=tuple(args.job_id),
                     limit=args.limit,
+                    maximum_concurrent_opportunities=args.maximum_concurrent_opportunities,
                     tushare_token=os.environ.get("TUSHARE_TOKEN"),
                     cancelled=cancelled,
                     maximum_state_bytes=args.maximum_state_bytes,
@@ -3338,6 +3365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     now=args.now,
                     job_ids=tuple(args.job_id),
                     limit=args.limit,
+                    maximum_concurrent_opportunities=args.maximum_concurrent_opportunities,
                     tushare_token=secrets["TUSHARE_TOKEN"],
                     cancelled=cancelled,
                     maximum_state_bytes=args.maximum_state_bytes,
@@ -3376,6 +3404,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 invocation_interval_seconds=args.invocation_interval_seconds,
                 notification_policy=args.notification_policy,
                 maximum_state_bytes=args.maximum_state_bytes,
+                maximum_concurrent_opportunities=args.maximum_concurrent_opportunities,
             )
         except (TypeError, ValueError) as exc:
             print(

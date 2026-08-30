@@ -575,6 +575,38 @@ def test_collection_job_is_schema_valid_and_round_trips_from_private_storage(
     assert runtime.job(job.job_id) == job
 
 
+def test_due_job_ids_order_all_due_candidates_by_absolute_deadline_before_limit(
+    tmp_path: Path,
+) -> None:
+    _store, runtime, policy, _registered_job = _runtime(tmp_path)
+    earlier_deadline = _job(
+        starts_at=START + timedelta(seconds=10),
+        misfire_grace_seconds=0,
+    )
+    runtime.register(
+        earlier_deadline,
+        collection_policy=policy,
+        source_acceptance_report=_accepted_report(),
+        source_config=SOURCE_CONFIG,
+        registered_at=START,
+    )
+    later_deadline = _job(
+        starts_at=START + timedelta(seconds=5),
+        misfire_grace_seconds=20,
+    )
+    runtime.register(
+        later_deadline,
+        collection_policy=policy,
+        source_acceptance_report=_accepted_report(),
+        source_config=SOURCE_CONFIG,
+        registered_at=START,
+    )
+
+    assert runtime.due_job_ids(now=START + timedelta(seconds=10), limit=1) == (
+        earlier_deadline.job_id,
+    )
+
+
 def test_concurrent_workers_only_run_one_collector_for_the_due_opportunity(
     tmp_path: Path,
 ) -> None:
@@ -811,6 +843,28 @@ def test_opportunity_completion_cannot_precede_bound_snapshot_receipt(tmp_path: 
     opportunity = runtime.opportunities(job.job_id)[0]
     assert result.outcome == "success"
     assert opportunity.completed_at == snapshot_receipt
+
+
+def test_injected_completion_clock_cannot_precede_claim_or_lose_terminal_state(
+    tmp_path: Path,
+) -> None:
+    claimed_at = START + timedelta(seconds=10)
+    _store, runtime, _policy, job = _runtime(tmp_path, clock=lambda: START)
+
+    result = runtime.run_due(
+        job.job_id,
+        now=claimed_at,
+        collector=_timeout_collector,
+    )
+
+    opportunity = runtime.opportunities(job.job_id)[0]
+    usage = runtime.usage_records(job.job_id)[0]
+    assert result.outcome == "collector_failure"
+    assert opportunity.outcome == "collector_failure"
+    assert opportunity.started_at == claimed_at
+    assert opportunity.completed_at == claimed_at
+    assert usage.latency_ms == 0
+    assert runtime.health(job.job_id, now=claimed_at).collector_failures == 1
 
 
 def test_collector_failure_uses_typed_backoff_before_the_next_opportunity(

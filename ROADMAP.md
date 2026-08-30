@@ -8,9 +8,10 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 The shortest accepted path to Agent-directed paper operation is:
 
 0. restore prospective route health after the 30 August audit found one serial worker spending up
-   to 291 seconds across thirteen due Jobs while two-minute news Jobs have a 90-second grace window;
-   add bounded per-opportunity concurrency plus a versioned replacement-route lifecycle without
-   restarting or discarding the current append-only collector state;
+   to 291 seconds across thirteen due Jobs while two-minute news Jobs have a 90-second grace window.
+   The repository now has deadline-first bounded per-opportunity concurrency and a versioned
+   replacement-route lifecycle; next accept a fresh private supervisor plan and route epoch across
+   several real two-minute cycles without restarting or discarding append-only collector state;
 1. freeze every real post-admission trigger candidate, run formal Event Impact Triage inside the
    Harness, and either select the first rule-eligible event, block on `needs_review`, or route a
    checkpoint-ineligible but potentially material event to EventAssessment/Attention Watch;
@@ -204,6 +205,15 @@ Stage 3 — operate continuous collection:
   gates in report
   `prospective-collection-tracer-report-4859c478c9d778bf912f038cc37a9d068db23e3cbe2098e0dac3663c73b59454`.
   This is repository/runtime acceptance only; no host supervisor is installed.
+  - [x] Repair the later multi-policy scheduling drift in the repository: automatically selected
+    opportunities are ordered by `next_due + misfire_grace`, each claim samples its actual Harness
+    clock, and supervisor plan v4 binds a configurable 1-16 concurrency limit (default 4). Route
+    plan v2 uses explicit predecessor CAS, one durable current head, immutable effective intervals,
+    and readiness plus triage-freeze effective-time checks. No Job or historical opportunity is
+    deleted or reset.
+  - [ ] Reload and accept the new private supervisor plan, explicitly replace the currently selected
+    legacy route, and prove zero new deadline misses across several two-minute cycles. This runtime
+    evidence is separate from repository acceptance.
 - [x] `PDI-21` Install and accept the authorized host process supervisor.
   - [x] Freeze a content-identified, secret-free launchd pre-install plan and a private
     environment-file boundary, then install and explicitly enable the authorized v3 plan on the

@@ -21,7 +21,8 @@ from market_impact_agent.prospective_diagnostic import (
     ProspectiveDiagnosticRegistration,
 )
 
-PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA = "market-impact.prospective-checkpoint-route-plan.v1"
+PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA_V1 = "market-impact.prospective-checkpoint-route-plan.v1"
+PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA = "market-impact.prospective-checkpoint-route-plan.v2"
 PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL = "sqlite_begin_immediate_then_harness_clock_v1"
 PROSPECTIVE_CHECKPOINT_READINESS_REPORT_SCHEMA = (
     "market-impact.prospective-checkpoint-readiness-report.v1"
@@ -64,6 +65,7 @@ class ProspectiveCheckpointRoutePlan:
     plan_id: str
     registration_id: str
     bindings: tuple[ProspectiveCheckpointRouteBinding, ...]
+    replaces_plan_id: str | None = None
     admission_timing_protocol: str = PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL
     historical_pit_claim: bool = False
     model_calls_authorized: bool = False
@@ -71,8 +73,22 @@ class ProspectiveCheckpointRoutePlan:
     schema_version: str = PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA:
+        if self.schema_version not in {
+            PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA_V1,
+            PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA,
+        }:
             raise ValueError("unsupported prospective checkpoint route plan schema")
+        if self.schema_version == PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA_V1:
+            if self.replaces_plan_id is not None:
+                raise ValueError("v1 checkpoint route plans cannot replace another plan")
+        elif self.replaces_plan_id is not None:
+            _prefixed(
+                self.replaces_plan_id,
+                "prospective-checkpoint-route-plan-",
+                "checkpoint route plan replaces_plan_id",
+            )
+            if self.replaces_plan_id == self.plan_id:
+                raise ValueError("checkpoint route plan cannot replace itself")
         if self.admission_timing_protocol != PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL:
             raise ValueError("unsupported checkpoint route admission timing protocol")
         _prefixed(
@@ -97,7 +113,7 @@ class ProspectiveCheckpointRoutePlan:
         return f"prospective-checkpoint-route-plan-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        core: dict[str, object] = {
             "schema_version": self.schema_version,
             "registration_id": self.registration_id,
             "admission_timing_protocol": self.admission_timing_protocol,
@@ -106,6 +122,9 @@ class ProspectiveCheckpointRoutePlan:
             "model_calls_authorized": self.model_calls_authorized,
             "execution_capability": self.execution_capability,
         }
+        if self.schema_version == PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA:
+            core["replaces_plan_id"] = self.replaces_plan_id
+        return core
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "plan_id": self.plan_id}
@@ -116,6 +135,7 @@ class ProspectiveCheckpointRoutePlan:
         *,
         registration_id: str,
         bindings: tuple[ProspectiveCheckpointRouteBinding, ...],
+        replaces_plan_id: str | None = None,
     ) -> ProspectiveCheckpointRoutePlan:
         ordered = tuple(
             sorted(
@@ -130,6 +150,7 @@ class ProspectiveCheckpointRoutePlan:
         core = {
             "schema_version": PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA,
             "registration_id": registration_id,
+            "replaces_plan_id": replaces_plan_id,
             "admission_timing_protocol": (PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL),
             "bindings": [item.to_dict() for item in ordered],
             "historical_pit_claim": False,
@@ -140,6 +161,7 @@ class ProspectiveCheckpointRoutePlan:
             plan_id=f"prospective-checkpoint-route-plan-{canonical_hash(core)}",
             registration_id=registration_id,
             bindings=ordered,
+            replaces_plan_id=replaces_plan_id,
         )
 
 
@@ -181,7 +203,7 @@ class ProspectiveCheckpointRouteAdmission:
 
 
 class ProspectiveCheckpointAdmissionStore:
-    """Durable Harness-clock admission for no-authority route plans."""
+    """Durable Harness-clock admission and versioned current-route authority."""
 
     def __init__(
         self,
@@ -204,6 +226,29 @@ class ProspectiveCheckpointAdmissionStore:
                 )
                 """
             )
+            _ensure_sqlite_column(
+                connection,
+                "prospective_checkpoint_route_admissions",
+                "route_plan_artifact_hash",
+                "TEXT",
+            )
+            _ensure_sqlite_column(
+                connection,
+                "prospective_checkpoint_route_admissions",
+                "superseded_at",
+                "TEXT",
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS prospective_checkpoint_route_heads (
+                    registration_id TEXT PRIMARY KEY,
+                    route_plan_id TEXT NOT NULL UNIQUE,
+                    admission_id TEXT NOT NULL UNIQUE,
+                    effective_from TEXT NOT NULL,
+                    route_plan_artifact_hash TEXT NOT NULL
+                )
+                """
+            )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.index_path)
@@ -218,25 +263,97 @@ class ProspectiveCheckpointAdmissionStore:
         *,
         route_plan: ProspectiveCheckpointRoutePlan,
         registration: ProspectiveDiagnosticRegistration,
+        runtime: ProspectiveCollectionRuntime,
     ) -> ProspectiveCheckpointRouteAdmission:
         if route_plan.registration_id != registration.registration_id:
             raise ValueError("checkpoint route plan belongs to a different registration")
+        _validate_route_plan_structure(
+            registration=registration,
+            route_plan=route_plan,
+            runtime=runtime,
+        )
+        route_plan_artifact = self.store.artifacts.put_json(route_plan.to_dict())
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT admission_id, registration_id, artifact_hash, recorded_at
+                SELECT admission_id, registration_id, artifact_hash, recorded_at,
+                       route_plan_artifact_hash, superseded_at
                 FROM prospective_checkpoint_route_admissions
                 WHERE route_plan_id = ?
                 """,
                 (route_plan.plan_id,),
             ).fetchone()
             if row is not None:
-                return self._verified_admission(route_plan.plan_id, row)
+                admission = self._verified_admission(route_plan.plan_id, row)
+                self._bind_verified_plan_artifact(
+                    connection,
+                    route_plan=route_plan,
+                    row=row,
+                    artifact_hash=route_plan_artifact.content_hash,
+                )
+                head = self._head_row(connection, route_plan.registration_id)
+                if head is None:
+                    if row["superseded_at"] is not None:
+                        raise ValueError("a superseded checkpoint route cannot become current")
+                    connection.execute(
+                        """
+                        INSERT INTO prospective_checkpoint_route_heads(
+                            registration_id, route_plan_id, admission_id, effective_from,
+                            route_plan_artifact_hash
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            route_plan.registration_id,
+                            route_plan.plan_id,
+                            admission.admission_id,
+                            _timestamp(admission.recorded_at),
+                            route_plan_artifact.content_hash,
+                        ),
+                    )
+                elif cast(str, head["route_plan_id"]) == route_plan.plan_id:
+                    self._verify_head(
+                        head,
+                        admission,
+                        route_plan_artifact.content_hash,
+                    )
+                return admission
+
+            head = self._head_row(connection, route_plan.registration_id)
+            if head is None:
+                legacy_count = cast(
+                    int,
+                    connection.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM prospective_checkpoint_route_admissions
+                        WHERE registration_id = ?
+                        """,
+                        (route_plan.registration_id,),
+                    ).fetchone()[0],
+                )
+                if legacy_count:
+                    raise ValueError(
+                        "checkpoint route history has no current head; explicitly re-admit "
+                        "one existing plan before creating a replacement"
+                    )
+                if route_plan.replaces_plan_id is not None:
+                    raise ValueError("initial checkpoint route plan cannot name a predecessor")
+            else:
+                current_plan_id = cast(str, head["route_plan_id"])
+                if route_plan.schema_version != PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA:
+                    raise ValueError("only a v2 checkpoint route plan can replace the current plan")
+                if route_plan.replaces_plan_id != current_plan_id:
+                    raise ValueError("checkpoint route replacement predecessor is not current")
+
             recorded_at = self._clock()
             _strict_utc(recorded_at, "checkpoint route admission Harness clock")
             if recorded_at < registration.registered_at:
                 raise ValueError("checkpoint routes cannot be admitted before the registration")
+            if head is not None and recorded_at <= _datetime(
+                head["effective_from"], "checkpoint route predecessor effective_from"
+            ):
+                raise ValueError("checkpoint route replacement must start after its predecessor")
             core = {
                 "route_plan_id": route_plan.plan_id,
                 "registration_id": route_plan.registration_id,
@@ -252,8 +369,9 @@ class ProspectiveCheckpointAdmissionStore:
             connection.execute(
                 """
                 INSERT INTO prospective_checkpoint_route_admissions(
-                    route_plan_id, admission_id, registration_id, artifact_hash, recorded_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    route_plan_id, admission_id, registration_id, artifact_hash, recorded_at,
+                    route_plan_artifact_hash, superseded_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL)
                 """,
                 (
                     route_plan.plan_id,
@@ -261,15 +379,63 @@ class ProspectiveCheckpointAdmissionStore:
                     admission.registration_id,
                     artifact.content_hash,
                     _timestamp(recorded_at),
+                    route_plan_artifact.content_hash,
                 ),
             )
+            if head is None:
+                connection.execute(
+                    """
+                    INSERT INTO prospective_checkpoint_route_heads(
+                        registration_id, route_plan_id, admission_id, effective_from,
+                        route_plan_artifact_hash
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        route_plan.registration_id,
+                        route_plan.plan_id,
+                        admission.admission_id,
+                        _timestamp(recorded_at),
+                        route_plan_artifact.content_hash,
+                    ),
+                )
+            else:
+                predecessor_id = cast(str, head["route_plan_id"])
+                superseded = connection.execute(
+                    """
+                    UPDATE prospective_checkpoint_route_admissions
+                    SET superseded_at = ?
+                    WHERE route_plan_id = ? AND superseded_at IS NULL
+                    """,
+                    (_timestamp(recorded_at), predecessor_id),
+                )
+                if superseded.rowcount != 1:
+                    raise ValueError("current checkpoint route interval is corrupt")
+                swapped = connection.execute(
+                    """
+                    UPDATE prospective_checkpoint_route_heads
+                    SET route_plan_id = ?, admission_id = ?, effective_from = ?,
+                        route_plan_artifact_hash = ?
+                    WHERE registration_id = ? AND route_plan_id = ?
+                    """,
+                    (
+                        route_plan.plan_id,
+                        admission.admission_id,
+                        _timestamp(recorded_at),
+                        route_plan_artifact.content_hash,
+                        route_plan.registration_id,
+                        predecessor_id,
+                    ),
+                )
+                if swapped.rowcount != 1:
+                    raise ValueError("checkpoint route head changed during replacement")
         return admission
 
     def admission(self, route_plan_id: str) -> ProspectiveCheckpointRouteAdmission:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT admission_id, registration_id, artifact_hash, recorded_at
+                SELECT admission_id, registration_id, artifact_hash, recorded_at,
+                       route_plan_artifact_hash, superseded_at
                 FROM prospective_checkpoint_route_admissions
                 WHERE route_plan_id = ?
                 """,
@@ -278,6 +444,98 @@ class ProspectiveCheckpointAdmissionStore:
         if row is None:
             raise KeyError(f"checkpoint route plan is not durably admitted: {route_plan_id}")
         return self._verified_admission(route_plan_id, row)
+
+    def current_plan_id(self, registration_id: str) -> str:
+        with self._connect() as connection:
+            row = self._head_row(connection, registration_id)
+        if row is None:
+            raise KeyError(f"checkpoint route registration has no current head: {registration_id}")
+        return cast(str, row["route_plan_id"])
+
+    def assert_effective(
+        self,
+        *,
+        route_plan_id: str,
+        admission_id: str,
+        registration_id: str,
+        at: datetime,
+    ) -> None:
+        _strict_utc(at, "checkpoint route effective-at timestamp")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT admission_id, registration_id, artifact_hash, recorded_at,
+                       route_plan_artifact_hash, superseded_at
+                FROM prospective_checkpoint_route_admissions
+                WHERE route_plan_id = ?
+                """,
+                (route_plan_id,),
+            ).fetchone()
+            head = self._head_row(connection, registration_id)
+        if row is None:
+            raise KeyError(f"checkpoint route plan is not durably admitted: {route_plan_id}")
+        if cast(str, row["admission_id"]) != admission_id:
+            raise ValueError("checkpoint route admission identity does not match durable state")
+        if cast(str, row["registration_id"]) != registration_id:
+            raise ValueError("checkpoint route admission belongs to a different registration")
+        admission = self._verified_admission(route_plan_id, row)
+        route_plan_artifact_hash = cast(str | None, row["route_plan_artifact_hash"])
+        if route_plan_artifact_hash is None:
+            raise ValueError("checkpoint route plan has no durable CAS artifact")
+        route_plan = prospective_checkpoint_route_plan_from_dict(
+            self.store.artifacts.read_json(route_plan_artifact_hash)
+        )
+        if (
+            route_plan.plan_id != route_plan_id
+            or route_plan.registration_id != admission.registration_id
+        ):
+            raise ValueError("checkpoint route plan CAS artifact does not match durable state")
+        effective_from = _datetime(row["recorded_at"], "checkpoint route effective_from")
+        effective_to = (
+            None
+            if row["superseded_at"] is None
+            else _datetime(row["superseded_at"], "checkpoint route effective_to")
+        )
+        if at < effective_from or (effective_to is not None and at >= effective_to):
+            raise ValueError("checkpoint route plan is not effective at the requested time")
+        if effective_to is None:
+            if head is None:
+                raise ValueError("checkpoint route plan has no authoritative effective interval")
+            if cast(str, head["registration_id"]) != registration_id:
+                raise ValueError("checkpoint route head belongs to a different registration")
+            self._verify_head(head, admission, route_plan_artifact_hash)
+        else:
+            with self._connect() as connection:
+                successor_rows = connection.execute(
+                    """
+                    SELECT route_plan_id, admission_id, registration_id, artifact_hash,
+                           recorded_at, route_plan_artifact_hash, superseded_at
+                    FROM prospective_checkpoint_route_admissions
+                    WHERE registration_id = ? AND recorded_at = ? AND route_plan_id != ?
+                    """,
+                    (registration_id, _timestamp(effective_to), route_plan_id),
+                ).fetchall()
+            verified_successors = 0
+            for successor_row in successor_rows:
+                successor_plan_hash = cast(str | None, successor_row["route_plan_artifact_hash"])
+                if successor_plan_hash is None:
+                    continue
+                successor_admission = self._verified_admission(
+                    cast(str, successor_row["route_plan_id"]), successor_row
+                )
+                successor_plan = prospective_checkpoint_route_plan_from_dict(
+                    self.store.artifacts.read_json(successor_plan_hash)
+                )
+                if (
+                    successor_plan.plan_id == successor_admission.route_plan_id
+                    and successor_plan.registration_id == registration_id
+                    and successor_plan.replaces_plan_id == route_plan_id
+                ):
+                    verified_successors += 1
+            if verified_successors != 1:
+                raise ValueError(
+                    "checkpoint route effective interval lacks one authenticated successor"
+                )
 
     def _verified_admission(
         self,
@@ -289,6 +547,59 @@ class ProspectiveCheckpointAdmissionStore:
         if self.store.artifacts.read_json(artifact_hash) != admission.to_dict():
             raise ValueError("checkpoint route admission CAS artifact does not match durable state")
         return admission
+
+    @staticmethod
+    def _head_row(
+        connection: sqlite3.Connection,
+        registration_id: str,
+    ) -> sqlite3.Row | None:
+        return connection.execute(
+            """
+            SELECT registration_id, route_plan_id, admission_id, effective_from,
+                   route_plan_artifact_hash
+            FROM prospective_checkpoint_route_heads
+            WHERE registration_id = ?
+            """,
+            (registration_id,),
+        ).fetchone()
+
+    def _bind_verified_plan_artifact(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        route_plan: ProspectiveCheckpointRoutePlan,
+        row: sqlite3.Row,
+        artifact_hash: str,
+    ) -> None:
+        stored_hash = cast(str | None, row["route_plan_artifact_hash"])
+        if stored_hash is None:
+            connection.execute(
+                """
+                UPDATE prospective_checkpoint_route_admissions
+                SET route_plan_artifact_hash = ?
+                WHERE route_plan_id = ? AND route_plan_artifact_hash IS NULL
+                """,
+                (artifact_hash, route_plan.plan_id),
+            )
+            return
+        if stored_hash != artifact_hash:
+            raise ValueError("checkpoint route plan artifact hash does not match durable state")
+        if self.store.artifacts.read_json(stored_hash) != route_plan.to_dict():
+            raise ValueError("checkpoint route plan CAS artifact does not match durable state")
+
+    @staticmethod
+    def _verify_head(
+        head: sqlite3.Row,
+        admission: ProspectiveCheckpointRouteAdmission,
+        route_plan_artifact_hash: str,
+    ) -> None:
+        if (
+            cast(str, head["route_plan_id"]) != admission.route_plan_id
+            or cast(str, head["admission_id"]) != admission.admission_id
+            or cast(str, head["effective_from"]) != _timestamp(admission.recorded_at)
+            or cast(str, head["route_plan_artifact_hash"]) != route_plan_artifact_hash
+        ):
+            raise ValueError("checkpoint route head does not match its admission")
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,6 +789,41 @@ _ROUTE_SOURCE_CONTRACTS = {
 }
 
 
+def _validate_route_plan_structure(
+    *,
+    registration: ProspectiveDiagnosticRegistration,
+    route_plan: ProspectiveCheckpointRoutePlan,
+    runtime: ProspectiveCollectionRuntime,
+) -> None:
+    for binding in route_plan.bindings:
+        checkpoint = registration.checkpoint(binding.checkpoint_key)
+        slot = checkpoint.slot(binding.capability)
+        if slot.applicability is CapabilityApplicability.NOT_APPLICABLE:
+            raise ValueError("checkpoint route plan binds a not_applicable capability")
+        if binding.route_kind not in slot.required_route_kinds:
+            raise ValueError("checkpoint route plan contains an unregistered route kind")
+        job = runtime.job(binding.job_id)
+        policy = runtime.journal.policy(job.collection_policy_id)
+        report = runtime.source_acceptance_report(binding.job_id)
+        if policy.capability is not binding.capability:
+            raise ValueError("checkpoint route job capability does not match its binding")
+        if report.report_id != job.source_acceptance_report_id or not report.accepted:
+            raise ValueError("checkpoint route job lacks its accepted source report")
+        declaration = report.declaration
+        if declaration.capability is not binding.capability:
+            raise ValueError("checkpoint route accepted capability does not match its binding")
+        contract = _ROUTE_SOURCE_CONTRACTS.get(binding.route_kind)
+        if contract is None or (
+            contract.capability is not binding.capability
+            or contract.provider_id != declaration.provider_id
+            or contract.upstream_source != declaration.upstream_source
+            or contract.semantic_scope != declaration.semantic_scope
+        ):
+            raise ValueError(
+                "checkpoint route kind does not match accepted source semantics and identity"
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class _ValidatedRoute:
     job_id: str
@@ -508,6 +854,12 @@ def evaluate_prospective_checkpoint_readiness(
     _strict_utc(evaluated_at, "checkpoint readiness evaluated_at")
     if evaluated_at < admission.recorded_at:
         raise ValueError("checkpoint readiness cannot precede route admission")
+    admission_store.assert_effective(
+        route_plan_id=route_plan.plan_id,
+        admission_id=admission.admission_id,
+        registration_id=registration.registration_id,
+        at=evaluated_at,
+    )
 
     validated: dict[
         tuple[str, ObservationCapability, str],
@@ -733,23 +1085,32 @@ def prospective_checkpoint_route_plan_from_dict(
     value: object,
 ) -> ProspectiveCheckpointRoutePlan:
     payload = _object(value, "prospective checkpoint route plan")
+    schema_version = _string(payload, "schema_version")
+    expected_keys = {
+        "schema_version",
+        "plan_id",
+        "registration_id",
+        "admission_timing_protocol",
+        "bindings",
+        "historical_pit_claim",
+        "model_calls_authorized",
+        "execution_capability",
+    }
+    if schema_version == PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA:
+        expected_keys.add("replaces_plan_id")
     _exact_keys(
         payload,
-        {
-            "schema_version",
-            "plan_id",
-            "registration_id",
-            "admission_timing_protocol",
-            "bindings",
-            "historical_pit_claim",
-            "model_calls_authorized",
-            "execution_capability",
-        },
+        expected_keys,
         "prospective checkpoint route plan",
     )
     plan = ProspectiveCheckpointRoutePlan(
         plan_id=_string(payload, "plan_id"),
         registration_id=_string(payload, "registration_id"),
+        replaces_plan_id=(
+            _optional_string(payload, "replaces_plan_id")
+            if schema_version == PROSPECTIVE_CHECKPOINT_ROUTE_PLAN_SCHEMA
+            else None
+        ),
         admission_timing_protocol=_string(payload, "admission_timing_protocol"),
         bindings=tuple(
             _route_binding_from_dict(item) for item in _list(payload.get("bindings"), "bindings")
@@ -757,7 +1118,7 @@ def prospective_checkpoint_route_plan_from_dict(
         historical_pit_claim=_boolean(payload, "historical_pit_claim"),
         model_calls_authorized=_boolean(payload, "model_calls_authorized"),
         execution_capability=_boolean(payload, "execution_capability"),
-        schema_version=_string(payload, "schema_version"),
+        schema_version=schema_version,
     )
     if plan.to_dict() != payload:
         raise ValueError("prospective checkpoint route plan is not canonical")
@@ -774,6 +1135,17 @@ def _admission_from_row(
         registration_id=cast(str, row["registration_id"]),
         recorded_at=_datetime(cast(str, row["recorded_at"]), "recorded_at"),
     )
+
+
+def _ensure_sqlite_column(
+    connection: sqlite3.Connection,
+    table: str,
+    column: str,
+    declaration: str,
+) -> None:
+    columns = {cast(str, row[1]) for row in connection.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
 
 def _runtime_state_updated_at(
@@ -861,6 +1233,15 @@ def _string(value: dict[str, object], key: str) -> str:
     item = value.get(key)
     if not isinstance(item, str):
         raise TypeError(f"{key} must be a string")
+    return item
+
+
+def _optional_string(value: dict[str, object], key: str) -> str | None:
+    item = value.get(key)
+    if item is None:
+        return None
+    if not isinstance(item, str):
+        raise TypeError(f"{key} must be a string or null")
     return item
 
 

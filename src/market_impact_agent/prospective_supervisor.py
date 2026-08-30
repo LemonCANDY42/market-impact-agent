@@ -13,7 +13,7 @@ from pathlib import Path
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 
-PROSPECTIVE_SUPERVISOR_PLAN_SCHEMA = "market-impact.prospective-supervisor-plan.v3"
+PROSPECTIVE_SUPERVISOR_PLAN_SCHEMA = "market-impact.prospective-supervisor-plan.v4"
 PROSPECTIVE_SUPERVISOR_RECEIPT_SCHEMA = "market-impact.prospective-supervisor-receipt.v1"
 _ALLOWED_ENVIRONMENT_KEYS = frozenset({"TUSHARE_TOKEN"})
 _CLEAN_PROCESS_ENVIRONMENT = {
@@ -204,6 +204,7 @@ class ProspectiveSupervisorPlan:
     stderr_path: Path
     invocation_interval_seconds: int
     maximum_state_bytes: int
+    maximum_concurrent_opportunities: int
     notification_policy: str
     enabled_after_install: bool = False
     execution_capability: bool = False
@@ -246,6 +247,8 @@ class ProspectiveSupervisorPlan:
             raise ValueError("supervisor invocation interval must be at least 10 seconds")
         if self.maximum_state_bytes < 1:
             raise ValueError("supervisor maximum state bytes must be positive")
+        if not 1 <= self.maximum_concurrent_opportunities <= 16:
+            raise ValueError("supervisor maximum concurrent opportunities must be between 1 and 16")
         if self.notification_policy not in {"health_log_only", "failed_runs_only"}:
             raise ValueError("unsupported supervisor notification policy")
         if self.enabled_after_install:
@@ -276,6 +279,7 @@ class ProspectiveSupervisorPlan:
             "stderr_path": self.stderr_path.as_posix(),
             "invocation_interval_seconds": self.invocation_interval_seconds,
             "maximum_state_bytes": self.maximum_state_bytes,
+            "maximum_concurrent_opportunities": self.maximum_concurrent_opportunities,
             "notification_policy": self.notification_policy,
             "process_environment_isolation": self.process_environment_isolation,
             "process_environment": self.process_environment,
@@ -357,6 +361,7 @@ class ProspectiveSupervisorPlan:
         invocation_interval_seconds: int,
         maximum_state_bytes: int,
         notification_policy: str,
+        maximum_concurrent_opportunities: int = 4,
     ) -> ProspectiveSupervisorPlan:
         state_root = _canonical_path(state_root, "supervisor state root")
         environment_file = _canonical_path(
@@ -377,6 +382,7 @@ class ProspectiveSupervisorPlan:
             "stderr_path": stderr_path.as_posix(),
             "invocation_interval_seconds": invocation_interval_seconds,
             "maximum_state_bytes": maximum_state_bytes,
+            "maximum_concurrent_opportunities": maximum_concurrent_opportunities,
             "notification_policy": notification_policy,
             "process_environment_isolation": "clear_then_allowlist",
             "process_environment": dict(_CLEAN_PROCESS_ENVIRONMENT),
@@ -431,6 +437,7 @@ class ProspectiveSupervisorPlan:
             stderr_path=stderr_path,
             invocation_interval_seconds=invocation_interval_seconds,
             maximum_state_bytes=maximum_state_bytes,
+            maximum_concurrent_opportunities=maximum_concurrent_opportunities,
             notification_policy=notification_policy,
         )
 
@@ -453,6 +460,8 @@ def render_launchd_plist(plan: ProspectiveSupervisorPlan) -> dict[str, object]:
             plan.environment_file.as_posix(),
             "--maximum-state-bytes",
             str(plan.maximum_state_bytes),
+            "--maximum-concurrent-opportunities",
+            str(plan.maximum_concurrent_opportunities),
             "--require-clean-environment",
         ],
         "WorkingDirectory": plan.working_directory.as_posix(),

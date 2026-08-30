@@ -61,6 +61,8 @@ def test_supervisor_plan_is_content_identified_schema_valid_and_secret_free(
         plan.environment_file.as_posix(),
         "--maximum-state-bytes",
         "10000000000",
+        "--maximum-concurrent-opportunities",
+        "4",
         "--require-clean-environment",
     ]
     assert plist["StartInterval"] == 60
@@ -75,6 +77,7 @@ def test_supervisor_plan_is_content_identified_schema_valid_and_secret_free(
     }
     assert "TUSHARE_TOKEN" not in repr(plist)
     assert plan.execution_capability is False
+    assert plan.maximum_concurrent_opportunities == 4
     assert plan.disabled_install_commands == (
         (
             "launchctl",

@@ -594,13 +594,23 @@ class ProspectiveCollectionRuntime:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT job_id FROM prospective_collection_jobs
+                SELECT job_id, next_due_at FROM prospective_collection_jobs
                 WHERE status = 'active' AND next_due_at <= ?
-                ORDER BY next_due_at, job_id LIMIT ?
+                ORDER BY job_id
                 """,
-                (_timestamp(now), limit),
+                (_timestamp(now),),
             ).fetchall()
-        return tuple(cast(str, row["job_id"]) for row in rows)
+        ordered = sorted(
+            (
+                (
+                    _datetime(cast(str, row["next_due_at"]), "next_due_at")
+                    + timedelta(seconds=self.job(cast(str, row["job_id"])).misfire_grace_seconds),
+                    cast(str, row["job_id"]),
+                )
+                for row in rows
+            ),
+        )
+        return tuple(job_id for _, job_id in ordered[:limit])
 
     def job_ids(self, *, limit: int = 100) -> tuple[str, ...]:
         if limit < 1:
@@ -1299,13 +1309,15 @@ class ProspectiveCollectionRuntime:
             ).fetchone()
             if opportunity is None:
                 raise RuntimeError("prospective collection opportunity lease is missing")
+            started_at = _datetime(cast(str, opportunity["started_at"]), "started_at")
+            completed_at = max(completed_at, started_at)
             usage = self._build_usage_record(
                 job=job,
                 opportunity_id=opportunity_id,
                 scheduled_for=scheduled_for,
                 outcome=outcome,
                 collection_attempt_count=cast(int, opportunity["attempt_count"]),
-                started_at=_datetime(cast(str, opportunity["started_at"]), "started_at"),
+                started_at=started_at,
                 completed_at=completed_at,
                 snapshot_id=snapshot_id,
                 error_kind=error_kind,

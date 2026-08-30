@@ -230,7 +230,10 @@ Configuration, Prospective Collection Policy, adapter kind, first due time, jitt
 grace, and Provider timeout. The durable runtime creates one uniquely identified Collection
 Opportunity per logical due time, uses expiring leases for concurrency and crash recovery, and gives
 every opportunity a typed terminal or recoverable state. An OS supervisor may invoke the one-shot
-worker, but it does not own cadence or Provider selection.
+worker, but it does not own cadence or Provider selection. For automatically selected due work, the
+worker orders by absolute deadline (`next_due + misfire_grace`), samples the Harness clock when each
+opportunity is actually claimed, and applies the content-identified supervisor plan's bounded
+concurrency. An explicit replay `--now` remains deterministic.
 _Avoid_: Cron-owned business schedule, daemon authority, Agent-selected URL, execution job
 
 **Collection Usage Record**:
@@ -268,8 +271,12 @@ _Avoid_: Source configuration, experiment result, Provider allowlist, trading ma
 A content-identified, no-authority binding from registered checkpoint capability/route kinds to
 already accepted Harness Collection Jobs. A separate durable Harness-clock admission record is the
 lower bound for trigger candidate receipt, so the checked-in plan cannot self-authorize a backdated
-route. It selects neither an Event nor a conclusion and grants no model, historical-PIT, or
-execution authority.
+route. Route plan v2 names its exact predecessor. The admission authority maintains one atomic
+current head per registration and immutable half-open effective intervals; concurrent replacements
+from the same predecessor cannot both win. Legacy rows without a head require an operator to select
+an exact existing plan and are never resolved by latest timestamp. Readiness and downstream
+candidate freeze each reassert that the bound plan was effective at their own timestamp. It selects
+neither an Event nor a conclusion and grants no model, historical-PIT, or execution authority.
 _Avoid_: Provider fallback, Event selection, Watch, model registration
 
 **Prospective Checkpoint Readiness Report**:

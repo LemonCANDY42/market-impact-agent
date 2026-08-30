@@ -15,7 +15,12 @@
     "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-checkpoint-route-plan.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.prospective-checkpoint-route-plan.v1",
+        "market-impact.prospective-checkpoint-route-plan.v2"
+      ]
+    },
     "plan_id": {
       "type": "string",
       "pattern": "^prospective-checkpoint-route-plan-[0-9a-f]{64}$"
@@ -23,6 +28,10 @@
     "registration_id": {
       "type": "string",
       "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "replaces_plan_id": {
+      "type": ["string", "null"],
+      "pattern": "^prospective-checkpoint-route-plan-[0-9a-f]{64}$"
     },
     "admission_timing_protocol": {
       "const": "sqlite_begin_immediate_then_harness_clock_v1"
@@ -35,6 +44,19 @@
     "model_calls_authorized": {"const": false},
     "execution_capability": {"const": false}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-checkpoint-route-plan.v2"
+          }
+        }
+      },
+      "then": {"required": ["replaces_plan_id"]},
+      "else": {"not": {"required": ["replaces_plan_id"]}}
+    }
+  ],
   "$defs": {
     "capability": {
       "enum": [
