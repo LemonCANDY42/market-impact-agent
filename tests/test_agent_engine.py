@@ -875,6 +875,7 @@ def test_invalid_final_contract_gets_one_audited_correction_turn(tmp_path: Path)
         "event_id",
         "decision",
         "summary",
+        "decision_confidence",
         "transmission_steps",
         "candidates",
         "blockers",

@@ -60,7 +60,7 @@ The bootstrap implements:
   Checkpoint Market Universe View can deterministically join one frozen checkpoint's market,
   instrument, taxonomy, membership, and ETF-mapping inputs—including exact daily exchange-PCF
   constituent links—with versioned SSE/SZSE lot/tick rules while keeping suspension,
-  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps explicit; the v2 prospective
+  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps explicit; the v3 prospective
   registration and Query Gate block missing trigger/structural inputs while allowing the Agent to
   reason or abstain with optional information missing. A content-identified route plan now binds
   accepted Collection Jobs before any new trigger, and a read-only readiness report distinguishes
@@ -74,17 +74,21 @@ The bootstrap implements:
   reusable seven-gate Source Route Acceptance Report that binds captured rights evidence, exact raw
   JSON records, publication time, actual receipt, append-only revisions, and deterministic replay;
   the accepted route is private-research only and grants neither historical PIT nor execution;
-- a prospective `tushare-observation` Provider with fourteen separately content-identified routes
-  for news, index/ETF/calendar context, instrument/industry/ETF-PCF exposure, margin positioning,
-  macro schedule, and analyst forecasts; every checked-in route has passed real private capture,
-  stored-bundle replay, and the seven route gates without exposing the purchased token or licensed
-  rows;
+- a prospective `tushare-observation` Provider with twenty-three separately content-identified
+  routes for news, index/ETF/calendar context, instrument/industry/ETF-PCF exposure, margin
+  positioning, macro schedule, and analyst forecasts; the accepted routes have passed real private
+  capture, stored-bundle replay, and the seven route gates without exposing the purchased token or
+  licensed rows. The purchased news entitlement now has seven active short-news source Jobs and one
+  `major_news` Job at 2-, 5-, or 15-minute cadence. Two documented short-news sources remain
+  configured but inactive after valid empty probes, and `anns_d` remains unavailable to this token;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
 - a Harness-owned one-shot collection worker with content-identified Jobs, unique logical due
   opportunities, expiring leases, bounded jitter/backoff, misfire and cancellation classification,
-  restart-safe staged Snapshot recovery, and machine-readable health; a real CSRC-plus-Tushare
+  restart-safe staged Snapshot recovery, machine-readable health, rolling windows derived from the
+  Harness logical due time, healthy typed `no_data`, and append-only Collection Usage Records with
+  proved request/page/byte/row/latency totals and averages; a real CSRC-plus-Tushare
   market tracer and the authorized host process-supervisor acceptance have passed, while complete
   multi-policy operations, retention, and restore acceptance remains a separate gate;
 - a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
@@ -118,6 +122,9 @@ The bootstrap implements:
 - a content-identified Model Provider Profile/Factory plus a hash-chained Usage Ledger for
   successful and failed runs, including per-run Token/time/result budgets and a cost ceiling when
   the Provider has a defensible USD/token price;
+- an adaptive paired process diagnostic that runs two complete control/treatment pairs first and a
+  third complete pair only if either arm disagrees, plus observational per-Judgment
+  `decision_confidence` that is accumulated per model but never changes sizing, approval, or policy;
 - a Provider-neutral historical news batch contract with exact ordered source registrations,
   typed missingness/failures, strict UTC half-open filtering before limits, lineage deduplication,
   and a read-only news-evidence assessment Skill that cannot mint Evidence or signal weight;
@@ -405,7 +412,7 @@ uv run market-impact backtest phase2-run --registration PRIVATE_REGISTRATION.jso
   --data-snapshot-root .market-impact/tushare --output-dir PRIVATE_OUTPUT_DIRECTORY
 uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
 uv run market-impact data validate-prospective-diagnostic \
-  --registration examples/research/prospective-diagnostic-registration-v2.json
+  --registration examples/research/prospective-diagnostic-registration-v3.json
 uv run market-impact data accept-tushare-observation \
   --source-config examples/providers/tushare-observation-index-daily-v1.json \
   --parameters-json '{"ts_code":"000300.SH","start_date":"20260827","end_date":"20260827"}' \
@@ -420,9 +427,10 @@ uv run pyright
 uv run pytest
 ```
 
-The immutable v1 prospective registration remains beside v2 as the original
-all-slots-required diagnostic. V2 is the current partial-observation contract for future
-checkpoints; validating it does not itself authorize a model call or paper order.
+The immutable v1 prospective registration remains as the original all-slots-required diagnostic,
+and v2 preserves the first partial-observation contract. V3 is current for new checkpoints: it
+retains the v2 information boundary but runs two complete pairs before conditionally requiring a
+third. Validating it does not itself authorize a model call or paper order.
 
 Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment. Historical
 bundles remain under ignored `.market-impact/tushare/`; prospective observations, Journals, route

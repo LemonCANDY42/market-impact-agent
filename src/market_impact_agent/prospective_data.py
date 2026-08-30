@@ -13,6 +13,7 @@ from hashlib import sha256
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.data_inputs import (
@@ -31,9 +32,64 @@ from market_impact_agent.data_inputs import (
 from market_impact_agent.domain import require_aware
 from market_impact_agent.observations import ObservationCapability
 
-PROSPECTIVE_COLLECTION_POLICY_SCHEMA = "market-impact.prospective-collection-policy.v1"
+PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V1 = "market-impact.prospective-collection-policy.v1"
+PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V2 = "market-impact.prospective-collection-policy.v2"
+# Backward-compatible default. Rolling request windows select v2 explicitly.
+PROSPECTIVE_COLLECTION_POLICY_SCHEMA = PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V1
+_SUPPORTED_COLLECTION_POLICY_SCHEMAS = frozenset(
+    {PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V1, PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V2}
+)
 PROSPECTIVE_DATASET_MANIFEST_SCHEMA = "market-impact.prospective-dataset-manifest.v1"
 PROSPECTIVE_JOURNAL_SELECTION_SCHEMA = "market-impact.prospective-journal-selection.v1"
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveRollingWindow:
+    lookback_seconds: int
+    timezone: str
+    start_parameter: str = "start_date"
+    end_parameter: str = "end_date"
+    datetime_format: str = "%Y-%m-%d %H:%M:%S"
+
+    def __post_init__(self) -> None:
+        if self.lookback_seconds < 1:
+            raise ValueError("rolling collection lookback_seconds must be positive")
+        if self.start_parameter == self.end_parameter:
+            raise ValueError("rolling collection parameter names must be different")
+        for value, name in (
+            (self.timezone, "timezone"),
+            (self.start_parameter, "start_parameter"),
+            (self.end_parameter, "end_parameter"),
+            (self.datetime_format, "datetime_format"),
+        ):
+            if not value or value != value.strip():
+                raise ValueError(f"rolling collection {name} must be non-empty trimmed text")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as error:
+            raise ValueError("rolling collection timezone is unknown") from error
+
+    def resolve(self, scheduled_for: datetime) -> tuple[datetime, dict[str, str]]:
+        _strict_utc(scheduled_for, "rolling collection scheduled_for")
+        timezone = ZoneInfo(self.timezone)
+        end = scheduled_for.astimezone(timezone)
+        start = end - timedelta(seconds=self.lookback_seconds)
+        return (
+            start.astimezone(UTC),
+            {
+                self.start_parameter: start.strftime(self.datetime_format),
+                self.end_parameter: end.strftime(self.datetime_format),
+            },
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "lookback_seconds": self.lookback_seconds,
+            "timezone": self.timezone,
+            "start_parameter": self.start_parameter,
+            "end_parameter": self.end_parameter,
+            "datetime_format": self.datetime_format,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,11 +101,20 @@ class ProspectiveCollectionPolicy:
     parameters_json: str
     poll_interval_seconds: int
     maximum_gap_seconds: int
+    rolling_window: ProspectiveRollingWindow | None = None
     schema_version: str = PROSPECTIVE_COLLECTION_POLICY_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_COLLECTION_POLICY_SCHEMA:
+        if self.schema_version not in _SUPPORTED_COLLECTION_POLICY_SCHEMAS:
             raise ValueError("unsupported prospective collection policy schema_version")
+        if (
+            self.schema_version == PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V1
+            and self.rolling_window is not None
+        ) or (
+            self.schema_version == PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V2
+            and self.rolling_window is None
+        ):
+            raise ValueError("prospective collection policy schema and rolling window disagree")
         if not self.sources:
             raise ValueError("prospective collection policy requires at least one source")
         if any(item.source_config_hash is None for item in self.sources):
@@ -66,6 +131,17 @@ class ProspectiveCollectionPolicy:
             raise ValueError(
                 "prospective maximum_gap_seconds must not be shorter than the poll interval"
             )
+        if self.rolling_window is not None:
+            reserved = {
+                self.rolling_window.start_parameter,
+                self.rolling_window.end_parameter,
+            }
+            if reserved & set(parameters):
+                raise ValueError("rolling collection parameters cannot override window parameters")
+            if self.rolling_window.lookback_seconds < self.poll_interval_seconds:
+                raise ValueError(
+                    "rolling collection lookback must cover at least one poll interval"
+                )
         if self.policy_id != self.expected_policy_id:
             raise ValueError("prospective collection policy_id does not match content")
 
@@ -78,7 +154,7 @@ class ProspectiveCollectionPolicy:
         return _object(json.loads(self.parameters_json), "collection parameters")
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "capability": self.capability.value,
             "sources": [item.to_dict() for item in self.sources],
@@ -87,6 +163,47 @@ class ProspectiveCollectionPolicy:
             "poll_interval_seconds": self.poll_interval_seconds,
             "maximum_gap_seconds": self.maximum_gap_seconds,
         }
+        if self.rolling_window is not None:
+            payload["rolling_window"] = self.rolling_window.to_dict()
+        return payload
+
+    def resolve_query(self, scheduled_for: datetime) -> tuple[datetime, dict[str, object]]:
+        """Resolve immutable request parameters for one logical due opportunity."""
+
+        if self.rolling_window is None:
+            return self.window_start, self.parameters
+        window_start, window_parameters = self.rolling_window.resolve(scheduled_for)
+        return window_start, {**self.parameters, **window_parameters}
+
+    def matches_snapshot_query(
+        self,
+        *,
+        window_start: datetime | None,
+        parameters: Mapping[str, object],
+    ) -> bool:
+        if window_start is None:
+            return False
+        if self.rolling_window is None:
+            return window_start == self.window_start and dict(parameters) == self.parameters
+        rolling = self.rolling_window
+        start_value = parameters.get(rolling.start_parameter)
+        end_value = parameters.get(rolling.end_parameter)
+        if not isinstance(start_value, str) or not isinstance(end_value, str):
+            return False
+        try:
+            timezone = ZoneInfo(rolling.timezone)
+            start = datetime.strptime(start_value, rolling.datetime_format).replace(tzinfo=timezone)
+            end = datetime.strptime(end_value, rolling.datetime_format).replace(tzinfo=timezone)
+        except (ValueError, ZoneInfoNotFoundError):
+            return False
+        base_parameters = dict(parameters)
+        base_parameters.pop(rolling.start_parameter, None)
+        base_parameters.pop(rolling.end_parameter, None)
+        return (
+            base_parameters == self.parameters
+            and end - start == timedelta(seconds=rolling.lookback_seconds)
+            and window_start == start.astimezone(UTC)
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "policy_id": self.policy_id}
@@ -101,9 +218,15 @@ class ProspectiveCollectionPolicy:
         parameters: Mapping[str, object],
         poll_interval_seconds: int,
         maximum_gap_seconds: int,
+        rolling_window: ProspectiveRollingWindow | None = None,
     ) -> ProspectiveCollectionPolicy:
+        schema_version = (
+            PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V1
+            if rolling_window is None
+            else PROSPECTIVE_COLLECTION_POLICY_SCHEMA_V2
+        )
         core = {
-            "schema_version": PROSPECTIVE_COLLECTION_POLICY_SCHEMA,
+            "schema_version": schema_version,
             "capability": capability.value,
             "sources": [item.to_dict() for item in sources],
             "window_start": _timestamp(window_start),
@@ -111,6 +234,8 @@ class ProspectiveCollectionPolicy:
             "poll_interval_seconds": poll_interval_seconds,
             "maximum_gap_seconds": maximum_gap_seconds,
         }
+        if rolling_window is not None:
+            core["rolling_window"] = rolling_window.to_dict()
         return cls(
             policy_id=f"prospective-collection-policy-{canonical_hash(core)}",
             capability=capability,
@@ -119,6 +244,8 @@ class ProspectiveCollectionPolicy:
             parameters_json=canonical_json_bytes(parameters).decode(),
             poll_interval_seconds=poll_interval_seconds,
             maximum_gap_seconds=maximum_gap_seconds,
+            rolling_window=rolling_window,
+            schema_version=schema_version,
         )
 
 
@@ -375,10 +502,11 @@ class ProspectiveDataJournal:
             raise ValueError("Data Snapshot source policy does not match collection policy")
         if snapshot.query.sources != policy.sources:
             raise ValueError("Data Snapshot sources do not match collection policy")
-        if snapshot.query.window_start != policy.window_start:
-            raise ValueError("Data Snapshot window does not match collection policy")
-        if snapshot.query.parameters != policy.parameters:
-            raise ValueError("Data Snapshot parameters do not match collection policy")
+        if not policy.matches_snapshot_query(
+            window_start=snapshot.query.window_start,
+            parameters=snapshot.query.parameters,
+        ):
+            raise ValueError("Data Snapshot request does not match collection policy")
         stored = self.store.get(snapshot.snapshot_id)
         if stored != snapshot:
             raise ValueError("prospective journal requires the persisted immutable Data Snapshot")
@@ -1154,6 +1282,26 @@ class ProspectiveDataJournal:
 
 def prospective_collection_policy_from_dict(value: object) -> ProspectiveCollectionPolicy:
     payload = _object(value, "prospective collection policy")
+    schema_version = _string(payload, "schema_version")
+    rolling_payload = payload.get("rolling_window")
+    rolling_window: ProspectiveRollingWindow | None = None
+    if rolling_payload is not None:
+        rolling = _object(rolling_payload, "rolling collection window")
+        if set(rolling) != {
+            "lookback_seconds",
+            "timezone",
+            "start_parameter",
+            "end_parameter",
+            "datetime_format",
+        }:
+            raise ValueError("rolling collection window fields are not canonical")
+        rolling_window = ProspectiveRollingWindow(
+            lookback_seconds=_integer(rolling, "lookback_seconds"),
+            timezone=_string(rolling, "timezone"),
+            start_parameter=_string(rolling, "start_parameter"),
+            end_parameter=_string(rolling, "end_parameter"),
+            datetime_format=_string(rolling, "datetime_format"),
+        )
     sources = tuple(
         DataSourceBinding(
             provider_id=_string(item, "provider_id"),
@@ -1178,7 +1326,8 @@ def prospective_collection_policy_from_dict(value: object) -> ProspectiveCollect
         ).decode(),
         poll_interval_seconds=_integer(payload, "poll_interval_seconds"),
         maximum_gap_seconds=_integer(payload, "maximum_gap_seconds"),
-        schema_version=_string(payload, "schema_version"),
+        rolling_window=rolling_window,
+        schema_version=schema_version,
     )
 
 

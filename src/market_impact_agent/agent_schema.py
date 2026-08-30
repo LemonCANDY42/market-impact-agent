@@ -20,6 +20,7 @@ AGENT_SCHEMA_FILES = (
     "attention-watch-policy.schema.json",
     "attention-watch-wake.schema.json",
     "prospective-collection-policy.schema.json",
+    "prospective-collection-usage-record.schema.json",
     "prospective-collection-job.schema.json",
     "prospective-collection-tracer-report.schema.json",
     "prospective-supervisor-plan.schema.json",

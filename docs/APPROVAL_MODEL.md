@@ -16,7 +16,8 @@ Approval is a policy state machine, not a conversational promise.
 
 1. For an Agent-originated paper order, validate and persist the exact eligible Prospective Query
    Gate→Prospective Evidence Lineage→Prospective Execution Plan→complete Decision Run
-   Manifest→Decision Admission→Signal→Order binding. The six Judgment, final validation-event, and
+   Manifest→Decision Admission→Signal→Order binding. The registered four or six Judgment, final
+   validation-event, and
    metrics artifacts, Harness-bundled Provider Profile, and control-plus-routed-method surfaces must
    reconcile before admission. Content hashes alone are insufficient: the composition root must
    bind each execution-surface hash to a trusted Agent runtime authority that reopens the actual Run
@@ -59,7 +60,7 @@ provider reconciliation snapshot accounts for every known and external order wit
 
 Immutable contracts live in a content-addressed store. For the Agent path the outbox row additionally
 binds the `DecisionAdmission` artifact hash; the restart validator also reopens the Execution Plan,
-all six Judgment, final validation-event, and metrics artifacts, treatment agreement, Signal
+all four or six Judgment, final validation-event, and metrics artifacts, treatment agreement, Signal
 validity, and Order binding. Before that immutable copy is admitted, the source Agent runtime
 authorities must have reopened and validated the actual runs; a caller cannot promote a fabricated
 but internally consistent run bundle. An
@@ -82,7 +83,9 @@ expiry, mandate, and actor. Editing an intent invalidates its approval.
 The bootstrap contains no live provider, credential loader, autonomous approver, Agent-facing
 execution tool, automatic Judgment-to-paper dispatcher, or notification click-to-trade path. The
 Decision Admission contract remains mock-diagnostic only, and no real checkpoint has yet passed the
-v4 Query Gate or completed the registered paired Judgment runs. The only executable provider is a
+v4 Query Gate or completed the registered adaptive paired Judgment runs. Agent-reported
+`decision_confidence` remains observational and cannot alter policy, approval, mandate, size, or
+execution admission. The only executable provider is a
 paper-only mock whose optional SQLite truth survives restart for contract tests and exposes no
 account capability. Local mock acceptance and the experimental provenance contract do not upgrade
 any external Provider or authorize live. These omissions are acceptance criteria, not unfinished

@@ -18,12 +18,16 @@ PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1 = (
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2 = (
     "market-impact.prospective-diagnostic-registration.v2"
 )
+PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3 = (
+    "market-impact.prospective-diagnostic-registration.v3"
+)
 # Backward-compatible default; v2 must be selected explicitly.
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1
 _SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
     {
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     }
 )
 
@@ -217,6 +221,8 @@ class ProspectiveDiagnosticRegistration:
     stop_conditions: tuple[str, ...]
     go_conditions: tuple[str, ...]
     claim_scope: str
+    minimum_replicates_per_arm: int | None = None
+    replicate_schedule_rule: str | None = None
     schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA
 
     def __post_init__(self) -> None:
@@ -228,7 +234,10 @@ class ProspectiveDiagnosticRegistration:
             for slot in checkpoint.capability_slots
         ):
             raise ValueError("prospective diagnostic v1 does not support optional capability slots")
-        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2:
+        if self.schema_version in {
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+        }:
             for checkpoint in self.checkpoints:
                 if (
                     checkpoint.slot(ObservationCapability.EVENT_REVELATION).applicability
@@ -252,7 +261,22 @@ class ProspectiveDiagnosticRegistration:
         ):
             raise ValueError("prospective diagnostic requires the two frozen paired arms")
         if self.replicates_per_arm != 3:
-            raise ValueError("prospective diagnostic requires exactly three replicates per arm")
+            raise ValueError(
+                "prospective diagnostic requires exactly three replicates per arm as the maximum"
+            )
+        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3:
+            if self.minimum_replicates_per_arm != 2:
+                raise ValueError(
+                    "prospective diagnostic v3 requires two initial replicates per arm"
+                )
+            if self.replicate_schedule_rule != (
+                "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
+            ):
+                raise ValueError("prospective diagnostic v3 replicate schedule is invalid")
+        elif (
+            self.minimum_replicates_per_arm is not None or self.replicate_schedule_rule is not None
+        ):
+            raise ValueError("adaptive replicate fields require prospective diagnostic v3")
         _identifier(self.model_profile_id, "prospective diagnostic model_profile_id")
         try:
             cost = Decimal(self.aggregate_model_cost_limit_usd)
@@ -283,7 +307,7 @@ class ProspectiveDiagnosticRegistration:
         return match
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "registered_at": _timestamp(self.registered_at),
             "checkpoints": [item.to_dict() for item in self.checkpoints],
@@ -296,6 +320,10 @@ class ProspectiveDiagnosticRegistration:
             "go_conditions": list(self.go_conditions),
             "claim_scope": self.claim_scope,
         }
+        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3:
+            payload["minimum_replicates_per_arm"] = self.minimum_replicates_per_arm
+            payload["replicate_schedule_rule"] = self.replicate_schedule_rule
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "registration_id": self.registration_id}
@@ -314,9 +342,11 @@ class ProspectiveDiagnosticRegistration:
         stop_conditions: tuple[str, ...],
         go_conditions: tuple[str, ...],
         claim_scope: str,
+        minimum_replicates_per_arm: int | None = None,
+        replicate_schedule_rule: str | None = None,
         schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
     ) -> ProspectiveDiagnosticRegistration:
-        core = {
+        core: dict[str, object] = {
             "schema_version": schema_version,
             "registered_at": _timestamp(registered_at),
             "checkpoints": [item.to_dict() for item in checkpoints],
@@ -329,6 +359,9 @@ class ProspectiveDiagnosticRegistration:
             "go_conditions": list(go_conditions),
             "claim_scope": claim_scope,
         }
+        if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3:
+            core["minimum_replicates_per_arm"] = minimum_replicates_per_arm
+            core["replicate_schedule_rule"] = replicate_schedule_rule
         return cls(
             registration_id=(f"prospective-diagnostic-registration-{canonical_hash(core)}"),
             registered_at=registered_at,
@@ -341,6 +374,8 @@ class ProspectiveDiagnosticRegistration:
             stop_conditions=stop_conditions,
             go_conditions=go_conditions,
             claim_scope=claim_scope,
+            minimum_replicates_per_arm=minimum_replicates_per_arm,
+            replicate_schedule_rule=replicate_schedule_rule,
             schema_version=schema_version,
         )
 
@@ -355,6 +390,12 @@ def prospective_diagnostic_registration_from_dict(
     value: object,
 ) -> ProspectiveDiagnosticRegistration:
     payload = _object(value, "prospective diagnostic registration")
+    schema_version = _string(payload, "schema_version")
+    adaptive_fields: set[str] = (
+        {"minimum_replicates_per_arm", "replicate_schedule_rule"}
+        if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3
+        else set()
+    )
     _exact_keys(
         payload,
         {
@@ -370,7 +411,8 @@ def prospective_diagnostic_registration_from_dict(
             "stop_conditions",
             "go_conditions",
             "claim_scope",
-        },
+        }
+        | adaptive_fields,
         "prospective diagnostic registration fields",
     )
     registration = ProspectiveDiagnosticRegistration(
@@ -390,7 +432,13 @@ def prospective_diagnostic_registration_from_dict(
         stop_conditions=_string_tuple(payload.get("stop_conditions"), "stop_conditions"),
         go_conditions=_string_tuple(payload.get("go_conditions"), "go_conditions"),
         claim_scope=_string(payload, "claim_scope"),
-        schema_version=_string(payload, "schema_version"),
+        minimum_replicates_per_arm=(
+            _integer(payload, "minimum_replicates_per_arm") if adaptive_fields else None
+        ),
+        replicate_schedule_rule=(
+            _string(payload, "replicate_schedule_rule") if adaptive_fields else None
+        ),
+        schema_version=schema_version,
     )
     if registration.to_dict() != payload:
         raise ValueError("prospective diagnostic registration is not canonical")

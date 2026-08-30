@@ -107,6 +107,17 @@ class TushareObservationTransport(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class TushareObservationCaptureUsage:
+    request_count: int
+    response_bytes: int
+    capture_bytes: int
+
+    def __post_init__(self) -> None:
+        if self.request_count < 1 or self.response_bytes < 1 or self.capture_bytes < 1:
+            raise ValueError("Tushare capture usage values must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class TushareObservationSourceConfig:
     source_config_id: str
     source_id: str
@@ -1072,6 +1083,65 @@ def _capture_bundle(
     return b"".join(parts)
 
 
+def summarize_tushare_observation_capture_usage(
+    payload: bytes,
+) -> TushareObservationCaptureUsage:
+    """Read exact page and byte counts without decoding licensed response content."""
+
+    prefix = f"{TUSHARE_OBSERVATION_CAPTURE_SCHEMA}\n".encode()
+    if not payload.startswith(prefix):
+        raise TushareObservationParseError("Tushare capture bundle prefix is invalid")
+    cursor = len(prefix)
+
+    def read_line() -> bytes:
+        nonlocal cursor
+        newline = payload.find(b"\n", cursor)
+        if newline < 0:
+            raise TushareObservationParseError("Tushare capture bundle line is incomplete")
+        line = payload[cursor:newline]
+        cursor = newline + 1
+        return line
+
+    try:
+        metadata = json.loads(read_line())
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise TushareObservationParseError("Tushare capture metadata is invalid") from error
+    if not isinstance(metadata, dict):
+        raise TushareObservationParseError("Tushare capture metadata is invalid")
+
+    request_count = 0
+    response_bytes = 0
+    while cursor < len(payload):
+        try:
+            header = json.loads(read_line())
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise TushareObservationParseError("Tushare capture page header is invalid") from error
+        typed_header = _mapping(header, "Tushare capture page header")
+        body_size = typed_header.get("body_size")
+        body_hash = typed_header.get("body_sha256")
+        if (
+            isinstance(body_size, bool)
+            or not isinstance(body_size, int)
+            or body_size < 1
+            or not isinstance(body_hash, str)
+        ):
+            raise TushareObservationParseError("Tushare capture page size is invalid")
+        body = payload[cursor : cursor + body_size]
+        if len(body) != body_size or sha256(body).hexdigest() != body_hash:
+            raise TushareObservationParseError("Tushare capture page body is invalid")
+        cursor += body_size
+        if cursor >= len(payload) or payload[cursor : cursor + 1] != b"\n":
+            raise TushareObservationParseError("Tushare capture page delimiter is invalid")
+        cursor += 1
+        request_count += 1
+        response_bytes += body_size
+    return TushareObservationCaptureUsage(
+        request_count=request_count,
+        response_bytes=response_bytes,
+        capture_bytes=len(payload),
+    )
+
+
 def _request_parameters(
     config: TushareObservationSourceConfig,
     parameters: Mapping[str, object],
@@ -1192,7 +1262,7 @@ def _validate_parameter_dates(
             continue
         parsed[name] = (
             _parse_tushare_datetime(value, name, config=config)
-            if config.api_name == "news" and name in {"start_date", "end_date"}
+            if config.api_name in {"news", "major_news"} and name in {"start_date", "end_date"}
             else _parse_tushare_date(value, name)
         )
     monthly = parameters.get("m")

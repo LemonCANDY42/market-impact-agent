@@ -7,7 +7,7 @@ import pytest
 from market_impact_agent.cli import main
 
 
-@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("version", ["v1", "v2", "v3"])
 def test_cli_validates_frozen_prospective_diagnostic_registration(
     capsys: pytest.CaptureFixture[str],
     version: str,

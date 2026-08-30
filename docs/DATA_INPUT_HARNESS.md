@@ -19,7 +19,7 @@ metadata and excerpts only. It does not establish historical PIT, article-body r
 completeness, or execution readiness. The first accepted A-share route is the CSRC official
 publication Provider in `src/market_impact_agent/csrc_news.py`. Its bounded trial uses the same
 Harness and Snapshot contract and accepts prospective private-research collection only. The
-`tushare-observation` Provider adds fourteen separately configured private routes for news, market,
+`tushare-observation` Provider adds twenty-three separately configured private routes for news, market,
 instrument, industry, positioning, macro-schedule, and analyst-forecast observations. Each route
 has its own content identity and acceptance report; sharing one transport never merges their
 semantics or acceptance. The `nbs-macro-release` Provider uses the exact official latest-release
@@ -172,11 +172,13 @@ vendor field would hide an inference inside the data plane.
 The `Prospective Diagnostic Registration` freezes requirements before acquisition. It names three
 first-eligible future event mechanisms and fixes each cutoff rule, all six declared capability
 slots, route/source targets, freshness and gap limits, allowed instruments, horizons, paired arms,
-three replicates, the aggregate model budget, hidden-outcome rule, and stop/go conditions. It
+the replicate rule, the aggregate model budget, hidden-outcome rule, and stop/go conditions. It
 deliberately contains no Provider IDs and grants no model or execution authority. The immutable v1
 registration retains its original all-required semantics. The superseding v2 registration requires
 only the actual-receipt event trigger for model dispatch; expectation, market, exposure, positioning,
-and macro slots are optional observed information whose absence remains part of the input.
+and macro slots are optional observed information whose absence remains part of the input. V3 keeps
+that boundary while starting with two complete control/treatment pairs and requiring the third
+complete pair only when either arm's first two decisions disagree.
 
 `ProspectiveCheckpointRoutePlan` separately pre-binds those registered semantic route kinds to
 accepted durable Collection Jobs. A separate SQLite/CAS admission record uses the Harness clock to
@@ -304,11 +306,11 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 ## Acceptance sequence
 
-PDI-01 v1 remains immutable. The v2 registration
-`prospective-diagnostic-registration-19ef4193130c0121527a75f3235505c4eec708495e8848588e8ac344e90bc426`
-freezes the same three first-eligible EOD mechanisms while separating the required event trigger from
-optional observed information. The current Tushare Observation Provider has
-fourteen route-level seven-gate acceptance reports, and the CSRC official-event route remains
+PDI-01 v1 and v2 remain immutable. The current v3 registration
+`prospective-diagnostic-registration-7217f22392ac715e80550ccb75a23faff9b23aadd94db6c13e494033c5c273b0`
+freezes the same three first-eligible EOD mechanisms and required-trigger/optional-information
+boundary while adding adaptive paired replication. The current Tushare Observation Provider has
+twenty-two unique route-level seven-gate acceptances, and the CSRC official-event route remains
 accepted.
 These are route contracts, not complete checkpoint sets: direct publisher coverage, complete market
 semantics, tradability fields, taxonomy effective intervals, official macro release/revision
@@ -316,12 +318,12 @@ lineage, and future post-registration receipts still have to reconcile at each c
 Those gaps limit coverage claims and later execution where relevant; they no longer all block a
 prospective process diagnostic. No model call begins until the structural Query Gate passes.
 
-The current v2 route plan is frozen in
+The current v3 route plan is frozen in
 `examples/research/prospective-checkpoint-route-plan-v1.json`. First durably anchor the plan:
 
 ```bash
 market-impact data checkpoint-route-admit \
-  --registration examples/research/prospective-diagnostic-registration-v2.json \
+  --registration examples/research/prospective-diagnostic-registration-v3.json \
   --route-plan examples/research/prospective-checkpoint-route-plan-v1.json \
   --state-root .market-impact/data-inputs
 ```
@@ -331,7 +333,7 @@ Then run the non-mutating readiness audit:
 
 ```bash
 market-impact data checkpoint-readiness \
-  --registration examples/research/prospective-diagnostic-registration-v2.json \
+  --registration examples/research/prospective-diagnostic-registration-v3.json \
   --route-plan examples/research/prospective-checkpoint-route-plan-v1.json \
   --state-root .market-impact/data-inputs
 ```
@@ -463,6 +465,12 @@ Accepted CSRC, Tushare, and NBS macro-release routes can also be registered as c
 Collection Jobs. The Harness, rather than an OS scheduler, owns cadence, due time, retry/misfire
 semantics, Provider binding, and logical opportunity identity. `collection-run-due` is deliberately
 one-shot so a later authorized host supervisor only starts or restarts a bounded process.
+Rolling policies resolve their half-open source window from the logical due time and registered
+timezone; they do not read the host clock to mutate a query. The current purchased-news route uses
+2-minute polling with a 10-minute overlap for Sina, WallstreetCN, CLS, and Yicai; 5-minute polling
+with a 20-minute overlap for 10jqka, Eastmoney, and Jinrongjie; and 15-minute polling with a 2-hour
+overlap for `major_news`. Tushare documents pull queries, not a WebSocket/push subscription, so the
+system describes this honestly as rolling polling plus event Wake.
 Concurrent invocations share
 an expiring lease; restart resumes staged data, and every due opportunity remains inspectable via
 `collection-health`. `SIGINT` or `SIGTERM` requests are checked before Provider collection and
@@ -472,6 +480,21 @@ backoff, and scheduling decisions only; actual opportunity completion uses the r
 and cannot precede its bound Snapshot receipt. Both `collection-run-due` and
 `collection-service-run` require `--maximum-state-bytes` and fail closed before Provider collection
 when the current state exceeds that bound.
+
+Every terminal opportunity also appends a `CollectionUsageRecord`. Tushare captured bundles expose
+exact request/page/response-byte totals, selected rows, attempts, and elapsed time; `collection-health`
+reports rolling-24-hour and lifetime totals plus per-opportunity averages. A successful provider
+window with no rows is terminal `no_data`, remains healthy, and makes both one-shot worker commands
+exit successfully. Each nullable summary dimension also includes an `*_unknown_records` count: an
+all-unknown dimension stays `null`, while an observed zero remains `0` with no unknown records.
+Tushare records `flat_subscription_not_allocated_per_request` with a null incremental cost; the
+official CSRC and NBS routes record `not_applicable` rather than inheriting a Tushare subscription
+claim. A future cost-relevant route without evidence must record `unknown`. Only Tushare observation
+Jobs currently support rolling windows; CSRC and NBS rolling registrations fail closed. These records
+are collection operations evidence, not the Agent model Usage Ledger or a billing invoice.
+Usage Record v2 adds the explicit cost fields. The reader preserves both original v1 records and the
+short pre-v2 transition form without rewriting their content identities, so a collector upgrade does
+not invalidate or strand the append-only runtime history.
 
 The content-identified tracer report accepts exactly one CSRC event Job and one Tushare market Job
 only when both latest opportunities end in complete prospective actual-receipt Snapshots, their

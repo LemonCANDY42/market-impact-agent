@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event, Lock, Thread
 
+import pytest
+
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.data_inputs import (
@@ -25,9 +27,11 @@ from market_impact_agent.observations import (
     OccurrenceBasis,
 )
 from market_impact_agent.prospective_collection_runtime import (
+    PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1,
     ProspectiveCollectionAdapterKind,
     ProspectiveCollectionJob,
     ProspectiveCollectionRuntime,
+    collection_usage_record_from_dict,
 )
 from market_impact_agent.prospective_collection_tracer import (
     qualify_prospective_collection_tracer,
@@ -36,6 +40,7 @@ from market_impact_agent.prospective_collection_tracer import (
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
+    ProspectiveRollingWindow,
 )
 from market_impact_agent.source_acceptance import (
     SourceAcceptanceGate,
@@ -79,6 +84,21 @@ def _policy() -> ProspectiveCollectionPolicy:
         },
         poll_interval_seconds=60,
         maximum_gap_seconds=180,
+    )
+
+
+def _rolling_policy() -> ProspectiveCollectionPolicy:
+    return ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        sources=(_source(),),
+        window_start=WINDOW_START,
+        parameters={"ts_code": "000300.SH"},
+        poll_interval_seconds=60,
+        maximum_gap_seconds=180,
+        rolling_window=ProspectiveRollingWindow(
+            lookback_seconds=600,
+            timezone="Asia/Shanghai",
+        ),
     )
 
 
@@ -151,6 +171,31 @@ def _job(
         maximum_jitter_seconds=0,
         provider_timeout_seconds=5.0,
     )
+
+
+@pytest.mark.parametrize(
+    "adapter_kind",
+    (
+        ProspectiveCollectionAdapterKind.CSRC_NEWS,
+        ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE,
+    ),
+)
+def test_collection_registration_rejects_unsupported_rolling_windows(
+    adapter_kind: ProspectiveCollectionAdapterKind,
+) -> None:
+    policy = _rolling_policy()
+
+    with pytest.raises(ValueError, match="rolling windows"):
+        ProspectiveCollectionJob.build(
+            adapter_kind=adapter_kind,
+            collection_policy=policy,
+            source_acceptance_report=_accepted_report(),
+            source_config=SOURCE_CONFIG,
+            starts_at=START,
+            misfire_grace_seconds=30,
+            maximum_jitter_seconds=0,
+            provider_timeout_seconds=5.0,
+        )
 
 
 def _snapshot(
@@ -237,6 +282,61 @@ def _snapshot(
     return snapshot
 
 
+def _no_data_snapshot(
+    store: LocalDataSnapshotStore,
+    *,
+    policy: ProspectiveCollectionPolicy,
+    retrieved_at: datetime,
+) -> DataSnapshot:
+    source = policy.sources[0]
+    raw_response_hash = store.put_raw(b'{"data":{"fields":[],"items":[]}}')
+    query = DataQuery.build(
+        capability=policy.capability,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=retrieved_at,
+        window_start=policy.window_start,
+        source_policy_id=policy.policy_id,
+        parameters=policy.parameters,
+        sources=policy.sources,
+        minimum_data_sources=1,
+    )
+    attempt = DataProviderAttempt(
+        provider_id=source.provider_id,
+        provider_version=source.provider_version,
+        upstream_source=source.upstream_source,
+        required=True,
+        status=DataFetchStatus.NO_DATA,
+        retrieved_at=retrieved_at,
+        raw_response_hash=raw_response_hash,
+        received_count=0,
+        accepted_count=0,
+        rejected_missing_availability=0,
+        rejected_after_cutoff=0,
+        rejected_missing_authority=0,
+        rejected_authority_after_cutoff=0,
+        rejected_lane_mismatch=0,
+        error_kind=None,
+    )
+    core = {
+        "schema_version": "market-impact.data-snapshot.v2",
+        "query": query.to_dict(),
+        "attempts": [attempt.to_dict()],
+        "observations": [],
+        "coverage_complete": False,
+        "completed_at": retrieved_at.isoformat().replace("+00:00", "Z"),
+    }
+    snapshot = DataSnapshot(
+        snapshot_id=f"data-snapshot-{canonical_hash(core)}",
+        query=query,
+        attempts=(attempt,),
+        observations=(),
+        coverage_complete=False,
+        completed_at=retrieved_at,
+    )
+    store.put(snapshot)
+    return snapshot
+
+
 def _runtime(
     tmp_path: Path,
     *,
@@ -269,6 +369,7 @@ def _runtime(
 def _unexpected_collector(
     _policy: ProspectiveCollectionPolicy,
     _source_config: dict[str, object],
+    _scheduled_for: datetime,
 ) -> DataSnapshot:
     raise AssertionError("collector must not be called")
 
@@ -276,6 +377,7 @@ def _unexpected_collector(
 def _timeout_collector(
     _policy: ProspectiveCollectionPolicy,
     _source_config: dict[str, object],
+    _scheduled_for: datetime,
 ) -> DataSnapshot:
     raise TimeoutError("fixture timeout")
 
@@ -286,7 +388,7 @@ def test_due_job_records_actual_receipt_and_exposes_restart_safe_health(tmp_path
     result = runtime.run_due(
         job.job_id,
         now=START,
-        collector=lambda bound_policy, source_config: _snapshot(
+        collector=lambda bound_policy, source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=START,
@@ -299,6 +401,7 @@ def test_due_job_records_actual_receipt_and_exposes_restart_safe_health(tmp_path
     assert result.scheduled_for == START
     assert result.missed_opportunities == 0
     assert result.data_snapshot_id is not None
+    assert result.usage_record_id is not None
     assert ProspectiveDataJournal(store).stats(policy_id=policy.policy_id) == {
         "policy_id": policy.policy_id,
         "collection_snapshot_count": 1,
@@ -310,12 +413,157 @@ def test_due_job_records_actual_receipt_and_exposes_restart_safe_health(tmp_path
 
     restarted = ProspectiveCollectionRuntime(store, lease_timeout_seconds=30)
     health = restarted.health(job.job_id, now=START + timedelta(seconds=10))
+    usage_records = restarted.usage_records(job.job_id)
+    usage_summary = restarted.usage_summary(job.job_id)
 
     assert health.last_outcome == "success"
     assert health.successful_opportunities == 1
     assert health.missed_opportunities == 0
     assert health.next_due_at == START + timedelta(seconds=60)
     assert health.execution_capability is False
+    assert len(usage_records) == 1
+    assert usage_records[0].record_id == result.usage_record_id
+    assert (
+        validate_agent_contract(
+            usage_records[0].to_dict(),
+            "prospective-collection-usage-record.schema.json",
+        )
+        == ()
+    )
+    assert usage_records[0].provider_attempt_count == 1
+    assert usage_records[0].request_count is None
+    assert usage_records[0].incremental_cost_microusd is None
+    assert usage_records[0].cost_basis == "flat_subscription_not_allocated_per_request"
+    assert usage_summary["record_count"] == 1
+    assert usage_summary["accepted_records"] == 1
+    assert usage_summary["accepted_records_unknown_records"] == 0
+    assert usage_summary["request_count"] is None
+    assert usage_summary["request_count_unknown_records"] == 1
+    assert usage_summary["incremental_cost_microusd"] is None
+    assert usage_summary["cost_basis"] == "flat_subscription_not_allocated_per_request"
+
+
+def test_due_job_records_healthy_no_data_without_failure_or_backoff(tmp_path: Path) -> None:
+    store, runtime, _policy, job = _runtime(tmp_path)
+
+    result = runtime.run_due(
+        job.job_id,
+        now=START,
+        collector=lambda bound_policy, source_config, _scheduled_for: _no_data_snapshot(
+            store,
+            policy=bound_policy,
+            retrieved_at=START,
+        ),
+    )
+
+    health = runtime.health(job.job_id, now=START + timedelta(seconds=10))
+    usage = runtime.usage_summary(job.job_id)
+    assert result.outcome == "no_data"
+    assert result.error_kind is None
+    assert health.last_outcome == "no_data"
+    assert health.last_error_kind is None
+    assert health.successful_opportunities == 1
+    assert health.no_data_opportunities == 1
+    assert health.source_failures == 0
+    assert health.backoff_until is None
+    assert usage["success_count"] == 1
+    assert usage["no_data_count"] == 1
+    assert usage["failure_count"] == 0
+
+
+def test_usage_summary_keeps_all_unknown_measurements_null(tmp_path: Path) -> None:
+    _store, runtime, _policy, job = _runtime(tmp_path)
+
+    result = runtime.run_due(job.job_id, now=START, collector=_timeout_collector)
+    usage = runtime.usage_summary(job.job_id)
+
+    assert result.outcome == "collector_failure"
+    for dimension in (
+        "provider_attempt_count",
+        "request_count",
+        "page_count",
+        "response_bytes",
+        "raw_artifact_bytes",
+        "received_records",
+        "accepted_records",
+    ):
+        assert usage[dimension] is None
+        assert usage[f"{dimension}_unknown_records"] == 1
+    assert usage["incremental_cost_microusd"] is None
+    assert usage["cost_basis"] == "flat_subscription_not_allocated_per_request"
+
+
+@pytest.mark.parametrize("includes_cost_fields", [False, True])
+def test_usage_record_reader_preserves_existing_v1_artifacts(
+    includes_cost_fields: bool,
+) -> None:
+    core: dict[str, object] = {
+        "schema_version": PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1,
+        "opportunity_id": f"collection-opportunity-{canonical_hash({'fixture': 'old'})}",
+        "job_id": f"prospective-collection-job-{canonical_hash({'fixture': 'job'})}",
+        "scheduled_for": START.isoformat().replace("+00:00", "Z"),
+        "adapter_kind": "tushare_observation",
+        "outcome": "success",
+        "collection_attempt_count": 1,
+        "provider_attempt_count": 1,
+        "request_count": 1,
+        "page_count": 1,
+        "response_bytes": 100,
+        "raw_artifact_bytes": 120,
+        "received_records": 2,
+        "accepted_records": 2,
+        "latency_ms": 50.0,
+        "error_kind": None,
+        "recorded_at": START.isoformat().replace("+00:00", "Z"),
+        "execution_capability": False,
+    }
+    if includes_cost_fields:
+        core["incremental_cost_microusd"] = None
+        core["cost_basis"] = "flat_subscription_not_allocated_per_request"
+    payload = {
+        **core,
+        "record_id": f"prospective-collection-usage-{canonical_hash(core)}",
+    }
+
+    record = collection_usage_record_from_dict(payload)
+
+    assert record.to_dict() == payload
+    assert record.cost_basis == (
+        "flat_subscription_not_allocated_per_request" if includes_cost_fields else None
+    )
+    assert validate_agent_contract(payload, "prospective-collection-usage-record.schema.json") == ()
+
+
+def test_official_provider_usage_does_not_claim_a_tushare_subscription_cost(tmp_path: Path) -> None:
+    store, runtime, _policy, _job = _runtime(tmp_path)
+    event_job = _register_event_job(runtime)
+    event_policy = runtime.journal.policy(event_job.collection_policy_id)
+
+    result = runtime.run_due(
+        event_job.job_id,
+        now=START,
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
+            store,
+            policy=bound_policy,
+            retrieved_at=START,
+        ),
+    )
+    usage_record = runtime.usage_records(event_job.job_id)[0]
+    usage_summary = runtime.usage_summary(event_job.job_id)
+
+    assert event_policy.capability is ObservationCapability.EVENT_REVELATION
+    assert result.outcome == "success"
+    assert usage_record.incremental_cost_microusd is None
+    assert usage_record.cost_basis == "not_applicable"
+    assert (
+        validate_agent_contract(
+            usage_record.to_dict(),
+            "prospective-collection-usage-record.schema.json",
+        )
+        == ()
+    )
+    assert usage_summary["incremental_cost_microusd"] is None
+    assert usage_summary["cost_basis"] == "not_applicable"
 
 
 def test_collection_job_is_schema_valid_and_round_trips_from_private_storage(
@@ -341,6 +589,7 @@ def test_concurrent_workers_only_run_one_collector_for_the_due_opportunity(
     def blocked_collector(
         bound_policy: ProspectiveCollectionPolicy,
         source_config: dict[str, object],
+        _scheduled_for: datetime,
     ) -> DataSnapshot:
         nonlocal calls
         assert source_config == SOURCE_CONFIG
@@ -385,6 +634,7 @@ def test_expired_lease_recovers_and_rejects_the_stale_worker_capture(tmp_path: P
     def stale_collector(
         bound_policy: ProspectiveCollectionPolicy,
         source_config: dict[str, object],
+        _scheduled_for: datetime,
     ) -> DataSnapshot:
         assert source_config == SOURCE_CONFIG
         entered.set()
@@ -402,7 +652,7 @@ def test_expired_lease_recovers_and_rejects_the_stale_worker_capture(tmp_path: P
     recovered = recovered_runtime.run_due(
         job.job_id,
         now=START + timedelta(seconds=2),
-        collector=lambda bound_policy, _source_config: _snapshot(
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=START + timedelta(seconds=2),
@@ -429,7 +679,7 @@ def test_late_worker_classifies_each_missed_opportunity_before_collecting(
     result = runtime.run_due(
         job.job_id,
         now=now,
-        collector=lambda bound_policy, _source_config: _snapshot(
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=now,
@@ -463,6 +713,7 @@ def test_graceful_cancellation_types_the_due_opportunity_without_collecting(
     def collector(
         _policy: ProspectiveCollectionPolicy,
         _source_config: dict[str, object],
+        _scheduled_for: datetime,
     ) -> DataSnapshot:
         nonlocal called
         called = True
@@ -489,6 +740,7 @@ def test_cancellation_requested_during_collection_does_not_journal_the_snapshot(
     def collector(
         bound_policy: ProspectiveCollectionPolicy,
         _source_config: dict[str, object],
+        _scheduled_for: datetime,
     ) -> DataSnapshot:
         nonlocal cancellation_requested
         snapshot = _snapshot(
@@ -525,7 +777,7 @@ def test_opportunity_completion_uses_finish_clock_not_invocation_time(tmp_path: 
     result = runtime.run_due(
         job.job_id,
         now=START,
-        collector=lambda bound_policy, _source_config: _snapshot(
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=snapshot_receipt,
@@ -549,7 +801,7 @@ def test_opportunity_completion_cannot_precede_bound_snapshot_receipt(tmp_path: 
     result = runtime.run_due(
         job.job_id,
         now=START,
-        collector=lambda bound_policy, _source_config: _snapshot(
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=snapshot_receipt,
@@ -579,7 +831,7 @@ def test_collector_failure_uses_typed_backoff_before_the_next_opportunity(
     recovered = runtime.run_due(
         job.job_id,
         now=START + timedelta(seconds=60),
-        collector=lambda bound_policy, _source_config: _snapshot(
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=START + timedelta(seconds=60),
@@ -604,7 +856,7 @@ def test_worker_rejects_a_receipt_observed_before_its_logical_due_time(
     result = runtime.run_due(
         job.job_id,
         now=START,
-        collector=lambda bound_policy, _source_config: _snapshot(
+        collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
             store,
             policy=bound_policy,
             retrieved_at=START - timedelta(seconds=1),
@@ -653,6 +905,7 @@ def test_staged_snapshot_resumes_the_same_opportunity_after_journal_failure(
     def collector(
         bound_policy: ProspectiveCollectionPolicy,
         _source_config: dict[str, object],
+        _scheduled_for: datetime,
     ) -> DataSnapshot:
         nonlocal calls
         calls += 1
@@ -732,7 +985,7 @@ def _collect_tracer_routes(
         result = runtime.run_due(
             job.job_id,
             now=START,
-            collector=lambda bound_policy, _source_config: _snapshot(
+            collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
                 store,
                 policy=bound_policy,
                 retrieved_at=retrieved_at,

@@ -15,7 +15,12 @@
     "maximum_gap_seconds"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-collection-policy.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.prospective-collection-policy.v1",
+        "market-impact.prospective-collection-policy.v2"
+      ]
+    },
     "policy_id": {
       "type": "string",
       "pattern": "^prospective-collection-policy-[0-9a-f]{64}$"
@@ -41,10 +46,47 @@
     "window_start": {"type": "string", "format": "date-time"},
     "parameters": {"type": "object"},
     "poll_interval_seconds": {"type": "integer", "minimum": 1},
-    "maximum_gap_seconds": {"type": "integer", "minimum": 1}
+    "maximum_gap_seconds": {"type": "integer", "minimum": 1},
+    "rolling_window": {"$ref": "#/$defs/rolling_window"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "market-impact.prospective-collection-policy.v1"}
+        }
+      },
+      "then": {"not": {"required": ["rolling_window"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "market-impact.prospective-collection-policy.v2"}
+        }
+      },
+      "then": {"required": ["rolling_window"]}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "rolling_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lookback_seconds",
+        "timezone",
+        "start_parameter",
+        "end_parameter",
+        "datetime_format"
+      ],
+      "properties": {
+        "lookback_seconds": {"type": "integer", "minimum": 1},
+        "timezone": {"type": "string", "minLength": 1},
+        "start_parameter": {"type": "string", "minLength": 1},
+        "end_parameter": {"type": "string", "minLength": 1},
+        "datetime_format": {"type": "string", "minLength": 1}
+      }
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,

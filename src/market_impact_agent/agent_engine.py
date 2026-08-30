@@ -1342,6 +1342,7 @@ def _judgment_proposal_contract() -> dict[str, object]:
             "event_id",
             "decision",
             "summary",
+            "decision_confidence",
             "transmission_steps",
             "candidates",
             "blockers",
@@ -1353,6 +1354,10 @@ def _judgment_proposal_contract() -> dict[str, object]:
             "event_id": "non-empty string",
             "decision": "propose or abstain",
             "summary": "non-empty string",
+            "decision_confidence": (
+                "number from 0 through 1 representing the Agent's confidence in the overall "
+                "decision; observational only and never an approval or sizing input"
+            ),
             "transmission_steps": [
                 {
                     "step_id": "non-empty unique string",

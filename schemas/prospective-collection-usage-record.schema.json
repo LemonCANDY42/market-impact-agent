@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-collection-usage-record.schema.json",
+  "title": "Market Impact Prospective Collection Usage Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_id",
+    "opportunity_id",
+    "job_id",
+    "scheduled_for",
+    "adapter_kind",
+    "outcome",
+    "collection_attempt_count",
+    "provider_attempt_count",
+    "request_count",
+    "page_count",
+    "response_bytes",
+    "raw_artifact_bytes",
+    "received_records",
+    "accepted_records",
+    "latency_ms",
+    "error_kind",
+    "recorded_at",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "market-impact.prospective-collection-usage-record.v1",
+        "market-impact.prospective-collection-usage-record.v2"
+      ]
+    },
+    "record_id": {
+      "type": "string",
+      "pattern": "^prospective-collection-usage-[0-9a-f]{64}$"
+    },
+    "opportunity_id": {
+      "type": "string",
+      "pattern": "^collection-opportunity-[0-9a-f]{64}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^prospective-collection-job-[0-9a-f]{64}$"
+    },
+    "scheduled_for": {"type": "string", "format": "date-time"},
+    "adapter_kind": {"enum": ["csrc_news", "nbs_macro_release", "tushare_observation"]},
+    "outcome": {
+      "enum": ["success", "no_data", "source_failure", "collector_failure", "cancelled"]
+    },
+    "collection_attempt_count": {"type": "integer", "minimum": 1},
+    "provider_attempt_count": {"type": ["integer", "null"], "minimum": 0},
+    "request_count": {"type": ["integer", "null"], "minimum": 1},
+    "page_count": {"type": ["integer", "null"], "minimum": 1},
+    "response_bytes": {"type": ["integer", "null"], "minimum": 0},
+    "raw_artifact_bytes": {"type": ["integer", "null"], "minimum": 0},
+    "received_records": {"type": ["integer", "null"], "minimum": 0},
+    "accepted_records": {"type": ["integer", "null"], "minimum": 0},
+    "latency_ms": {"type": "number", "minimum": 0},
+    "incremental_cost_microusd": {"type": "null"},
+    "cost_basis": {
+      "enum": [
+        "flat_subscription_not_allocated_per_request",
+        "not_applicable",
+        "unknown"
+      ]
+    },
+    "error_kind": {"type": ["string", "null"]},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "execution_capability": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-collection-usage-record.v2"
+          }
+        }
+      },
+      "then": {
+        "required": ["incremental_cost_microusd", "cost_basis"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"adapter_kind": {"const": "tushare_observation"}}
+      },
+      "then": {
+        "properties": {
+          "cost_basis": {"const": "flat_subscription_not_allocated_per_request"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"adapter_kind": {"enum": ["csrc_news", "nbs_macro_release"]}}
+      },
+      "then": {
+        "properties": {"cost_basis": {"const": "not_applicable"}}
+      }
+    }
+  ]
+}

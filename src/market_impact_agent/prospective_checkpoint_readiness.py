@@ -16,6 +16,7 @@ from market_impact_agent.observations import ObservationCapability
 from market_impact_agent.prospective_collection_runtime import ProspectiveCollectionRuntime
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
@@ -444,6 +445,12 @@ class _RouteSourceContract:
 
 
 _ROUTE_SOURCE_CONTRACTS = {
+    "established_news": _RouteSourceContract(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="tushare-observation",
+        upstream_source="tushare-news",
+        semantic_scope="aggregated_source_observation_actual_receipt_only",
+    ),
     "official_event": _RouteSourceContract(
         capability=ObservationCapability.EVENT_REVELATION,
         provider_id="csrc-official-news",
@@ -488,8 +495,11 @@ def evaluate_prospective_checkpoint_readiness(
     runtime: ProspectiveCollectionRuntime,
     evaluated_at: datetime,
 ) -> ProspectiveCheckpointReadinessReport:
-    if registration.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2:
-        raise ValueError("checkpoint readiness requires a v2 prospective registration")
+    if registration.schema_version not in {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    }:
+        raise ValueError("checkpoint readiness requires a v2 or v3 prospective registration")
     if route_plan.registration_id != registration.registration_id:
         raise ValueError("checkpoint route plan belongs to a different registration")
     admission = admission_store.admission(route_plan.plan_id)

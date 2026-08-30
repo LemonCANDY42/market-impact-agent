@@ -10,6 +10,7 @@ import pytest
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     DiagnosticCapabilitySlot,
@@ -23,7 +24,7 @@ from market_impact_agent.prospective_diagnostic import (
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "examples/research/prospective-diagnostic-registration-v1.json"
-V2_EXAMPLE = ROOT / "examples/research/prospective-diagnostic-registration-v2.json"
+V3_EXAMPLE = ROOT / "examples/research/prospective-diagnostic-registration-v3.json"
 
 
 def _payload() -> dict[str, object]:
@@ -207,10 +208,15 @@ def test_v1_registration_rejects_optional_capability_semantics() -> None:
         prospective_diagnostic_registration_from_dict(payload)
 
 
-def test_v2_example_freezes_trigger_required_and_information_optional() -> None:
-    registration = load_prospective_diagnostic_registration(V2_EXAMPLE)
+def test_v3_example_freezes_adaptive_pairs_and_partial_information_semantics() -> None:
+    registration = load_prospective_diagnostic_registration(V3_EXAMPLE)
 
-    assert registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2
+    assert registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3
+    assert registration.minimum_replicates_per_arm == 2
+    assert registration.replicates_per_arm == 3
+    assert registration.replicate_schedule_rule == (
+        "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
+    )
     for checkpoint in registration.checkpoints:
         assert (
             checkpoint.slot(

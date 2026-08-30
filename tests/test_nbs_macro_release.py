@@ -667,13 +667,16 @@ def test_nbs_scheduled_collector_runtime_binding_materializes_a_snapshot(
     result = runtime.run_due(
         job.job_id,
         now=starts_at,
-        collector=lambda bound_policy, source_config: collect_prospective_source_snapshot(
-            job=job,
-            policy=bound_policy,
-            source_config=source_config,
-            store=scheduled_store,
-            nbs_http_client=FakeHTTPClient(_responses()),
-            clock=lambda: starts_at,
+        collector=lambda bound_policy, source_config, scheduled_for: (
+            collect_prospective_source_snapshot(
+                job=job,
+                policy=bound_policy,
+                source_config=source_config,
+                store=scheduled_store,
+                nbs_http_client=FakeHTTPClient(_responses()),
+                scheduled_for=scheduled_for,
+                clock=lambda: starts_at,
+            )
         ),
     )
 
@@ -692,13 +695,16 @@ def test_nbs_scheduled_collector_runtime_binding_materializes_a_snapshot(
     incomplete = runtime.run_due(
         job.job_id,
         now=next_due,
-        collector=lambda bound_policy, source_config: collect_prospective_source_snapshot(
-            job=job,
-            policy=bound_policy,
-            source_config=source_config,
-            store=scheduled_store,
-            nbs_http_client=FakeHTTPClient(incomplete_responses),
-            clock=lambda: next_due,
+        collector=lambda bound_policy, source_config, scheduled_for: (
+            collect_prospective_source_snapshot(
+                job=job,
+                policy=bound_policy,
+                source_config=source_config,
+                store=scheduled_store,
+                nbs_http_client=FakeHTTPClient(incomplete_responses),
+                scheduled_for=scheduled_for,
+                clock=lambda: next_due,
+            )
         ),
     )
 

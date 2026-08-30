@@ -153,7 +153,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/regime-modeled-pit-policy-v1.json",
         "examples/research/regime-modeled-pit-agent-validation-v1.json",
         "examples/research/prospective-diagnostic-registration-v1.json",
-        "examples/research/prospective-diagnostic-registration-v2.json",
+        "examples/research/prospective-diagnostic-registration-v3.json",
         "examples/research/prospective-checkpoint-route-plan-v1.json",
     ],
 )
@@ -216,7 +216,7 @@ def test_examples_conform_to_schema(example_path: str) -> None:
     elif example_path.endswith(
         (
             "prospective-diagnostic-registration-v1.json",
-            "prospective-diagnostic-registration-v2.json",
+            "prospective-diagnostic-registration-v3.json",
         )
     ):
         schema_name = "prospective-diagnostic-registration.schema.json"
@@ -282,7 +282,7 @@ def test_prospective_diagnostic_schema_matches_versioned_capability_rules() -> N
         cast(Validator, validator).validate(v1_optional)
 
     v2_missing_trigger = load_json(
-        ROOT / "examples/research/prospective-diagnostic-registration-v2.json"
+        ROOT / "examples/research/prospective-diagnostic-registration-v3.json"
     )
     for checkpoint in cast(list[dict[str, Any]], v2_missing_trigger["checkpoints"]):
         for slot in cast(list[dict[str, Any]], checkpoint["capability_slots"]):

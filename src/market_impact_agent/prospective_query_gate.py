@@ -19,6 +19,7 @@ from market_impact_agent.prospective_checkpoint_sets import (
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
@@ -168,8 +169,11 @@ def evaluate_prospective_query_gate(
     model_cost_limit_usd: Decimal,
     evaluated_at: datetime,
 ) -> ProspectiveQueryGateResult:
-    if registration.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2:
-        raise ValueError("partial-information Query Gate requires a v2 registration")
+    if registration.schema_version not in {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    }:
+        raise ValueError("partial-information Query Gate requires a v2 or v3 registration")
     checkpoint = registration.checkpoint(snapshot_set.checkpoint_key)
     if snapshot_set.registration_id != registration.registration_id:
         raise ValueError("Query Gate Snapshot Set belongs to a different registration")

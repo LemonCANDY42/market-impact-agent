@@ -85,7 +85,9 @@ from market_impact_agent.prospective_checkpoint_sets import (
     ProspectiveCheckpointSnapshotSet,
 )
 from market_impact_agent.prospective_diagnostic import (
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
+    ProspectiveDiagnosticRegistration,
     load_prospective_diagnostic_registration,
 )
 from market_impact_agent.prospective_execution import (
@@ -102,7 +104,7 @@ from market_impact_agent.research import EvidenceTier, TransmissionDirectness
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
 
 NOW = datetime(2026, 8, 30, 8, tzinfo=UTC)
-REGISTRATION_PATH = Path("examples/research/prospective-diagnostic-registration-v2.json")
+REGISTRATION_PATH = Path("examples/research/prospective-diagnostic-registration-v3.json")
 MODEL_PROFILE_PATH = Path("examples/providers/cliproxyapi-luna-xhigh-v1.json")
 MINIMAX_PROFILE_PATH = Path("examples/providers/minimax-m3-research-v1.json")
 
@@ -179,8 +181,31 @@ def _binding(arm: str) -> AgentExecutionBinding:
     )
 
 
-def _execution_plan() -> ProspectiveExecutionPlan:
+def _adaptive_registration() -> ProspectiveDiagnosticRegistration:
     registration = _registration()
+    return ProspectiveDiagnosticRegistration.build(
+        registered_at=registration.registered_at,
+        checkpoints=registration.checkpoints,
+        paired_arms=registration.paired_arms,
+        replicates_per_arm=registration.replicates_per_arm,
+        model_profile_id=registration.model_profile_id,
+        aggregate_model_cost_limit_usd=registration.aggregate_model_cost_limit_usd,
+        outcome_opening_rule=registration.outcome_opening_rule,
+        stop_conditions=registration.stop_conditions,
+        go_conditions=registration.go_conditions,
+        claim_scope=registration.claim_scope,
+        minimum_replicates_per_arm=2,
+        replicate_schedule_rule=(
+            "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
+        ),
+        schema_version=PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    )
+
+
+def _execution_plan(
+    registration: ProspectiveDiagnosticRegistration | None = None,
+) -> ProspectiveExecutionPlan:
+    registration = _registration() if registration is None else registration
     profile = load_model_provider_profile(MODEL_PROFILE_PATH)
     return ProspectiveExecutionPlan.build(
         registration=registration,
@@ -220,6 +245,7 @@ def _decision_proposal(
         blockers=(),
         unresolved_questions=("effect magnitude",),
         stopped_reason="registered checks completed",
+        decision_confidence=0.7,
     )
 
 
@@ -574,8 +600,12 @@ def _pack() -> EvidencePack:
     )
 
 
-def _gate(pack: EvidencePack, plan: ProspectiveExecutionPlan) -> ProspectiveQueryGateResult:
-    registration = _registration()
+def _gate(
+    pack: EvidencePack,
+    plan: ProspectiveExecutionPlan,
+    registration: ProspectiveDiagnosticRegistration | None = None,
+) -> ProspectiveQueryGateResult:
+    registration = _registration() if registration is None else registration
     core = {
         "schema_version": "market-impact.prospective-query-gate-result.v4",
         "registration_id": registration.registration_id,
@@ -654,6 +684,7 @@ def _artifact(
         blockers=(),
         unresolved_questions=("effect magnitude",),
         stopped_reason="registered checks completed",
+        decision_confidence=0.7,
     )
     return JudgmentArtifact.build(
         run_id=run_id,
@@ -775,12 +806,16 @@ def _runs(pack: EvidencePack | None = None) -> dict[str, tuple[AgentRunResult, .
 
 def _paired_runs(
     runs: dict[str, tuple[AgentRunResult, ...]] | None = None,
+    *,
+    registration: ProspectiveDiagnosticRegistration | None = None,
+    replicates: int = 3,
 ) -> tuple[PairedDecisionRun, ...]:
     selected = _runs() if runs is None else runs
+    registration = _registration() if registration is None else registration
     return tuple(
         PairedDecisionRun(arm=arm, replicate_index=index, result=result)
-        for arm in _registration().paired_arms
-        for index, result in enumerate(selected[arm], start=1)
+        for arm in registration.paired_arms
+        for index, result in enumerate(selected[arm][:replicates], start=1)
     )
 
 
@@ -851,6 +886,95 @@ def test_treatment_two_of_three_proposes_without_control_agreement() -> None:
             control_arm=manifest.treatment_arm,
             treatment_arm=manifest.control_arm,
         )
+
+
+def test_adaptive_pair_stops_after_two_only_when_both_arms_agree() -> None:
+    registration = _adaptive_registration()
+    pack = _pack()
+    plan = _execution_plan(registration)
+    gate = _gate(pack, plan, registration)
+    runs = _runs(pack)
+    control = registration.paired_arms[0]
+    runs[control] = (
+        _result(control, 1, "510500.XSHG", CandidateDirection.DOWN, pack=pack),
+        _result(control, 2, "510500.XSHG", CandidateDirection.DOWN, pack=pack),
+        _result(control, 3, "510300.XSHG", CandidateDirection.UP, pack=pack),
+    )
+
+    manifest = build_decision_run_manifest(
+        registration=registration,
+        query_gate=gate,
+        evidence_pack=pack,
+        execution_plan=plan,
+        paired_runs=_paired_runs(runs, registration=registration, replicates=2),
+        created_at=NOW - timedelta(minutes=6),
+    )
+
+    assert manifest.schema_version == "market-impact.decision-run-manifest.v2"
+    assert manifest.replicates_executed_per_arm == 2
+    assert manifest.replicate_stop_reason == "first_two_agree_in_both_arms"
+    assert manifest.disposition is DecisionDisposition.PROPOSE
+    assert manifest.agreement_count == 2
+    confidence = manifest.to_dict()["confidence_observation"]
+    assert isinstance(confidence, dict)
+    assert confidence["reported_count"] == 4
+    assert confidence["missing_count"] == 0
+    assert confidence["overall_mean_confidence_by_arm"] == {
+        "structured_agent_core": 0.7,
+        "structured_agent_plus_routed_methods": 0.7,
+    }
+    assert confidence["third_pair_confidence_by_arm"] == {
+        "structured_agent_core": None,
+        "structured_agent_plus_routed_methods": None,
+    }
+    assert validate_agent_contract(manifest.to_dict(), "decision-run-manifest.schema.json") == ()
+
+    with pytest.raises(ValueError, match="unnecessary third pair"):
+        build_decision_run_manifest(
+            registration=registration,
+            query_gate=gate,
+            evidence_pack=pack,
+            execution_plan=plan,
+            paired_runs=_paired_runs(runs, registration=registration),
+            created_at=NOW - timedelta(minutes=6),
+        )
+
+
+def test_adaptive_pair_requires_third_pair_after_either_arm_disagrees() -> None:
+    registration = _adaptive_registration()
+    pack = _pack()
+    plan = _execution_plan(registration)
+    gate = _gate(pack, plan, registration)
+    runs = _runs(pack)
+
+    with pytest.raises(ValueError, match="third pair after disagreement"):
+        build_decision_run_manifest(
+            registration=registration,
+            query_gate=gate,
+            evidence_pack=pack,
+            execution_plan=plan,
+            paired_runs=_paired_runs(runs, registration=registration, replicates=2),
+            created_at=NOW - timedelta(minutes=6),
+        )
+
+    manifest = build_decision_run_manifest(
+        registration=registration,
+        query_gate=gate,
+        evidence_pack=pack,
+        execution_plan=plan,
+        paired_runs=_paired_runs(runs, registration=registration),
+        created_at=NOW - timedelta(minutes=6),
+    )
+    assert manifest.replicates_executed_per_arm == 3
+    assert manifest.replicate_stop_reason == ("third_pair_required_after_first_two_disagreement")
+    confidence = manifest.to_dict()["confidence_observation"]
+    assert isinstance(confidence, dict)
+    assert confidence["reported_count"] == 6
+    assert confidence["third_pair_confidence_by_arm"] == {
+        "structured_agent_core": 0.7,
+        "structured_agent_plus_routed_methods": 0.7,
+    }
+    assert validate_agent_contract(manifest.to_dict(), "decision-run-manifest.schema.json") == ()
 
     by_id = {
         result.judgment.artifact_id: result.judgment
@@ -960,7 +1084,7 @@ def test_treatment_without_two_matching_votes_abstains_and_cannot_create_signal(
     )
 
     assert manifest.disposition is DecisionDisposition.ABSTAIN
-    assert manifest.blockers == ("treatment:no_two_of_three_target_direction_agreement",)
+    assert manifest.blockers == ("treatment:no_majority_target_direction_agreement",)
     with pytest.raises(PermissionError, match="cannot create a Signal"):
         build_signal_from_decision_manifest(
             manifest=manifest,

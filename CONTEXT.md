@@ -206,6 +206,15 @@ every opportunity a typed terminal or recoverable state. An OS supervisor may in
 worker, but it does not own cadence or Provider selection.
 _Avoid_: Cron-owned business schedule, daemon authority, Agent-selected URL, execution job
 
+**Collection Usage Record**:
+An append-only, content-identified account of one Collection Opportunity's observable Provider
+work: collection and Provider attempts, Tushare request/page/response-byte totals when the captured
+bundle can prove them, selected row count, elapsed time, terminal outcome, and typed error. A valid
+empty source window is `no_data`, not a failure. Subscription cost remains explicitly unallocated
+when no defensible per-request price exists; unknown request counts for other Providers remain null
+rather than inferred.
+_Avoid_: Billing invoice, estimated request count, successful empty Snapshot, model Usage Ledger
+
 **Prospective Collection Tracer Report**:
 A private, content-identified acceptance report for one bounded CSRC official-event Job and one
 Tushare market-context Job. It binds their accepted route reports, Collection Policies, logical
@@ -218,12 +227,14 @@ _Avoid_: Historical qualification, service-install receipt, Query Gate, executio
 A content-identified requirements freeze for two or three first-eligible future checkpoints with
 different event mechanisms. It fixes each checkpoint's end-of-day cutoff construction, explicit
 capability applicability, route-kind and source-diversity minima, cadence/gap/freshness limits,
-eligible venues and instruments, candidate horizons, paired Agent arms, three replicates, aggregate
+eligible venues and instruments, candidate horizons, paired Agent arms, replicate policy, aggregate
 model budget, hidden-outcome rule, and stop/go conditions before new acquisition or inference. It
 selects requirements, not Providers, observations, outcomes, or trades. Schema v1 preserves the
 original all-required diagnostic. Schema v2 requires an actual-receipt event trigger while allowing
 the other declared information capabilities to be optional observed context whose absence must stay
-visible to the Agent and evaluator.
+visible to the Agent and evaluator. Schema v3 starts with two complete control/treatment pairs and
+requires a third complete pair only when either arm's first two decisions disagree; it never runs a
+single unpaired tie-breaker.
 _Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
 
 **Prospective Checkpoint Route Plan**:
@@ -266,7 +277,7 @@ the authorized checkpoint input set.
 _Avoid_: Matching URL, inferred provenance, same-cutoff Evidence Pack
 
 **Prospective Query Gate Result**:
-A content-identified preflight binding one v2 registration, checkpoint Snapshot Set, Evidence Pack,
+A content-identified preflight binding one current registration, checkpoint Snapshot Set, Evidence Pack,
 Prospective Evidence Lineage, Prospective Execution Plan, model profile, cost ceiling, and exact
 authorized Snapshot and Checkpoint Decision Input IDs. Missing required trigger or structural input
 is blocking; missing optional information and unmet corroboration targets are nonblocking gaps passed
@@ -561,7 +572,10 @@ _Avoid_: Backtest run, chat session
 
 **Judgment Artifact**:
 The immutable result of a Judgment Run, including cited evidence, transmission reasoning,
-candidate impacts, blockers, abstention state, and the complete configuration identity.
+candidate impacts, blockers, abstention state, an optional Agent-reported overall
+`decision_confidence`, and the complete configuration identity. Overall confidence is observational:
+it is calibrated per model after outcomes open and cannot size a position, change approval, or
+override hard policy.
 It is a proposal awaiting deterministic admission, not a Signal Intent.
 _Avoid_: Model response, trade recommendation
 
@@ -575,9 +589,11 @@ _Avoid_: Agent team, repeated chat
 A content-identified record of one eligible Prospective Query Gate, exact Evidence Pack and Agent
 Execution Plan, and the complete registered paired Judgment Replicate Set. It records every terminal
 run, Judgment, execution-surface, and content-identified metrics artifact, verifies exact
-provider/model and per-arm provenance, derives treatment-arm stability by the pre-registered rule,
-and retains the control arm only for comparison. It is run lineage, not a new policy or execution
-authority.
+provider/model and per-arm provenance, records whether two or three pairs were executed and why,
+derives treatment-arm stability by the pre-registered rule, and retains the control arm only for
+comparison. Schema v1 preserves the historical fixed three-pair contract. Schema v2 uses the
+registered adaptive two-then-optional-third paired rule. It is run lineage, not a new policy or
+execution authority.
 Each run also binds the exact final `judgment.validated` Journal event. That event binds the Judgment
 proposal, transcript, content-identified metrics payload, and cost, so a caller cannot lower reported
 cost by replacing a standalone metrics object.

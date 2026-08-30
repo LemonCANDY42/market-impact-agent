@@ -9,8 +9,10 @@ The shortest accepted path to Agent-directed paper operation is:
 
 1. observe one real post-admission trigger and freeze the internally verifiable selected Snapshot
    Set, explicit optional gaps, Prospective Evidence Lineage, tools, and Query Gate;
-2. run three paired Judgment replicates per arm and freeze one Decision Run Manifest;
-3. require treatment-arm two-of-three target-and-direction agreement, or archive abstention without a
+2. run two complete paired Judgment replicates, add a third complete pair only when either arm's
+   first two decisions disagree, and freeze one Decision Run Manifest;
+3. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
+   or the matching first two when the registered early-stop rule applies; otherwise archive without a
    Signal or Order; the control arm is comparison-only;
 4. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
    the already accepted durable mock outbox;
@@ -108,11 +110,19 @@ Stage 1 — freeze requirements:
     positioning, macro, and additional corroboration as explicit optional information. It retains
     the same paired arms, three replicates, USD 20 ceiling, hidden outcomes, and no-alpha/no-execution
     claim scope.
+  - [x] Supersede v2 for new checkpoints with v3 registration
+    `prospective-diagnostic-registration-7217f22392ac715e80550ccb75a23faff9b23aadd94db6c13e494033c5c273b0`.
+    V3 preserves the same requirements, arms, ceiling, hidden outcomes, and claim boundary, but runs
+    two complete pairs first and requires the third complete pair only when either arm disagrees.
+    The paired design is never reduced to a one-arm tie-breaker.
 
 Stage 2 — accept source slices and measure coverage:
 
 - [ ] `PDI-10` Accept checkpoint-relevant official-event and established-news routes.
-  - [x] Accept the CSRC official-event route and the Tushare/Sina prospective aggregator route.
+  - [x] Accept the CSRC official-event route, seven non-empty Tushare short-news source routes, and
+    Tushare `major_news`. They are prospective aggregator observations, not direct-publisher or
+    historical-authority substitutes. Two additionally entitled short-news sources returned valid
+    empty bounded windows and remain unregistered until they produce content.
   - [ ] Accept the direct publisher coverage required by each registered checkpoint; aggregator
     receipt cannot substitute for publisher authority. Under v2 this is a coverage/corroboration
     target after one valid trigger, not a global model-dispatch blocker.
@@ -204,7 +214,14 @@ Stage 3 — operate continuous collection:
     Its backup verification passed; an unpersisted clean-root restore reproduced the state but is
     runtime evidence only. These finite-window Jobs are not the registered PDI-22 soak and do not
     prove an indefinite rolling-date contract.
-  - [ ] Complete PDI-17 observed checkpoint Snapshot sets, bind the v2 registration to them and the
+  - [x] Add rolling-window Collection Policies resolved from the Harness logical due time, not the
+    host wall clock; register seven active short-news Jobs at 2- or 5-minute cadence and one
+    `major_news` Job at 15-minute cadence without restarting the supervisor. Add append-only
+    Collection Usage Records for attempts, proved request/page/byte counts, rows, latency, outcome,
+    and explicit unallocated flat-subscription cost. Valid empty windows are healthy `no_data`, not
+    source failures; Providers whose request count cannot be proved retain null rather than an
+    estimate.
+  - [ ] Complete PDI-17 observed checkpoint Snapshot sets, bind the v3 registration to them and the
     accepted supervisor receipt, then run the registered multi-policy soak and fault matrix.
 
 Stage 4 — prove bounded Judgment inputs before automatic dispatch:
@@ -212,16 +229,18 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan
-    `prospective-checkpoint-route-plan-575e81dd6c81648823ae524668fff4d6e2da68f333441e4c27e050839a244244`
+    `prospective-checkpoint-route-plan-edbac9b9e7d2313fe61e6e0a69810779f109a372f3010c269cc3ca7be0ac1354`
     and implement a content-identified readiness audit. Its canonical content now fixes
     `sqlite_begin_immediate_then_harness_clock_v1`; admissions for the retired pre-protocol plan do
     not match it. The new plan was durably admitted as
-    `prospective-checkpoint-route-admission-0932cbdcec4e0841d25cb0d7cf612f676870afd9bb37a83b13c40b83ab1da538`
+    `prospective-checkpoint-route-admission-a05108e79d88f68cf3ed08ac1d918d7cffdf2c8de55869f82ab3b226f9fe0eee`
     and audited in private report
-    `prospective-checkpoint-readiness-report-42dbf28390bf3324918cfaa12d1a5989e2f9af30516e480a55ba518d461804ae`:
-    one policy checkpoint is operational and waiting for a post-admission external trigger, the
-    issuer and macro trigger routes remain unconfigured, candidate count is zero, and model calls
-    remain unauthorized.
+    `prospective-checkpoint-readiness-report-40114fdf675cb49a0fec1aef90d64e9e695f958fb36e55a0d67b4f25acb7a1cc`:
+    the policy checkpoint has operational CSRC and two-minute Tushare/Sina trigger Jobs and observed
+    five post-admission versions by 2026-08-30 00:29 UTC. Manual semantic inspection found no
+    capital-market policy or market-structure change among them, so no eligibility selection,
+    Snapshot Set, Query Gate, or model call was created. Issuer and macro trigger routes remain
+    unconfigured.
   - [ ] After a post-admission candidate appears, seal its registered eligibility selection and
     trading-session barrier, then freeze the actual Snapshot Set, Evidence Pack, read-only tools,
     Prospective Evidence Lineage, and Prospective Execution Plan. Pre-admission observations remain
@@ -239,9 +258,11 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
   - [ ] Freeze and pass the gate for the first real post-route-plan checkpoint, then add one or two
     independently triggered registered checkpoints. Waiting for an external event is tracked
     separately from missing trigger-route infrastructure.
-- [ ] `PDI-32` Run three paired replicates per checkpoint under the frozen stop and cost rules.
+- [ ] `PDI-32` Run adaptive two-then-optional-third paired replicates per checkpoint under the
+  frozen stop and cost rules.
   - [x] Implement the Prospective Execution Plan and Decision Run Manifest contracts. They seal the
-    Harness-bundled Provider Profile, a control surface plus treatment routed-method superset, six
+    Harness-bundled Provider Profile, a control surface plus treatment routed-method superset, four
+    or six
     canonically indexed runs, Judgment-linked validation events and metrics, total cost, and
     treatment-only agreement; swapped, reused, incomplete, or mutable-cost runs abstain. Query Gate
     must follow Snapshot Set reconciliation, runs must start after their Query Gate, and Signal and
@@ -249,9 +270,12 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     composition-root-bound Agent runtime authorities to reopen every actual Run Record, complete
     Journal chain, source artifact, and recomputed metric; caller-authored self-consistent hashes do
     not prove that a run occurred.
-  - [ ] Freeze the first real six terminal runs in one Decision Run Manifest. Treatment-arm two-of-three
-    target-and-direction agreement may form a Signal; the control arm is comparison-only. Invalid,
-    reused, mismatched-runtime, or incomplete replicate sets abstain.
+  - [x] Add observational top-level `decision_confidence` to new Judgment outputs. It is accumulated
+    and later calibrated per model; it cannot size a position, affect approval, or override policy.
+  - [ ] Freeze the first real four or six terminal runs in one Decision Run Manifest. Run the third
+    complete pair only if either arm's first two decisions disagree. Treatment agreement may form a
+    Signal; the control arm is comparison-only. Invalid, reused, mismatched-runtime, incomplete, or
+    unnecessarily expanded replicate sets abstain.
 
 Stage 5 — automate bounded follow-up and open registered outcomes:
 

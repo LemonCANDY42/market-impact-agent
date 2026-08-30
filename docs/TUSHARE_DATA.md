@@ -4,6 +4,13 @@ The first Tushare slice is a read-only, language-neutral HTTPS adapter. It mater
 deterministic tables and a fixed SSE/SZSE universe without making Tushare, its Python SDK,
 or a data vendor the orchestration owner.
 
+Tushare's official Python examples and its direct-HTTP contract address the same token-authenticated
+HTTP service and expose the same API permissions. The Harness therefore keeps the direct HTTPS
+Adapter: exact response pages and bytes, API error codes, bounded pagination, replay inputs, and
+credential isolation remain explicit in the Provider contract. Installing the SDK would add a
+client convenience layer, not news coverage, lower latency, or a push channel, so it is not a
+runtime dependency.
+
 Tushare is fully usable as an upstream source under this project's deployment entitlement: the
 owner supplies their purchased token, uses it only inside the private Harness, and does not resell
 or redistribute the data. That fact authorizes Provider integration; it does not make any route
@@ -26,11 +33,13 @@ The separate research-only market-context panel uses
 ## Prospective Observation Provider
 
 `src/market_impact_agent/tushare_observation.py` implements one credential-isolated HTTPS transport
-and fourteen content-identified route configurations. The owner's purchased 10,000-plus-point account
-is treated as fully usable for this private Harness; the token is read only from `TUSHARE_TOKEN` and
-is excluded from requests persisted for replay, hashes, logs, errors, configs, and Agent tools.
+and twenty-three content-identified route configurations. The owner's separately purchased news
+entitlement and 10,000-plus-point account are treated as fully usable for this private Harness; the
+token is read only from `TUSHARE_TOKEN` and is excluded from requests persisted for replay, hashes,
+logs, errors, configs, and Agent tools.
 
 The official route contracts are [`news`](https://tushare.pro/document/2?doc_id=143),
+[`major_news`](https://tushare.pro/document/2?doc_id=195),
 [`index_daily`](https://tushare.pro/document/2?doc_id=95),
 [`fund_daily`](https://tushare.pro/document/2?doc_id=127),
 [`trade_cal`](https://tushare.pro/document/2?doc_id=26),
@@ -84,6 +93,53 @@ passed the same capture, Journal, isolated replay, rights, and seven-gate path o
 | `cn_schedule` | macro schedule | 14 | `source-route-acceptance-report-52d94fbcbf6bd5959d82a16013d67413c37a04f5d31b6cf6fc1fb74f5635da2c` |
 | `report_rc` | prior expectation observations | 4,802 | `source-route-acceptance-report-a79d8525ea67763d8022a8909dcfd7a85683f5c476ab6ff2f89149aec9fba8ff` |
 | `news` (`src=sina`) | event revelation | 29 | `source-route-acceptance-report-e9bc974b0b3e0101701fed3b0dd37e57cc7fc595b93dff3802129fb125b9dde8` |
+
+The purchased news entitlement was then exercised across every documented short-news source and
+`major_news` with bounded current windows. Seven additional short-news sources and `major_news`
+produced non-empty actual-receipt Snapshots and passed the same seven route gates. The acceptance
+artifacts retain hashes and counts only in Git; licensed rows remain private:
+
+| Route | Accepted observations | Acceptance report |
+| --- | ---: | --- |
+| `news` (`src=sina`, repeated current-window acceptance) | 354 | `source-route-acceptance-report-4727fb86...` |
+| `news` (`src=wallstreetcn`) | 147 | `source-route-acceptance-report-a6aae3...` |
+| `news` (`src=10jqka`) | 57 | `source-route-acceptance-report-11ef27...` |
+| `news` (`src=eastmoney`) | 194 | `source-route-acceptance-report-27dcd1...` |
+| `news` (`src=jinrongjie`) | 115 | `source-route-acceptance-report-096f27...` |
+| `news` (`src=cls`) | 11 | `source-route-acceptance-report-a86dc9...` |
+| `news` (`src=yicai`) | 74 | `source-route-acceptance-report-b8eb2b...` |
+| `major_news` | 4 | `source-route-acceptance-report-e81748953a21e52cb908934151ed59118ebe83f3bba399ca21415e91b542cfe3` |
+
+`yuncaijing` and `fenghuang` returned valid empty results in both 24-hour and seven-day probes. Their
+checked-in configurations remain available, but no active Job or route-acceptance claim is created
+until a non-empty bounded capture can pass replay. `anns_d` returned the Provider's explicit
+permission error and is not configured. An empty entitlement-backed window is evidence of `NO_DATA`,
+not a transport failure and not proof of complete publisher coverage.
+
+## Rolling news collection
+
+The official news APIs are pull APIs; no documented WebSocket or push-subscription contract is
+claimed. The practical low-latency path is Harness-owned rolling polling plus a later event Wake:
+
+| Route | Cadence | Lookback | Purpose |
+| --- | ---: | ---: | --- |
+| Sina, WallstreetCN, CLS, Yicai short news | 2 minutes | 10 minutes | Low-latency event discovery with overlap |
+| 10jqka, Eastmoney, Jinrongjie short news | 5 minutes | 20 minutes | Broader periodic corroboration and catch-up |
+| `major_news` | 15 minutes | 2 hours | Longer-form major-event context |
+
+Each query window is deterministically resolved from the Collection Opportunity's logical due time
+in its registered timezone. The overlap is intentional: the Journal deduplicates exact content
+versions while retaining later sightings and measured receipt lag. A valid empty interval completes
+as healthy `no_data`; permission, contract, transport, and replay failures remain typed failures.
+The one-shot launchd-supervised worker discovers the registered Jobs on its normal minute tick, so
+registration does not restart the service and the process is normally absent between invocations.
+
+Every terminal opportunity appends a content-identified Collection Usage Record. For captured
+Tushare bundles it reports exact request/page/response-byte totals, selected rows, attempts, and
+latency; rolling 24-hour and lifetime summaries expose per-opportunity averages and totals.
+Subscription spend is not fabricated as a request price: estimated cost is null with
+`flat_subscription_not_allocated_per_request`. Other Providers keep request/page counts null unless
+their captured artifacts can prove them.
 
 This is route-level prospective evidence, not completion of PDI-10 through PDI-16. In particular,
 Tushare `news` is an aggregator route even when `src=sina`; its receipt does not establish a direct

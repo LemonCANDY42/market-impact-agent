@@ -11,7 +11,7 @@ import tempfile
 import time
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from threading import Event, current_thread, main_thread
@@ -154,6 +154,7 @@ from market_impact_agent.prospective_collectors import collect_prospective_sourc
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
+    ProspectiveRollingWindow,
 )
 from market_impact_agent.prospective_diagnostic import (
     load_prospective_diagnostic_registration,
@@ -438,6 +439,18 @@ def build_parser() -> argparse.ArgumentParser:
     collection_register_parser.add_argument("--source-config", required=True, type=Path)
     collection_register_parser.add_argument("--acceptance-report", required=True, type=Path)
     collection_register_parser.add_argument("--parameters-json", required=True)
+    collection_register_parser.add_argument(
+        "--rolling-lookback-seconds",
+        type=int,
+        help=(
+            "Resolve start_date/end_date from each logical due time using an overlapping "
+            "rolling window"
+        ),
+    )
+    collection_register_parser.add_argument(
+        "--rolling-window-timezone",
+        default="Asia/Shanghai",
+    )
     collection_register_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
     collection_register_parser.add_argument("--starts-at", required=True, type=_aware_timestamp)
     collection_register_parser.add_argument("--poll-interval-seconds", required=True, type=int)
@@ -1999,6 +2012,8 @@ def register_prospective_collection_job(
     provider_timeout_seconds: float,
     state_root: Path,
     registered_at: datetime | None = None,
+    rolling_lookback_seconds: int | None = None,
+    rolling_window_timezone: str = "Asia/Shanghai",
 ) -> dict[str, object]:
     source_config, provider_manifest, capability, source_id, source_config_hash = (
         _prospective_collection_source_binding(adapter_kind, source_config_path)
@@ -2018,6 +2033,14 @@ def register_prospective_collection_job(
         parameters=parameters,
         poll_interval_seconds=poll_interval_seconds,
         maximum_gap_seconds=maximum_gap_seconds,
+        rolling_window=(
+            None
+            if rolling_lookback_seconds is None
+            else ProspectiveRollingWindow(
+                lookback_seconds=rolling_lookback_seconds,
+                timezone=rolling_window_timezone,
+            )
+        ),
     )
     report = load_source_route_acceptance_report(acceptance_report_path)
     job = ProspectiveCollectionJob.build(
@@ -2120,13 +2143,14 @@ def _state_budget_guarded_collector(
     def guarded(
         policy: ProspectiveCollectionPolicy,
         source_config: dict[str, object],
+        scheduled_for: datetime,
     ) -> DataSnapshot:
         metrics = collect_operations_metrics(
             state_root=state_root,
             measured_at=datetime.now(UTC),
         )
         assert_within_state_budget(metrics, maximum_state_bytes=maximum_state_bytes)
-        return collector(policy, source_config)
+        return collector(policy, source_config, scheduled_for)
 
     return guarded
 
@@ -2140,6 +2164,7 @@ def _bound_prospective_collector(
     def collector(
         policy: ProspectiveCollectionPolicy,
         source_config: dict[str, object],
+        scheduled_for: datetime,
     ) -> DataSnapshot:
         return collect_prospective_source_snapshot(
             job=job,
@@ -2147,6 +2172,7 @@ def _bound_prospective_collector(
             source_config=source_config,
             store=store,
             tushare_token=tushare_token,
+            scheduled_for=scheduled_for,
         )
 
     return collector
@@ -2162,11 +2188,20 @@ def prospective_collection_health(
     observed_at = datetime.now(UTC) if now is None else now.astimezone(UTC)
     runtime = ProspectiveCollectionRuntime(LocalDataSnapshotStore(state_root))
     selected_job_ids = job_ids if job_ids else runtime.job_ids(limit=limit)
+    rolling_since = observed_at - timedelta(hours=24)
     return {
         "observed_at": _utc_timestamp(observed_at),
         "job_count": len(selected_job_ids),
         "health": [
             runtime.health(job_id, now=observed_at).to_dict() for job_id in selected_job_ids
+        ],
+        "collection_usage": [
+            {
+                "job_id": job_id,
+                "lifetime": runtime.usage_summary(job_id),
+                "rolling_24h": runtime.usage_summary(job_id, since=rolling_since),
+            }
+            for job_id in selected_job_ids
         ],
         "historical_pit_claim": False,
         "execution_capability": False,
@@ -3212,6 +3247,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 maximum_jitter_seconds=args.maximum_jitter_seconds,
                 provider_timeout_seconds=args.provider_timeout_seconds,
                 state_root=args.state_root,
+                rolling_lookback_seconds=args.rolling_lookback_seconds,
+                rolling_window_timezone=args.rolling_window_timezone,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
@@ -3240,7 +3277,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
-        successful_outcomes = {"success", "not_due", "in_progress", "backing_off"}
+        successful_outcomes = {"success", "no_data", "not_due", "in_progress", "backing_off"}
         raw_results = result.get("results")
         result_items = cast(list[object], raw_results) if isinstance(raw_results, list) else []
 
@@ -3313,7 +3350,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         output = {**result, "service_environment_loaded": True}
         print(json.dumps(output, indent=2, sort_keys=True))
-        successful_outcomes = {"success", "not_due", "in_progress", "backing_off"}
+        successful_outcomes = {"success", "no_data", "not_due", "in_progress", "backing_off"}
         raw_results = result.get("results")
         result_items = cast(list[object], raw_results) if isinstance(raw_results, list) else []
 

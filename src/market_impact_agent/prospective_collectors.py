@@ -47,6 +47,7 @@ def collect_prospective_source_snapshot(
     tushare_transport: TushareObservationTransport | None = None,
     csrc_http_client: CsrcNewsHTTPClient | None = None,
     nbs_http_client: NbsMacroReleaseHTTPClient | None = None,
+    scheduled_for: datetime | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> DataSnapshot:
     """Capture one accepted route and materialize its immutable prospective Snapshot."""
@@ -57,6 +58,11 @@ def collect_prospective_source_snapshot(
         raise ValueError("prospective collector source config does not match its job")
     if len(policy.sources) != 1:
         raise ValueError("prospective collector requires exactly one source route")
+    if policy.rolling_window is not None and scheduled_for is None:
+        raise ValueError("rolling prospective collector requires its logical due time")
+    request_window_start, request_parameters = policy.resolve_query(
+        policy.window_start if scheduled_for is None else scheduled_for
+    )
 
     if job.adapter_kind is ProspectiveCollectionAdapterKind.CSRC_NEWS:
         config = csrc_news_source_from_dict(dict(source_config))
@@ -81,14 +87,14 @@ def collect_prospective_source_snapshot(
         captures = asyncio.run(
             provider.collect(
                 window_start=policy.window_start,
-                parameters=policy.parameters,
+                parameters=request_parameters,
             )
         )
         capture_cutoff = max(item.retrieved_at for item in captures)
         replay_provider = provider.replay(captures)
     elif job.adapter_kind is ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE:
         config = nbs_macro_release_source_from_dict(dict(source_config))
-        if policy.parameters != {"indicators": list(config.indicators)}:
+        if request_parameters != {"indicators": list(config.indicators)}:
             raise ValueError(
                 "NBS macro release collection policy indicators must exactly match "
                 "the source config"
@@ -114,7 +120,7 @@ def collect_prospective_source_snapshot(
         captures = asyncio.run(
             provider.collect(
                 window_start=policy.window_start,
-                parameters=policy.parameters,
+                parameters=request_parameters,
                 require_complete_indicator_scope=True,
             )
         )
@@ -142,7 +148,7 @@ def collect_prospective_source_snapshot(
         capture = asyncio.run(
             provider.collect(
                 source_id=config.source_id,
-                parameters=policy.parameters,
+                parameters=request_parameters,
             )
         )
         capture_cutoff = capture.retrieved_at
@@ -154,9 +160,9 @@ def collect_prospective_source_snapshot(
         capability=policy.capability,
         pit_lane=DataPITLane.PROSPECTIVE,
         as_of=capture_cutoff.astimezone(UTC),
-        window_start=policy.window_start,
+        window_start=request_window_start,
         source_policy_id=policy.policy_id,
-        parameters=policy.parameters,
+        parameters=request_parameters,
         sources=policy.sources,
         minimum_data_sources=len(policy.sources),
     )

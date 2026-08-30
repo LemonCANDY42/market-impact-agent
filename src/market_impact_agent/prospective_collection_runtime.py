@@ -10,7 +10,12 @@ from enum import StrEnum
 from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash
-from market_impact_agent.data_inputs import DataPITLane, DataSnapshot, LocalDataSnapshotStore
+from market_impact_agent.data_inputs import (
+    DataFetchStatus,
+    DataPITLane,
+    DataSnapshot,
+    LocalDataSnapshotStore,
+)
 from market_impact_agent.domain import require_aware
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
@@ -20,18 +25,48 @@ from market_impact_agent.source_acceptance import (
     SourceRouteAcceptanceReport,
     source_route_acceptance_report_from_dict,
 )
+from market_impact_agent.tushare_observation import (
+    summarize_tushare_observation_capture_usage,
+)
 
 PROSPECTIVE_COLLECTION_JOB_SCHEMA = "market-impact.prospective-collection-job.v1"
+PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1 = (
+    "market-impact.prospective-collection-usage-record.v1"
+)
+PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA = "market-impact.prospective-collection-usage-record.v2"
 _TERMINAL_OUTCOMES = frozenset(
-    {"success", "source_failure", "collector_failure", "cancelled", "missed"}
+    {"success", "no_data", "source_failure", "collector_failure", "cancelled", "missed"}
 )
 _MAX_MISFIRES_PER_RUN = 10_000
+_USAGE_MEASUREMENT_DIMENSIONS = (
+    "provider_attempt_count",
+    "request_count",
+    "page_count",
+    "response_bytes",
+    "raw_artifact_bytes",
+    "received_records",
+    "accepted_records",
+)
+_USAGE_COST_BASES = frozenset(
+    {"flat_subscription_not_allocated_per_request", "not_applicable", "unknown"}
+)
 
 
 class ProspectiveCollectionAdapterKind(StrEnum):
     CSRC_NEWS = "csrc_news"
     NBS_MACRO_RELEASE = "nbs_macro_release"
     TUSHARE_OBSERVATION = "tushare_observation"
+
+
+def _usage_cost_basis(adapter_kind: ProspectiveCollectionAdapterKind) -> str:
+    if adapter_kind is ProspectiveCollectionAdapterKind.TUSHARE_OBSERVATION:
+        return "flat_subscription_not_allocated_per_request"
+    if adapter_kind in {
+        ProspectiveCollectionAdapterKind.CSRC_NEWS,
+        ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE,
+    }:
+        return "not_applicable"
+    raise ValueError("unsupported prospective collection adapter cost basis")
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +199,114 @@ class CollectionOpportunity:
 
 
 @dataclass(frozen=True, slots=True)
+class CollectionUsageRecord:
+    record_id: str
+    opportunity_id: str
+    job_id: str
+    scheduled_for: datetime
+    adapter_kind: ProspectiveCollectionAdapterKind
+    outcome: str
+    collection_attempt_count: int
+    provider_attempt_count: int | None
+    request_count: int | None
+    page_count: int | None
+    response_bytes: int | None
+    raw_artifact_bytes: int | None
+    received_records: int | None
+    accepted_records: int | None
+    latency_ms: float
+    incremental_cost_microusd: int | None
+    cost_basis: str | None
+    error_kind: str | None
+    recorded_at: datetime
+    execution_capability: bool = False
+    schema_version: str = PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version not in {
+            PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1,
+            PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA,
+        }:
+            raise ValueError("unsupported Collection Usage Record schema")
+        _trimmed(self.opportunity_id, "collection usage opportunity_id")
+        _trimmed(self.job_id, "collection usage job_id")
+        _strict_utc(self.scheduled_for, "collection usage scheduled_for")
+        _strict_utc(self.recorded_at, "collection usage recorded_at")
+        if self.outcome not in _TERMINAL_OUTCOMES - {"missed"}:
+            raise ValueError("collection usage outcome is not terminal")
+        if self.collection_attempt_count < 1:
+            raise ValueError("collection usage attempt count must be positive")
+        for value, name in (
+            (self.provider_attempt_count, "provider_attempt_count"),
+            (self.request_count, "request_count"),
+            (self.page_count, "page_count"),
+            (self.response_bytes, "response_bytes"),
+            (self.raw_artifact_bytes, "raw_artifact_bytes"),
+            (self.received_records, "received_records"),
+            (self.accepted_records, "accepted_records"),
+        ):
+            if value is not None and value < 0:
+                raise ValueError(f"collection usage {name} cannot be negative")
+        if self.request_count is not None and self.request_count < 1:
+            raise ValueError("known collection request count must be positive")
+        if self.page_count is not None and self.page_count < 1:
+            raise ValueError("known collection page count must be positive")
+        if self.latency_ms < 0:
+            raise ValueError("collection usage latency cannot be negative")
+        if self.incremental_cost_microusd is not None and self.incremental_cost_microusd < 0:
+            raise ValueError("collection usage incremental cost cannot be negative")
+        if self.cost_basis is None:
+            if self.schema_version != PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1:
+                raise ValueError("collection usage cost basis is required")
+            if self.incremental_cost_microusd is not None:
+                raise ValueError("legacy collection usage cost must remain unknown")
+        else:
+            if self.cost_basis not in _USAGE_COST_BASES:
+                raise ValueError("collection usage cost basis is unsupported")
+            if self.cost_basis != _usage_cost_basis(self.adapter_kind):
+                raise ValueError("collection usage cost basis does not match its adapter")
+            if self.incremental_cost_microusd is not None:
+                raise ValueError("collection usage cost must remain unallocated for its cost basis")
+        if self.execution_capability:
+            raise ValueError("Collection Usage Record cannot grant execution capability")
+        if self.record_id != self.expected_record_id:
+            raise ValueError("Collection Usage Record ID does not match content")
+
+    @property
+    def expected_record_id(self) -> str:
+        return f"prospective-collection-usage-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        core: dict[str, object] = {
+            "schema_version": self.schema_version,
+            "opportunity_id": self.opportunity_id,
+            "job_id": self.job_id,
+            "scheduled_for": _timestamp(self.scheduled_for),
+            "adapter_kind": self.adapter_kind.value,
+            "outcome": self.outcome,
+            "collection_attempt_count": self.collection_attempt_count,
+            "provider_attempt_count": self.provider_attempt_count,
+            "request_count": self.request_count,
+            "page_count": self.page_count,
+            "response_bytes": self.response_bytes,
+            "raw_artifact_bytes": self.raw_artifact_bytes,
+            "received_records": self.received_records,
+            "accepted_records": self.accepted_records,
+            "latency_ms": self.latency_ms,
+            "error_kind": self.error_kind,
+            "recorded_at": _timestamp(self.recorded_at),
+            "execution_capability": self.execution_capability,
+        }
+        if self.cost_basis is not None:
+            core["incremental_cost_microusd"] = self.incremental_cost_microusd
+            core["cost_basis"] = self.cost_basis
+        return core
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "record_id": self.record_id}
+
+
+@dataclass(frozen=True, slots=True)
 class CollectionRunResult:
     job_id: str
     outcome: str
@@ -172,6 +315,7 @@ class CollectionRunResult:
     data_snapshot_id: str | None
     missed_opportunities: int
     error_kind: str | None
+    usage_record_id: str | None = None
     execution_capability: bool = False
 
     def to_dict(self) -> dict[str, object]:
@@ -185,6 +329,7 @@ class CollectionRunResult:
             "data_snapshot_id": self.data_snapshot_id,
             "missed_opportunities": self.missed_opportunities,
             "error_kind": self.error_kind,
+            "usage_record_id": self.usage_record_id,
             "execution_capability": self.execution_capability,
         }
 
@@ -198,6 +343,7 @@ class CollectionHealth:
     last_outcome: str | None
     last_error_kind: str | None
     successful_opportunities: int
+    no_data_opportunities: int
     source_failures: int
     collector_failures: int
     cancelled_opportunities: int
@@ -217,6 +363,7 @@ class CollectionHealth:
             "last_outcome": self.last_outcome,
             "last_error_kind": self.last_error_kind,
             "successful_opportunities": self.successful_opportunities,
+            "no_data_opportunities": self.no_data_opportunities,
             "source_failures": self.source_failures,
             "collector_failures": self.collector_failures,
             "cancelled_opportunities": self.cancelled_opportunities,
@@ -228,7 +375,7 @@ class CollectionHealth:
 
 
 ScheduledCollector = Callable[
-    [ProspectiveCollectionPolicy, dict[str, object]],
+    [ProspectiveCollectionPolicy, dict[str, object], datetime],
     DataSnapshot,
 ]
 
@@ -239,6 +386,11 @@ def _validate_adapter_policy_scope(
     collection_policy: ProspectiveCollectionPolicy,
     source_config: Mapping[str, object],
 ) -> None:
+    if (
+        collection_policy.rolling_window is not None
+        and adapter_kind is not ProspectiveCollectionAdapterKind.TUSHARE_OBSERVATION
+    ):
+        raise ValueError("rolling windows require the Tushare observation adapter")
     if adapter_kind is not ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE:
         return
     configured_indicators = source_config.get("indicators")
@@ -323,6 +475,16 @@ class ProspectiveCollectionRuntime:
                 );
                 CREATE INDEX IF NOT EXISTS prospective_collection_opportunities_job
                     ON prospective_collection_opportunities(job_id, scheduled_for);
+                CREATE TABLE IF NOT EXISTS prospective_collection_usage_records (
+                    record_id TEXT PRIMARY KEY,
+                    opportunity_id TEXT NOT NULL UNIQUE
+                        REFERENCES prospective_collection_opportunities(opportunity_id),
+                    job_id TEXT NOT NULL REFERENCES prospective_collection_jobs(job_id),
+                    recorded_at TEXT NOT NULL,
+                    artifact_hash TEXT NOT NULL UNIQUE
+                );
+                CREATE INDEX IF NOT EXISTS prospective_collection_usage_job_time
+                    ON prospective_collection_usage_records(job_id, recorded_at, record_id);
                 """
             )
 
@@ -499,7 +661,11 @@ class ProspectiveCollectionRuntime:
                 )
         else:
             try:
-                snapshot = collector(policy, self.source_config(job_id))
+                snapshot = collector(
+                    policy,
+                    self.source_config(job_id),
+                    claim.scheduled_for,
+                )
                 self._validate_snapshot(
                     snapshot,
                     policy=policy,
@@ -587,9 +753,14 @@ class ProspectiveCollectionRuntime:
                 missed_opportunities=claim.missed_opportunities,
             )
 
-        outcome = "success" if snapshot.coverage_complete else "source_failure"
+        no_data = bool(snapshot.attempts) and all(
+            item.status is DataFetchStatus.NO_DATA for item in snapshot.attempts
+        )
+        outcome = (
+            "success" if snapshot.coverage_complete else "no_data" if no_data else "source_failure"
+        )
         error_kind = None
-        if not snapshot.coverage_complete:
+        if outcome == "source_failure":
             error_kind = next(
                 (item.error_kind for item in snapshot.attempts if item.error_kind is not None),
                 "source_coverage_incomplete",
@@ -619,6 +790,76 @@ class ProspectiveCollectionRuntime:
                 (job_id,),
             ).fetchall()
         return tuple(_opportunity_from_row(row) for row in rows)
+
+    def usage_records(
+        self,
+        job_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> tuple[CollectionUsageRecord, ...]:
+        self.job(job_id)
+        if since is not None:
+            _strict_utc(since, "collection usage since")
+        with self._connect() as connection:
+            if since is None:
+                rows = connection.execute(
+                    """
+                    SELECT artifact_hash FROM prospective_collection_usage_records
+                    WHERE job_id = ? ORDER BY recorded_at, record_id
+                    """,
+                    (job_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT artifact_hash FROM prospective_collection_usage_records
+                    WHERE job_id = ? AND recorded_at >= ?
+                    ORDER BY recorded_at, record_id
+                    """,
+                    (job_id, _timestamp(since)),
+                ).fetchall()
+        return tuple(
+            collection_usage_record_from_dict(
+                self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
+            )
+            for row in rows
+        )
+
+    def usage_summary(
+        self,
+        job_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> dict[str, object]:
+        job = self.job(job_id)
+        records = self.usage_records(job_id, since=since)
+
+        summary_measurements: dict[str, int | None] = {}
+        unknown_measurement_records: dict[str, int] = {}
+        for name in _USAGE_MEASUREMENT_DIMENSIONS:
+            values = tuple(
+                cast(int, value) for item in records if (value := getattr(item, name)) is not None
+            )
+            summary_measurements[name] = None if not values else sum(values)
+            unknown_measurement_records[f"{name}_unknown_records"] = len(records) - len(values)
+
+        latencies = tuple(item.latency_ms for item in records)
+        return {
+            "job_id": job_id,
+            "since": None if since is None else _timestamp(since),
+            "record_count": len(records),
+            "success_count": sum(item.outcome in {"success", "no_data"} for item in records),
+            "no_data_count": sum(item.outcome == "no_data" for item in records),
+            "failure_count": sum(
+                item.outcome in {"source_failure", "collector_failure"} for item in records
+            ),
+            "collection_attempt_count": sum(item.collection_attempt_count for item in records),
+            **summary_measurements,
+            **unknown_measurement_records,
+            "average_latency_ms": (None if not latencies else sum(latencies) / len(latencies)),
+            "incremental_cost_microusd": None,
+            "cost_basis": _usage_cost_basis(job.adapter_kind),
+        }
 
     def health(self, job_id: str, *, now: datetime) -> CollectionHealth:
         _strict_utc(now, "prospective collection health time")
@@ -653,7 +894,8 @@ class ProspectiveCollectionRuntime:
             ),
             last_outcome=cast(str | None, row["last_outcome"]),
             last_error_kind=last_error_kind,
-            successful_opportunities=counts["success"],
+            successful_opportunities=counts["success"] + counts["no_data"],
+            no_data_opportunities=counts["no_data"],
             source_failures=counts["source_failure"],
             collector_failures=counts["collector_failure"],
             cancelled_opportunities=counts["cancelled"],
@@ -728,12 +970,13 @@ class ProspectiveCollectionRuntime:
             raise ValueError("collector must persist its immutable Data Snapshot")
         if snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
             raise ValueError("collector Snapshot must use the prospective PIT lane")
+        expected_window_start, expected_parameters = policy.resolve_query(scheduled_for)
         if (
             snapshot.query.capability is not policy.capability
             or snapshot.query.source_policy_id != policy.policy_id
             or snapshot.query.sources != policy.sources
-            or snapshot.query.window_start != policy.window_start
-            or snapshot.query.parameters != policy.parameters
+            or snapshot.query.window_start != expected_window_start
+            or snapshot.query.parameters != expected_parameters
         ):
             raise ValueError("collector Snapshot does not match its collection policy")
         if (
@@ -1046,6 +1289,28 @@ class ProspectiveCollectionRuntime:
                     missed_opportunities=missed_opportunities,
                     error_kind="collection_lease_lost",
                 )
+            opportunity = connection.execute(
+                """
+                SELECT started_at, attempt_count
+                FROM prospective_collection_opportunities
+                WHERE opportunity_id = ? AND lease_token = ?
+                """,
+                (opportunity_id, lease_token),
+            ).fetchone()
+            if opportunity is None:
+                raise RuntimeError("prospective collection opportunity lease is missing")
+            usage = self._build_usage_record(
+                job=job,
+                opportunity_id=opportunity_id,
+                scheduled_for=scheduled_for,
+                outcome=outcome,
+                collection_attempt_count=cast(int, opportunity["attempt_count"]),
+                started_at=_datetime(cast(str, opportunity["started_at"]), "started_at"),
+                completed_at=completed_at,
+                snapshot_id=snapshot_id,
+                error_kind=error_kind,
+            )
+            usage_artifact = self.store.artifacts.put_json(usage.to_dict())
             failures = cast(int, row["consecutive_failures"]) + 1 if failed else 0
             backoff_until = (
                 now + timedelta(seconds=_backoff_seconds(policy, failures)) if failed else None
@@ -1069,6 +1334,20 @@ class ProspectiveCollectionRuntime:
                     error_kind,
                     opportunity_id,
                     lease_token,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO prospective_collection_usage_records(
+                    record_id, opportunity_id, job_id, recorded_at, artifact_hash
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    usage.record_id,
+                    opportunity_id,
+                    job.job_id,
+                    _timestamp(usage.recorded_at),
+                    usage_artifact.content_hash,
                 ),
             )
             connection.execute(
@@ -1098,6 +1377,95 @@ class ProspectiveCollectionRuntime:
             data_snapshot_id=snapshot_id,
             missed_opportunities=missed_opportunities,
             error_kind=error_kind,
+            usage_record_id=usage.record_id,
+        )
+
+    def _build_usage_record(
+        self,
+        *,
+        job: ProspectiveCollectionJob,
+        opportunity_id: str,
+        scheduled_for: datetime,
+        outcome: str,
+        collection_attempt_count: int,
+        started_at: datetime,
+        completed_at: datetime,
+        snapshot_id: str | None,
+        error_kind: str | None,
+    ) -> CollectionUsageRecord:
+        provider_attempt_count: int | None = None
+        request_count: int | None = None
+        page_count: int | None = None
+        response_bytes: int | None = None
+        raw_artifact_bytes: int | None = None
+        received_records: int | None = None
+        accepted_records: int | None = None
+        if snapshot_id is not None:
+            snapshot = self.store.get(snapshot_id)
+            provider_attempt_count = len(snapshot.attempts)
+            received_records = sum(item.received_count for item in snapshot.attempts)
+            accepted_records = sum(item.accepted_count for item in snapshot.attempts)
+            raw_payloads: list[bytes] = []
+            for attempt in snapshot.attempts:
+                if attempt.raw_response_hash is None:
+                    continue
+                artifact = self.store.artifacts.get(
+                    attempt.raw_response_hash,
+                    media_type="application/octet-stream",
+                )
+                raw_payloads.append(artifact.path.read_bytes())
+            raw_artifact_bytes = sum(len(item) for item in raw_payloads)
+            if (
+                job.adapter_kind is ProspectiveCollectionAdapterKind.TUSHARE_OBSERVATION
+                and len(raw_payloads) == 1
+                and snapshot.attempts[0].provider_id == "tushare-observation"
+            ):
+                tushare_usage = summarize_tushare_observation_capture_usage(raw_payloads[0])
+                request_count = tushare_usage.request_count
+                page_count = tushare_usage.request_count
+                response_bytes = tushare_usage.response_bytes
+        core: dict[str, object] = {
+            "schema_version": PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA,
+            "opportunity_id": opportunity_id,
+            "job_id": job.job_id,
+            "scheduled_for": _timestamp(scheduled_for),
+            "adapter_kind": job.adapter_kind.value,
+            "outcome": outcome,
+            "collection_attempt_count": collection_attempt_count,
+            "provider_attempt_count": provider_attempt_count,
+            "request_count": request_count,
+            "page_count": page_count,
+            "response_bytes": response_bytes,
+            "raw_artifact_bytes": raw_artifact_bytes,
+            "received_records": received_records,
+            "accepted_records": accepted_records,
+            "latency_ms": (completed_at - started_at).total_seconds() * 1000,
+            "incremental_cost_microusd": None,
+            "cost_basis": _usage_cost_basis(job.adapter_kind),
+            "error_kind": error_kind,
+            "recorded_at": _timestamp(completed_at),
+            "execution_capability": False,
+        }
+        return CollectionUsageRecord(
+            record_id=f"prospective-collection-usage-{canonical_hash(core)}",
+            opportunity_id=opportunity_id,
+            job_id=job.job_id,
+            scheduled_for=scheduled_for,
+            adapter_kind=job.adapter_kind,
+            outcome=outcome,
+            collection_attempt_count=collection_attempt_count,
+            provider_attempt_count=provider_attempt_count,
+            request_count=request_count,
+            page_count=page_count,
+            response_bytes=response_bytes,
+            raw_artifact_bytes=raw_artifact_bytes,
+            received_records=received_records,
+            accepted_records=accepted_records,
+            latency_ms=(completed_at - started_at).total_seconds() * 1000,
+            incremental_cost_microusd=None,
+            cost_basis=_usage_cost_basis(job.adapter_kind),
+            error_kind=error_kind,
+            recorded_at=completed_at,
         )
 
     def _release_staged_failure(
@@ -1229,6 +1597,84 @@ def prospective_collection_job_from_dict(value: object) -> ProspectiveCollection
     return job
 
 
+def collection_usage_record_from_dict(value: object) -> CollectionUsageRecord:
+    if not isinstance(value, dict):
+        raise ValueError("Collection Usage Record must be an object")
+    raw = cast(dict[object, object], value)
+    if not all(isinstance(key, str) for key in raw):
+        raise ValueError("Collection Usage Record must be an object")
+    payload = cast(dict[str, object], raw)
+    base_fields = {
+        "schema_version",
+        "record_id",
+        "opportunity_id",
+        "job_id",
+        "scheduled_for",
+        "adapter_kind",
+        "outcome",
+        "collection_attempt_count",
+        "provider_attempt_count",
+        "request_count",
+        "page_count",
+        "response_bytes",
+        "raw_artifact_bytes",
+        "received_records",
+        "accepted_records",
+        "latency_ms",
+        "error_kind",
+        "recorded_at",
+        "execution_capability",
+    }
+    cost_fields = {"incremental_cost_microusd", "cost_basis"}
+    schema_version = _string(payload, "schema_version")
+    if schema_version == PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA:
+        expected = base_fields | cost_fields
+    elif schema_version == PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1:
+        expected = base_fields if "cost_basis" not in payload else base_fields | cost_fields
+    else:
+        raise ValueError("unsupported Collection Usage Record schema")
+    if set(payload) != expected:
+        raise ValueError("Collection Usage Record fields are not closed")
+
+    def optional_integer(name: str) -> int | None:
+        raw_value = payload.get(name)
+        return None if raw_value is None else _integer(payload, name)
+
+    error_kind = payload.get("error_kind")
+    if error_kind is not None and not isinstance(error_kind, str):
+        raise ValueError("Collection Usage Record error_kind must be text or null")
+    record = CollectionUsageRecord(
+        schema_version=schema_version,
+        record_id=_string(payload, "record_id"),
+        opportunity_id=_string(payload, "opportunity_id"),
+        job_id=_string(payload, "job_id"),
+        scheduled_for=_datetime(_string(payload, "scheduled_for"), "scheduled_for"),
+        adapter_kind=ProspectiveCollectionAdapterKind(_string(payload, "adapter_kind")),
+        outcome=_string(payload, "outcome"),
+        collection_attempt_count=_integer(payload, "collection_attempt_count"),
+        provider_attempt_count=optional_integer("provider_attempt_count"),
+        request_count=optional_integer("request_count"),
+        page_count=optional_integer("page_count"),
+        response_bytes=optional_integer("response_bytes"),
+        raw_artifact_bytes=optional_integer("raw_artifact_bytes"),
+        received_records=optional_integer("received_records"),
+        accepted_records=optional_integer("accepted_records"),
+        latency_ms=_number(payload, "latency_ms"),
+        incremental_cost_microusd=(
+            optional_integer("incremental_cost_microusd")
+            if "incremental_cost_microusd" in payload
+            else None
+        ),
+        cost_basis=_string(payload, "cost_basis") if "cost_basis" in payload else None,
+        error_kind=error_kind,
+        recorded_at=_datetime(_string(payload, "recorded_at"), "recorded_at"),
+        execution_capability=_boolean(payload, "execution_capability"),
+    )
+    if record.to_dict() != payload:
+        raise ValueError("Collection Usage Record is not canonical")
+    return record
+
+
 def _opportunity_from_row(row: sqlite3.Row) -> CollectionOpportunity:
     return CollectionOpportunity(
         opportunity_id=cast(str, row["opportunity_id"]),
@@ -1262,6 +1708,7 @@ def _run_result(
     data_snapshot_id: str | None = None,
     missed_opportunities: int = 0,
     error_kind: str | None = None,
+    usage_record_id: str | None = None,
 ) -> CollectionRunResult:
     return CollectionRunResult(
         job_id=job_id,
@@ -1271,6 +1718,7 @@ def _run_result(
         data_snapshot_id=data_snapshot_id,
         missed_opportunities=missed_opportunities,
         error_kind=error_kind,
+        usage_record_id=usage_record_id,
     )
 
 

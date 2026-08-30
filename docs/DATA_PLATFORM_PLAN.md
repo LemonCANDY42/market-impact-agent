@@ -302,12 +302,18 @@ pass its engineering acceptance before the Harness may expose it. The only remai
 question is whether the current account enables an optional freshness/product tier required by a
 registration.
 
+The official Python examples and direct-HTTP contract address the same token-authenticated service
+and permissions. The project keeps its direct HTTPS Adapter because it makes exact response bytes,
+pagination, API errors, replay, and token isolation part of the Harness contract. The SDK adds a
+convenience wrapper but no additional news route, entitlement, or push delivery, so it is not
+installed as a runtime dependency.
+
 #### Source and capability findings
 
 | Decision input | Minimal evidence on 2026-08-28 | Implementation decision |
 | --- | --- | --- |
 | Official event fact | The CSRC route already has three actual receipts and deterministic replay | Keep direct CSRC as the first accepted event route; add only checkpoint-relevant official routes |
-| Established news | The current Tushare token returned eight bounded `news` rows; `major_news` returned API success with an explicit empty result for the registered day; direct Xinhua RSS also responded, while a public Bloomberg RSS URL was technically reachable but its public terms do not authorize the planned automated database | Implement Tushare news as the first broad private route with upstream `src` identity and receipt time preserved; preserve no-data distinctly from failure; use direct/licensed publisher routes only where their retention terms pass; do not persist Bloomberg's public RSS |
+| Established news | The purchased news entitlement produced non-empty bounded samples for Sina, WallstreetCN, 10jqka, Eastmoney, Jinrongjie, CLS, Yicai, and `major_news`; Yuncaijing and Fenghuang returned valid empty 24-hour and seven-day probes; `anns_d` returned explicit permission denial | Run the seven non-empty short-news sources at 2- or 5-minute rolling cadence and `major_news` at 15 minutes; preserve upstream `src`, actual receipt, exact response identity, `no_data`, and failures distinctly; direct/licensed publisher routes remain separate authority/corroboration paths |
 | Market/index context | `index_daily` returned the requested three sessions; prior token-backed daily/adjustment/limit bundles already replay deterministically | Implement the Tushare EOD/index route first; keep raw executable prices separate from as-of adjusted research views |
 | Low-latency market context | `rt_min_daily` and `rt_sw_k` returned explicit permission errors for the current token | Record these two capabilities as not enabled now; enable the relevant Tushare real-time product or a later licensed execution feed before a registration requires intraday freshness |
 | Tradable universe and exposure | `etf_basic` returned 30 listed CSI 300-linked ETFs; effective index/industry membership interfaces expose listing or `in_date`/`out_date` fields | Build effective-dated ETF/instrument and exposure dimensions from Tushare; reject mappings with missing lifecycle or taxonomy version |
@@ -337,7 +343,8 @@ Primary references used by this gate are the official Tushare contracts for
 [`cn_schedule`](https://tushare.pro/document/2?doc_id=461),
 [`index_member_all`](https://tushare.pro/document/2?doc_id=335),
 [`etf_basic`](https://tushare.pro/document/2?doc_id=385),
-[`news`](https://tushare.pro/document/2?doc_id=143), and the separately entitled
+[`news`](https://tushare.pro/document/2?doc_id=143),
+[`major_news`](https://tushare.pro/document/2?doc_id=195), and the separately entitled
 [`rt_min_daily`](https://tushare.pro/document/2?doc_id=457); the
 [SSE market-data product boundary](https://english.sse.com.cn/markets/dataservice/products/),
 [NBS release calendar](https://www.stats.gov.cn/xxgk/sjfb/fbrcb/), and
@@ -455,7 +462,7 @@ flowchart LR
 **What it delivers:** one content-identified registration for two or three checkpoints with
 different event mechanisms. It fixes the decision cutoff construction, capability matrix, route and
 source-diversity minima, cadence/gap/freshness rules, target venue and allowed instrument classes,
-candidate horizon set, paired arms, three replicates per arm, aggregate model-cost ceiling, hidden-
+candidate horizon set, paired arms, replicate rule, aggregate model-cost ceiling, hidden-
 outcome rule, and exact stop/go criteria.
 
 **Blocked by:** PDI-00.
@@ -477,16 +484,23 @@ three replicates per arm, shared USD 20.00 ceiling, hidden outcomes, and process
 scope are fixed. This completion authorizes source acquisition against the registration; it does not
 authorize a model call or outcome opening.
 
+**Superseded for new runs 2026-08-30:** v2 first separated the required actual-receipt trigger from
+optional observed information. V3 registration
+`prospective-diagnostic-registration-7217f22392ac715e80550ccb75a23faff9b23aadd94db6c13e494033c5c273b0`
+preserves that boundary and the USD 20 ceiling, but runs two complete control/treatment pairs first
+and requires the third complete pair only when either arm's first two decisions disagree. It never
+runs one arm alone as a tie-breaker.
+
 ### Stage 2 — Accept prospective source slices and measure coverage
 
 The route Tasks may proceed independently after PDI-01. A checkpoint may bind more than one route,
 but an implicit Provider fallback is never allowed.
 
-**Route implementation checkpoints, 2026-08-28 through 2026-08-29:** the `tushare-observation`
-Provider has fourteen separate official-document-bound configurations. Every one completed a real
-token-backed capture, private Journal/store write, exact stored-bundle replay in an isolated store,
-and all seven generic
-source-route gates. The accepted samples covered index and ETF prices, calendar, ETF/stock identity,
+**Route implementation checkpoints, 2026-08-28 through 2026-08-30:** the `tushare-observation`
+Provider has twenty-three separate official-document-bound configurations. Twenty-two unique routes
+completed a real token-backed capture, private Journal/store write, exact stored-bundle replay in an
+isolated store, and all seven generic source-route gates; two valid-empty short-news routes remain
+inactive. The accepted samples covered index and ETF prices, calendar, ETF/stock identity,
 daily limits, SW2021 classification and membership, exchange margin, the economic release schedule,
 analyst forecasts, Sina-source Tushare news, and one representative SSE and SZSE exchange-PCF route.
 Report identities and row counts are recorded in `TUSHARE_DATA.md`; licensed rows remain private.
@@ -620,9 +634,9 @@ the Agent may form an evidence-linked Expectation Delta.
 
 #### PDI-17 — Freeze observed checkpoint Snapshot sets with explicit coverage gaps
 
-**Blocked by:** a first-eligible trigger under the v2 registration. PDI-10 through PDI-16 remain
+**Blocked by:** a first-eligible trigger under the v3 registration. PDI-10 through PDI-16 remain
 coverage and semantic-quality dependencies, but optional slots do not all have to complete before a
-process-diagnostic Judgment Run. As of 2026-08-29, no post-v2 trigger Snapshot Set is frozen and no
+process-diagnostic Judgment Run. No post-v3-admission trigger Snapshot Set is frozen and no
 paired Agent model call is authorized.
 
 **Acceptance:** every present capability has a structurally complete prospective Data Snapshot with
@@ -681,6 +695,26 @@ actual-receipt Snapshots with no miss or failure. All six tracer gates passed in
 `prospective-collection-tracer-report-4859c478c9d778bf912f038cc37a9d068db23e3cbe2098e0dac3663c73b59454`.
 This accepts PDI-20 at repository/runtime level only. No host service was installed, so PDI-21
 remains closed; the report explicitly carries no historical-PIT, model, or execution authority.
+
+**Rolling-news extension, 2026-08-30:** Collection Policy v2 can resolve `start_date` and
+`end_date` deterministically from each logical due time in a registered timezone. Seven non-empty
+Tushare short-news sources run every 2 or 5 minutes with overlapping 10- or 20-minute windows;
+`major_news` runs every 15 minutes with a 2-hour window. The official API is pull-only, so this is
+low-latency polling plus a later event Wake, not a claimed push stream. A valid empty response is
+terminal healthy `no_data`; permission, contract, transport, and replay failures remain failures.
+
+Each terminal opportunity appends a content-identified Collection Usage Record. Tushare capture
+artifacts prove request/page/response-byte totals, row count, attempts, and latency; health output
+reports rolling-24-hour and lifetime totals and per-opportunity averages. Every nullable measurement
+also has an `*_unknown_records` count, so a total remains `null` when all records are unknown and an
+observed zero stays distinguishable. Tushare uses a null incremental cost with
+`flat_subscription_not_allocated_per_request`; official CSRC and NBS routes use `not_applicable`,
+and a future cost-relevant route without evidence must use `unknown`. A healthy terminal `no_data`
+is successful for both one-shot commands. Rolling query resolution is currently accepted only for
+Tushare observation Jobs; CSRC and NBS registrations reject it until their collectors can prove
+equivalent execution. Usage Record v2 adds the cost fields while the reader preserves original v1
+and short transition artifacts without changing their content identities. These operational records
+do not replace the model Usage Ledger.
 
 Register and invoke Jobs through the same Harness surface:
 
@@ -832,7 +866,7 @@ selected at its barrier. Optional slot absence is retained, not fabricated.
 
 #### PDI-31 — Qualify two or three registered checkpoints
 
-Recompute the v2 registration from immutable artifacts. Required trigger, cutoff, selected-Snapshot
+Recompute the v3 registration from immutable artifacts. Required trigger, cutoff, selected-Snapshot
 integrity, tool binding, horizon, target scope, model profile, cost, and future-outcome gates must
 pass before a model process starts. Optional expectation, market, exposure, positioning, macro, and
 corroboration gaps are reported as `nonblocking_information_gaps` and passed to both paired arms.
@@ -846,21 +880,30 @@ Snapshot Set's reconciliation time.
 
 **Blocked by:** PDI-30.
 
-#### PDI-32 — Run three paired replicates per checkpoint
+#### PDI-32 — Run adaptive two-then-optional-third paired replicates per checkpoint
 
 Execute the frozen arms under one Provider Profile and shared cost ceiling. Report terminal status,
 tool use, citations, abstention, candidates, event-identity/expectation/horizon blockers, decision
 agreement, latency, and the reconciled Usage Ledger. Apply the PDI-01 stop rule immediately; do not
 expand to more checkpoints when the same input blockers persist.
 
-The implemented Decision Run Manifest accepts only six canonically indexed runs whose Judgment
+Run two complete control/treatment pairs first. If both arms' first two terminal decisions agree
+(same abstention, or the same target and direction), stop at four runs. If either arm disagrees,
+run the third complete pair and apply treatment two-of-three agreement; never execute a third run
+for only one arm. Each new Judgment also reports top-level `decision_confidence` in `[0,1]`.
+Confidence is observational only: analyze first-two agreement, majority/minority confidence gaps,
+third-pair confidence, and later outcome calibration separately per model. It cannot change target,
+position size, Query Gate, approval, or hard policy.
+
+The implemented Decision Run Manifest v2 accepts four or six canonically indexed runs whose Judgment
 artifacts prove the planned arm surface and exact Provider/model. The registered alias resolves to
 one Harness-bundled Provider Profile, while treatment preserves the control surface and adds
 routed-method Skills. Each metrics payload is content-identified and must match the final
 `judgment.validated` Journal event referenced by its Judgment; mutable caller totals, post-hoc arm
 relabeling, reused runs, and unsealed cost evidence force abstention. The Manifest does not prove its
 own run occurrence: mock paper admission must use composition-root-bound Agent runtime authorities
-to reopen all six source Run Records, complete Journal chains, terminal/transcript/raw/tool-result
+to reopen all four or six source Run Records, complete Journal chains,
+terminal/transcript/raw/tool-result
 artifacts, and Journal-recomputed metrics before accepting the immutable copy. A proposed Signal is
 reconstructed from the exact agreeing treatment Judgments and must cover the entire Order lifetime. Runs must start after Query Gate
 evaluation, while Signal and Order creation must not predate the resulting consensus Manifest.
@@ -872,16 +915,18 @@ can make or abstain from a decision under the information actually observed. Mis
 evaluation dimension, not silently completed. Required-gate failure returns work to its owning data
 or input Task and keeps automatic dispatch closed.
 
-**Route-readiness status, 2026-08-29:** route plan
-`prospective-checkpoint-route-plan-575e81dd6c81648823ae524668fff4d6e2da68f333441e4c27e050839a244244`
+**Route-readiness status, 2026-08-30:** v3 route plan
+`prospective-checkpoint-route-plan-edbac9b9e7d2313fe61e6e0a69810779f109a372f3010c269cc3ca7be0ac1354`
 canonically binds `sqlite_begin_immediate_then_harness_clock_v1`. Any SQLite admission and readiness
 report for the retired pre-protocol plan remain historical rows only and cannot satisfy this plan's
 identity. The plan was durably admitted as
-`prospective-checkpoint-route-admission-0932cbdcec4e0841d25cb0d7cf612f676870afd9bb37a83b13c40b83ab1da538`
-at `2026-08-29T09:03:54.782300Z`; private readiness report
-`prospective-checkpoint-readiness-report-42dbf28390bf3324918cfaa12d1a5989e2f9af30516e480a55ba518d461804ae`
-then found one operational policy checkpoint waiting for a post-admission trigger, zero candidates,
-and unconfigured issuer and macro trigger routes. CSRC still cannot be relabeled as `issuer_event`
+`prospective-checkpoint-route-admission-a05108e79d88f68cf3ed08ac1d918d7cffdf2c8de55869f82ab3b226f9fe0eee`
+at `2026-08-30T00:16:35.798593Z`; private readiness report
+`prospective-checkpoint-readiness-report-40114fdf675cb49a0fec1aef90d64e9e695f958fb36e55a0d67b4f25acb7a1cc`
+then found one operational policy checkpoint with CSRC and two-minute Tushare/Sina trigger Jobs and
+five post-admission content versions. Manual semantic inspection found none eligible under the
+registered capital-market-policy or market-structure-change rule, so no selection or model authority
+was created. Issuer and macro trigger routes remain unconfigured. CSRC still cannot be relabeled as `issuer_event`
 or `official_macro_release`. No model call, Snapshot Set, Evidence Pack, Query Gate pass, paper
 admission, or execution authority was created.
 
@@ -946,11 +991,12 @@ larger prospective study is justified; a pass authorizes that next research regi
 - Attention Watch provides durable `run_due` state and a local pending/delivered outbox, but no
   installed scheduler or Agent-run dispatcher. An external supervisor must call it, and only the
   new-observation-version trigger is accepted.
-- CSRC and fourteen Tushare route-level contracts are accepted for prospective private research, but
+- CSRC and twenty-two unique Tushare route-level contracts are accepted for prospective private
+  research, but
   this is not a globally complete A-share decision feed. Registered direct-publisher coverage,
   total-return/as-of price semantics, then-effective taxonomy and tradability, positioning units and
   cadence, original macro releases and revision lineage, prior-expectation population/units/
-  consensus, and the first post-v2 checkpoint-barrier reconciliation remain open. These gaps bound
+  consensus, and the first post-v3 checkpoint-barrier reconciliation remain open. These gaps bound
   data-quality and execution claims; optional gaps do not globally block prospective Agent research.
 - Strict historical qualification remains unchanged until new historically authoritative records
   are materialized and requalified.

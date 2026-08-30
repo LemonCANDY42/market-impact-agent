@@ -15,7 +15,12 @@
     "strategy_promotion_claim", "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.decision-run-manifest.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.decision-run-manifest.v1",
+        "market-impact.decision-run-manifest.v2"
+      ]
+    },
     "manifest_id": {"type": "string", "pattern": "^decision-run-manifest-[0-9a-f]{64}$"},
     "registration_id": {"type": "string", "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"},
     "registration_hash": {"$ref": "#/$defs/sha256"},
@@ -29,8 +34,16 @@
     "control_arm": {"const": "structured_agent_core"},
     "treatment_arm": {"const": "structured_agent_plus_routed_methods"},
     "replicates_per_arm": {"const": 3},
+    "replicates_executed_per_arm": {"type": "integer", "minimum": 2, "maximum": 3},
+    "replicate_stop_reason": {
+      "enum": [
+        "first_two_agree_in_both_arms",
+        "third_pair_required_after_first_two_disagreement"
+      ]
+    },
+    "confidence_observation": {"$ref": "#/$defs/confidence_observation"},
     "assessments": {
-      "type": "array", "minItems": 6, "maxItems": 6,
+      "type": "array", "minItems": 4, "maxItems": 6,
       "items": {"$ref": "#/$defs/assessment"}
     },
     "disposition": {"enum": ["propose", "abstain"]},
@@ -49,6 +62,16 @@
     "strategy_promotion_claim": {"const": false},
     "execution_capability": {"const": false}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": "market-impact.decision-run-manifest.v1"}}},
+      "then": {"properties": {"assessments": {"minItems": 6, "maxItems": 6}}}
+    },
+    {
+      "if": {"properties": {"schema_version": {"const": "market-impact.decision-run-manifest.v2"}}},
+      "then": {"required": ["replicates_executed_per_arm", "replicate_stop_reason", "confidence_observation"]}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "judgment_id": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"},
@@ -78,7 +101,50 @@
         "run_validation_evidence_hash": {"$ref": "#/$defs/nullable_sha256"},
         "estimated_cost_microusd": {"type": ["integer", "null"], "minimum": 0},
         "vote_target_id": {"type": ["string", "null"]},
-        "vote_direction": {"enum": ["up", "down", null]}
+        "vote_direction": {"enum": ["up", "down", null]},
+        "decision_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    },
+    "confidence_by_arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structured_agent_core", "structured_agent_plus_routed_methods"],
+      "properties": {
+        "structured_agent_core": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "structured_agent_plus_routed_methods": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    },
+    "agreement_by_arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structured_agent_core", "structured_agent_plus_routed_methods"],
+      "properties": {
+        "structured_agent_core": {"type": "boolean"},
+        "structured_agent_plus_routed_methods": {"type": "boolean"}
+      }
+    },
+    "confidence_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope", "reported_count", "missing_count", "first_two_agree_by_arm",
+        "first_two_mean_confidence_by_arm", "overall_mean_confidence_by_arm",
+        "third_pair_confidence_by_arm", "treatment_majority_mean_confidence",
+        "treatment_minority_mean_confidence",
+        "treatment_majority_minus_minority_confidence", "outcome_calibration_status"
+      ],
+      "properties": {
+        "scope": {"const": "observational_only_no_sizing_approval_or_policy_effect"},
+        "reported_count": {"type": "integer", "minimum": 0, "maximum": 6},
+        "missing_count": {"type": "integer", "minimum": 0, "maximum": 6},
+        "first_two_agree_by_arm": {"$ref": "#/$defs/agreement_by_arm"},
+        "first_two_mean_confidence_by_arm": {"$ref": "#/$defs/confidence_by_arm"},
+        "overall_mean_confidence_by_arm": {"$ref": "#/$defs/confidence_by_arm"},
+        "third_pair_confidence_by_arm": {"$ref": "#/$defs/confidence_by_arm"},
+        "treatment_majority_mean_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "treatment_minority_mean_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "treatment_majority_minus_minority_confidence": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+        "outcome_calibration_status": {"const": "pending_registered_outcome_opening"}
       }
     }
   }

@@ -260,6 +260,42 @@ def test_interactive_due_worker_forwards_required_state_budget(
     assert received["maximum_state_bytes"] == 654321
 
 
+@pytest.mark.parametrize("command", ["collection-run-due", "collection-service-run"])
+def test_due_workers_accept_healthy_terminal_no_data(
+    tmp_path: Path,
+    capsys: object,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    def fake_run_due(**_kwargs: Any) -> dict[str, object]:
+        return {
+            "job_count": 1,
+            "results": [{"outcome": "no_data"}],
+            "execution_capability": False,
+        }
+
+    monkeypatch.setattr(cli_module, "run_due_prospective_collection_jobs", fake_run_due)
+    arguments = [
+        "data",
+        command,
+        "--state-root",
+        (tmp_path / "state").as_posix(),
+        "--maximum-state-bytes",
+        "654321",
+    ]
+    if command == "collection-service-run":
+        environment_file = tmp_path / "collection.env"
+        environment_file.write_text("TUSHARE_TOKEN=do-not-print-me\n", encoding="utf-8")
+        environment_file.chmod(0o600)
+        arguments.extend(["--environment-file", environment_file.as_posix()])
+
+    exit_code = main(arguments)
+    output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+
+    assert exit_code == 0
+    assert output["results"] == [{"outcome": "no_data"}]
+
+
 def test_due_workers_reject_nonpositive_state_budget_without_jobs(
     tmp_path: Path,
     capsys: object,

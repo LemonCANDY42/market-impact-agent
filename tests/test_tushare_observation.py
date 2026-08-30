@@ -26,12 +26,14 @@ from market_impact_agent.tushare_observation import (
     TushareObservationSourceConfig,
     load_tushare_observation_capture_bundle,
     load_tushare_observation_source,
+    summarize_tushare_observation_capture_usage,
 )
 
 RETRIEVED = datetime(2026, 8, 28, 8, 0, tzinfo=UTC)
 TOKEN = "tushare-test-token-must-never-appear"
 DOCUMENTATION_IDS = {
     "news": 143,
+    "major_news": 195,
     "index_daily": 95,
     "fund_daily": 127,
     "trade_cal": 26,
@@ -135,6 +137,41 @@ def test_collection_rejects_total_capture_bytes_before_accumulating_pages(
 
     assert capture.coverage_complete is False
     assert capture.error_kind == "capture_size_exceeded"
+
+
+def test_capture_usage_counts_pages_and_network_bytes_without_decoding_content() -> None:
+    config = _configs()[0]
+    parameters = {
+        "start_date": "2026-08-28 07:00:00",
+        "end_date": "2026-08-28 08:00:00",
+    }
+    response = _response(config.fields, [_values(config.api_name, config.fields)])
+    encoded_response = json.dumps(
+        response,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode()
+    provider = TushareObservationProvider(
+        TOKEN,
+        (config,),
+        transport=FakeTransport([response]),
+        clock=lambda: RETRIEVED,
+    )
+    source = _source(provider, config)
+    query = _query(provider, config, parameters)
+    capture = asyncio.run(provider.collect(source_id=config.source_id, parameters=parameters))
+    provider_response = provider.response_from_capture(
+        query=query,
+        source=source,
+        capture=capture,
+    )
+    assert provider_response.raw_payload is not None
+
+    usage = summarize_tushare_observation_capture_usage(provider_response.raw_payload)
+
+    assert usage.request_count == 1
+    assert usage.response_bytes == len(encoded_response)
+    assert usage.capture_bytes == len(provider_response.raw_payload)
 
 
 def _route_specs() -> tuple[
@@ -645,12 +682,14 @@ def test_checked_in_source_configs_are_canonical_schema_valid_and_secret_free() 
     paths = sorted(Path("examples/providers").glob("tushare-observation-*.json"))
 
     configs = tuple(load_tushare_observation_source(path) for path in paths)
-    assert len(configs) == len(_route_specs())
-    assert {item.api_name for item in configs} == {spec[0] for spec in _route_specs()}
-    assert {item.api_name: item.documentation_url for item in configs} == {
-        api_name: f"https://tushare.pro/document/2?doc_id={doc_id}"
-        for api_name, doc_id in DOCUMENTATION_IDS.items()
-    }
+    assert len(configs) >= len(_route_specs())
+    assert {spec[0] for spec in _route_specs()} <= {item.api_name for item in configs}
+    assert all(
+        item.documentation_url
+        == f"https://tushare.pro/document/2?doc_id={DOCUMENTATION_IDS[item.api_name]}"
+        for item in configs
+    )
+    assert len({item.source_id for item in configs}) == len(configs)
     assert all("token" not in path.read_text(encoding="utf-8").casefold() for path in paths)
 
 
@@ -749,6 +788,40 @@ def test_no_data_and_permission_denied_are_distinct_and_token_is_redacted() -> N
     assert denied.error_kind == "permission_denied"
     assert TOKEN not in repr(permission_provider)
     assert TOKEN not in repr(denied)
+
+
+def test_major_news_accepts_documented_datetime_window_parameters() -> None:
+    config = load_tushare_observation_source(
+        Path("examples/providers/tushare-observation-major-news-v1.json")
+    )
+    transport = FakeTransport(
+        [
+            _response(
+                config.fields,
+                [["Example", "Licensed body", "2026-08-28 07:00:00", "Example Wire"]],
+            )
+        ]
+    )
+    provider = TushareObservationProvider(
+        TOKEN,
+        (config,),
+        transport=transport,
+        clock=lambda: RETRIEVED,
+    )
+
+    capture = asyncio.run(
+        provider.collect(
+            source_id=config.source_id,
+            parameters={
+                "start_date": "2026-08-28 06:00:00",
+                "end_date": "2026-08-28 08:00:00",
+            },
+        )
+    )
+
+    assert capture.coverage_complete is True
+    assert capture.error_kind is None
+    assert len(transport.requests) == 1
 
 
 def test_provider_fails_closed_for_malformed_duplicate_and_truncated_pages() -> None:

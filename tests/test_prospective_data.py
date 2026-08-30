@@ -35,6 +35,8 @@ from market_impact_agent.observations import (
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
+    ProspectiveRollingWindow,
+    prospective_collection_policy_from_dict,
 )
 from market_impact_agent.runtime_store import ArtifactStore
 
@@ -166,6 +168,38 @@ def test_policy_is_content_identified_and_schema_valid() -> None:
 
     assert policy.policy_id == policy.expected_policy_id
     assert different_scope.policy_id != policy.policy_id
+    assert (
+        validate_agent_contract(policy.to_dict(), "prospective-collection-policy.schema.json") == ()
+    )
+
+
+def test_rolling_policy_resolves_each_due_time_without_mutating_its_identity() -> None:
+    rolling = ProspectiveRollingWindow(
+        lookback_seconds=600,
+        timezone="Asia/Shanghai",
+    )
+    policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        sources=(_source(),),
+        window_start=PUBLISHED - timedelta(hours=1),
+        parameters={},
+        poll_interval_seconds=120,
+        maximum_gap_seconds=360,
+        rolling_window=rolling,
+    )
+
+    window_start, parameters = policy.resolve_query(FIRST_RECEIPT)
+
+    assert window_start == FIRST_RECEIPT - timedelta(minutes=10)
+    assert parameters == {
+        "start_date": "2026-08-28 13:50:00",
+        "end_date": "2026-08-28 14:00:00",
+    }
+    assert policy.matches_snapshot_query(
+        window_start=window_start,
+        parameters=parameters,
+    )
+    assert prospective_collection_policy_from_dict(policy.to_dict()) == policy
     assert (
         validate_agent_contract(policy.to_dict(), "prospective-collection-policy.schema.json") == ()
     )

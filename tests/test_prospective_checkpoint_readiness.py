@@ -32,7 +32,7 @@ from market_impact_agent.prospective_diagnostic import (
 )
 
 ROOT = Path(__file__).parents[1]
-REGISTRATION_PATH = ROOT / "examples/research/prospective-diagnostic-registration-v2.json"
+REGISTRATION_PATH = ROOT / "examples/research/prospective-diagnostic-registration-v3.json"
 JOB_ID = "prospective-collection-job-" + "a" * 64
 POLICY_ID = "prospective-collection-policy-" + "b" * 64
 REPORT_ID = "source-route-acceptance-report-" + "c" * 64

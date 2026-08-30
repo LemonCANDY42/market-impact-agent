@@ -23,6 +23,7 @@ from market_impact_agent.prospective_data import (
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
@@ -496,11 +497,11 @@ def reconcile_prospective_checkpoint_snapshot_set(
         raise ValueError("checkpoint barrier must follow prospective registration")
     if reconciled_at < barrier_at:
         raise ValueError("checkpoint reconciliation cannot precede the barrier")
-    if (
-        allow_partial
-        and registration.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2
-    ):
-        raise ValueError("partial checkpoint reconciliation requires a v2 registration")
+    if allow_partial and registration.schema_version not in {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    }:
+        raise ValueError("partial checkpoint reconciliation requires a v2 or v3 registration")
     checkpoint = registration.checkpoint(checkpoint_key)
     selection_keys = tuple((item.capability, item.route_kind) for item in selections)
     if len(selection_keys) != len(set(selection_keys)):

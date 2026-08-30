@@ -1,6 +1,6 @@
 {
   "schema_version": "market-impact.prospective-checkpoint-route-plan.v1",
-  "registration_id": "prospective-diagnostic-registration-19ef4193130c0121527a75f3235505c4eec708495e8848588e8ac344e90bc426",
+  "registration_id": "prospective-diagnostic-registration-7217f22392ac715e80550ccb75a23faff9b23aadd94db6c13e494033c5c273b0",
   "admission_timing_protocol": "sqlite_begin_immediate_then_harness_clock_v1",
   "bindings": [
     {
@@ -14,6 +14,12 @@
       "capability": "market_context",
       "route_kind": "market_index_price",
       "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-c2c038492f381993183387aca74a5852cf52a731c917012e2b6bb467da222396"
     },
     {
       "checkpoint_key": "next-a-share-policy-event",
@@ -49,5 +55,5 @@
   "historical_pit_claim": false,
   "model_calls_authorized": false,
   "execution_capability": false,
-  "plan_id": "prospective-checkpoint-route-plan-575e81dd6c81648823ae524668fff4d6e2da68f333441e4c27e050839a244244"
+  "plan_id": "prospective-checkpoint-route-plan-edbac9b9e7d2313fe61e6e0a69810779f109a372f3010c269cc3ca7be0ac1354"
 }

@@ -22,7 +22,8 @@
     "schema_version": {
       "enum": [
         "market-impact.prospective-diagnostic-registration.v1",
-        "market-impact.prospective-diagnostic-registration.v2"
+        "market-impact.prospective-diagnostic-registration.v2",
+        "market-impact.prospective-diagnostic-registration.v3"
       ]
     },
     "registration_id": {
@@ -40,6 +41,10 @@
       "const": ["structured_agent_core", "structured_agent_plus_routed_methods"]
     },
     "replicates_per_arm": {"const": 3},
+    "minimum_replicates_per_arm": {"const": 2},
+    "replicate_schedule_rule": {
+      "const": "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
+    },
     "model_profile_id": {"type": "string", "minLength": 1},
     "aggregate_model_cost_limit_usd": {
       "type": "string",
@@ -90,6 +95,35 @@
         }
       },
       "then": {
+        "properties": {
+          "checkpoints": {
+            "items": {
+              "properties": {
+                "capability_slots": {
+                  "contains": {
+                    "properties": {
+                      "capability": {"const": "event_revelation"},
+                      "applicability": {"const": "required"}
+                    },
+                    "required": ["capability", "applicability"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-diagnostic-registration.v3"
+          }
+        }
+      },
+      "then": {
+        "required": ["minimum_replicates_per_arm", "replicate_schedule_rule"],
         "properties": {
           "checkpoints": {
             "items": {

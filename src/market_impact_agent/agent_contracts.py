@@ -353,11 +353,16 @@ class JudgmentProposal:
     blockers: tuple[str, ...]
     unresolved_questions: tuple[str, ...]
     stopped_reason: str
+    decision_confidence: float | None = None
 
     def __post_init__(self) -> None:
         _nonempty(self.event_id, "event_id")
         _nonempty(self.summary, "summary")
         _nonempty(self.stopped_reason, "stopped_reason")
+        if self.decision_confidence is not None and (
+            not math.isfinite(self.decision_confidence) or not 0 <= self.decision_confidence <= 1
+        ):
+            raise ValueError("decision_confidence must be finite and between zero and one")
         _unique(tuple(item.step_id for item in self.transmission_steps), "step_id")
         _unique(tuple(item.target_id for item in self.candidates), "candidate target_id")
         _unique(self.blockers, "blockers")
@@ -370,7 +375,7 @@ class JudgmentProposal:
             raise ValueError("abstain decisions require at least one blocker")
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "event_id": self.event_id,
             "decision": self.decision.value,
             "summary": self.summary,
@@ -380,6 +385,9 @@ class JudgmentProposal:
             "unresolved_questions": list(self.unresolved_questions),
             "stopped_reason": self.stopped_reason,
         }
+        if self.decision_confidence is not None:
+            payload["decision_confidence"] = self.decision_confidence
+        return payload
 
     def validate_against(self, evidence_pack: EvidencePack) -> None:
         if self.event_id != evidence_pack.event_id:
@@ -650,6 +658,11 @@ def judgment_proposal_from_dict(value: object) -> JudgmentProposal:
             _string_list(payload.get("unresolved_questions"), "unresolved_questions")
         ),
         stopped_reason=_string(payload, "stopped_reason"),
+        decision_confidence=(
+            None
+            if "decision_confidence" not in payload
+            else _number(payload.get("decision_confidence"), "decision_confidence")
+        ),
     )
     if proposal.to_dict() != payload:
         raise ValueError("judgment proposal does not match the canonical contract")

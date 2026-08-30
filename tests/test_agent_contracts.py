@@ -110,6 +110,7 @@ def proposal() -> JudgmentProposal:
         blockers=(),
         unresolved_questions=("duration of the outage",),
         stopped_reason="minimum fact, transmission, counterevidence, and cutoff checks passed",
+        decision_confidence=0.68,
     )
 
 
@@ -188,6 +189,28 @@ def test_judgment_proposal_roundtrips_and_rejects_unknown_evidence() -> None:
     forged = judgment_proposal_from_dict(invalid)
     with pytest.raises(ValueError, match="unknown Evidence Pack reference"):
         forged.validate_against(evidence_pack())
+
+
+def test_decision_confidence_is_optional_for_replay_but_bounded_when_present() -> None:
+    current = proposal()
+    assert judgment_proposal_from_dict(current.to_dict()).decision_confidence == 0.68
+
+    legacy = current.to_dict()
+    legacy.pop("decision_confidence")
+    assert judgment_proposal_from_dict(legacy).decision_confidence is None
+
+    with pytest.raises(ValueError, match="decision_confidence"):
+        JudgmentProposal(
+            event_id=current.event_id,
+            decision=current.decision,
+            summary=current.summary,
+            transmission_steps=current.transmission_steps,
+            candidates=current.candidates,
+            blockers=current.blockers,
+            unresolved_questions=current.unresolved_questions,
+            stopped_reason=current.stopped_reason,
+            decision_confidence=1.01,
+        )
 
 
 def test_abstention_requires_blockers_and_cannot_smuggle_candidates() -> None:

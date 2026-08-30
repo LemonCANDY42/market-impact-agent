@@ -24,13 +24,19 @@ from market_impact_agent.domain import (
     require_aware,
 )
 from market_impact_agent.prospective_diagnostic import (
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     ProspectiveDiagnosticRegistration,
 )
 from market_impact_agent.prospective_execution import ProspectiveExecutionPlan
 from market_impact_agent.prospective_query_gate import ProspectiveQueryGateResult
 from market_impact_agent.runtime_store import RunStatus, runtime_event_from_dict
 
-DECISION_RUN_MANIFEST_SCHEMA = "market-impact.decision-run-manifest.v1"
+DECISION_RUN_MANIFEST_SCHEMA_V1 = "market-impact.decision-run-manifest.v1"
+DECISION_RUN_MANIFEST_SCHEMA_V2 = "market-impact.decision-run-manifest.v2"
+DECISION_RUN_MANIFEST_SCHEMA = DECISION_RUN_MANIFEST_SCHEMA_V1
+_SUPPORTED_DECISION_RUN_MANIFEST_SCHEMAS = frozenset(
+    {DECISION_RUN_MANIFEST_SCHEMA_V1, DECISION_RUN_MANIFEST_SCHEMA_V2}
+)
 DECISION_ADMISSION_SCHEMA = "market-impact.decision-admission.v1"
 DECISION_CLAIM_SCOPE = "execution_diagnostic_only_no_alpha_or_live_claim"
 
@@ -70,6 +76,7 @@ class DecisionRunAssessment:
     estimated_cost_microusd: int | None
     vote_target_id: str | None
     vote_direction: CandidateDirection | None
+    decision_confidence: float | None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -88,6 +95,7 @@ class DecisionRunAssessment:
             "estimated_cost_microusd": self.estimated_cost_microusd,
             "vote_target_id": self.vote_target_id,
             "vote_direction": (None if self.vote_direction is None else self.vote_direction.value),
+            "decision_confidence": self.decision_confidence,
         }
 
 
@@ -115,6 +123,8 @@ class DecisionRunManifest:
     total_estimated_cost_microusd: int
     blockers: tuple[str, ...]
     created_at: datetime
+    replicates_executed_per_arm: int = 3
+    replicate_stop_reason: str = "fixed_three_paired_replicates"
     claim_scope: str = DECISION_CLAIM_SCOPE
     historical_pit_claim: bool = False
     strategy_promotion_claim: bool = False
@@ -122,7 +132,7 @@ class DecisionRunManifest:
     schema_version: str = DECISION_RUN_MANIFEST_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != DECISION_RUN_MANIFEST_SCHEMA:
+        if self.schema_version not in _SUPPORTED_DECISION_RUN_MANIFEST_SCHEMAS:
             raise ValueError("unsupported Decision Run Manifest schema")
         _prefixed_hash(
             self.registration_id,
@@ -149,8 +159,17 @@ class DecisionRunManifest:
         )
         _sha256(self.agent_execution_plan_hash, "Decision Run Agent execution plan hash")
         _strict_utc(self.created_at, "Decision Run Manifest created_at")
-        if self.replicates_per_arm != 3 or len(self.assessments) != 6:
-            raise ValueError("Decision Run Manifest requires exactly three runs per paired arm")
+        if self.replicates_per_arm != 3:
+            raise ValueError("Decision Run Manifest maximum replicate count must be three")
+        if self.schema_version == DECISION_RUN_MANIFEST_SCHEMA_V1:
+            if len(self.assessments) != 6 or self.replicates_executed_per_arm != 3:
+                raise ValueError("Decision Run Manifest v1 requires three runs per paired arm")
+            if self.replicate_stop_reason != "fixed_three_paired_replicates":
+                raise ValueError("Decision Run Manifest v1 replicate stop reason is invalid")
+        elif self.replicates_executed_per_arm not in {2, 3} or len(self.assessments) != (
+            self.replicates_executed_per_arm * 2
+        ):
+            raise ValueError("Decision Run Manifest v2 requires two or three runs per paired arm")
         if (self.control_arm, self.treatment_arm) != (
             "structured_agent_core",
             "structured_agent_plus_routed_methods",
@@ -158,10 +177,26 @@ class DecisionRunManifest:
             raise ValueError("Decision Run Manifest paired arm roles are not canonical")
         keys = tuple((item.arm, item.replicate_index) for item in self.assessments)
         expected = tuple(
-            (arm, index) for arm in (self.control_arm, self.treatment_arm) for index in range(1, 4)
+            (arm, index)
+            for arm in (self.control_arm, self.treatment_arm)
+            for index in range(1, self.replicates_executed_per_arm + 1)
         )
         if keys != expected:
             raise ValueError("Decision Run Manifest assessments are not canonically ordered")
+        if self.schema_version == DECISION_RUN_MANIFEST_SCHEMA_V2:
+            first_two_agree = all(
+                _first_two_assessments_agree(self.assessments, arm=arm)
+                for arm in (self.control_arm, self.treatment_arm)
+            )
+            if self.replicates_executed_per_arm == 2 and (
+                not first_two_agree or self.replicate_stop_reason != "first_two_agree_in_both_arms"
+            ):
+                raise ValueError("adaptive Decision Run stopped before required third pair")
+            if self.replicates_executed_per_arm == 3 and (
+                first_two_agree
+                or self.replicate_stop_reason != "third_pair_required_after_first_two_disagreement"
+            ):
+                raise ValueError("adaptive Decision Run executed an unnecessary third pair")
         if self.agreeing_judgment_artifact_ids != tuple(
             sorted(set(self.agreeing_judgment_artifact_ids))
         ):
@@ -195,7 +230,7 @@ class DecisionRunManifest:
                 or item.estimated_cost_microusd is None
                 for item in self.assessments
             ):
-                raise ValueError("proposed Decision Run Manifest requires six valid sealed runs")
+                raise ValueError("proposed Decision Run Manifest requires all valid sealed runs")
             agreeing_assessments = tuple(
                 item
                 for item in self.assessments
@@ -231,7 +266,7 @@ class DecisionRunManifest:
         return f"decision-run-manifest-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "registration_id": self.registration_id,
             "registration_hash": self.registration_hash,
@@ -261,6 +296,15 @@ class DecisionRunManifest:
             "strategy_promotion_claim": self.strategy_promotion_claim,
             "execution_capability": self.execution_capability,
         }
+        if self.schema_version == DECISION_RUN_MANIFEST_SCHEMA_V2:
+            payload["replicates_executed_per_arm"] = self.replicates_executed_per_arm
+            payload["replicate_stop_reason"] = self.replicate_stop_reason
+            payload["confidence_observation"] = _decision_confidence_observation(
+                self.assessments,
+                control_arm=self.control_arm,
+                treatment_arm=self.treatment_arm,
+            )
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "manifest_id": self.manifest_id}
@@ -289,10 +333,17 @@ def build_decision_run_manifest(
         raise ValueError("Query Gate binds a different Agent execution plan")
     if execution_plan.registration_id != registration.registration_id:
         raise ValueError("Agent execution plan belongs to a different registration")
+    adaptive = registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3
+    if adaptive:
+        if len(paired_runs) not in {4, 6}:
+            raise ValueError("adaptive Decision runs require two or three complete paired runs")
+        replicates_executed = len(paired_runs) // 2
+    else:
+        replicates_executed = registration.replicates_per_arm
     expected_keys = tuple(
         (arm, index)
         for arm in registration.paired_arms
-        for index in range(1, registration.replicates_per_arm + 1)
+        for index in range(1, replicates_executed + 1)
     )
     if tuple((item.arm, item.replicate_index) for item in paired_runs) != expected_keys:
         raise ValueError("Decision runs must be the exact canonically ordered paired replicates")
@@ -312,6 +363,20 @@ def build_decision_run_manifest(
             created_at=created_at,
         )
         for item in paired_runs
+    )
+    first_two_agree = all(
+        _first_two_assessments_agree(assessments, arm=arm) for arm in registration.paired_arms
+    )
+    if adaptive and replicates_executed == 2 and not first_two_agree:
+        raise ValueError("adaptive Decision runs require a third pair after disagreement")
+    if adaptive and replicates_executed == 3 and first_two_agree:
+        raise ValueError("adaptive Decision runs must not execute an unnecessary third pair")
+    replicate_stop_reason = (
+        "first_two_agree_in_both_arms"
+        if adaptive and replicates_executed == 2
+        else "third_pair_required_after_first_two_disagreement"
+        if adaptive
+        else "fixed_three_paired_replicates"
     )
     blockers = [
         f"{item.arm}:{item.replicate_index}:{item.reason}"
@@ -352,7 +417,11 @@ def build_decision_run_manifest(
     )
     selected_count = 0 if selected is None else votes[selected]
     if selected_count < 2:
-        blockers.append("treatment:no_two_of_three_target_direction_agreement")
+        blockers.append(
+            "treatment:no_majority_target_direction_agreement"
+            if adaptive
+            else "treatment:no_two_of_three_target_direction_agreement"
+        )
 
     if blockers:
         disposition = DecisionDisposition.ABSTAIN
@@ -375,7 +444,9 @@ def build_decision_run_manifest(
         )
 
     core: dict[str, object] = {
-        "schema_version": DECISION_RUN_MANIFEST_SCHEMA,
+        "schema_version": (
+            DECISION_RUN_MANIFEST_SCHEMA_V2 if adaptive else DECISION_RUN_MANIFEST_SCHEMA_V1
+        ),
         "registration_id": registration.registration_id,
         "registration_hash": canonical_hash(registration.to_dict()),
         "checkpoint_key": query_gate.checkpoint_key,
@@ -402,6 +473,14 @@ def build_decision_run_manifest(
         "strategy_promotion_claim": False,
         "execution_capability": False,
     }
+    if adaptive:
+        core["replicates_executed_per_arm"] = replicates_executed
+        core["replicate_stop_reason"] = replicate_stop_reason
+        core["confidence_observation"] = _decision_confidence_observation(
+            assessments,
+            control_arm=registration.paired_arms[0],
+            treatment_arm=registration.paired_arms[1],
+        )
     return DecisionRunManifest(
         manifest_id=f"decision-run-manifest-{canonical_hash(core)}",
         registration_id=registration.registration_id,
@@ -425,6 +504,34 @@ def build_decision_run_manifest(
         total_estimated_cost_microusd=total_cost,
         blockers=tuple(sorted(set(blockers))),
         created_at=created_at,
+        replicates_executed_per_arm=replicates_executed,
+        replicate_stop_reason=replicate_stop_reason,
+        schema_version=(
+            DECISION_RUN_MANIFEST_SCHEMA_V2 if adaptive else DECISION_RUN_MANIFEST_SCHEMA_V1
+        ),
+    )
+
+
+def _first_two_assessments_agree(
+    assessments: tuple[DecisionRunAssessment, ...],
+    *,
+    arm: str,
+) -> bool:
+    selected = tuple(
+        item for item in assessments if item.arm == arm and item.replicate_index in {1, 2}
+    )
+    if len(selected) != 2 or any(item.outcome is RunAssessmentOutcome.INVALID for item in selected):
+        return False
+    if selected[0].outcome is not selected[1].outcome:
+        return False
+    if selected[0].outcome is RunAssessmentOutcome.ABSTAIN:
+        return True
+    return (
+        selected[0].vote_target_id,
+        selected[0].vote_direction,
+    ) == (
+        selected[1].vote_target_id,
+        selected[1].vote_direction,
     )
 
 
@@ -523,7 +630,98 @@ def _assess_run(
         estimated_cost_microusd=cost,
         vote_target_id=target,
         vote_direction=direction,
+        decision_confidence=(None if artifact is None else artifact.proposal.decision_confidence),
     )
+
+
+def _decision_confidence_observation(
+    assessments: tuple[DecisionRunAssessment, ...],
+    *,
+    control_arm: str,
+    treatment_arm: str,
+) -> dict[str, object]:
+    def mean(values: tuple[float, ...]) -> float | None:
+        return None if not values else round(sum(values) / len(values), 6)
+
+    def arm_values(arm: str, indexes: set[int] | None = None) -> tuple[float, ...]:
+        return tuple(
+            item.decision_confidence
+            for item in assessments
+            if item.arm == arm
+            and (indexes is None or item.replicate_index in indexes)
+            and item.decision_confidence is not None
+        )
+
+    def decision_key(item: DecisionRunAssessment) -> tuple[str, ...] | None:
+        if item.outcome is RunAssessmentOutcome.INVALID:
+            return None
+        if item.outcome is RunAssessmentOutcome.ABSTAIN:
+            return (RunAssessmentOutcome.ABSTAIN.value,)
+        if item.vote_target_id is None or item.vote_direction is None:
+            return None
+        return (
+            RunAssessmentOutcome.PROPOSE.value,
+            item.vote_target_id,
+            item.vote_direction.value,
+        )
+
+    treatment = tuple(item for item in assessments if item.arm == treatment_arm)
+    decision_counts = Counter(key for item in treatment if (key := decision_key(item)) is not None)
+    majority_key: tuple[str, ...] | None = None
+    if decision_counts:
+        candidate_key, candidate_count = max(
+            decision_counts.items(),
+            key=lambda item: (item[1], item[0]),
+        )
+        if candidate_count >= 2:
+            majority_key = candidate_key
+    majority_confidences = tuple(
+        item.decision_confidence
+        for item in treatment
+        if majority_key is not None
+        and decision_key(item) == majority_key
+        and item.decision_confidence is not None
+    )
+    minority_confidences = tuple(
+        item.decision_confidence
+        for item in treatment
+        if majority_key is not None
+        and decision_key(item) is not None
+        and decision_key(item) != majority_key
+        and item.decision_confidence is not None
+    )
+    majority_mean = mean(majority_confidences)
+    minority_mean = mean(minority_confidences)
+    confidence_gap = (
+        None
+        if majority_mean is None or minority_mean is None
+        else round(majority_mean - minority_mean, 6)
+    )
+    return {
+        "scope": "observational_only_no_sizing_approval_or_policy_effect",
+        "reported_count": sum(item.decision_confidence is not None for item in assessments),
+        "missing_count": sum(item.decision_confidence is None for item in assessments),
+        "first_two_agree_by_arm": {
+            control_arm: _first_two_assessments_agree(assessments, arm=control_arm),
+            treatment_arm: _first_two_assessments_agree(assessments, arm=treatment_arm),
+        },
+        "first_two_mean_confidence_by_arm": {
+            control_arm: mean(arm_values(control_arm, {1, 2})),
+            treatment_arm: mean(arm_values(treatment_arm, {1, 2})),
+        },
+        "overall_mean_confidence_by_arm": {
+            control_arm: mean(arm_values(control_arm)),
+            treatment_arm: mean(arm_values(treatment_arm)),
+        },
+        "third_pair_confidence_by_arm": {
+            control_arm: mean(arm_values(control_arm, {3})),
+            treatment_arm: mean(arm_values(treatment_arm, {3})),
+        },
+        "treatment_majority_mean_confidence": majority_mean,
+        "treatment_minority_mean_confidence": minority_mean,
+        "treatment_majority_minus_minority_confidence": confidence_gap,
+        "outcome_calibration_status": "pending_registered_outcome_opening",
+    }
 
 
 def completed_run_validation_evidence_hash(result: AgentRunResult) -> str:
