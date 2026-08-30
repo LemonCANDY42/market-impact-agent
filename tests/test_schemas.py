@@ -41,6 +41,8 @@ class Validator(Protocol):
         "event-impact-triage-candidate-set.schema.json",
         "event-impact-triage-work-manifest.schema.json",
         "event-impact-triage-work-execution-plan.schema.json",
+        "event-impact-triage-work-comparison-registration.schema.json",
+        "event-impact-triage-work-comparison-report.schema.json",
         "event-impact-triage-candidate-digest.schema.json",
         "event-impact-triage-cluster-partition.schema.json",
         "event-impact-triage-proposal.schema.json",

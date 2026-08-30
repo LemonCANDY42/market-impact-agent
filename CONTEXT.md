@@ -295,6 +295,25 @@ Seed plus role. Labels, tools, PIT, Judgment and execution remain absent, and an
 request is never retried automatically.
 _Avoid_: Scheduler, dynamic role discovery, label-bearing plan, best-effort partial proposal
 
+**Event Impact Triage Work Comparison Registration**:
+A content-identified, append-only Harness-clock binding created after a complete Label Set is sealed
+and before either Manifest-bound arm starts. It fixes exact Candidate Set and Work Manifest
+IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, checkpoint contract,
+Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
+stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
+authority.
+_Avoid_: v1 comparison mutation, caller clock, revealed-label prompt, repaired failed arm
+
+**Event Impact Triage Work Comparison Report**:
+A content-identified semantic score produced only after both Work Plans fully reopen every expected
+Run, terminal artifact, journal chain and exact completed Usage record. Arm start, finish and cost
+come from that authority rather than caller claims. One batch can pass its frozen gate but can never
+by itself promote a method or authorize downstream execution. The Report binds both Plan IDs,
+Outcome hashes, authority receipt hashes and the registered cost cap. Downstream consumers must run
+the Harness replay authority and require byte-identical evaluator output; schema validity alone is
+not authority.
+_Avoid_: Partial score, best-effort Usage union, v1 negative-evidence reuse, trading decision
+
 **Event Impact Triage Work Manifest**:
 An arm-neutral, content-identified pre-model partition of one exact Candidate Set. It collapses only
 byte-identical normalized payloads into atoms while retaining every Observation Version identity,

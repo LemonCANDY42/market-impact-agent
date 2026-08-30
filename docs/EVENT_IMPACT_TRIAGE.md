@@ -139,6 +139,32 @@ identity/tool/secret responses, cross-Manifest input and artifact/event/pointer/
 predecessor corruption rejection. This is mechanics evidence only; no real model run or semantic
 quality claim has been made.
 
+The v2 work path has its own append-only Work Comparison Registration and Report; it does not reuse
+or mutate the failed v1 comparison identity. Before either arm may start, the Harness-clock
+registration binds the exact Candidate Set ID/hash, sealed Label Set, Work Manifest ID/hash, both
+Work Execution Plan IDs, prospective registration, checkpoint contract, Model Provider Profile,
+frozen v1 semantic metrics/gates and the sum of the two plan cost ceilings. Labels remain outside
+both plans and every runtime prompt. Evaluation first performs the complete per-unit artifact,
+journal and Usage reopening, then derives arm start from the earliest authoritative Run creation,
+finish from the latest terminal Run update and cost from exactly the completed Usage records.
+Terminal artifact timestamps must reconcile to those Run records. A pre-registration start,
+failed, ambiguous or incomplete unit, identity drift, cross-Manifest input, missing or extra Usage,
+or timestamp/artifact tamper fails before scoring.
+
+The Report binds both Work Plan IDs, content hashes of both complete Arm Outcomes, hashes of both
+authority receipts and the registered aggregate cost cap. Its closed blocker taxonomy determines
+the batch gate; promotion-only blockers do not fail that gate, while unknown or score-contradictory
+blockers cannot be rehashed into a valid Report. Downstream use must invoke the Harness report
+authority with the registration, frozen inputs, both outcomes and both runtime authorities. That
+authority fully re-evaluates and reopens the comparison at the recorded evaluation time and requires
+byte-identical Report output; a structurally valid caller-authored Report is not acceptance evidence.
+
+The bounded 121-candidate fixture freezes eleven Work Units, 133 baseline and 166 treatment maximum
+Runs, and a 299 microusd aggregate plan cap. It completes and scores both arms, validates the two
+new schemas, proves label absence from Manifest/plans, and reopens both arms after restart without
+another Provider call. This remains scripted mechanics evidence only. The original v1 real attempts
+remain immutable negative capacity evidence and are not eligible inputs to a v2 Report.
+
 The map/partition artifact layer is also closed. One Candidate Digest binds one exact Manifest atom
 and may record bounded supported facts, conflicts, transmission hypotheses, countercases,
 uncertainty and checkpoint-rule evidence. Every field may remain empty when extraction is not

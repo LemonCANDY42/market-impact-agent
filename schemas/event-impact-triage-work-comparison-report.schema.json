@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-work-comparison-report.schema.json",
+  "title": "Market Impact Event Impact Triage Work Comparison Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "comparison_id",
+    "label_set_id",
+    "label_exposure",
+    "baseline_plan_id",
+    "treatment_plan_id",
+    "baseline_outcome_hash",
+    "treatment_outcome_hash",
+    "baseline_authority_receipt_hash",
+    "treatment_authority_receipt_hash",
+    "max_aggregate_estimated_cost_microusd",
+    "baseline_score",
+    "treatment_score",
+    "batch_gate_passed",
+    "promotion_eligible",
+    "blockers",
+    "evaluated_at",
+    "historical_pit_claim",
+    "strategy_or_execution_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-work-comparison-report.v1"},
+    "report_id": {"type": "string", "pattern": "^event-impact-triage-work-comparison-report-[0-9a-f]{64}$"},
+    "comparison_id": {"type": "string", "pattern": "^event-impact-triage-work-comparison-[0-9a-f]{64}$"},
+    "label_set_id": {"type": "string", "pattern": "^event-impact-triage-label-set-[0-9a-f]{64}$"},
+    "label_exposure": {"enum": ["pristine_blind", "operator_exposed"]},
+    "baseline_plan_id": {"type": "string", "pattern": "^event-impact-triage-work-execution-plan-[0-9a-f]{64}$"},
+    "treatment_plan_id": {"type": "string", "pattern": "^event-impact-triage-work-execution-plan-[0-9a-f]{64}$"},
+    "baseline_outcome_hash": {"$ref": "#/$defs/sha256"},
+    "treatment_outcome_hash": {"$ref": "#/$defs/sha256"},
+    "baseline_authority_receipt_hash": {"$ref": "#/$defs/sha256"},
+    "treatment_authority_receipt_hash": {"$ref": "#/$defs/sha256"},
+    "max_aggregate_estimated_cost_microusd": {"type": "integer", "minimum": 0},
+    "baseline_score": {"$ref": "#/$defs/score"},
+    "treatment_score": {"$ref": "#/$defs/score"},
+    "batch_gate_passed": {"type": "boolean"},
+    "promotion_eligible": {"const": false},
+    "blockers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "contains": {"const": "second_pristine_blind_batch_required"},
+      "items": {
+        "enum": [
+          "aggregate_model_cost_exceeded",
+          "operator_exposed_batch_cannot_promote",
+          "second_pristine_blind_batch_required",
+          "treatment_has_unsupported_material_route",
+          "treatment_missed_must_catch_eligible",
+          "treatment_worse_checkpoint_eligibility",
+          "treatment_worse_impact_routing"
+        ]
+      }
+    },
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "historical_pit_claim": {"const": false},
+    "strategy_or_execution_authority": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "blockers": {
+            "contains": {
+              "enum": [
+                "aggregate_model_cost_exceeded",
+                "treatment_has_unsupported_material_route",
+                "treatment_missed_must_catch_eligible",
+                "treatment_worse_checkpoint_eligibility",
+                "treatment_worse_impact_routing"
+              ]
+            }
+          }
+        },
+        "required": ["blockers"]
+      },
+      "then": {"properties": {"batch_gate_passed": {"const": false}}},
+      "else": {"properties": {"batch_gate_passed": {"const": true}}}
+    },
+    {
+      "if": {
+        "properties": {"label_exposure": {"const": "operator_exposed"}},
+        "required": ["label_exposure"]
+      },
+      "then": {
+        "properties": {
+          "blockers": {"contains": {"const": "operator_exposed_batch_cannot_promote"}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_count",
+        "classified_count",
+        "candidate_coverage",
+        "checkpoint_eligibility_correct",
+        "checkpoint_eligibility_accuracy",
+        "eligible_false_negatives",
+        "eligible_false_positives",
+        "must_catch_false_negatives",
+        "needs_review_correct",
+        "needs_review_label_count",
+        "needs_review_accuracy",
+        "route_correct",
+        "route_accuracy",
+        "unsupported_material_routes",
+        "estimated_cost_microusd"
+      ],
+      "properties": {
+        "candidate_count": {"type": "integer", "minimum": 1},
+        "classified_count": {"type": "integer", "minimum": 0},
+        "candidate_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "checkpoint_eligibility_correct": {"type": "integer", "minimum": 0},
+        "checkpoint_eligibility_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "eligible_false_negatives": {"type": "integer", "minimum": 0},
+        "eligible_false_positives": {"type": "integer", "minimum": 0},
+        "must_catch_false_negatives": {"type": "integer", "minimum": 0},
+        "needs_review_correct": {"type": "integer", "minimum": 0},
+        "needs_review_label_count": {"type": "integer", "minimum": 0},
+        "needs_review_accuracy": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "route_correct": {"type": "integer", "minimum": 0},
+        "route_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "unsupported_material_routes": {"type": "integer", "minimum": 0},
+        "estimated_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

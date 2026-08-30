@@ -713,8 +713,16 @@ def evaluate_event_impact_triage_comparison(
         raise ValueError("triage comparison cannot be evaluated before both arms finish")
     baseline.proposal.validate_against(candidate_set)
     treatment.proposal.validate_against(candidate_set)
-    baseline_score = _score(label_set, baseline)
-    treatment_score = _score(label_set, treatment)
+    baseline_score = score_event_impact_triage_proposal(
+        labels=label_set,
+        proposal=baseline.proposal,
+        total_estimated_cost_microusd=baseline.total_estimated_cost_microusd,
+    )
+    treatment_score = score_event_impact_triage_proposal(
+        labels=label_set,
+        proposal=treatment.proposal,
+        total_estimated_cost_microusd=treatment.total_estimated_cost_microusd,
+    )
     blockers: set[str] = {"second_pristine_blind_batch_required"}
     if label_set.exposure is not TriageLabelExposure.PRISTINE_BLIND:
         blockers.add("operator_exposed_batch_cannot_promote")
@@ -772,9 +780,23 @@ def evaluate_event_impact_triage_comparison(
     )
 
 
-def _score(labels: EventImpactTriageLabelSet, outcome: TriageArmOutcome) -> TriageArmScore:
+def score_event_impact_triage_proposal(
+    *,
+    labels: EventImpactTriageLabelSet,
+    proposal: EventImpactTriageProposal,
+    total_estimated_cost_microusd: int,
+) -> TriageArmScore:
+    """Apply the frozen v1 semantic score to one complete Triage Proposal.
+
+    The helper is shared by the monolithic v1 and Manifest-bound work comparison
+    contracts. Keeping serialization in ``TriageArmScore`` preserves the v1 report
+    byte-for-byte while avoiding a second scoring authority.
+    """
+
+    if total_estimated_cost_microusd < 0:
+        raise ValueError("triage outcome cost must be non-negative")
     predicted: dict[str, tuple[CheckpointEligibility, TriageRoute, bool]] = {}
-    for cluster in outcome.proposal.clusters:
+    for cluster in proposal.clusters:
         material = bool(cluster.changed_facts and cluster.transmission_channels)
         for version_id in cluster.candidate_version_ids:
             predicted[version_id] = (
@@ -825,7 +847,7 @@ def _score(labels: EventImpactTriageLabelSet, outcome: TriageArmOutcome) -> Tria
         needs_review_label_count=needs_review_count,
         route_correct=route_correct,
         unsupported_material_routes=unsupported_material_routes,
-        total_estimated_cost_microusd=outcome.total_estimated_cost_microusd,
+        total_estimated_cost_microusd=total_estimated_cost_microusd,
     )
 
 

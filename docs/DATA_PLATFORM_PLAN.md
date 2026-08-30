@@ -883,6 +883,21 @@ prompt/response/artifact/metric/Usage reopening before every downstream boundary
 cross-Work-Unit and both-arm acceptance is scripted
 mechanics evidence; no real model or comparison arm has completed through this path yet.
 
+The v2 work runtime also owns a distinct append-only Work Comparison Registration/Report contract.
+Registration binds exact Candidate Set and Manifest hashes, the sealed Label Set, both Work Plan
+identities, the shared prospective registration/checkpoint/profile surface, frozen semantic metrics
+and plan-derived aggregate cost before any Run creation. Evaluation accepts only fully reopened
+completed arms and derives earliest start, latest finish and exact cost from the Run Journal and
+completed Usage set, with terminal timestamps reconciled to the Journal. Scripted 121-candidate
+acceptance proves eleven units, 133/166 maximum Runs, a 299 microusd combined cap, label-free plans
+and restart without new Provider calls. It does not complete the private real arms or grant PIT,
+strategy, Judgment, paper or live execution authority.
+
+Each Report also binds both plan identities, complete Outcome hashes and authoritative receipt
+hashes. Its blocker taxonomy and batch gate are internally closed. Any downstream consumer must run
+the Harness replay authority, which fully reopens both arms and requires byte-identical evaluator
+output; schema validity or a caller-rehashed Report alone is insufficient.
+
 **Blocked by:** typed Position Snapshot and Historical Analogy Pack payload bindings before their
 optional roles can be enabled; labels sealed before execution; replay of the current unclassified
 versions through both arms; a second pristine blind batch; and passing semantic metrics. Opaque

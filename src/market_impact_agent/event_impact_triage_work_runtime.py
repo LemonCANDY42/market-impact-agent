@@ -668,6 +668,56 @@ class EventImpactTriageWorkRunEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class EventImpactTriageWorkRunAuthorityReceipt:
+    """Authoritative time/cost boundary derived only after full work-run reopening."""
+
+    plan_id: str
+    started_at: datetime
+    finished_at: datetime
+    completed_run_count: int
+    total_estimated_cost_microusd: int
+    schema_version: str = "market-impact.event-impact-triage-work-run-authority-receipt.v1"
+
+    def __post_init__(self) -> None:
+        _prefixed_hash(
+            self.plan_id,
+            "event-impact-triage-work-execution-plan-",
+            "triage work authority receipt plan",
+        )
+        if self.schema_version != (
+            "market-impact.event-impact-triage-work-run-authority-receipt.v1"
+        ):
+            raise ValueError("unsupported triage work authority receipt schema")
+        if self.started_at.utcoffset() != UTC.utcoffset(self.started_at):
+            raise ValueError("triage work authority started_at must use UTC")
+        if self.finished_at.utcoffset() != UTC.utcoffset(self.finished_at):
+            raise ValueError("triage work authority finished_at must use UTC")
+        if self.finished_at < self.started_at:
+            raise ValueError("triage work authority cannot finish before it starts")
+        if self.completed_run_count < 1:
+            raise ValueError("triage work authority requires at least one completed Run")
+        if self.total_estimated_cost_microusd < 0:
+            raise ValueError("triage work authority cost must be non-negative")
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "plan_id": self.plan_id,
+            "started_at": _timestamp(self.started_at),
+            "finished_at": _timestamp(self.finished_at),
+            "completed_run_count": self.completed_run_count,
+            "total_estimated_cost_microusd": self.total_estimated_cost_microusd,
+        }
+
+    @property
+    def receipt_hash(self) -> str:
+        return canonical_hash(self.core_dict())
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "receipt_hash": self.receipt_hash}
+
+
+@dataclass(frozen=True, slots=True)
 class EventImpactTriageWorkRunResult:
     plan_id: str
     status: RunStatus
@@ -851,9 +901,10 @@ class EventImpactTriageWorkRunner:
             raise ValueError("triage work evidence differs from the recomputed work graph")
         if len({item.run_id for item in run_evidence.members}) != len(run_evidence.members):
             raise ValueError("triage work run IDs must be unique")
-        if run_evidence.usage_ledger_hash != self.usage_ledger.ledger_hash:
+        usage_ledger_hash, usage_records = self._authoritative_usage_snapshot()
+        if run_evidence.usage_ledger_hash != usage_ledger_hash:
             raise ValueError("triage work evidence differs from the authoritative Usage Ledger")
-        usage = {item.record.run_id: item.record for item in self.usage_ledger.records()}
+        usage = {item.run_id: item for item in usage_records}
         if set(usage) != {item.run_id for item in run_evidence.members}:
             raise ValueError("triage work Usage Ledger must contain exactly every completed unit")
         reopened_outputs: dict[tuple[TriageWorkPhase, str, TriageAgentRole], object] = {}
@@ -867,11 +918,17 @@ class EventImpactTriageWorkRunner:
                 or record.terminal_artifact_id != member.terminal_artifact_hash
             ):
                 raise ValueError("triage work member differs from its Run Record")
+            if record.updated_at < record.created_at:
+                raise ValueError("triage work Run Record finishes before it starts")
             terminal = _object(
                 self.artifact_store.read_json(member.terminal_artifact_hash),
                 "triage work terminal artifact",
             )
             parsed = self._validate_terminal(terminal, member.phase, member.unit_id, member.role)
+            if parsed.get("started_at") != _timestamp(record.created_at):
+                raise ValueError("triage work terminal started_at differs from the Run Journal")
+            if parsed.get("finished_at") != _timestamp(record.updated_at):
+                raise ValueError("triage work terminal finished_at differs from the Run Journal")
             if parsed.get("execution_binding_hash") != member.execution_binding_hash:
                 raise ValueError("triage work terminal binding differs from Run Evidence")
             binding = self.plan.binding(member.phase, member.role)
@@ -975,6 +1032,78 @@ class EventImpactTriageWorkRunner:
             reopened_outputs=reopened_outputs,
             members=run_evidence.members,
         )
+
+    def authoritative_completed_work_run_receipt(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        work_manifest: EventImpactTriageWorkManifest,
+        digests: tuple[TriageCandidateDigest, ...],
+        partition: TriageClusterPartition,
+        proposal: EventImpactTriageProposal,
+        run_evidence: EventImpactTriageWorkRunEvidence,
+    ) -> EventImpactTriageWorkRunAuthorityReceipt:
+        """Fully reopen a completed arm, then derive its authoritative clock and cost."""
+
+        self.assert_authoritative_completed_work_run(
+            candidate_set=candidate_set,
+            work_manifest=work_manifest,
+            digests=digests,
+            partition=partition,
+            proposal=proposal,
+            run_evidence=run_evidence,
+        )
+        run_records = tuple(self.journal.get_run(item.run_id) for item in run_evidence.members)
+        usage_ledger_hash, usage_records = self._authoritative_usage_snapshot()
+        expected_run_ids = {item.run_id for item in run_evidence.members}
+        if (
+            usage_ledger_hash != run_evidence.usage_ledger_hash
+            or {item.run_id for item in usage_records} != expected_run_ids
+        ):
+            raise ValueError("triage work Usage Ledger changed after authoritative reopening")
+        usage_by_run_id = {item.run_id: item for item in usage_records}
+        for member, record in zip(run_evidence.members, run_records, strict=True):
+            if (
+                record.status is not RunStatus.COMPLETED
+                or record.terminal_artifact_id != member.terminal_artifact_hash
+            ):
+                raise ValueError("triage work authority receipt requires completed Run records")
+            if record.updated_at < record.created_at:
+                raise ValueError("triage work Run Record finishes before it starts")
+            terminal = _object(
+                self.artifact_store.read_json(member.terminal_artifact_hash),
+                "triage work terminal artifact",
+            )
+            if terminal.get("started_at") != _timestamp(record.created_at):
+                raise ValueError("triage work terminal started_at differs from the Run Journal")
+            if terminal.get("finished_at") != _timestamp(record.updated_at):
+                raise ValueError("triage work terminal finished_at differs from the Run Journal")
+        completed_usage = tuple(usage_by_run_id[item.run_id] for item in run_evidence.members)
+        if any(item.status is not RunStatus.COMPLETED for item in completed_usage):
+            raise ValueError("triage work authority receipt requires completed Usage records")
+        receipt = EventImpactTriageWorkRunAuthorityReceipt(
+            plan_id=self.plan.plan_id,
+            started_at=min(item.created_at for item in run_records),
+            finished_at=max(item.updated_at for item in run_records),
+            completed_run_count=len(run_records),
+            total_estimated_cost_microusd=sum(
+                item.metrics.estimated_cost_microusd for item in completed_usage
+            ),
+        )
+        final_ledger_hash, final_usage_records = self._authoritative_usage_snapshot()
+        if final_ledger_hash != usage_ledger_hash or final_usage_records != usage_records:
+            raise ValueError("triage work Usage Ledger changed while deriving authority receipt")
+        return receipt
+
+    def _authoritative_usage_snapshot(self) -> tuple[str, tuple[UsageRecord, ...]]:
+        stored = self.usage_ledger.records()
+        ledger_hash = canonical_hash(
+            {
+                "schema_version": "market-impact.usage-ledger.v1",
+                "record_hashes": [item.record_hash for item in stored],
+            }
+        )
+        return ledger_hash, tuple(item.record for item in stored)
 
     def _assert_recomputed_prompts(
         self,

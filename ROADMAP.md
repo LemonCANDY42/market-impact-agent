@@ -310,6 +310,16 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       arms, a cross-Work-Unit cluster, restart, concurrency, budget failure and artifact/event/
       terminal/Usage tamper. This accepts mechanics only. The original real Candidate Set still has
       no completed v2 arm or semantic Comparison Report; that replay remains under PDI-29D.
+    - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
+      registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
+      shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
+      plan cap before either arm starts. Evaluation first reopens every expected completed Run and
+      exact Usage record, reconciles terminal timestamps to the Run Journal, and only then scores.
+      A scripted 121-candidate fixture proves eleven units, 133/166 maximum Runs, both complete arms,
+      label-free plans and restart without new calls. This does not complete the private real replay;
+      the failed v1 attempts remain negative evidence and cannot satisfy the v2 authority.
+      Reports bind both Plan IDs, Outcome hashes and receipt hashes; downstream acceptance requires
+      full Harness replay and byte equality, not schema validity or caller-rehashed content alone.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan
