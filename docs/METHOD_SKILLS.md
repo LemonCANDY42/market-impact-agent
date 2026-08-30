@@ -147,3 +147,21 @@ and Usage Ledger hash is
 `d8f3b00e35e3b0289004868d480e43f3f190b4007b331fe7ff1fa2b6c1a2bbbb`.
 The correction is also stored as content-addressed artifact
 `9c383d44b2e1ca7b00b6b9fe25d0d06adca31a8b2b9230ac3bcbf1f24a938017`.
+
+## Outcome-opened Skill discovery is a separate lane
+
+Broad historical review may use later evidence and the complete realized window to discover a
+general mechanism, including bounded TradingAgents-style specialist decomposition. It does not run
+through the point-in-time Method Route and cannot directly add a Skill to this catalog.
+
+The [Skill governance contract](SKILL_GOVERNANCE.md) requires one discovery and at least two
+additional independent Event Case/time-family validations, predeclared divergence limits, and no
+unresolved material or refuting counterexample before a conclusion can enter a non-executable
+candidate group. Specialist count, debate rounds, and stochastic replicates do not count as
+additional validation units.
+
+Every candidate is then compared against a content-identified baseline containing all runtime
+manifests, this catalog, the general Research Method Catalog, and prior candidates. Duplicate,
+subsumed, extension, specialization, conflict, and orthogonal relations receive explicit
+resolutions. Candidate admission never mutates this catalog. Active promotion still needs later
+outcome-blinded holdout or prospective ablation evidence and an explicitly authorized catalog edit.

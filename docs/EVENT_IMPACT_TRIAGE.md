@@ -241,6 +241,14 @@ clinical milestones, and recall/channel/regulatory escalation—but does not est
 direction or alpha. Historical outcome-opened cases may develop or audit a Skill; they cannot enter
 strict historical backtest inputs unless their version and authority were provable at cutoff.
 
+The durable accumulation path is now owned by `docs/SKILL_GOVERNANCE.md`. A triage miss, exposure
+path, event-family structure, or countercase may seed one Outcome-Opened Full-Information Review,
+but it remains a research conclusion. It needs two additional independent Event Case/time-family
+validations, bounded divergence, resolved material counterexamples, and a complete current
+Skill/catalog conflict review before it can become a non-executable Skill candidate. The triage
+coordinator and specialists working on one Candidate Set are one analysis unit, not independent
+validation evidence. No candidate can route itself back into triage or Judgment.
+
 ## Dual-track acceptance
 
 The shared engine-neutral EventAssessment, Candidate Impact, Signal Intent, Order Intent and Policy

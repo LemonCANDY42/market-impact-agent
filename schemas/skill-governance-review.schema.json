@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/skill-governance-review.schema.json",
+  "title": "Skill Governance Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "review_id", "evaluated_at", "candidate_group_id",
+    "candidate_group_hash", "baseline_snapshot", "comparisons", "admitted_as_candidate",
+    "blockers", "candidate_id", "active_skill", "catalog_mutation", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.skill-governance-review.v1"},
+    "review_id": {"type": "string", "pattern": "^skill-governance-review-[0-9a-f]{64}$"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "candidate_group_id": {"type": "string", "pattern": "^skill-candidate-group-[0-9a-f]{64}$"},
+    "candidate_group_hash": {"$ref": "#/$defs/sha256"},
+    "baseline_snapshot": {"$ref": "#/$defs/baseline"},
+    "comparisons": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/comparison"}},
+    "admitted_as_candidate": {"type": "boolean"},
+    "blockers": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "candidate_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^skill-candidate-[0-9a-f]{64}$"}]},
+    "active_skill": {"const": false},
+    "catalog_mutation": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"admitted_as_candidate": {"const": true}}},
+      "then": {"properties": {"blockers": {"maxItems": 0}, "candidate_id": {"type": "string"}}}
+    },
+    {
+      "if": {"properties": {"admitted_as_candidate": {"const": false}}},
+      "then": {"properties": {"blockers": {"minItems": 1}, "candidate_id": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hashes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "groups": {"enum": ["evidence_authority", "discovery_triage", "event_transmission", "macro_regime", "industry_sector", "issuer_fundamental", "portfolio_risk", "market_microstructure"]},
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subject_ref", "kind", "name", "group", "content_hash"],
+      "properties": {
+        "subject_ref": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "kind": {"enum": ["active_skill", "open_candidate"]},
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "group": {"$ref": "#/$defs/groups"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "baseline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["snapshot_id", "subjects"],
+      "properties": {
+        "snapshot_id": {"type": "string", "pattern": "^skill-baseline-[0-9a-f]{64}$"},
+        "subjects": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/subject"}}
+      }
+    },
+    "comparison": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subject_ref", "relationship", "resolution", "rationale", "evidence_hashes"],
+      "properties": {
+        "subject_ref": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "relationship": {"enum": ["duplicate", "candidate_subsumed_by_subject", "candidate_extends_subject", "candidate_specializes_subject", "conflicts_with_subject", "orthogonal"]},
+        "resolution": {"enum": ["reject_duplicate", "keep_subject", "replace_subject", "merge_as_new_version", "coexist_scoped", "narrow_to_exception", "reject_candidate", "revise_both", "no_action"]},
+        "rationale": {"type": "string", "minLength": 1},
+        "evidence_hashes": {"$ref": "#/$defs/hashes"}
+      }
+    }
+  }
+}

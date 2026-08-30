@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/skill-research-study.schema.json",
+  "title": "Skill Research Study",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "study_id", "registered_at", "title", "information_scope",
+    "independent_unit_policy", "multi_expert_authority", "inference_eligible",
+    "strict_pit_eligible", "execution_capability", "corpus_hashes", "work_units",
+    "validation_metric_policies", "specialist_roles", "provider_profile_hashes", "skill_surface_hashes",
+    "maximum_model_cost_microusd", "excluded_uses"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.skill-research-study.v1"},
+    "study_id": {"type": "string", "pattern": "^skill-research-study-[0-9a-f]{64}$"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "title": {"type": "string", "minLength": 1},
+    "information_scope": {"const": "registered_outcome_opened_full_information"},
+    "independent_unit_policy": {"const": "event_case_or_distinct_time_family_block_not_agent_count"},
+    "multi_expert_authority": {"const": "decomposition_only"},
+    "inference_eligible": {"const": false},
+    "strict_pit_eligible": {"const": false},
+    "execution_capability": {"const": "none"},
+    "corpus_hashes": {"$ref": "#/$defs/hashes"},
+    "work_units": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/work_unit"}
+    },
+    "validation_metric_policies": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/validation_metric_policy"}
+    },
+    "specialist_roles": {"$ref": "#/$defs/strings"},
+    "provider_profile_hashes": {"$ref": "#/$defs/hashes"},
+    "skill_surface_hashes": {"$ref": "#/$defs/hashes"},
+    "maximum_model_cost_microusd": {"type": "integer", "minimum": 0},
+    "excluded_uses": {"$ref": "#/$defs/strings"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hashes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "strings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "validation_metric_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metric_id", "maximum_divergence"],
+      "properties": {
+        "metric_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "maximum_divergence": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"}
+      }
+    },
+    "work_unit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unit_id", "event_family", "time_block", "instrument_scope", "source_artifact_hashes"],
+      "properties": {
+        "unit_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "event_family": {"type": "string", "minLength": 1},
+        "time_block": {"type": "string", "minLength": 1},
+        "instrument_scope": {"$ref": "#/$defs/strings"},
+        "source_artifact_hashes": {"$ref": "#/$defs/hashes"}
+      }
+    }
+  }
+}

@@ -106,6 +106,33 @@ evidence-rejected methods, never uses realized outcomes for selection, and never
 silently add its own method or capability.
 _Avoid_: Prompt routing, model-selected tools
 
+**Outcome-Opened Full-Information Review**:
+A retrospective research view that may use the complete realized horizon and later evidence inside
+one registered corpus. It is never literally global, never point-in-time, and cannot supply strict
+historical inputs, a prospective Judgment, strategy promotion, or execution authority.
+_Avoid_: Omniscient backtest, Strict PIT, future-known Evidence Pack
+
+**Skill Research Study**:
+A content-identified, non-executable plan for Outcome-Opened Full-Information Review. It binds the
+corpus, distinct Event Case/time-family work units, optional bounded specialist decomposition,
+model/Skill surfaces, predeclared validation metrics/divergence limits, cost ceiling, and prohibited
+uses. Its conservative independence identity is event-family plus time block; changing display IDs,
+instruments, sources, specialists, or runs does not create another Independent Evaluation Unit.
+_Avoid_: Method Quality Benchmark, Agent debate, Skill candidate
+
+**Skill Candidate Group**:
+One scoped research conclusion bound to exactly one discovery block, at least two additional
+independent validation blocks, divergence limits, evidence, and counterexample accounting. It is a
+non-executable governance input and cannot be routed or loaded as an active Skill.
+_Avoid_: Active Skill, Pattern Pack, validated alpha
+
+**Skill Governance Review**:
+A content-identified candidate decision against a complete Skill Baseline Snapshot containing all
+runtime manifests, both research catalogs, and open candidates. It records one relationship and
+resolution per existing subject; admission creates only a non-executable candidate and never
+mutates an active catalog.
+_Avoid_: Skill install, catalog edit, model vote
+
 **Event Cluster**:
 One market-relevant development represented by one or more related disclosures
 or catalysts rather than by individual headlines.
@@ -692,6 +719,21 @@ it is calibrated per model after outcomes open and cannot size a position, chang
 override hard policy.
 It is a proposal awaiting deterministic admission, not a Signal Intent.
 _Avoid_: Model response, trade recommendation
+
+**Judgment Skill Trace**:
+A content-identified sidecar binding one Judgment Artifact, Skill Route, and Agent Execution
+Binding to offered, selected/rejected, dependency-loaded, and Agent-reported Skill use plus the
+proposal fields reportedly influenced. Exact manifest identity exists only for loaded Skills;
+rejected offers cannot invent a version or route reason. Agent-reported use is observational, not
+causal evidence or execution authority.
+_Avoid_: Judgment Artifact version, Skill ablation result, proof of reasoning
+
+**Judgment Evaluation Band**:
+A post-Judgment, pre-outcome specification of acceptable direction, horizon, total-return range,
+realized-volatility range, and adverse excursion under a versioned policy catalog durably registered
+by the Harness before the Agent run. Its result may measure broadly correct practical judgment but
+cannot relax exact Signal, mandate, approval, or execution gates.
+_Avoid_: Trading Mandate tolerance, post-outcome target, position-sizing rule
 
 **Judgment Replicate Set**:
 A pre-sized collection of independent Judgment Artifacts produced from the same Evidence

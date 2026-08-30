@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/skill-candidate-group.schema.json",
+  "title": "Skill Candidate Group",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "candidate_group_id", "study_id", "study_hash", "conclusion",
+    "validation_blocks", "counterexamples", "candidate_status", "active_skill",
+    "inference_eligible", "strict_pit_eligible", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.skill-candidate-group.v1"},
+    "candidate_group_id": {"type": "string", "pattern": "^skill-candidate-group-[0-9a-f]{64}$"},
+    "study_id": {"type": "string", "pattern": "^skill-research-study-[0-9a-f]{64}$"},
+    "study_hash": {"$ref": "#/$defs/sha256"},
+    "conclusion": {"$ref": "#/$defs/conclusion"},
+    "validation_blocks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/validation"}},
+    "counterexamples": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/counterexample"}},
+    "candidate_status": {"const": "non_executable_pending_governance"},
+    "active_skill": {"const": false},
+    "inference_eligible": {"const": false},
+    "strict_pit_eligible": {"const": false},
+    "execution_capability": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hashes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "strings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "groups": {"enum": ["evidence_authority", "discovery_triage", "event_transmission", "macro_regime", "industry_sector", "issuer_fundamental", "portfolio_risk", "market_microstructure"]},
+    "work_unit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unit_id", "event_family", "time_block", "instrument_scope", "source_artifact_hashes"],
+      "properties": {
+        "unit_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "event_family": {"type": "string", "minLength": 1},
+        "time_block": {"type": "string", "minLength": 1},
+        "instrument_scope": {"$ref": "#/$defs/strings"},
+        "source_artifact_hashes": {"$ref": "#/$defs/hashes"}
+      }
+    },
+    "conclusion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["proposed_name", "proposed_version", "group", "change_kind", "proposition", "mechanism_steps", "applicability_conditions", "exceptions", "required_evidence", "prohibited_uses"],
+      "properties": {
+        "proposed_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "proposed_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "group": {"$ref": "#/$defs/groups"},
+        "change_kind": {"enum": ["new_method", "strengthens_invariant", "clarifies_invariant"]},
+        "proposition": {"type": "string", "minLength": 1},
+        "mechanism_steps": {"$ref": "#/$defs/strings"},
+        "applicability_conditions": {"$ref": "#/$defs/strings"},
+        "exceptions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "required_evidence": {"$ref": "#/$defs/strings"},
+        "prohibited_uses": {"$ref": "#/$defs/strings"}
+      }
+    },
+    "validation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["validation_id", "role", "work_unit", "metric_id", "observed_divergence", "supports_conclusion", "evidence_hashes", "counterexample_search_hash", "specialist_artifact_hashes"],
+      "properties": {
+        "validation_id": {"type": "string", "pattern": "^skill-validation-[0-9a-f]{64}$"},
+        "role": {"enum": ["discovery", "independent_validation"]},
+        "work_unit": {"$ref": "#/$defs/work_unit"},
+        "metric_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "observed_divergence": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "supports_conclusion": {"type": "boolean"},
+        "evidence_hashes": {"$ref": "#/$defs/hashes"},
+        "counterexample_search_hash": {"$ref": "#/$defs/sha256"},
+        "specialist_artifact_hashes": {"$ref": "#/$defs/hashes"}
+      }
+    },
+    "counterexample": {
+      "type": "object", "additionalProperties": false,
+      "required": ["counterexample_id", "severity", "disposition", "summary", "evidence_hashes", "scope_effect"],
+      "properties": {
+        "counterexample_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "severity": {"enum": ["minor", "material"]},
+        "disposition": {"enum": ["narrows_scope", "encoded_exception", "refutes_conclusion", "unresolved"]},
+        "summary": {"type": "string", "minLength": 1},
+        "evidence_hashes": {"$ref": "#/$defs/hashes"},
+        "scope_effect": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

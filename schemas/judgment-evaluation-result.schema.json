@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/judgment-evaluation-result.schema.json",
+  "title": "Judgment Evaluation Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "result_id", "evaluated_at", "specification_id",
+    "specification_hash", "outcome_hash", "horizon_sessions", "realized_terminal_return",
+    "realized_volatility", "adverse_excursion", "direction_passed", "horizon_passed",
+    "return_band_passed", "volatility_band_passed", "adverse_excursion_passed",
+    "broadly_correct", "evaluation_only", "changes_signal_or_execution_admission"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.judgment-evaluation-result.v1"},
+    "result_id": {"type": "string", "pattern": "^judgment-evaluation-result-[0-9a-f]{64}$"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "specification_id": {"type": "string", "pattern": "^judgment-evaluation-band-[0-9a-f]{64}$"},
+    "specification_hash": {"$ref": "#/$defs/sha256"},
+    "outcome_hash": {"$ref": "#/$defs/sha256"},
+    "horizon_sessions": {"type": "integer", "minimum": 1},
+    "realized_terminal_return": {"$ref": "#/$defs/decimal"},
+    "realized_volatility": {"$ref": "#/$defs/nonnegative_decimal"},
+    "adverse_excursion": {"$ref": "#/$defs/nonnegative_decimal"},
+    "direction_passed": {"type": "boolean"},
+    "horizon_passed": {"type": "boolean"},
+    "return_band_passed": {"type": "boolean"},
+    "volatility_band_passed": {"type": "boolean"},
+    "adverse_excursion_passed": {"type": "boolean"},
+    "broadly_correct": {"type": "boolean"},
+    "evaluation_only": {"const": true},
+    "changes_signal_or_execution_admission": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "nonnegative_decimal": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"}
+  }
+}

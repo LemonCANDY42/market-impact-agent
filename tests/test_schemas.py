@@ -109,6 +109,12 @@ class Validator(Protocol):
         "method-evidence-declaration.schema.json",
         "method-skill-ablation-registration.schema.json",
         "method-skill-ablation-audit-correction.schema.json",
+        "skill-research-study.schema.json",
+        "skill-candidate-group.schema.json",
+        "skill-governance-review.schema.json",
+        "judgment-skill-trace.schema.json",
+        "judgment-evaluation-band-specification.schema.json",
+        "judgment-evaluation-result.schema.json",
     ],
 )
 def test_schema_is_valid(schema_name: str) -> None:

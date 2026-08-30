@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/judgment-skill-trace.schema.json",
+  "title": "Judgment Skill Trace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "trace_id", "observed_at", "run_id", "judgment_artifact_id",
+    "judgment_artifact_hash", "route_id", "route_hash", "execution_binding_hash",
+    "entries", "agent_report_authority", "signal_or_execution_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.judgment-skill-trace.v1"},
+    "trace_id": {"type": "string", "pattern": "^judgment-skill-trace-[0-9a-f]{64}$"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "run_id": {"type": "string", "minLength": 1},
+    "judgment_artifact_id": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"},
+    "judgment_artifact_hash": {"$ref": "#/$defs/sha256"},
+    "route_id": {"type": "string", "minLength": 1},
+    "route_hash": {"$ref": "#/$defs/sha256"},
+    "execution_binding_hash": {"$ref": "#/$defs/sha256"},
+    "entries": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/entry"}},
+    "agent_report_authority": {"const": "observational_self_report_not_causal_evidence"},
+    "signal_or_execution_authority": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "entry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["skill_name", "manifest_hash", "offer_disposition", "route_disposition", "loaded", "route_reasons", "agent_reported_use", "trigger_evidence_refs", "influenced_proposal_paths", "agent_rationale"],
+      "properties": {
+        "skill_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "manifest_hash": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "offer_disposition": {"enum": ["offered", "dependency_only"]},
+        "route_disposition": {"enum": ["selected", "loaded_dependency", "rejected"]},
+        "loaded": {"type": "boolean"},
+        "route_reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "agent_reported_use": {"enum": ["applied", "consulted_not_applied", "not_applicable", "not_reported"]},
+        "trigger_evidence_refs": {"$ref": "#/$defs/strings"},
+        "influenced_proposal_paths": {"$ref": "#/$defs/strings"},
+        "agent_rationale": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

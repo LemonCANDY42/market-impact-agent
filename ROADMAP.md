@@ -7,6 +7,10 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 The shortest accepted path to Agent-directed paper operation is:
 
+0. restore prospective route health after the 30 August audit found one serial worker spending up
+   to 291 seconds across thirteen due Jobs while two-minute news Jobs have a 90-second grace window;
+   add bounded per-opportunity concurrency plus a versioned replacement-route lifecycle without
+   restarting or discarding the current append-only collector state;
 1. freeze every real post-admission trigger candidate, run formal Event Impact Triage inside the
    Harness, and either select the first rule-eligible event, block on `needs_review`, or route a
    checkpoint-ineligible but potentially material event to EventAssessment/Attention Watch;
@@ -397,6 +401,37 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     complete pair only if either arm's first two decisions disagree. Treatment agreement may form a
     Signal; the control arm is comparison-only. Invalid, reused, mismatched-runtime, incomplete, or
     unnecessarily expanded replicate sets abstain.
+
+### Parallel Skill discovery and Judgment measurement lane
+
+- [x] `PDI-33` Add the non-executable Skill discovery and governance contract family.
+  - [x] Define registered outcome-opened full-information studies without changing Evidence Pack,
+    strict PIT, prospective input, Signal, Order, or execution authority.
+  - [x] Require one discovery plus at least two additional independent Event Case/time-family
+    validation blocks, bounded divergence, and no unresolved material or refuting counterexample.
+    Multiple specialists, repeated model runs, renamed IDs, instrument changes, or source-set changes
+    inside one event-family/time block remain one evaluation unit. Divergence limits are frozen in
+    the Study before analysis.
+  - [x] Build a complete Skill Baseline Snapshot from every runtime manifest, both research
+    catalogs, instruction identity, and every admitted open candidate. Require one typed
+    duplicate/subsumed/extension/specialization/conflict/orthogonal review per subject and keep
+    merge/replace outcomes non-mutating.
+- [x] `PDI-34` Add observational Judgment Skill Trace and tolerant evaluation contracts.
+  - [x] Bind offered, routed, dependency-loaded and exact loaded-manifest identities plus
+    Agent-reported use and influenced proposal paths in a Judgment v2 sidecar. Rejected Skills
+    cannot invent version identity or route reasons; self-report is not causal evidence.
+  - [x] Freeze direction, horizon, total-return, volatility and adverse-excursion bands after a
+    Judgment but before outcome opening, with maximum widths from a Harness-durably-registered
+    pre-run policy catalog. Results cannot alter
+    exact consensus, Signal/Order, mandate, approval, reconciliation, or execution gates.
+- [ ] `PDI-35` Exercise the governance loop with real research evidence.
+  - [ ] Emit the Skill Trace sidecar automatically from each registered model adapter while
+    preserving legacy Judgment replay.
+  - [ ] Register one multi-case Skill Research Study, run its discovery and at least two independent
+    validations, complete all catalog/candidate comparisons, and either admit or reject the first
+    non-executable candidate.
+  - [ ] Test any admitted candidate on a later pristine holdout or prospective cohort before an
+    explicitly authorized active-Skill catalog change.
 
 Stage 5 — automate bounded follow-up and open registered outcomes:
 

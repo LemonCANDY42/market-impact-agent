@@ -100,6 +100,19 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - invocation and loaded-resource hashes in the run trace; a Skill grants no execution
   authority by itself.
 
+`JudgmentSkillTrace.v1` now defines the versioned sidecar for the fuller chain: offered or
+dependency-only, selected/rejected/dependency-loaded, exact manifest identity, route reason,
+evidence trigger, Agent-reported use, and reportedly influenced proposal paths. The Harness checks
+the Judgment, route, execution binding, Evidence Pack references, and proposal paths. The report is
+observational self-attribution, not causal Skill evidence, and cannot affect a Signal or execution.
+Automatic emission by each model adapter remains open; historical Judgment Artifact v2 identities
+are not rewritten.
+
+Outcome-opened multi-case Skill discovery is separately specified in
+`docs/SKILL_GOVERNANCE.md`. It may use bounded specialist decomposition, but specialists sharing one
+case remain one evaluation unit. A non-executable candidate requires two additional independent
+validation blocks and complete catalog conflict governance before any later active-Skill gate.
+
 ### MCP and tools
 
 - versioned MCP configuration with server identity, transport, command/origin, environment

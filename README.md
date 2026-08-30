@@ -112,7 +112,12 @@ The bootstrap implements:
   Harness logical due time, healthy typed `no_data`, and append-only Collection Usage Records with
   proved request/page/byte/row/latency totals and averages; a real CSRC-plus-Tushare
   market tracer and the authorized host process-supervisor acceptance have passed, while complete
-  multi-policy operations, retention, and restore acceptance remains a separate gate;
+  multi-policy operations, retention, and restore acceptance remains a separate gate. A 30 August
+  runtime audit found current route-plan drift: one serial worker can spend 291 seconds across
+  thirteen due Jobs while two-minute news Jobs have a 90-second grace window, producing post-
+  admission misses and zero currently operational checkpoints. Bounded per-opportunity concurrency
+  and versioned replacement-route admission are the next mainline repair; the existing append-only
+  collector state remains intact and must not be restarted or discarded;
 - a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
   poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
   due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,
@@ -141,6 +146,14 @@ The bootstrap implements:
 - persona-free, automatically routed Research Method Skills adapted from stable event,
   fundamental, market-context, and adversarial-risk workflows; a frozen four-arm ablation
   holds evidence/model/action space constant while varying only those method layers;
+- a separate [Skill discovery and governance](docs/SKILL_GOVERNANCE.md) lane for registered
+  outcome-opened full-information research. It requires one discovery plus at least two additional
+  independent Event Case/time-family validations, bounded divergence, resolved material
+  counterexamples, and exhaustive comparison against every runtime Skill, both research catalogs,
+  and open candidate before creating a non-executable candidate. A Judgment v2 sidecar can retain
+  offered/routed/loaded/reported-use/influence trace, and a pre-outcome evaluation band can measure
+  broadly correct direction, horizon, return, volatility and adverse excursion. Neither contract
+  changes PIT, consensus, Signal/Order, approval, paper, or live authority;
 - a content-identified Model Provider Profile/Factory plus a hash-chained Usage Ledger for
   successful and failed runs, including per-run Token/time/result budgets and a cost ceiling when
   the Provider has a defensible USD/token price;

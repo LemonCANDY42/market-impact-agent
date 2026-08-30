@@ -173,6 +173,9 @@ FRED, and live Polymarket context into prose before the debate and decision grap
 - Allow a derived sentiment feature to describe sample size, cross-source disagreement,
   event-versus-opinion mix, and confidence. It remains a derived assessment, never canonical
   evidence or an automatic trading weight.
+- Reuse analyst/risk/countercase roles as bounded decomposition inside a registered Skill Research
+  Study when the question benefits from it. Role count, debate rounds, and repeated calls over one
+  Event Case remain one analysis unit and cannot satisfy independent-validation gates.
 - Test every source adapter for future-dated and undated-record leakage.
 
 The public `NewsObservationBatch` contract now implements the ordered source chain, typed fetch

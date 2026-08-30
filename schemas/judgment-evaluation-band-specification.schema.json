@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/judgment-evaluation-band-specification.schema.json",
+  "title": "Judgment Evaluation Band Specification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "specification_id", "registered_at", "outcome_open_not_before",
+    "policy_catalog", "tolerance_policy", "judgment_artifact_id",
+    "judgment_artifact_hash", "judgment_started_at", "judgment_finished_at",
+    "target_id", "expected_direction",
+    "earliest_horizon_sessions", "latest_horizon_sessions", "terminal_return_lower",
+    "terminal_return_upper", "realized_volatility_lower",
+    "realized_volatility_upper",
+    "maximum_adverse_excursion", "price_basis", "volatility_basis", "overall_rule",
+    "evaluation_only", "changes_signal_or_execution_admission"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.judgment-evaluation-band-specification.v1"},
+    "specification_id": {"type": "string", "pattern": "^judgment-evaluation-band-[0-9a-f]{64}$"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "outcome_open_not_before": {"type": "string", "format": "date-time"},
+    "policy_catalog": {"$ref": "#/$defs/policy_catalog"},
+    "tolerance_policy": {"$ref": "#/$defs/tolerance_policy"},
+    "judgment_artifact_id": {"type": "string", "pattern": "^judgment-[0-9a-f]{64}$"},
+    "judgment_artifact_hash": {"$ref": "#/$defs/sha256"},
+    "judgment_started_at": {"type": "string", "format": "date-time"},
+    "judgment_finished_at": {"type": "string", "format": "date-time"},
+    "target_id": {"type": "string", "minLength": 1},
+    "expected_direction": {"enum": ["up", "down"]},
+    "earliest_horizon_sessions": {"type": "integer", "minimum": 1},
+    "latest_horizon_sessions": {"type": "integer", "minimum": 1},
+    "terminal_return_lower": {"$ref": "#/$defs/decimal"},
+    "terminal_return_upper": {"$ref": "#/$defs/decimal"},
+    "realized_volatility_lower": {"$ref": "#/$defs/nonnegative_decimal"},
+    "realized_volatility_upper": {"$ref": "#/$defs/nonnegative_decimal"},
+    "maximum_adverse_excursion": {"$ref": "#/$defs/nonnegative_decimal"},
+    "price_basis": {"type": "string", "minLength": 1},
+    "volatility_basis": {"type": "string", "minLength": 1},
+    "overall_rule": {"const": "all_direction_horizon_return_volatility_and_adverse_excursion"},
+    "evaluation_only": {"const": true},
+    "changes_signal_or_execution_admission": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "nonnegative_decimal": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+    "tolerance_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "policy_id", "policy_name", "policy_version",
+        "maximum_latest_horizon_sessions", "maximum_horizon_span_sessions",
+        "maximum_return_band_width", "maximum_volatility_band_width",
+        "maximum_adverse_excursion", "price_basis", "volatility_basis"
+      ],
+      "properties": {
+        "policy_id": {"type": "string", "pattern": "^judgment-evaluation-policy-[0-9a-f]{64}$"},
+        "policy_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "policy_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "maximum_latest_horizon_sessions": {"type": "integer", "minimum": 1, "maximum": 1260},
+        "maximum_horizon_span_sessions": {"type": "integer", "minimum": 1, "maximum": 1260},
+        "maximum_return_band_width": {"$ref": "#/$defs/nonnegative_decimal"},
+        "maximum_volatility_band_width": {"$ref": "#/$defs/nonnegative_decimal"},
+        "maximum_adverse_excursion": {"$ref": "#/$defs/nonnegative_decimal"},
+        "price_basis": {"type": "string", "minLength": 1},
+        "volatility_basis": {"type": "string", "minLength": 1}
+      }
+    },
+    "policy_catalog": {
+      "type": "object", "additionalProperties": false,
+      "required": ["catalog_id", "registered_at", "policies"],
+      "properties": {
+        "catalog_id": {"type": "string", "pattern": "^judgment-evaluation-policy-catalog-[0-9a-f]{64}$"},
+        "registered_at": {"type": "string", "format": "date-time"},
+        "policies": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/tolerance_policy"}
+        }
+      }
+    }
+  }
+}
