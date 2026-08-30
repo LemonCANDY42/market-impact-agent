@@ -920,6 +920,15 @@ That first immutable Decision remains a readable legacy v2 artifact. New Work ad
 Decision v3, bind the authority-derived Work `finished_at` and require it to equal `decided_at`;
 equivalent retries may verify and return the stored v2 but never mutate it.
 
+A second real v4 treatment then froze 39 later actual-receipt versions into four Work Units, 39
+Digests and 29 Cluster Seeds. It completed 29 of 30 logical members across 31 Provider attempts,
+343,211 input and 151,024 output Tokens. One classify request ended after dispatch without a
+completed response and was sealed `_AmbiguousRun` / `human_input_required`. Consequently there is
+no Proposal, Work authority receipt, Decision, Query Gate or downstream authority. The 29 completed
+members are retained as negative runtime evidence only. Restart cannot resend the ambiguous
+request; continuing these versions requires a separately accepted operator-resolution or
+replacement-run contract rather than an implicit replay.
+
 The exact real v2/v2 registration
 `event-impact-triage-work-comparison-e45b1d3cb71a5949a3418b82d06fbb32aab46eec062cde3e35cc61419ae2ff97`
 is terminal: baseline completed four members before a fifth map/coordinator member exhausted its

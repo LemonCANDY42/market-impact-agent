@@ -303,6 +303,13 @@ Implemented contract evidence:
   candidate exactly once, producing
   five archive, two EventAssessment and one Attention Watch cluster with no eligible checkpoint;
   the subsequent readiness audit excluded all nine and exposed 26 genuinely new candidates.
+- a second real v4 treatment froze 39 later actual-receipt versions into four work units, 39
+  Digests and 29 Cluster Seeds. Twenty-nine of thirty logical members completed across 31 Provider
+  attempts, 343,211 input and 151,024 output Tokens. One classify request ended after dispatch
+  without a completed response and was sealed `_AmbiguousRun` / `human_input_required`. The batch
+  therefore has no Proposal, authority receipt or Decision. It is negative runtime evidence, not a
+  partial semantic result; restart cannot resend the ambiguous request, and the 29 completed
+  classifications cannot be assembled by an operator outside Harness authority.
 
 Still required for real acceptance:
 
@@ -316,6 +323,12 @@ Still required for real acceptance:
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,
   unsupported transmission paths and resource use;
 - a real selected event passed through PDI-30 and Query Gate.
+
+The unresolved second-batch interruption also leaves an explicit design choice outside current
+authority. A future operator-resolution or replacement-run contract would have to retain the old
+dispatch, grant a new run identity explicitly, forbid combining two possible responses, and remain
+non-executable. Until such a contract is separately accepted, the batch stays terminal and its
+versions stay unclassified.
 
 None of this grants historical PIT, Judgment-run, Strategy Admission, paper/live execution, account,
 credential, mandate, approval, or broker authority.

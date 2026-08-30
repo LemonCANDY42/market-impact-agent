@@ -90,7 +90,10 @@ The bootstrap implements:
   nine-version real v4 treatment completed all 13 members and produced a native Work Decision: no
   eligible policy checkpoint, five archive clusters, two EventAssessment routes and one Attention
   Watch route. That Decision classified each version once and granted no Query Gate, Judgment or
-  execution authority. Typed Position Snapshot/historical-context
+  execution authority. A subsequent 39-version real v4 treatment completed 29 of 30 logical
+  members but sealed one post-dispatch Provider interruption as `human_input_required`; it produced
+  no Proposal or Decision and is retained only as negative runtime evidence, without automatic
+  replay. Typed Position Snapshot/historical-context
   payloads, completed real comparison arms and passing blind semantic results remain open acceptance
   work. Order-time
   tradability and risk remain

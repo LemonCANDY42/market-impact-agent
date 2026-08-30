@@ -373,6 +373,15 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       first Decision remains readable as legacy v2; new Work admissions use Decision v3, bind
       authority `finished_at`, require exact `decided_at`, and can idempotently verify/reopen that
       equivalent stored v2 without rewriting it.
+    - [x] Preserve the second unlabelled real v4 batch as negative runtime evidence instead of
+      replaying one ambiguous request. The frozen 39-version actual-receipt Candidate Set and
+      four-unit Manifest produced 39 Digests and 29 Cluster Seeds. Twenty-nine of thirty logical
+      members completed across 31 Provider attempts with 343,211 input and 151,024 output Tokens.
+      One classify request ended after dispatch without a completed response and was sealed
+      `_AmbiguousRun` / `human_input_required`; therefore the Work graph produced no Proposal,
+      authority receipt, Decision, Query Gate or execution authority. Restart must reopen that
+      terminal evidence without sending the request again. Any later operator-resolution or
+      replacement-run authority is a separate explicit contract decision, not an implicit retry.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
