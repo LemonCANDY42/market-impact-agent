@@ -225,3 +225,55 @@ In parallel, the Prospective Receipt Journal and source-acceptance sequence in
 [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) collect genuine future availability/authority and
 build reusable datasets. That path improves future backtests and paper/live inputs, but it does not
 change the remaining historical strict-PIT blockers above.
+
+## Outcome-opened event-logic stress tests
+
+A private, reproducible historical stress test now covers 17 `news_first` Event Clusters and 37
+asset exposures from the outcome-opened catalog. It verifies upstream hashes, aggregates by Event
+Cluster, freezes a 1,000-draw random-date comparison, and reports window, pre-event drift,
+market-relative, state, family, overlap and multiple-testing sensitivity. Its content identity is
+`historical-robustness-06168192f3db05225851c10cdac45a9eeb9ec967085763f8f7bac94e45a502d8`.
+
+The descriptive signed cluster mean is 3.38% at five sessions, while the signed 20-session
+pre-event drift is -0.98%; the five-session random-date empirical p-value is 0.0010 and its
+five-window BH q-value is 0.0017. These values are materially selection-sensitive: clusters found
+only from news average 1.15% at five sessions, while clusters also marked `price_first` average
+6.55%. The test cannot repair post-outcome event-directory, direction, window, state or exposure
+selection and therefore supplies neither a causal result nor a strategy/backtest admission claim.
+
+An independently predeclared adversarial pass then challenged the five-session result. All 17
+leave-one-cluster-out estimates remained positive at 2.53%–3.72%; excluding every dual
+`price_first` cluster retained 1.15%, excluding the dense 2024 calendar retained 2.59%, and a
+uniform geometric market-relative specification retained 1.85%. Every computable leave-one-family
+and leave-one-year block also stayed positive. This narrows the specific concern that one cluster,
+one family, one year or the price-first subset alone creates the direction. It does not narrow the
+larger post-outcome directory and timing-selection problem. The adversarial analysis identity is
+`historical-robustness-adversarial-ea65fbf2a744b7a2555c7a501c3c27d4057a2665ba26a4d3183ec55abe47d98f`.
+
+A separate price-first discovery pass retained 20 candidate event windows after starting from
+industry/index anomalies rather than named stories. Ten have tier-A, five tier-B and five tier-C
+source/mechanism support; eleven are P0 candidates for subsequent source-version and PIT rebuilding.
+The private content identity is
+`sha256:6b2cf67e1fa034b4eade8890df030d396edd1cfe4c9d578ec37fcf2c1a047283`.
+The package preserves official URLs, aggregate reactions, confounders and PIT gaps but deliberately
+omits licensed market rows, so its exact price calculations cannot be reproduced from that package
+alone. It is a discovery pool, not a backtest corpus or causal ranking.
+
+A separate leave-block-out transfer audit used 14 event-archetype folds and ten year folds. Across
+17 events and 37 paths it formed 26 conditional hypotheses; after outcomes were opened, 18 retained
+the predicted sign and eight were opposite or zero, while 48 insufficiently supported paths
+abstained. All paths remain action-ineligible because point-in-time prior expectations and source
+availability are incomplete. Hidden miss families were inspected only after the folds for error
+analysis and were not converted into event-specific keyword rules.
+
+A second independently predeclared transfer validation did not support promotion of those rules.
+Across six support/consistency thresholds, only 17 block-plus-path fingerprints persisted. At the
+default threshold it produced 24 conditional hypotheses, 18 same-sign outcomes, six opposite or
+zero outcomes and 50 abstentions; in 499 within-cell outcome-sign permutations, both 24 hypotheses
+and 18 same-sign outcomes fell inside their random-label reference intervals. The current rule set
+therefore remains a hypothesis-generation and abstention aid, not demonstrated generalizable event
+logic. The hidden cases stayed outside the population, folds, permutations and code constants.
+
+These artifacts may refine general event structure, transmission, countercase and abstention Skills.
+They may not enter strict historical inputs, retroactively grant authority, tune an opened cohort
+and then reuse it as unseen evidence, or authorize prospective Judgment, paper or live execution.

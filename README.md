@@ -70,9 +70,12 @@ The bootstrap implements:
   or held-position impact routing, and leaves first-eligible selection to the Harness after
   authoritative coordinator/specialist Run and Usage Ledger verification. A fixture-accepted,
   no-tool Model Provider runtime now freezes coordinator-only and bounded-specialist comparison
-  arms, budgets, restart behavior and pre-reveal evaluation mechanics. Typed
-  position/historical-context payloads, real candidate replay and passing blind semantic results
-  remain open acceptance work. Order-time
+  arms, budgets, restart behavior and pre-reveal evaluation mechanics. The first sealed real
+  121-version comparison attempt stopped fail-closed on timeout/budget capacity before producing a
+  report; an arm-neutral Work Manifest now partitions the exact input into eleven bounded units,
+  but those units are not yet wired into runtime execution. Typed position/historical-context
+  payloads, completed real comparison arms and passing blind semantic results remain open acceptance
+  work. Order-time
   tradability and risk remain
   independently fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source

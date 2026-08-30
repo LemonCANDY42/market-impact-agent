@@ -267,6 +267,33 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     post-admission versions through both arms and a later pristine blind batch. Pass the registered
     evaluation of classification, `needs_review`, impact route, unsupported transmission paths,
     hidden-case family recall and cost. Fixture contract acceptance is not real semantic acceptance.
+    - [x] Freeze the first real operator-exposed batch without disclosing licensed payloads: 121
+      post-admission versions in Candidate Set
+      `event-impact-triage-candidate-set-407ac0bd37e6e8934f390e73a31e1794074343d22a5a6d7db4299629c2c9abc2`,
+      complete labels sealed before execution, and comparison
+      `event-impact-triage-comparison-7421f8aff50415538e28ff677d9d349607b87495f49d9aae4fdcba0ce171a533`.
+      The baseline stopped after two completed Provider turns and 179,520 input / 17,614 output
+      Tokens when a later turn timed out; the treatment stopped after two turns and 182,727 input /
+      42,631 output Tokens when the first specialist exceeded its frozen role budget. No Comparison
+      Report exists, the batch gate is false with `triage_arm_not_completed`, and no candidate or
+      downstream authority was produced. Preserve this as real negative capacity evidence; do not
+      retry the ambiguous baseline request or repair it by merely increasing budgets.
+  - [ ] `PDI-29E` Add a content-identified Work Manifest before recovering the failed real batch.
+    Deterministically collapse exact content duplicates, retain every version identity, and split
+    work in receipt order under frozen candidate-count and estimated-prompt ceilings. Baseline and
+    treatment must share the same manifest; partitions must be exhaustive, disjoint and stable;
+    labels must remain absent; any oversized unit or incomplete arm fails before semantic scoring.
+    After manifest acceptance, add bounded map/partition/classify work-unit execution with complete
+    per-unit Run/Usage authority. The failed v1 attempts remain immutable and cannot be silently
+    resumed or counted as completed v2 evidence.
+    - [x] Accept the arm-neutral Work Manifest v1 contract and run it against the exact real
+      Candidate Set. Manifest
+      `event-impact-triage-work-manifest-dbae4a23bb3283c2352c6842eca366d19062d9217406d4d0d13e440e1e5853fc`
+      retains 121 distinct content atoms and partitions them into ten 12-version units plus one
+      one-version unit. The conservative canonical-JSON UTF-8 upper bounds range from 1,260 to
+      23,687 under a frozen 32,768 ceiling; no singleton or 128-atom cap failed. This accepts real
+      preflight partition mechanics only; neither arm is yet bound to or executed through these
+      units.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan

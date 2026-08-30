@@ -201,6 +201,80 @@ class EventImpactTriageCandidateSet:
         return {**self.core_dict(), "candidate_set_id": self.candidate_set_id}
 
 
+def event_impact_triage_candidate_set_from_dict(
+    value: object,
+) -> EventImpactTriageCandidateSet:
+    payload = _object(value, "Event Impact Triage Candidate Set")
+    expected = {
+        "schema_version",
+        "candidate_set_id",
+        "registration_id",
+        "checkpoint_key",
+        "route_plan_id",
+        "route_admission_id",
+        "readiness_report_id",
+        "data_snapshot_id",
+        "admitted_at",
+        "frozen_at",
+        "observations",
+        "historical_pit_claim",
+        "judgment_model_calls_authorized",
+        "execution_capability",
+    }
+    if set(payload) != expected:
+        raise ValueError("Event Impact Triage Candidate Set fields are invalid")
+    observation_fields = {
+        "version_id",
+        "observation_id",
+        "first_available_at",
+        "authority_at",
+        "provider_id",
+        "provider_version",
+        "upstream_source",
+        "source_ref",
+        "raw_content_hash",
+        "normalized_payload_hash",
+    }
+    observations: list[TriageObservationRef] = []
+    for raw in _array(payload.get("observations"), "triage candidate observations"):
+        item = _object(raw, "triage candidate observation")
+        if set(item) != observation_fields:
+            raise ValueError("Event Impact Triage observation fields are invalid")
+        observations.append(
+            TriageObservationRef(
+                version_id=_string(item, "version_id"),
+                observation_id=_string(item, "observation_id"),
+                first_available_at=_datetime(_string(item, "first_available_at")),
+                authority_at=_datetime(_string(item, "authority_at")),
+                provider_id=_string(item, "provider_id"),
+                provider_version=_string(item, "provider_version"),
+                upstream_source=_string(item, "upstream_source"),
+                source_ref=_string(item, "source_ref"),
+                raw_content_hash=_string(item, "raw_content_hash"),
+                normalized_payload_hash=_string(item, "normalized_payload_hash"),
+            )
+        )
+    result = EventImpactTriageCandidateSet(
+        candidate_set_id=_string(payload, "candidate_set_id"),
+        registration_id=_string(payload, "registration_id"),
+        checkpoint_key=_string(payload, "checkpoint_key"),
+        route_plan_id=_string(payload, "route_plan_id"),
+        route_admission_id=_string(payload, "route_admission_id"),
+        readiness_report_id=_string(payload, "readiness_report_id"),
+        data_snapshot_id=_string(payload, "data_snapshot_id"),
+        admitted_at=_datetime(_string(payload, "admitted_at")),
+        frozen_at=_datetime(_string(payload, "frozen_at")),
+        observations=tuple(observations),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("Event Impact Triage Candidate Set is not canonical")
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class TriageClusterProposal:
     cluster_id: str
@@ -453,6 +527,8 @@ class EventImpactTriageProposal:
             unknown_evidence = set(cluster.evidence_version_ids) - expected
             if unknown_evidence:
                 raise ValueError("triage proposal cites evidence outside the frozen candidate set")
+            if not set(cluster.evidence_version_ids) <= set(cluster.candidate_version_ids):
+                raise ValueError("triage cluster evidence must belong to the same event cluster")
         if len(assigned) != len(set(assigned)):
             raise ValueError("triage proposal assigns a candidate version more than once")
         if set(assigned) != expected:
@@ -832,13 +908,17 @@ def admit_event_impact_triage(
     )
 
     availability = {item.version_id: item.first_available_at for item in candidate_set.observations}
+    ready_at = {
+        item.cluster_id: max(
+            availability[version_id]
+            for version_id in (*item.candidate_version_ids, *item.evidence_version_ids)
+        )
+        for item in proposal.clusters
+    }
     ordered = tuple(
         sorted(
             proposal.clusters,
-            key=lambda item: (
-                min(availability[version_id] for version_id in item.candidate_version_ids),
-                item.cluster_id,
-            ),
+            key=lambda item: (ready_at[item.cluster_id], item.cluster_id),
         )
     )
     eligible = tuple(
@@ -848,10 +928,7 @@ def admit_event_impact_triage(
                 for item in ordered
                 if item.checkpoint_eligibility is CheckpointEligibility.ELIGIBLE
             ),
-            key=lambda item: (
-                max(availability[version_id] for version_id in item.evidence_version_ids),
-                item.cluster_id,
-            ),
+            key=lambda item: (ready_at[item.cluster_id], item.cluster_id),
         )
     )
     needs_review = tuple(
@@ -863,15 +940,8 @@ def admit_event_impact_triage(
     if first_eligible is None:
         blockers = needs_review
     else:
-        eligible_at = max(
-            availability[version_id] for version_id in first_eligible.evidence_version_ids
-        )
-        blockers = tuple(
-            item
-            for item in needs_review
-            if min(availability[version_id] for version_id in item.candidate_version_ids)
-            <= eligible_at
-        )
+        eligible_at = ready_at[first_eligible.cluster_id]
+        blockers = tuple(item for item in needs_review if ready_at[item.cluster_id] <= eligible_at)
     if blockers:
         status = TriageDecisionStatus.NEEDS_REVIEW
         selected: TriageClusterProposal | None = None
@@ -945,6 +1015,15 @@ def _strict_utc(value: datetime, name: str) -> None:
 
 def _timestamp(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
+
+
+def _datetime(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("triage timestamp must use ISO 8601") from exc
+    _strict_utc(parsed, "triage timestamp")
+    return parsed
 
 
 def _trimmed(value: str, name: str) -> None:

@@ -286,6 +286,15 @@ fact/transmission/countercase specialists plus coordinator; an interrupted infer
 automatically. It grants no PIT, Judgment, or execution authority.
 _Avoid_: Dynamic debate, opaque Agent team, retry policy, trading plan
 
+**Event Impact Triage Work Manifest**:
+An arm-neutral, content-identified pre-model partition of one exact Candidate Set. It collapses only
+byte-identical normalized payloads into atoms while retaining every Observation Version identity,
+then assigns those atoms deterministically by first receipt under frozen candidate-count and
+conservative canonical-JSON UTF-8 size ceilings. It contains no source payloads or labels and grants
+no PIT, Judgment, classification, or execution authority. Baseline and treatment must bind the same
+Manifest before bounded work-unit execution can be accepted.
+_Avoid_: News summary, model shortlist, Provider-token estimate, completed triage run
+
 **Event Impact Triage Comparison Registration**:
 A content-identified pre-execution comparison of coordinator-only and bounded-specialist plans over
 the same Candidate Set, checkpoint contract, Model Provider Profile and complete sealed label set.

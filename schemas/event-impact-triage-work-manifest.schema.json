@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-work-manifest.schema.json",
+  "title": "Market Impact Event Impact Triage Work Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "candidate_set_id",
+    "candidate_set_hash",
+    "candidate_content_view",
+    "policy",
+    "ordered_candidate_version_ids",
+    "atoms",
+    "work_units",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-work-manifest.v1"},
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-work-manifest-[0-9a-f]{64}$"
+    },
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "candidate_set_hash": {"$ref": "#/$defs/sha256"},
+    "candidate_content_view": {"const": "normalized-observation-payload-v1"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "ordered_candidate_version_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/versionId"}
+    },
+    "atoms": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/atom"}
+    },
+    "work_units": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/workUnit"}
+    },
+    "historical_pit_claim": {"const": false},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "versionId": {
+      "type": "string",
+      "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+    },
+    "atomId": {
+      "type": "string",
+      "pattern": "^event-impact-triage-work-atom-[0-9a-f]{64}$"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_atoms_per_work_unit",
+        "max_candidate_versions_per_work_unit",
+        "max_estimated_serialized_prompt_utf8_tokens",
+        "token_estimator_id",
+        "serialized_prompt_format"
+      ],
+      "properties": {
+        "max_atoms_per_work_unit": {"type": "integer", "minimum": 1, "maximum": 128},
+        "max_candidate_versions_per_work_unit": {"type": "integer", "minimum": 1},
+        "max_estimated_serialized_prompt_utf8_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Conservative canonical-JSON UTF-8 byte upper bound at one byte per token; not a provider tokenizer count."
+        },
+        "token_estimator_id": {"const": "canonical-json-utf8-upper-bound-v1"},
+        "serialized_prompt_format": {"const": "triage-work-unit-content.v1"}
+      }
+    },
+    "atom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "atom_id",
+        "normalized_payload_hash",
+        "serialized_payload_bytes",
+        "candidate_version_ids"
+      ],
+      "properties": {
+        "atom_id": {"$ref": "#/$defs/atomId"},
+        "normalized_payload_hash": {"$ref": "#/$defs/sha256"},
+        "serialized_payload_bytes": {"type": "integer", "minimum": 1},
+        "candidate_version_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/versionId"}
+        }
+      }
+    },
+    "workUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_unit_id",
+        "ordinal",
+        "atom_ids",
+        "candidate_version_ids",
+        "atom_count",
+        "candidate_version_count",
+        "estimated_serialized_prompt_utf8_tokens"
+      ],
+      "properties": {
+        "work_unit_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-work-unit-[0-9a-f]{64}$"
+        },
+        "ordinal": {"type": "integer", "minimum": 1},
+        "atom_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/atomId"}
+        },
+        "candidate_version_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/versionId"}
+        },
+        "atom_count": {"type": "integer", "minimum": 1},
+        "candidate_version_count": {"type": "integer", "minimum": 1},
+        "estimated_serialized_prompt_utf8_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Conservative canonical-JSON UTF-8 byte upper bound at one byte per token; not a provider tokenizer count."
+        }
+      }
+    }
+  }
+}

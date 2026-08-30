@@ -33,6 +33,7 @@ from market_impact_agent.event_impact_triage_evaluation import (
     TriageGoldLabel,
     TriageLabelExposure,
     evaluate_event_impact_triage_comparison,
+    event_impact_triage_label_set_from_dict,
 )
 from market_impact_agent.event_impact_triage_runtime import (
     EventImpactTriageExecutionPlan,
@@ -763,6 +764,7 @@ def test_comparison_protocol_scores_arms_but_operator_exposed_batch_cannot_promo
     assert not validate_agent_contract(
         labels.to_dict(), "event-impact-triage-label-set.schema.json"
     )
+    assert event_impact_triage_label_set_from_dict(labels.to_dict()) == labels
     assert not validate_agent_contract(
         comparison.to_dict(), "event-impact-triage-comparison-registration.schema.json"
     )

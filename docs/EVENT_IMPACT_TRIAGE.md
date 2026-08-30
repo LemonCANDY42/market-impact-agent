@@ -83,6 +83,34 @@ and cost ceiling. Outputs, raw responses, validation events and usage are sealed
 reopened exactly. A process interruption with an uncertain Provider outcome becomes
 `human_input_required` and is never retried automatically.
 
+The first real 121-version run showed that one full-set output per role is not an acceptable work
+unit. The coordinator-only arm completed two Provider turns before a later turn timed out; the
+treatment completed two turns before its first specialist exceeded the frozen output budget. The
+Harness produced no Comparison Report or triage selection. This is preserved as negative runtime
+evidence, including the known Usage records and the unresolved timed-out Provider outcome. It is
+not a semantic classifier result and cannot be repaired by raising limits or replaying the uncertain
+request.
+
+PDI-29E therefore introduces a pre-model Work Manifest. It binds the same Candidate Set to stable,
+receipt-ordered work units under both a candidate-count ceiling and an estimated serialized-prompt
+ceiling. Exact normalized-content duplicates may share one atom, but every Observation Version
+identity remains covered. The manifest contains hashes, sizes, ordering and policy only—never paid
+news payloads or labels—and grants no PIT, Judgment or execution authority. Baseline and treatment
+must use the same manifest. Any missing, duplicate, reordered or oversized unit fails closed.
+
+The later runtime recovery is intentionally separate: bounded map units produce compact candidate
+digests, a partition unit proposes cross-unit event clusters from those digests, and bounded
+classification units reopen only each proposed cluster's raw frozen content. The Harness alone
+assembles and validates the unchanged full Proposal. Every unit needs its own authoritative Run and
+Usage record; one failed or ambiguous unit blocks the arm rather than allowing partial conclusions.
+
+The v1 Manifest contract has passed both a synthetic 121-version test and the exact private real
+Candidate Set preflight. The real Manifest contains 121 distinct atoms and eleven work units: ten
+units of 12 versions and one of one. Their conservative canonical-JSON UTF-8 size bounds are all
+below the frozen 32,768 ceiling. No payload or label is present in the Manifest. This proves only
+that the current input can be partitioned deterministically; runtime phase binding, per-unit Usage
+authority and completed comparison arms remain unimplemented.
+
 Position and historical IDs are deliberately not accepted yet. The Harness must first define and
 reopen their typed payloads so the model receives actual cutoff-bound content rather than an opaque
 identifier. Their absence does not block portfolio-independent triage. Until those contracts pass,
@@ -147,8 +175,10 @@ Still required for real acceptance:
 
 - typed, secret-free Position Snapshot and evidence-lane-preserving Historical Analogy Pack payload
   bindings before their optional specialists can be enabled;
-- labels sealed before model execution, replay of the currently unclassified prospective versions
-  through both arms with complete Run Records and costs, and a later pristine blind batch;
+- complete PDI-29E Work Manifest and bounded work-unit recovery of the sealed 121-version batch;
+  the existing monolithic attempt failed before a Comparison Report and remains negative evidence;
+- replay through both arms with complete per-unit Run Records and costs, followed by a later pristine
+  blind batch and an explicit cross-batch promotion disposition;
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,
   unsupported transmission paths and resource use;
 - a real selected event passed through PDI-30 and Query Gate.

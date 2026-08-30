@@ -31,6 +31,7 @@ from market_impact_agent.event_impact_triage import (
     TriageRunEvidence,
     TriageRunMemberEvidence,
     admit_event_impact_triage,
+    event_impact_triage_candidate_set_from_dict,
     freeze_event_impact_triage_candidate_set,
 )
 from market_impact_agent.observations import (
@@ -334,6 +335,7 @@ def test_triage_selects_first_eligible_without_erasing_other_financial_impact(
         )
         == ()
     )
+    assert event_impact_triage_candidate_set_from_dict(candidate_set.to_dict()) == candidate_set
     assert (
         validate_agent_contract(proposal.to_dict(), "event-impact-triage-proposal.schema.json")
         == ()
@@ -400,6 +402,86 @@ def test_earlier_needs_review_blocks_later_checkpoint_selection(tmp_path: Path) 
     assert decision.blocking_review_cluster_ids == (review.cluster_id,)
     assert decision.attention_watch_cluster_ids == (review.cluster_id,)
     assert decision.unselected_eligible_cluster_ids == (eligible.cluster_id,)
+
+
+def test_cluster_ready_time_uses_latest_member_before_blocking_selection(tmp_path: Path) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    first, second, third = candidate_set.version_ids
+    review = TriageClusterProposal.build(
+        candidate_version_ids=(first, third),
+        checkpoint_eligibility=CheckpointEligibility.NEEDS_REVIEW,
+        recommended_route=TriageRoute.ATTENTION_WATCH,
+        event_archetypes=(EventArchetype.ISSUER_CORPORATE,),
+        event_stage=EventStage.DIFFUSING,
+        changed_facts=("A later follow-up makes the earlier issuer item unresolved.",),
+        rule_reasons=("The completed cluster does not yet prove a policy-rule change.",),
+        evidence_version_ids=(first, third),
+        uncertainty_notes=("Primary-source confirmation is missing.",),
+        watch_questions=("Will an authority publish a binding follow-up?",),
+        triage_confidence=0.52,
+    )
+    eligible = TriageClusterProposal.build(
+        candidate_version_ids=(second,),
+        checkpoint_eligibility=CheckpointEligibility.ELIGIBLE,
+        recommended_route=TriageRoute.CHECKPOINT_CANDIDATE,
+        event_archetypes=(EventArchetype.POLICY_REGULATORY,),
+        event_stage=EventStage.FIRST_OBSERVED,
+        changed_facts=("A capital-market rule changed.",),
+        rule_reasons=("The registered policy rule matches.",),
+        evidence_version_ids=(second,),
+        transmission_channels=(TransmissionChannel.POLICY_ACCESS,),
+        triage_confidence=0.81,
+    )
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(review, eligible),
+    )
+
+    decision = admit_event_impact_triage(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=_run_evidence(),
+        run_authority=RecordingRunAuthority(candidate_set.candidate_set_id, proposal.proposal_id),
+        decided_at=DECIDED_AT,
+    )
+
+    assert decision.status is TriageDecisionStatus.ELIGIBLE_SELECTED
+    assert decision.selected_cluster_id == eligible.cluster_id
+    assert decision.blocking_review_cluster_ids == ()
+    assert decision.attention_watch_cluster_ids == (review.cluster_id,)
+
+
+def test_triage_proposal_rejects_cross_cluster_evidence(tmp_path: Path) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    first, second, third = candidate_set.version_ids
+    first_cluster = TriageClusterProposal.build(
+        candidate_version_ids=(first,),
+        checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+        recommended_route=TriageRoute.ARCHIVE,
+        event_archetypes=(),
+        event_stage=EventStage.FIRST_OBSERVED,
+        changed_facts=(),
+        rule_reasons=("The item is outside the registered checkpoint rule.",),
+        evidence_version_ids=(second,),
+        triage_confidence=0.7,
+    )
+    remaining = TriageClusterProposal.build(
+        candidate_version_ids=(second, third),
+        checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+        recommended_route=TriageRoute.ARCHIVE,
+        event_archetypes=(),
+        event_stage=EventStage.FIRST_OBSERVED,
+        changed_facts=(),
+        rule_reasons=("The remaining items are outside the registered checkpoint rule.",),
+        evidence_version_ids=(second, third),
+        triage_confidence=0.7,
+    )
+
+    with pytest.raises(ValueError, match="evidence must belong to the same event cluster"):
+        EventImpactTriageProposal.build(
+            candidate_set=candidate_set,
+            clusters=(first_cluster, remaining),
+        )
 
 
 def test_triage_proposal_cannot_omit_a_frozen_candidate(tmp_path: Path) -> None:

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.domain import require_aware
@@ -182,6 +182,56 @@ class EventImpactTriageLabelSet:
             labels=ordered,
             sealed_at=sealed_at,
         )
+
+
+def event_impact_triage_label_set_from_dict(value: object) -> EventImpactTriageLabelSet:
+    payload = _object(value, "Event Impact Triage Label Set")
+    expected = {
+        "schema_version",
+        "label_set_id",
+        "candidate_set_id",
+        "exposure",
+        "labels",
+        "sealed_at",
+    }
+    if set(payload) != expected:
+        raise ValueError("Event Impact Triage Label Set fields are invalid")
+    label_fields = {
+        "version_id",
+        "checkpoint_eligibility",
+        "expected_route",
+        "must_catch",
+        "material_transmission_expected",
+        "rationale",
+    }
+    labels: list[TriageGoldLabel] = []
+    for raw in _array(payload.get("labels"), "triage labels"):
+        item = _object(raw, "triage label")
+        if set(item) != label_fields:
+            raise ValueError("Event Impact Triage label fields are invalid")
+        labels.append(
+            TriageGoldLabel(
+                version_id=_string(item, "version_id"),
+                checkpoint_eligibility=CheckpointEligibility(
+                    _string(item, "checkpoint_eligibility")
+                ),
+                expected_route=TriageRoute(_string(item, "expected_route")),
+                must_catch=_boolean(item, "must_catch"),
+                material_transmission_expected=_boolean(item, "material_transmission_expected"),
+                rationale=_string(item, "rationale"),
+            )
+        )
+    result = EventImpactTriageLabelSet(
+        label_set_id=_string(payload, "label_set_id"),
+        candidate_set_id=_string(payload, "candidate_set_id"),
+        exposure=TriageLabelExposure(_string(payload, "exposure")),
+        labels=tuple(labels),
+        sealed_at=_datetime(_string(payload, "sealed_at")),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("Event Impact Triage Label Set is not canonical")
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -809,3 +859,32 @@ def _prefixed_hash(value: str, prefix: str, label: str) -> None:
     if not value.startswith(prefix):
         raise ValueError(f"{label} must start with {prefix}")
     _sha256(value.removeprefix(prefix), label)
+
+
+def _object(value: object, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} must be an object with string keys")
+    mapping = cast(dict[object, object], value)
+    if not all(isinstance(key, str) for key in mapping):
+        raise TypeError(f"{label} must be an object with string keys")
+    return cast(dict[str, object], mapping)
+
+
+def _array(value: object, label: str) -> list[object]:
+    if not isinstance(value, list):
+        raise TypeError(f"{label} must be an array")
+    return cast(list[object], value)
+
+
+def _string(payload: dict[str, object], name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise TypeError(f"{name} must be a non-empty trimmed string")
+    return value
+
+
+def _boolean(payload: dict[str, object], name: str) -> bool:
+    value = payload.get(name)
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a boolean")
+    return value
