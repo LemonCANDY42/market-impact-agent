@@ -231,6 +231,8 @@ class EventImpactTriageWorkComparisonRegistration:
             or treatment_plan.arm is not TriageComparisonArm.TREATMENT
         ):
             raise ValueError("triage work comparison plans have incorrect arms")
+        if baseline_plan.schema_version != treatment_plan.schema_version:
+            raise ValueError("triage work comparison cannot mix Plan schema revisions")
         for plan in (baseline_plan, treatment_plan):
             if (
                 plan.candidate_set_id != candidate_set.candidate_set_id

@@ -287,8 +287,12 @@ automatically. It grants no PIT, Judgment, or execution authority.
 _Avoid_: Dynamic debate, opaque Agent team, retry policy, trading plan
 
 **Event Impact Triage Work Execution Plan**:
-A content-identified v2 pre-model binding of the exact Candidate Set and Work Manifest hashes to one
-comparison arm and Model Provider Profile. It freezes the repeated map roles per Work Unit, one
+A content-identified pre-model binding of the exact Candidate Set and Work Manifest hashes to one
+comparison arm and Model Provider Profile. Schema v2 preserves the original exact-ID model-output
+dialect byte for byte. Schema v3 changes only that model-facing dialect: map outputs bind to atoms
+by exact array position and partition outputs use validated zero-based global atom ordinals; the
+Harness injects the authoritative atom identities into the unchanged canonical Digest and
+Partition artifacts. Both schemas freeze the repeated map roles per Work Unit, one
 partition coordinator, bounded classify fan-out, exact Skill/prompt/output contracts and per-unit,
 per-phase and aggregate request/token/cost ceilings. Run identity is phase plus Work Unit or Cluster
 Seed plus role. Labels, tools, PIT, Judgment and execution remain absent, and an ambiguous dispatched
@@ -301,7 +305,8 @@ and before either Manifest-bound arm starts. It fixes exact Candidate Set and Wo
 IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, checkpoint contract,
 Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
 stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
-authority.
+authority. Both plans must use the same Work Plan schema revision; mixed v2/v3 comparisons fail
+before registration, while v3/v3 comparisons retain the existing Registration and Report authority.
 _Avoid_: v1 comparison mutation, caller clock, revealed-label prompt, repaired failed arm
 
 **Event Impact Triage Work Comparison Report**:

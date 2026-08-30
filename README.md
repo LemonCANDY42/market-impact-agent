@@ -73,12 +73,18 @@ The bootstrap implements:
   arms, budgets, restart behavior and pre-reveal evaluation mechanics. The first sealed real
   121-version comparison attempt stopped fail-closed on timeout/budget capacity before producing a
   report; an arm-neutral Work Manifest partitions the exact input into eleven bounded units, and a
-  Manifest-bound v2 runtime now executes fail-closed map, partition, and per-cluster classification
-  units with authoritative restart and Usage reopening. A distinct v2 Work Comparison
+  Manifest-bound runtime now preserves the byte-exact v2 dialect and adds a v3 positional-identity
+  dialect: specialist findings and coordinator Digest drafts bind by exact array position, while
+  partition drafts use strictly validated zero-based global atom ordinals. The Harness translates
+  both dialects into the same canonical Digest, Partition and Proposal contracts and retains
+  fail-closed map, partition, per-cluster classification, restart and Usage reopening. A distinct Work Comparison
   Registration/Report pre-binds the Candidate Set, Manifest, plans and frozen gates, then scores
   only two fully reopened completed arms using Journal-derived timing and exact Usage cost. Its
   Report binds Outcome/receipt hashes and requires byte-identical Harness replay before downstream
-  use. Its 121-candidate proof is scripted only; no private real arm was run. Typed position/historical-context
+  use. The real v2/v2 replay was safely terminal but incomplete: baseline stopped
+  `budget_exhausted` after four completed members and treatment stopped `failed` after five, so no
+  Report or semantic authority exists. Its v3 121-candidate positional proof is scripted mechanics
+  evidence that addresses those identity/type-contract failures without rewriting v2. Typed Position Snapshot/historical-context
   payloads, completed real comparison arms and passing blind semantic results remain open acceptance
   work. Order-time
   tradability and risk remain

@@ -92,8 +92,15 @@ def _fixture(
     arm: TriageComparisonArm,
     count: int = 121,
     provider: ScriptedWorkProvider | None = None,
+    dialect: str = "v2",
 ) -> RuntimeFixture:
-    return _runtime(tmp_path, arm=arm, count=count, provider=provider)
+    return _runtime(
+        tmp_path,
+        arm=arm,
+        count=count,
+        provider=provider,
+        dialect=dialect,
+    )
 
 
 def _race_runner(runner: EventImpactTriageWorkRunner) -> AppendUsageAfterAssertionRunner:
@@ -529,6 +536,75 @@ def test_work_comparison_rejects_pre_registration_start_and_extra_usage(
             proposal=baseline_outcome.proposal,
             run_evidence=baseline_outcome.run_evidence,
         )
+
+
+def test_v3_comparison_registers_and_reports_but_mixed_revisions_fail(
+    tmp_path: Path,
+) -> None:
+    baseline, _, candidate_set, manifest, baseline_plan = _fixture(
+        tmp_path / "baseline-v3",
+        arm=TriageComparisonArm.BASELINE,
+        count=3,
+        dialect="v3",
+    )
+    treatment, _, treatment_candidates, treatment_manifest, treatment_plan = _fixture(
+        tmp_path / "treatment-v3",
+        arm=TriageComparisonArm.TREATMENT,
+        count=3,
+        dialect="v3",
+    )
+    v2_baseline, _, v2_candidates, v2_manifest, v2_baseline_plan = _fixture(
+        tmp_path / "baseline-v2",
+        arm=TriageComparisonArm.BASELINE,
+        count=3,
+    )
+    assert treatment_candidates == candidate_set == v2_candidates
+    assert treatment_manifest == manifest == v2_manifest
+    labels = _labels(candidate_set)
+
+    with pytest.raises(ValueError, match="cannot mix Plan schema revisions"):
+        EventImpactTriageWorkComparisonRegistration.build(
+            candidate_set=candidate_set,
+            label_set=labels,
+            work_manifest=manifest,
+            baseline_plan=v2_baseline_plan,
+            treatment_plan=treatment_plan,
+            registered_at=NOW + timedelta(hours=3),
+        )
+    assert v2_baseline.plan == v2_baseline_plan
+
+    store = EventImpactTriageWorkComparisonStore(
+        tmp_path / "comparison-v3.sqlite",
+        clock=lambda: NOW + timedelta(hours=3),
+    )
+    registration = store.register(
+        candidate_set=candidate_set,
+        label_set=labels,
+        work_manifest=manifest,
+        baseline_plan=baseline_plan,
+        treatment_plan=treatment_plan,
+    )
+    baseline._clock = lambda: NOW + timedelta(hours=4)
+    treatment._clock = lambda: NOW + timedelta(hours=4, minutes=10)
+    baseline_result = asyncio.run(baseline.run())
+    treatment_result = asyncio.run(treatment.run())
+    report = evaluate_event_impact_triage_work_comparison(
+        registration=registration,
+        candidate_set=candidate_set,
+        label_set=labels,
+        work_manifest=manifest,
+        baseline=_outcome(baseline, baseline_result),
+        treatment=_outcome(treatment, treatment_result),
+        baseline_authority=baseline,
+        treatment_authority=treatment,
+        registration_authority=store,
+        evaluated_at=NOW + timedelta(hours=5),
+    )
+    assert registration.schema_version == (
+        "market-impact.event-impact-triage-work-comparison-registration.v1"
+    )
+    assert report.schema_version == "market-impact.event-impact-triage-work-comparison-report.v1"
+    assert report.batch_gate_passed
 
 
 def test_failed_or_ambiguous_work_arm_has_no_scorable_outcome(tmp_path: Path) -> None:

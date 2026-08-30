@@ -118,6 +118,28 @@ the Work Unit coordinator. One partition coordinator consumes only the complete 
 one classify coordinator per Cluster Seed reopens only that seed's frozen raw content. The Harness
 then assembles the unchanged full Proposal and validates exact Candidate Set coverage.
 
+The v3 Work Execution Plan is a second explicit dialect of this same Harness runtime, not another
+orchestration owner and not another Work Manifest. V2 Plan JSON, prompt bytes, output and correction
+contracts, execution bindings, transcripts, terminal artifacts and replay remain unchanged. V3 has
+its own Plan schema, runtime reference, prompt-template IDs and Run artifact schema IDs. In v3, each
+specialist returns one finding object per input atom without `atom_id`, and the coordinator returns
+one Digest draft per atom without `atom_id`; exact array length and order are the binding, and the
+Harness injects the Work Unit's authoritative atom IDs before sealing the accepted output and
+building canonical Candidate Digest v1 artifacts. The partition coordinator receives global
+zero-based `atom_ordinal` values and returns `atom_ordinals`; the Harness rejects booleans,
+non-integers, negative or out-of-range values, non-increasing order within a cluster, duplicates and
+missing coverage before translating ordinals into canonical Cluster Partition v1 atom IDs. Classify
+and final Proposal assembly retain their existing semantic authority.
+
+V3 corrections carry the v3 output contract and stable validation categories without echoing atom
+IDs. Map contracts describe each narrative field as a bounded array of trimmed strings and include
+the forbidden label/route/authority control vocabulary; this supplies the model with the type,
+length and safety constraints that v2's field-name-only contract did not express. Parsing remains
+strict: there is no tolerant coercion, guessed identity or relaxed reserved-token guard. A
+comparison may register v2/v2 or v3/v3 Plans, never a mixed pair; the existing Work Comparison
+Registration and Report remain the authority for v3/v3 because their semantic inputs and evidence
+requirements did not change.
+
 Every Provider call has a durable request-dispatched event first. A timeout or process interruption
 after dispatch without a completed response becomes `human_input_required`; restart never sends
 that request again. Completed units reopen without a Provider call. Run identity includes phase,
@@ -132,12 +154,29 @@ response and deterministic Harness correction. Terminal output, transcript and r
 match the last completed response and validation event exactly. Returned Provider usage is journaled
 before model/tool/secret validation; secret-bearing response bodies are never persisted. Each
 completed predecessor passes this full reopening gate before its output may enter a later phase.
-Scripted-provider acceptance covers 121 candidates, a cluster spanning the first and last Work
+Scripted-provider acceptance covers both the frozen v2 behavior and v3 positional behavior over 121
+candidates, a cluster spanning the first and last Work
 Units, exact final coverage, both arms, restart without repeated calls, ambiguous dispatch,
 Provider-reported budget excess, concurrent ownership, multi-turn correction, invalid Provider
 identity/tool/secret responses, cross-Manifest input and artifact/event/pointer/Usage tamper or
-predecessor corruption rejection. This is mechanics evidence only; no real model run or semantic
-quality claim has been made.
+predecessor corruption rejection. V3 also covers every specialist role, positional coordinator
+binding, the twelve-item substituted-atom-ID failure shape, typed correction/Usage evidence, every
+ordinal validation class, schema packaging and v3/v3 reporting. This is mechanics evidence only;
+private real-run terminal evidence and semantic quality remain separate acceptance layers.
+
+The first real v2/v2 Work Comparison is terminal negative evidence. It registered the exact sealed
+121-version Candidate Set, operator-exposed Label Set and eleven-unit Manifest as comparison
+`event-impact-triage-work-comparison-e45b1d3cb71a5949a3418b82d06fbb32aab46eec062cde3e35cc61419ae2ff97`
+before either arm started. Baseline completed four members, then its fifth map/coordinator member
+used three full responses and exceeded the 32,768 aggregate unit-output ceiling at 34,552 after
+successive array-type, string-item-type and reserved-control-token violations. Its terminal arm
+totals are 158,332 input / 121,558 output Tokens and ten Provider attempts. Treatment completed five
+members, then its sixth map/transmission-mapper member failed the closed contract after three
+responses each returned twelve items but replaced one required atom ID with one nonexistent ID. Its
+terminal totals are 134,069 input / 42,707 output Tokens and eight attempts. Private summary hash
+`99c87ad303d2241792e698e08ed2616db388531c49d0b40f6ec51aa0b763f1e5` binds the outcome. Neither arm
+completed, so no Comparison Report, score, promotion or downstream authority exists; this evidence
+cannot be retried, repaired, or converted into v3 evidence.
 
 The v2 work path has its own append-only Work Comparison Registration and Report; it does not reuse
 or mutate the failed v1 comparison identity. Before either arm may start, the Harness-clock

@@ -69,6 +69,7 @@ packages = ["src/market_impact_agent"]
 "schemas/event-impact-triage-candidate-set.schema.json" = "market_impact_agent/schemas/event-impact-triage-candidate-set.schema.json"
 "schemas/event-impact-triage-work-manifest.schema.json" = "market_impact_agent/schemas/event-impact-triage-work-manifest.schema.json"
 "schemas/event-impact-triage-work-execution-plan.schema.json" = "market_impact_agent/schemas/event-impact-triage-work-execution-plan.schema.json"
+"schemas/event-impact-triage-work-execution-plan-v3.schema.json" = "market_impact_agent/schemas/event-impact-triage-work-execution-plan-v3.schema.json"
 "schemas/event-impact-triage-work-comparison-registration.schema.json" = "market_impact_agent/schemas/event-impact-triage-work-comparison-registration.schema.json"
 "schemas/event-impact-triage-work-comparison-report.schema.json" = "market_impact_agent/schemas/event-impact-triage-work-comparison-report.schema.json"
 "schemas/event-impact-triage-candidate-digest.schema.json" = "market_impact_agent/schemas/event-impact-triage-candidate-digest.schema.json"

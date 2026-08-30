@@ -880,8 +880,30 @@ Harness assembly of the unchanged full Proposal, request-dispatched journaling b
 call, crash-safe exclusive Run ownership, no-retry ambiguous recovery, repeated-role Run identity,
 exact multi-turn correction reconstruction, pre-validation Provider usage accounting, and exact
 prompt/response/artifact/metric/Usage reopening before every downstream boundary. Its 121-candidate,
-cross-Work-Unit and both-arm acceptance is scripted
-mechanics evidence; no real model or comparison arm has completed through this path yet.
+cross-Work-Unit and both-arm acceptance is scripted mechanics evidence. Private model-run and
+comparison-arm terminal evidence is a separate acceptance record and is not inferred from this
+implementation slice.
+
+The same Harness now exposes an explicit v3 positional-identity dialect while retaining v2 as an
+immutable replay dialect. V3 map responses omit atom IDs and bind specialist findings and
+coordinator Digest drafts by exact Work Unit array position. V3 partition responses use zero-based
+global atom ordinals; the Harness validates integer type excluding booleans, range, strict
+in-cluster order, global uniqueness and exact coverage, then injects authoritative atom IDs into the
+existing Digest v1 and Partition v1 artifacts. V3 prompt/correction contracts describe bounded
+string-array types and reserved control vocabulary, have distinct Plan/prompt/runtime/Run-artifact
+revisions, and never relax the label/route/authority guard. Mixed v2/v3 comparison registration is
+invalid; v3/v3 uses the existing append-only comparison and replay authority. Scripted 121-item,
+restart, correction/Usage and ordinal-failure acceptance is mechanics evidence only; private
+real-run terminal evidence is maintained separately. The exact real v2/v2 registration
+`event-impact-triage-work-comparison-e45b1d3cb71a5949a3418b82d06fbb32aab46eec062cde3e35cc61419ae2ff97`
+is terminal: baseline completed four members before a fifth map/coordinator member exhausted its
+32,768 output-token ceiling after three invalid contract responses; treatment completed five
+members before a sixth map/transmission-mapper member failed after three twelve-item responses each
+substituted one invalid atom identity. Arm totals were respectively 158,332 input / 121,558 output
+Tokens and ten attempts, versus 134,069 input / 42,707 output Tokens and eight attempts. Private
+summary artifact `99c87ad303d2241792e698e08ed2616db388531c49d0b40f6ec51aa0b763f1e5`
+records both terminal states. There is no Comparison Report or semantic/downstream authority, and
+the v3 dialect does not rewrite or upgrade this v2 evidence.
 
 The v2 work runtime also owns a distinct append-only Work Comparison Registration/Report contract.
 Registration binds exact Candidate Set and Manifest hashes, the sealed Label Set, both Work Plan
@@ -890,8 +912,9 @@ and plan-derived aggregate cost before any Run creation. Evaluation accepts only
 completed arms and derives earliest start, latest finish and exact cost from the Run Journal and
 completed Usage set, with terminal timestamps reconciled to the Journal. Scripted 121-candidate
 acceptance proves eleven units, 133/166 maximum Runs, a 299 microusd combined cap, label-free plans
-and restart without new Provider calls. It does not complete the private real arms or grant PIT,
-strategy, Judgment, paper or live execution authority.
+and restart without new Provider calls. The private real v2 arms stopped incomplete as recorded
+above; no Report exists and the contract grants no PIT, strategy, Judgment, paper or live execution
+authority.
 
 Each Report also binds both plan identities, complete Outcome hashes and authoritative receipt
 hashes. Its blocker taxonomy and batch gate are internally closed. Any downstream consumer must run

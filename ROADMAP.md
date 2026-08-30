@@ -308,15 +308,43 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       returned Provider Usage before output validation; and fully reopens each completed member
       before its output can reach a downstream phase. Scripted 121-candidate acceptance covers both
       arms, a cross-Work-Unit cluster, restart, concurrency, budget failure and artifact/event/
-      terminal/Usage tamper. This accepts mechanics only. The original real Candidate Set still has
-      no completed v2 arm or semantic Comparison Report; that replay remains under PDI-29D.
+      terminal/Usage tamper. This accepts mechanics only. Private v2 arm terminal evidence and any
+      semantic Comparison Report remain separate PDI-29D acceptance records.
+    - [x] Register and run the exact real 121-version Work Manifest through the v2/v2 Work
+      Comparison
+      `event-impact-triage-work-comparison-e45b1d3cb71a5949a3418b82d06fbb32aab46eec062cde3e35cc61419ae2ff97`.
+      The baseline completed four members and stopped on the fifth map/coordinator member as
+      `budget_exhausted` after 158,332 input / 121,558 output Tokens and ten Provider attempts; its
+      three responses respectively violated the checkpoint-evidence array type, string-item type,
+      and reserved-control-token boundary, with the last response taking aggregate unit output to
+      34,552 over the frozen 32,768 ceiling. The treatment completed five members and stopped on the
+      sixth map/transmission-mapper member as `failed` after 134,069 input / 42,707 output Tokens
+      and eight attempts; all three correction turns returned twelve findings but substituted one
+      nonexistent atom ID for one required ID. Private summary artifact
+      `99c87ad303d2241792e698e08ed2616db388531c49d0b40f6ec51aa0b763f1e5` binds the terminal result.
+      No Work Comparison Report, semantic score, candidate promotion or downstream authority
+      exists. This is negative real-model contract/capacity evidence; neither v2 Plan may be retried
+      or repaired in place.
+    - [x] Add the explicit v3 positional-identity Work Plan/runtime dialect without changing or
+      migrating v2 evidence. V3 specialist outputs and coordinator Digest drafts omit atom IDs and
+      bind by exact array position; partition drafts use zero-based global atom ordinals with
+      non-boolean integer, range, strict-order, uniqueness and exhaustive-coverage checks. The
+      Harness injects the authoritative atom IDs into the existing Digest v1 and Partition v1
+      artifacts. V3 correction contracts state typed bounded string-array and reserved-control-token
+      constraints without echoing atom IDs. Mixed v2/v3 comparison registration fails closed;
+      v3/v3 continues to use the existing comparison authority. Scripted acceptance covers the real
+      twelve-item substituted-ID failure shape, all specialist roles, cross-unit 121 mechanics,
+      correction/Usage reopening and ordinal failures. Private real-run evidence remains a separate
+      acceptance record; its purpose is to correct the two exact failure classes above, not to
+      upgrade that failed v2 batch into a semantic result.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
       plan cap before either arm starts. Evaluation first reopens every expected completed Run and
       exact Usage record, reconciles terminal timestamps to the Run Journal, and only then scores.
       A scripted 121-candidate fixture proves eleven units, 133/166 maximum Runs, both complete arms,
-      label-free plans and restart without new calls. This does not complete the private real replay;
+      label-free plans and restart without new calls. The private real v2 replay stopped with both
+      arms incomplete as recorded above;
       the failed v1 attempts remain negative evidence and cannot satisfy the v2 authority.
       Reports bind both Plan IDs, Outcome hashes and receipt hashes; downstream acceptance requires
       full Harness replay and byte equality, not schema validity or caller-rehashed content alone.

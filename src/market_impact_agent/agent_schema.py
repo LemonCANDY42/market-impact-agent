@@ -34,6 +34,7 @@ AGENT_SCHEMA_FILES = (
     "event-impact-triage-candidate-set.schema.json",
     "event-impact-triage-work-manifest.schema.json",
     "event-impact-triage-work-execution-plan.schema.json",
+    "event-impact-triage-work-execution-plan-v3.schema.json",
     "event-impact-triage-work-comparison-registration.schema.json",
     "event-impact-triage-work-comparison-report.schema.json",
     "event-impact-triage-candidate-digest.schema.json",
