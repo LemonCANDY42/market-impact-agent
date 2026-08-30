@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/retrieval-resolution.schema.json",
+  "title": "Market Impact Retrieval Resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "resolution_id", "plan_id", "outcome", "selected_snapshot_ids", "gaps", "barrier"],
+  "properties": {
+    "schema_version": {"enum": ["market-impact.retrieval-resolution.v1", "market-impact.retrieval-resolution.v2"]},
+    "resolution_id": {"type": "string", "pattern": "^retrieval-resolution-[0-9a-f]{64}$"},
+    "plan_id": {"type": "string", "pattern": "^retrieval-plan-[0-9a-f]{64}$"},
+    "outcome": {"enum": ["exact_cache_hit", "journal_freeze", "fetch_required", "unavailable"]},
+    "selected_snapshot_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^data-snapshot-[0-9a-f]{64}$"}},
+    "gaps": {"type": "array", "uniqueItems": true, "items": {"enum": ["cache_miss", "capability_mismatch", "pit_lane_mismatch", "collection_policy_mismatch", "source_set_mismatch", "coverage_incomplete", "coverage_too_narrow", "stale", "fetch_not_permitted", "fetch_budget_exhausted", "byte_budget_exhausted", "pit_cutoff_exceeded"]}},
+    "barrier": {"enum": ["none", "cache", "pit", "coverage", "freshness", "acquisition"]},
+    "requested_at": {"type": "string", "format": "date-time", "pattern": "Z$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": "market-impact.retrieval-resolution.v1"}}},
+      "then": {
+        "not": {"required": ["requested_at"]}
+      }
+    },
+    {
+      "if": {"properties": {"schema_version": {"const": "market-impact.retrieval-resolution.v2"}}},
+      "then": {"required": ["requested_at"]}
+    }
+  ]
+}

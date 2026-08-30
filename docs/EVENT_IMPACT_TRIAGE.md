@@ -304,12 +304,16 @@ Implemented contract evidence:
   five archive, two EventAssessment and one Attention Watch cluster with no eligible checkpoint;
   the subsequent readiness audit excluded all nine and exposed 26 genuinely new candidates.
 - a second real v4 treatment froze 39 later actual-receipt versions into four work units, 39
-  Digests and 29 Cluster Seeds. Twenty-nine of thirty logical members completed across 31 Provider
-  attempts, 343,211 input and 151,024 output Tokens. One classify request ended after dispatch
-  without a completed response and was sealed `_AmbiguousRun` / `human_input_required`. The batch
-  therefore has no Proposal, authority receipt or Decision. It is negative runtime evidence, not a
-  partial semantic result; restart cannot resend the ambiguous request, and the 29 completed
-  classifications cannot be assembled by an operator outside Harness authority.
+  Digests and 29 Cluster Seeds. The full graph contains 34 logical members: four map, one partition
+  and 29 classify. Twenty-nine completed, thirty were attempted across 31 physical Provider
+  attempts, one classify member was sealed `_AmbiguousRun` / `human_input_required`, and four
+  classify members never started; usage was 343,211 input and 151,024 output Tokens. The incident
+  path was an upstream TLS `bad record MAC`, followed by an unsafe second project generation POST
+  and gateway `auth_unavailable`, not quota or HTTP 429 evidence. The batch therefore has no
+  Proposal, authority receipt or Decision. It is negative runtime evidence, not a partial semantic
+  result; restart cannot resend the ambiguous request, and the completed classifications cannot be
+  assembled by an operator outside Harness authority. Prospective failure/retry/circuit semantics
+  are owned by [MODEL_PROVIDER_RELIABILITY.md](MODEL_PROVIDER_RELIABILITY.md).
 
 Still required for real acceptance:
 

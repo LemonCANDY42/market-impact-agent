@@ -462,11 +462,34 @@ _Avoid_: Composite Data Snapshot, executable universe, historical industry map, 
 
 **Attention Watch**:
 A Harness-approved, content-identified, expiring read-only policy that periodically reuses registered
-Data Queries and Providers for one event or entity, evaluates deterministic new-information
+Data Queries and Providers for one Monitoring Scope, evaluates deterministic new-information
 triggers, and may enqueue one idempotent Agent wake-up bound to a newly frozen Data Snapshot. The
 Agent may propose a Watch; it cannot choose arbitrary network routes, keep itself resident, bypass
 budgets, mutate prior Judgments, notify arbitrary destinations, or submit an order from the Watch.
 _Avoid_: Long-running Agent, cron prompt, market-data stream, order trigger
+
+**Monitoring Scope**:
+A content-identified, read-only subject and information-need boundary for an event cluster,
+industry, issuer, instrument, ETF, frozen subject set, or registered information aspect. It binds
+origin references, effective membership context where needed, PIT lane, freshness/coverage/fetch/
+byte limits, license use class, and a deterministic matcher accepted by a registered query
+template. It contains no URL, credential, destination, Agent callback, or execution capability.
+_Avoid_: Search prompt, watch keyword, mutable portfolio list, Provider route
+
+**Retrieval Plan**:
+A Harness binding from one Monitoring Scope and registered query-template matcher contract to one
+exact Prospective Collection Policy, capability, PIT lane, source set, cadence, coverage rule, and
+acquisition budget. It resolves policy rather than letting an Agent select a Provider or network
+route.
+_Avoid_: Agent fetch call, Provider fallback, scheduler job
+
+**Retrieval Resolution**:
+A content-identified, cutoff-bound result of local-first input resolution. It selects at most one
+already accepted Data Snapshot from cache or Journal, requests bounded acquisition through the
+Harness, or returns typed PIT/coverage/freshness/acquisition gaps. Direct fetch output is never a
+Resolution input: existing Collection Usage Records account for acquisition, the Journal freezes
+the result, and only a fresh Run may use that frozen Snapshot reference.
+_Avoid_: Live search result, mutable context append, successful HTTP response
 
 **Position Snapshot**:
 A cutoff-bound, content-identified view of held instruments, sides, quantities, environment and
@@ -868,6 +891,19 @@ _Avoid_: Provider manifest, successful connection, mock acceptance
 A versioned declaration binding one model adapter to its exact Provider identity, endpoint,
 model, capabilities, context limits, credential reference, and pricing basis.
 _Avoid_: Environment variables, fallback chain, model alias
+
+**Model Provider Failure**:
+A sanitized physical-attempt result that distinguishes whether generation was proven not started,
+may have started, or returned a response, and whether retry is safe, forbidden, or terminal. It
+binds a correlation ID, typed diagnostic, attempts and latency without persisting credentials,
+prompts, error bodies, or response content.
+_Avoid_: Exception string, generic retryable error, evidence that no response exists
+
+**Model Provider Health State**:
+Harness-owned durable incident, circuit, cooldown, and operator-notice-outbox state. It can block a
+new model request or require a safe probe/operator reset, but it cannot repair a terminal Run,
+authorize a replacement, change a Provider Profile, or notify an arbitrary destination.
+_Avoid_: Provider status page, automatic fallback, retry loop, Run authority
 
 **Usage Ledger**:
 An append-only account of model and tool consumption for completed and incomplete Judgment

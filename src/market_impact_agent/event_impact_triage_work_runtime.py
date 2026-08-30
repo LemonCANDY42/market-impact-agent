@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
-from typing import cast
+from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_engine import AgentRunResult, RunMetrics
@@ -51,6 +52,14 @@ from market_impact_agent.model_provider import (
     model_provider_profile_from_dict,
 )
 from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
+from market_impact_agent.provider_reliability import (
+    ProviderAttemptEvent,
+    ProviderAttemptPhase,
+    ProviderFailure,
+    ProviderGenerationState,
+    ProviderHealthStore,
+    ProviderRetryDisposition,
+)
 from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
@@ -871,6 +880,20 @@ class EventImpactTriageWorkRunResult:
     members: tuple[TriageWorkRunMember, ...]
 
 
+class _AttemptObservableProvider(Protocol):
+    async def complete_with_observer(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+        attempt_observer: Callable[[ProviderAttemptEvent], None],
+    ) -> ModelTurn: ...
+
+
 class EventImpactTriageWorkRunner:
     """Harness-owned map -> partition -> classify runtime over one frozen Work Manifest."""
 
@@ -887,6 +910,7 @@ class EventImpactTriageWorkRunner:
         artifact_store: ArtifactStore,
         journal: RunJournal,
         usage_ledger: UsageLedger,
+        provider_health_store: ProviderHealthStore | None = None,
         secret_values: tuple[str, ...] = (),
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -900,6 +924,7 @@ class EventImpactTriageWorkRunner:
         self.artifact_store = artifact_store
         self.journal = journal
         self.usage_ledger = usage_ledger
+        self.provider_health_store = provider_health_store
         self.secret_values = tuple(item for item in secret_values if item)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._counter = Utf8TokenEstimator()
@@ -1352,6 +1377,9 @@ class EventImpactTriageWorkRunner:
             )
         prompt = self.artifact_store.put_json(messages)
         execution_binding_hash = self._execution_binding_hash(binding, unit_id, prompt.content_hash)
+        metrics = _MutableMetrics()
+        active_messages: tuple[dict[str, object], ...] = messages
+        first_turn_number = 1
         try:
             record = self.journal.get_run(run_id)
         except KeyError:
@@ -1364,47 +1392,77 @@ class EventImpactTriageWorkRunner:
             if record.status.terminal:
                 return self._reopen_terminal(binding, unit_id, record)
             events = self.journal.events(run_id)
-            dispatched = sum(item.event_type == "model.request.dispatched" for item in events)
-            completed = sum(item.event_type == "model.response.completed" for item in events)
-            if dispatched > completed and not any(
-                item.event_type == "model.request.ambiguous" for item in events
-            ):
-                last_dispatch = next(
-                    item
-                    for item in reversed(events)
-                    if item.event_type == "model.request.dispatched"
-                )
+            unresolved = _unresolved_model_dispatches(events)
+            if unresolved:
+                last_dispatch = unresolved[-1]
+                attempts = _physical_provider_attempt_count(events)
                 self.journal.append(
                     run_id=run_id,
-                    event_id=f"{run_id}.request.{dispatched}.ambiguous",
+                    event_id=f"{run_id}.request.interrupted.ambiguous",
                     event_type="model.request.ambiguous",
                     observed_at=self._now(),
                     payload={
                         "dispatch_event_hash": last_dispatch.event_hash,
-                        "attempts": 1,
+                        "attempts": max(1, attempts),
                         "reason": "interrupted_process",
                     },
                 )
                 events = self.journal.events(run_id)
-            reason = (
-                "dispatched triage work request has no completed response; "
-                "automatic retry forbidden"
-                if dispatched > completed
-                else "interrupted triage work validation requires human review"
-            )
-            return self._seal_failure(
+                return self._seal_failure(
+                    binding=binding,
+                    unit_id=unit_id,
+                    run_id=run_id,
+                    execution_binding_hash=execution_binding_hash,
+                    status=RunStatus.HUMAN_INPUT_REQUIRED,
+                    error=_AmbiguousRun(
+                        "dispatched triage work request has no terminal attempt result; "
+                        "automatic retry forbidden"
+                    ),
+                    metrics=_metrics_from_events(events, self.plan.model_provider_profile),
+                )
+            recovered = self._recover_nonterminal_member(
                 binding=binding,
                 unit_id=unit_id,
                 run_id=run_id,
                 execution_binding_hash=execution_binding_hash,
-                status=RunStatus.HUMAN_INPUT_REQUIRED,
-                error=_AmbiguousRun(reason),
-                metrics=_metrics_from_events(events, self.plan.model_provider_profile),
+                initial_prompt_hash=prompt.content_hash,
+                initial_messages=messages,
+                events=events,
             )
-        metrics = _MutableMetrics()
-        active_messages: tuple[dict[str, object], ...] = messages
+            if isinstance(recovered, TriageWorkRunMember):
+                return recovered
+            active_messages, recovered_metrics, first_turn_number = recovered
+            metrics.add_metrics(recovered_metrics)
+        if self.provider_health_store is not None:
+            admission = self.provider_health_store.admission(
+                self.provider.provider_id, now=self._now()
+            )
+            if not admission.allowed:
+                self.journal.append(
+                    run_id=run_id,
+                    event_id=f"{run_id}.provider.admission.blocked",
+                    event_type="provider.admission.blocked",
+                    observed_at=self._now(),
+                    payload={
+                        "provider_id": self.provider.provider_id,
+                        "circuit_state": admission.state.value,
+                        "diagnostic_code": admission.diagnostic_code,
+                        "retry_after_seconds": admission.retry_after_seconds,
+                    },
+                )
+                return self._seal_failure(
+                    binding=binding,
+                    unit_id=unit_id,
+                    run_id=run_id,
+                    execution_binding_hash=execution_binding_hash,
+                    status=RunStatus.HUMAN_INPUT_REQUIRED,
+                    error=_ProviderAdmissionBlocked(
+                        "triage work Provider admission is blocked pending operator action"
+                    ),
+                    metrics=metrics.freeze(),
+                )
         try:
-            for turn_number in range(1, binding.max_turns + 1):
+            for turn_number in range(first_turn_number, binding.max_turns + 1):
                 estimated_input = self._counter.count_request(active_messages, ())
                 if estimated_input > binding.max_request_utf8_tokens:
                     raise _BudgetExceeded("triage work correction request exceeds frozen ceiling")
@@ -1428,46 +1486,190 @@ class EventImpactTriageWorkRunner:
                 )
                 if maximum_output < 1:
                     raise _BudgetExceeded("triage work unit lacks estimated-cost budget")
-                dispatch = self.journal.append(
-                    run_id=run_id,
-                    event_id=f"{run_id}.request.{turn_number}.dispatched",
-                    event_type="model.request.dispatched",
-                    observed_at=self._now(),
-                    payload={
-                        "plan_id": self.plan.plan_id,
-                        "phase": binding.phase.value,
-                        "unit_id": unit_id,
-                        "role": binding.role.value,
-                        "prompt_hash": self.artifact_store.put_json(active_messages).content_hash,
-                        "request_utf8_tokens": estimated_input,
-                        "max_output_tokens": maximum_output,
-                    },
+                prompt_hash = self.artifact_store.put_json(active_messages).content_hash
+                attempt_offset = sum(
+                    item.event_type == "model.request.dispatched"
+                    and item.payload.get("prompt_hash") == prompt_hash
+                    for item in self.journal.events(run_id)
                 )
+                physical_dispatches: dict[int, RuntimeEvent] = {}
+                recorded_failure_attempts: set[int] = set()
+                provider_request_id: str | None = None
+
+                def observe_attempt(
+                    event: ProviderAttemptEvent,
+                    physical_dispatches: dict[int, RuntimeEvent] = physical_dispatches,
+                    recorded_failure_attempts: set[int] = recorded_failure_attempts,
+                    turn_number: int = turn_number,
+                    prompt_hash: str = prompt_hash,
+                    estimated_input: int = estimated_input,
+                    maximum_output: int = maximum_output,
+                    attempt_offset: int = attempt_offset,
+                ) -> None:
+                    nonlocal provider_request_id
+                    provider_request_id = event.request_id
+                    physical_attempt = attempt_offset + event.physical_attempt
+                    if event.phase is ProviderAttemptPhase.DISPATCHED:
+                        physical_dispatches[physical_attempt] = self.journal.append(
+                            run_id=run_id,
+                            event_id=(
+                                f"{run_id}.request.{turn_number}.attempt."
+                                f"{physical_attempt}.dispatched"
+                            ),
+                            event_type="model.request.dispatched",
+                            observed_at=self._now(),
+                            payload={
+                                "plan_id": self.plan.plan_id,
+                                "phase": binding.phase.value,
+                                "unit_id": unit_id,
+                                "role": binding.role.value,
+                                "prompt_hash": prompt_hash,
+                                "request_utf8_tokens": estimated_input,
+                                "max_output_tokens": maximum_output,
+                                "provider_request_id": event.request_id,
+                                "physical_attempt": physical_attempt,
+                            },
+                        )
+                        return
+                    if event.phase is not ProviderAttemptPhase.FAILED or event.failure is None:
+                        return
+                    dispatch_event = physical_dispatches[physical_attempt]
+                    contextual_failure = event.failure.with_attempt_context(
+                        request_id=event.request_id,
+                        attempts=physical_attempt,
+                        elapsed_latency_ms=event.failure.elapsed_latency_ms,
+                    )
+                    self.journal.append(
+                        run_id=run_id,
+                        event_id=(
+                            f"{run_id}.request.{turn_number}.attempt.{physical_attempt}.failed"
+                        ),
+                        event_type="model.request.failed",
+                        observed_at=self._now(),
+                        payload={
+                            "dispatch_event_hash": dispatch_event.event_hash,
+                            "physical_attempt": physical_attempt,
+                            **contextual_failure.safe_fields(),
+                        },
+                    )
+                    recorded_failure_attempts.add(physical_attempt)
+                    if self.provider_health_store is not None:
+                        self.provider_health_store.record_failure(
+                            provider_id=self.provider.provider_id,
+                            failure=contextual_failure,
+                            physical_attempt=physical_attempt,
+                            observed_at=self._now(),
+                        )
+
+                observable_complete = getattr(self.provider, "complete_with_observer", None)
+                observable_provider = (
+                    cast(_AttemptObservableProvider, self.provider)
+                    if callable(observable_complete)
+                    else None
+                )
+                dispatch: RuntimeEvent | None = None
+                if observable_provider is None:
+                    dispatch = self.journal.append(
+                        run_id=run_id,
+                        event_id=f"{run_id}.request.{turn_number}.dispatched",
+                        event_type="model.request.dispatched",
+                        observed_at=self._now(),
+                        payload={
+                            "plan_id": self.plan.plan_id,
+                            "phase": binding.phase.value,
+                            "unit_id": unit_id,
+                            "role": binding.role.value,
+                            "prompt_hash": prompt_hash,
+                            "request_utf8_tokens": estimated_input,
+                            "max_output_tokens": maximum_output,
+                        },
+                    )
+                call_started = time.monotonic()
                 try:
-                    turn = await asyncio.wait_for(
-                        self.provider.complete(
+                    completion = (
+                        observable_provider.complete_with_observer(
                             messages=active_messages,
                             tools=(),
                             temperature=self.plan.model_provider_profile.temperature,
                             top_p=self.plan.model_provider_profile.top_p,
                             max_output_tokens=maximum_output,
-                            timeout_seconds=self.plan.model_provider_profile.budget.max_wall_seconds,
-                        ),
+                            timeout_seconds=(
+                                self.plan.model_provider_profile.budget.max_wall_seconds
+                            ),
+                            attempt_observer=observe_attempt,
+                        )
+                        if observable_provider is not None
+                        else self.provider.complete(
+                            messages=active_messages,
+                            tools=(),
+                            temperature=self.plan.model_provider_profile.temperature,
+                            top_p=self.plan.model_provider_profile.top_p,
+                            max_output_tokens=maximum_output,
+                            timeout_seconds=(
+                                self.plan.model_provider_profile.budget.max_wall_seconds
+                            ),
+                        )
+                    )
+                    turn = await asyncio.wait_for(
+                        completion,
                         timeout=self.plan.model_provider_profile.budget.max_wall_seconds,
                     )
                 except TimeoutError:
+                    elapsed_latency_ms = (time.monotonic() - call_started) * 1000
+                    current_attempt_count = len(physical_dispatches) or 1
+                    logical_attempt_count = attempt_offset + current_attempt_count
+                    dispatch = dispatch or (
+                        physical_dispatches[max(physical_dispatches)]
+                        if physical_dispatches
+                        else None
+                    )
+                    timeout_failure = ProviderFailure(
+                        "triage work Provider timeout after dispatch",
+                        error_class="timeout",
+                        diagnostic_code="harness_wall_timeout",
+                        request_id=(
+                            provider_request_id
+                            or f"harness-{canonical_hash(f'{run_id}:{turn_number}')[:24]}"
+                        ),
+                        generation_state=ProviderGenerationState.UNKNOWN,
+                        retry_disposition=ProviderRetryDisposition.FORBIDDEN,
+                        attempts=logical_attempt_count,
+                        elapsed_latency_ms=elapsed_latency_ms,
+                    )
+                    self.journal.append(
+                        run_id=run_id,
+                        event_id=f"{run_id}.request.{turn_number}.provider-timeout",
+                        event_type="model.request.failed",
+                        observed_at=self._now(),
+                        payload={
+                            "dispatch_event_hash": (
+                                None if dispatch is None else dispatch.event_hash
+                            ),
+                            **timeout_failure.safe_fields(),
+                        },
+                    )
+                    if self.provider_health_store is not None:
+                        self.provider_health_store.record_failure(
+                            provider_id=self.provider.provider_id,
+                            failure=timeout_failure,
+                            physical_attempt=logical_attempt_count,
+                            observed_at=self._now(),
+                        )
                     self.journal.append(
                         run_id=run_id,
                         event_id=f"{run_id}.request.{turn_number}.ambiguous",
                         event_type="model.request.ambiguous",
                         observed_at=self._now(),
                         payload={
-                            "dispatch_event_hash": dispatch.event_hash,
-                            "attempts": 1,
+                            "dispatch_event_hash": (
+                                None if dispatch is None else dispatch.event_hash
+                            ),
+                            **timeout_failure.safe_fields(),
                             "reason": "timeout",
                         },
                     )
-                    metrics.provider_attempts += 1
+                    metrics.provider_attempts += current_attempt_count
+                    metrics.latency_ms += elapsed_latency_ms
                     return self._seal_failure(
                         binding=binding,
                         unit_id=unit_id,
@@ -1475,6 +1677,84 @@ class EventImpactTriageWorkRunner:
                         execution_binding_hash=execution_binding_hash,
                         status=RunStatus.HUMAN_INPUT_REQUIRED,
                         error=_AmbiguousRun("triage work Provider timeout after dispatch"),
+                        metrics=metrics.freeze(),
+                    )
+                except ProviderFailure as exc:
+                    logical_attempts = attempt_offset + exc.attempts
+                    terminal_failure = exc.with_attempt_context(
+                        request_id=(
+                            exc.request_id
+                            or provider_request_id
+                            or f"harness-{canonical_hash(f'{run_id}:{turn_number}')[:24]}"
+                        ),
+                        attempts=logical_attempts,
+                        elapsed_latency_ms=exc.elapsed_latency_ms,
+                    )
+                    dispatch = dispatch or (
+                        physical_dispatches[max(physical_dispatches)]
+                        if physical_dispatches
+                        else None
+                    )
+                    if logical_attempts not in recorded_failure_attempts:
+                        self.journal.append(
+                            run_id=run_id,
+                            event_id=f"{run_id}.request.{turn_number}.provider-failure",
+                            event_type="model.request.failed",
+                            observed_at=self._now(),
+                            payload={
+                                "dispatch_event_hash": (
+                                    None if dispatch is None else dispatch.event_hash
+                                ),
+                                **terminal_failure.safe_fields(),
+                            },
+                        )
+                        if self.provider_health_store is not None:
+                            self.provider_health_store.record_failure(
+                                provider_id=self.provider.provider_id,
+                                failure=terminal_failure,
+                                physical_attempt=logical_attempts,
+                                observed_at=self._now(),
+                            )
+                    if exc.generation_state is ProviderGenerationState.UNKNOWN:
+                        event_type = "model.request.ambiguous"
+                        status = RunStatus.HUMAN_INPUT_REQUIRED
+                        message = (
+                            "triage work Provider generation state is unknown; "
+                            "automatic retry forbidden"
+                        )
+                    elif exc.generation_state is ProviderGenerationState.RESPONSE_RECEIVED:
+                        event_type = "model.response.invalid"
+                        status = RunStatus.FAILED
+                        message = "triage work Provider returned a terminal invalid response"
+                    else:
+                        event_type = "model.request.rejected"
+                        status = RunStatus.HUMAN_INPUT_REQUIRED
+                        message = "triage work Provider rejected the request before generation"
+                    self.journal.append(
+                        run_id=run_id,
+                        event_id=f"{run_id}.request.{turn_number}.terminal-provider-failure",
+                        event_type=event_type,
+                        observed_at=self._now(),
+                        payload={
+                            "dispatch_event_hash": (
+                                None if dispatch is None else dispatch.event_hash
+                            ),
+                            **terminal_failure.safe_fields(),
+                        },
+                    )
+                    metrics.provider_attempts += exc.attempts
+                    metrics.latency_ms += exc.elapsed_latency_ms
+                    return self._seal_failure(
+                        binding=binding,
+                        unit_id=unit_id,
+                        run_id=run_id,
+                        execution_binding_hash=execution_binding_hash,
+                        status=status,
+                        error=(
+                            _AmbiguousRun(message)
+                            if status is RunStatus.HUMAN_INPUT_REQUIRED
+                            else _TerminalProviderResponse(message)
+                        ),
                         metrics=metrics.freeze(),
                     )
                 except Exception as exc:
@@ -1492,7 +1772,9 @@ class EventImpactTriageWorkRunner:
                         event_type="model.request.ambiguous",
                         observed_at=self._now(),
                         payload={
-                            "dispatch_event_hash": dispatch.event_hash,
+                            "dispatch_event_hash": (
+                                None if dispatch is None else dispatch.event_hash
+                            ),
                             "attempts": recorded_attempts,
                             "reason": "provider_exception",
                         },
@@ -1509,6 +1791,11 @@ class EventImpactTriageWorkRunner:
                         ),
                         metrics=metrics.freeze(),
                     )
+                dispatch = dispatch or (
+                    physical_dispatches[max(physical_dispatches)] if physical_dispatches else None
+                )
+                if dispatch is None:
+                    raise RuntimeError("Provider returned without an observable physical dispatch")
                 if self._turn_contains_secret(turn):
                     self.journal.append(
                         run_id=run_id,
@@ -1553,6 +1840,12 @@ class EventImpactTriageWorkRunner:
                 metrics.add(turn, self.plan.model_provider_profile)
                 _assert_binding_budget(binding, metrics.freeze())
                 self._validate_turn(turn)
+                if self.provider_health_store is not None:
+                    self.provider_health_store.record_success(
+                        provider_id=self.provider.provider_id,
+                        request_id=provider_request_id,
+                        observed_at=self._now(),
+                    )
                 try:
                     output = self._parse_output(binding, unit_id, turn.assistant_message)
                 except (KeyError, TypeError, ValueError) as exc:
@@ -1597,6 +1890,193 @@ class EventImpactTriageWorkRunner:
                 error=exc,
                 metrics=metrics.freeze(),
             )
+
+    def _recover_nonterminal_member(
+        self,
+        *,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+        run_id: str,
+        execution_binding_hash: str,
+        initial_prompt_hash: str,
+        initial_messages: tuple[dict[str, object], ...],
+        events: tuple[RuntimeEvent, ...],
+    ) -> TriageWorkRunMember | tuple[tuple[dict[str, object], ...], RunMetrics, int]:
+        groups, trailing = _partition_model_turn_events(events)
+        active_messages = initial_messages
+        final_turn: ModelTurn | None = None
+        final_output: object | None = None
+        for turn_number, group in enumerate(groups, start=1):
+            turn = self._recovered_model_turn(
+                binding=binding,
+                unit_id=unit_id,
+                active_messages=active_messages,
+                group=group,
+            )
+            self._validate_turn(turn)
+            try:
+                output = self._parse_output(binding, unit_id, turn.assistant_message)
+            except (KeyError, TypeError, ValueError) as exc:
+                if turn_number >= binding.max_turns:
+                    return self._seal_failure(
+                        binding=binding,
+                        unit_id=unit_id,
+                        run_id=run_id,
+                        execution_binding_hash=execution_binding_hash,
+                        status=RunStatus.FAILED,
+                        error=ValueError("model failed the closed triage work output contract"),
+                        metrics=_metrics_from_events(events, self.plan.model_provider_profile),
+                    )
+                active_messages = (
+                    *active_messages,
+                    turn.assistant_message,
+                    _correction_message(binding, exc),
+                )
+                continue
+            if turn_number != len(groups) or trailing:
+                raise ValueError("triage work continued after a valid recovered response")
+            final_turn = turn
+            final_output = output
+
+        recovered_metrics = _metrics_from_events(events, self.plan.model_provider_profile)
+        if final_turn is not None and final_output is not None:
+            return self._seal_completed(
+                binding=binding,
+                unit_id=unit_id,
+                run_id=run_id,
+                execution_binding_hash=execution_binding_hash,
+                prompt_hash=initial_prompt_hash,
+                turn=final_turn,
+                output=final_output,
+                metrics=recovered_metrics,
+            )
+        if trailing:
+            if _trailing_attempts_are_safe_rejections(trailing):
+                return active_messages, recovered_metrics, len(groups) + 1
+            last = trailing[-1]
+            if last.event_type in {
+                "model.request.ambiguous",
+                "model.request.rejected",
+                "provider.admission.blocked",
+            }:
+                return self._seal_failure(
+                    binding=binding,
+                    unit_id=unit_id,
+                    run_id=run_id,
+                    execution_binding_hash=execution_binding_hash,
+                    status=RunStatus.HUMAN_INPUT_REQUIRED,
+                    error=_AmbiguousRun(
+                        "triage work recovered a terminal request-side interruption"
+                    ),
+                    metrics=recovered_metrics,
+                )
+            if last.event_type in {"model.response.invalid", "model.response.rejected"}:
+                return self._seal_failure(
+                    binding=binding,
+                    unit_id=unit_id,
+                    run_id=run_id,
+                    execution_binding_hash=execution_binding_hash,
+                    status=RunStatus.FAILED,
+                    error=_TerminalProviderResponse(
+                        "triage work recovered a terminal response-side failure"
+                    ),
+                    metrics=recovered_metrics,
+                )
+            if last.event_type == "model.request.failed":
+                generation_state = last.payload.get("generation_state")
+                status = (
+                    RunStatus.FAILED
+                    if generation_state == ProviderGenerationState.RESPONSE_RECEIVED.value
+                    else RunStatus.HUMAN_INPUT_REQUIRED
+                )
+                return self._seal_failure(
+                    binding=binding,
+                    unit_id=unit_id,
+                    run_id=run_id,
+                    execution_binding_hash=execution_binding_hash,
+                    status=status,
+                    error=(
+                        _TerminalProviderResponse(
+                            "triage work recovered a terminal Provider response failure"
+                        )
+                        if status is RunStatus.FAILED
+                        else _AmbiguousRun(
+                            "triage work recovered a non-retryable Provider rejection"
+                        )
+                    ),
+                    metrics=recovered_metrics,
+                )
+            raise ValueError("triage work nonterminal Journal has an invalid event tail")
+        return active_messages, recovered_metrics, len(groups) + 1
+
+    def _recovered_model_turn(
+        self,
+        *,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+        active_messages: tuple[dict[str, object], ...],
+        group: _ModelTurnEvents,
+    ) -> ModelTurn:
+        prompt_hash = canonical_hash(active_messages)
+        for ordinal, dispatch in enumerate(group.dispatches, start=1):
+            if (
+                dispatch.payload.get("plan_id") != self.plan.plan_id
+                or dispatch.payload.get("phase") != binding.phase.value
+                or dispatch.payload.get("unit_id") != unit_id
+                or dispatch.payload.get("role") != binding.role.value
+                or dispatch.payload.get("prompt_hash") != prompt_hash
+                or _integer(dispatch.payload, "request_utf8_tokens")
+                != self._counter.count_request(active_messages, ())
+            ):
+                raise ValueError("recovered triage work dispatch differs from its prompt")
+            physical_attempt = dispatch.payload.get("physical_attempt")
+            if (
+                physical_attempt is not None
+                and _integer(dispatch.payload, "physical_attempt") != ordinal
+            ):
+                raise ValueError("recovered physical Provider attempts are not consecutive")
+        if self.artifact_store.read_json(prompt_hash) != list(active_messages):
+            raise ValueError("recovered triage work prompt artifact is invalid")
+        if len(group.failures) != len(group.dispatches) - 1:
+            raise ValueError("recovered safe retry chain is incomplete")
+        for dispatch, failure in zip(group.dispatches, group.failures, strict=False):
+            if (
+                failure.payload.get("dispatch_event_hash") != dispatch.event_hash
+                or failure.payload.get("generation_state")
+                != ProviderGenerationState.NOT_STARTED.value
+                or failure.payload.get("retry_disposition") != ProviderRetryDisposition.SAFE.value
+            ):
+                raise ValueError("recovered triage work retry was not proven safe")
+        response = group.response
+        if (
+            response.payload.get("dispatch_event_hash") != group.dispatches[-1].event_hash
+            or response.payload.get("model") != self.provider.model
+            or _integer(response.payload, "tool_call_count") != 0
+        ):
+            raise ValueError("recovered triage work response differs from its dispatch")
+        assistant = _object(
+            self.artifact_store.read_json(_string(response.payload, "assistant_message_hash")),
+            "recovered triage work assistant response",
+        )
+        raw_response = _object(
+            self.artifact_store.read_json(_string(response.payload, "raw_response_hash")),
+            "recovered triage work raw response",
+        )
+        usage = _object(response.payload.get("usage"), "recovered triage work usage")
+        return ModelTurn(
+            response_id=_string(response.payload, "response_id"),
+            model=_string(response.payload, "model"),
+            assistant_message=assistant,
+            tool_calls=(),
+            finish_reason=_string(response.payload, "finish_reason"),
+            usage=ProviderUsage(
+                input_tokens=_integer(usage, "input_tokens"),
+                output_tokens=_integer(usage, "output_tokens"),
+            ),
+            raw_response=raw_response,
+            latency_ms=_number(response.payload, "latency_ms"),
+            attempts=_integer(response.payload, "attempts"),
+        )
 
     def _unclaimed_member(
         self,
@@ -1824,17 +2304,23 @@ class EventImpactTriageWorkRunner:
     def _parse_specialist_map_output(
         self, payload: dict[str, object], role: TriageAgentRole, unit_id: str
     ) -> dict[str, object]:
-        if set(payload) != {"manifest_id", "work_unit_id", "role", "atom_findings"}:
+        dialect = _plan_dialect(self.plan.schema_version)
+        identity_fields = {"manifest_id", "work_unit_id", "role"}
+        if dialect == "v2":
+            if set(payload) != identity_fields | {"atom_findings"}:
+                raise ValueError("triage map specialist output fields are invalid")
+            if (
+                payload.get("manifest_id") != self.work_manifest.manifest_id
+                or payload.get("work_unit_id") != unit_id
+                or payload.get("role") != role.value
+            ):
+                raise ValueError("triage map specialist output binding is invalid")
+        elif "atom_findings" not in payload or not set(payload) <= identity_fields | {
+            "atom_findings"
+        }:
             raise ValueError("triage map specialist output fields are invalid")
-        if (
-            payload.get("manifest_id") != self.work_manifest.manifest_id
-            or payload.get("work_unit_id") != unit_id
-            or payload.get("role") != role.value
-        ):
-            raise ValueError("triage map specialist output binding is invalid")
         unit = next(item for item in self.work_manifest.work_units if item.work_unit_id == unit_id)
         findings = _array(payload.get("atom_findings"), "triage specialist atom findings")
-        dialect = _plan_dialect(self.plan.schema_version)
         if len(findings) != len(unit.atom_ids):
             raise ValueError("triage map specialist must cover every Work Atom in order")
         if dialect == "v2" and (
@@ -1855,23 +2341,32 @@ class EventImpactTriageWorkRunner:
             accepted_findings.append({"atom_id": atom_id, expected_fields: list(values)})
         if dialect == "v2":
             return payload
-        return {**payload, "atom_findings": accepted_findings}
+        return {
+            "manifest_id": self.work_manifest.manifest_id,
+            "work_unit_id": unit_id,
+            "role": role.value,
+            "atom_findings": accepted_findings,
+        }
 
     def _parse_digest_drafts(
         self, payload: dict[str, object], unit: TriageWorkUnit
     ) -> tuple[TriageCandidateDigest, ...]:
-        if set(payload) != {"manifest_id", "work_unit_id", "digests"}:
+        dialect = _plan_dialect(self.plan.schema_version)
+        identity_fields = {"manifest_id", "work_unit_id"}
+        if dialect == "v2":
+            if set(payload) != identity_fields | {"digests"}:
+                raise ValueError("triage map coordinator output fields are invalid")
+            if (
+                payload.get("manifest_id") != self.work_manifest.manifest_id
+                or payload.get("work_unit_id") != unit.work_unit_id
+            ):
+                raise ValueError("triage map coordinator output binding is invalid")
+        elif "digests" not in payload or not set(payload) <= identity_fields | {"digests"}:
             raise ValueError("triage map coordinator output fields are invalid")
-        if (
-            payload.get("manifest_id") != self.work_manifest.manifest_id
-            or payload.get("work_unit_id") != unit.work_unit_id
-        ):
-            raise ValueError("triage map coordinator output binding is invalid")
         drafts = _array(payload.get("digests"), "triage map Digests")
         if len(drafts) != len(unit.atom_ids):
             raise ValueError("triage map must emit exactly one Digest per Work Atom")
         result: list[TriageCandidateDigest] = []
-        dialect = _plan_dialect(self.plan.schema_version)
         required = {
             "changed_facts",
             "source_conflicts",
@@ -1920,14 +2415,17 @@ class EventImpactTriageWorkRunner:
         return digests
 
     def _parse_partition_draft(self, payload: dict[str, object]) -> TriageClusterPartition:
-        if set(payload) != {"manifest_id", "clusters"}:
+        dialect = _plan_dialect(self.plan.schema_version)
+        if dialect == "v2":
+            if set(payload) != {"manifest_id", "clusters"}:
+                raise ValueError("triage partition draft fields are invalid")
+            if payload.get("manifest_id") != self.work_manifest.manifest_id:
+                raise ValueError("triage partition draft belongs to another Work Manifest")
+        elif "clusters" not in payload or not set(payload) <= {"manifest_id", "clusters"}:
             raise ValueError("triage partition draft fields are invalid")
-        if payload.get("manifest_id") != self.work_manifest.manifest_id:
-            raise ValueError("triage partition draft belongs to another Work Manifest")
         digests = self._completed_digests_from_journal()
         digest_by_atom = {item.atom_id: item for item in digests}
         clusters: list[TriageClusterSeed] = []
-        dialect = _plan_dialect(self.plan.schema_version)
         identity_field = "atom_ids" if dialect == "v2" else "atom_ordinals"
         required = {identity_field, "merge_state", "merge_evidence", "uncertainty_notes"}
         seen_ordinals: set[int] = set()
@@ -2264,47 +2762,24 @@ class EventImpactTriageWorkRunner:
         ):
             raise ValueError("triage work validation event linkage is invalid")
         turn_events = events[:-1]
-        if not turn_events or len(turn_events) % 2 != 0:
+        groups, trailing = _partition_model_turn_events(turn_events)
+        if not groups or trailing:
             raise ValueError("triage work completed member has an invalid turn chain")
         active_messages = initial_messages
         final_output: object | None = None
         last_assistant: dict[str, object] | None = None
         last_raw_hash: str | None = None
-        turn_count = len(turn_events) // 2
-        for index in range(turn_count):
-            turn_number = index + 1
-            dispatch = turn_events[index * 2]
-            response = turn_events[index * 2 + 1]
-            if (
-                dispatch.event_type != "model.request.dispatched"
-                or response.event_type != "model.response.completed"
-            ):
-                raise ValueError("triage work completed member turn ordering is invalid")
-            prompt_hash = canonical_hash(active_messages)
-            if (
-                dispatch.payload.get("plan_id") != self.plan.plan_id
-                or dispatch.payload.get("phase") != binding.phase.value
-                or dispatch.payload.get("unit_id") != unit_id
-                or dispatch.payload.get("role") != binding.role.value
-                or dispatch.payload.get("prompt_hash") != prompt_hash
-                or _integer(dispatch.payload, "request_utf8_tokens")
-                != self._counter.count_request(active_messages, ())
-            ):
-                raise ValueError("triage work dispatch differs from its recomputed prompt")
-            if self.artifact_store.read_json(prompt_hash) != list(active_messages):
-                raise ValueError("triage work per-turn prompt artifact is invalid")
-            if (
-                response.payload.get("dispatch_event_hash") != dispatch.event_hash
-                or response.payload.get("model") != self.provider.model
-                or _integer(response.payload, "tool_call_count") != 0
-            ):
-                raise ValueError("triage work response differs from its dispatch")
-            assistant = _object(
-                self.artifact_store.read_json(_string(response.payload, "assistant_message_hash")),
-                "triage work assistant response",
+        turn_count = len(groups)
+        for turn_number, group in enumerate(groups, start=1):
+            turn = self._recovered_model_turn(
+                binding=binding,
+                unit_id=unit_id,
+                active_messages=active_messages,
+                group=group,
             )
-            raw_hash = _string(response.payload, "raw_response_hash")
-            self.artifact_store.read_json(raw_hash)
+            self._validate_turn(turn)
+            assistant = turn.assistant_message
+            raw_hash = _string(group.response.payload, "raw_response_hash")
             last_assistant = assistant
             last_raw_hash = raw_hash
             try:
@@ -2770,6 +3245,14 @@ class _AmbiguousRun(RuntimeError):
     pass
 
 
+class _ProviderAdmissionBlocked(RuntimeError):
+    pass
+
+
+class _TerminalProviderResponse(RuntimeError):
+    pass
+
+
 class _RunRecordLike:
     run_id: str
     status: RunStatus
@@ -2778,14 +3261,118 @@ class _RunRecordLike:
     terminal_artifact_id: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class _ModelTurnEvents:
+    dispatches: tuple[RuntimeEvent, ...]
+    failures: tuple[RuntimeEvent, ...]
+    response: RuntimeEvent
+
+
+def _partition_model_turn_events(
+    events: tuple[RuntimeEvent, ...],
+) -> tuple[tuple[_ModelTurnEvents, ...], tuple[RuntimeEvent, ...]]:
+    groups: list[_ModelTurnEvents] = []
+    index = 0
+    while index < len(events):
+        group_start = index
+        dispatches: list[RuntimeEvent] = []
+        failures: list[RuntimeEvent] = []
+        while index < len(events):
+            dispatch = events[index]
+            if dispatch.event_type != "model.request.dispatched":
+                return tuple(groups), events[group_start:]
+            dispatches.append(dispatch)
+            index += 1
+            if index >= len(events):
+                return tuple(groups), events[group_start:]
+            outcome = events[index]
+            if outcome.event_type == "model.request.failed":
+                failures.append(outcome)
+                index += 1
+                if index >= len(events):
+                    return tuple(groups), events[group_start:]
+                if events[index].event_type == "model.request.dispatched":
+                    continue
+                return tuple(groups), events[group_start:]
+            if outcome.event_type != "model.response.completed":
+                return tuple(groups), events[group_start:]
+            groups.append(
+                _ModelTurnEvents(
+                    dispatches=tuple(dispatches),
+                    failures=tuple(failures),
+                    response=outcome,
+                )
+            )
+            index += 1
+            break
+    return tuple(groups), ()
+
+
+def _unresolved_model_dispatches(
+    events: tuple[RuntimeEvent, ...],
+) -> tuple[RuntimeEvent, ...]:
+    resolving_types = {
+        "model.request.failed",
+        "model.request.ambiguous",
+        "model.request.rejected",
+        "model.response.completed",
+        "model.response.invalid",
+        "model.response.rejected",
+    }
+    resolved_hashes = {
+        value
+        for event in events
+        if event.event_type in resolving_types
+        and isinstance((value := event.payload.get("dispatch_event_hash")), str)
+    }
+    return tuple(
+        event
+        for event in events
+        if event.event_type == "model.request.dispatched"
+        and event.event_hash not in resolved_hashes
+    )
+
+
+def _physical_provider_attempt_count(events: tuple[RuntimeEvent, ...]) -> int:
+    dispatches = tuple(event for event in events if event.event_type == "model.request.dispatched")
+    if dispatches and all("physical_attempt" in event.payload for event in dispatches):
+        return len(dispatches)
+    return sum(
+        _integer(event.payload, "attempts")
+        for event in events
+        if event.event_type
+        in {
+            "model.request.ambiguous",
+            "model.response.completed",
+            "model.response.rejected",
+        }
+    ) or len(dispatches)
+
+
+def _trailing_attempts_are_safe_rejections(
+    events: tuple[RuntimeEvent, ...],
+) -> bool:
+    if not events or len(events) % 2:
+        return False
+    for index in range(0, len(events), 2):
+        dispatch = events[index]
+        failure = events[index + 1]
+        if (
+            dispatch.event_type != "model.request.dispatched"
+            or failure.event_type != "model.request.failed"
+            or failure.payload.get("dispatch_event_hash") != dispatch.event_hash
+            or failure.payload.get("generation_state") != ProviderGenerationState.NOT_STARTED.value
+            or failure.payload.get("retry_disposition") != ProviderRetryDisposition.SAFE.value
+        ):
+            return False
+    return True
+
+
 def _metrics_from_events(
     events: tuple[RuntimeEvent, ...], profile: ModelProviderProfile
 ) -> RunMetrics:
     metrics = _MutableMetrics()
     for event in events:
-        if event.event_type == "model.request.ambiguous":
-            metrics.provider_attempts += _integer(event.payload, "attempts")
-            continue
         if event.event_type not in {
             "model.response.completed",
             "model.response.rejected",
@@ -2801,8 +3388,8 @@ def _metrics_from_events(
         metrics.output_tokens += turn_usage.output_tokens
         metrics.result_bytes += _integer(event.payload, "result_bytes")
         metrics.latency_ms += _number(event.payload, "latency_ms")
-        metrics.provider_attempts += _integer(event.payload, "attempts")
         metrics.estimated_cost_microusd += profile.pricing.estimate_microusd(turn_usage)
+    metrics.provider_attempts = _physical_provider_attempt_count(events)
     return metrics.freeze()
 
 
@@ -2945,11 +3532,8 @@ def _output_contract(
             return {
                 "contract_version": "v3",
                 "type": "object",
-                "required_fields": ["manifest_id", "work_unit_id", "role", "atom_findings"],
+                "required_fields": ["atom_findings"],
                 "field_schemas": {
-                    "manifest_id": {"type": "string"},
-                    "work_unit_id": {"type": "string"},
-                    "role": {"const": role.value},
                     "atom_findings": {
                         "type": "array",
                         "length": "exactly the phase_input.atoms array length",
@@ -2976,10 +3560,8 @@ def _output_contract(
             return {
                 "contract_version": "v3",
                 "type": "object",
-                "required_fields": ["manifest_id", "work_unit_id", "digests"],
+                "required_fields": ["digests"],
                 "field_schemas": {
-                    "manifest_id": {"type": "string"},
-                    "work_unit_id": {"type": "string"},
                     "digests": {
                         "type": "array",
                         "length": "exactly the phase_input.atoms array length",
@@ -2998,7 +3580,7 @@ def _output_contract(
             return {
                 "contract_version": "v3",
                 "type": "object",
-                "required_fields": ["manifest_id", "clusters"],
+                "required_fields": ["clusters"],
                 "cluster_fields": [
                     "atom_ordinals",
                     "merge_state",

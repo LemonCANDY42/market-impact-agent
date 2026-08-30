@@ -4,7 +4,7 @@ from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import pytest
 
@@ -193,7 +193,7 @@ def test_minimax_model_preflight_and_substitution_fail_closed() -> None:
     assert raised.value.error_class == "model_substitution"
 
 
-def test_minimax_retries_only_retryable_errors_and_redacts_secret() -> None:
+def test_minimax_does_not_retry_ambiguous_generation_and_redacts_secret() -> None:
     transport = FixtureTransport(
         [
             MiniMaxProviderError(
@@ -205,17 +205,20 @@ def test_minimax_retries_only_retryable_errors_and_redacts_secret() -> None:
             completion_response(),
         ]
     )
-    turn = asyncio.run(
-        provider(transport).complete(
-            messages=({"role": "user", "content": "test"},),
-            tools=(),
-            temperature=1,
-            top_p=1,
-            max_output_tokens=10,
-            timeout_seconds=5,
+    with pytest.raises(MiniMaxProviderError) as ambiguous:
+        asyncio.run(
+            provider(transport).complete(
+                messages=({"role": "user", "content": "test"},),
+                tools=(),
+                temperature=1,
+                top_p=1,
+                max_output_tokens=10,
+                timeout_seconds=5,
+            )
         )
-    )
-    assert turn.attempts == 2
+    assert len(transport.requests) == 1
+    assert "super-secret-key" not in str(ambiguous.value)
+    assert "[REDACTED]" in str(ambiguous.value)
 
     failed = FixtureTransport(
         [
@@ -284,11 +287,11 @@ def test_environment_provider_sends_credential_only_to_pinned_origin(
 
     request = transport.requests[0]
     assert request["url"] == "https://api.minimaxi.com/v1/models"
-    assert request["headers"] == {
-        "Authorization": "Bearer environment-secret",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    headers = cast(dict[str, str], request["headers"])
+    assert headers["Authorization"] == "Bearer environment-secret"
+    assert headers["Content-Type"] == "application/json"
+    assert headers["Accept"] == "application/json"
+    assert headers["X-Market-Impact-Request-Id"].startswith("mia-")
 
 
 @pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
@@ -319,7 +322,8 @@ def test_credential_request_rejects_all_redirects_without_forwarding_authorizati
                 timeout_seconds=2,
             )
 
-        assert raised.value.error_class == f"http_{status}"
+        assert raised.value.error_class == "http"
+        assert raised.value.diagnostic_code == f"http_{status}"
         assert raised.value.retryable is False
         assert "redirect-secret" not in str(raised.value)
         assert origin_handler.hits == ["/start"]

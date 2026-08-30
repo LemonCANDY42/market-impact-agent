@@ -14,6 +14,7 @@ from market_impact_agent.attention_watch import (
     AttentionWatchRunResult,
     AttentionWatchService,
     AttentionWatchStatus,
+    attention_watch_policy_from_dict,
 )
 from market_impact_agent.data_inputs import (
     DataFetchStatus,
@@ -24,6 +25,17 @@ from market_impact_agent.data_inputs import (
     DataSourceBinding,
     LocalDataSnapshotStore,
     SourceObservation,
+)
+from market_impact_agent.monitoring_scope import (
+    MonitoringMatchMode,
+    MonitoringScope,
+    MonitoringSubjectKind,
+    MonitoringSubjectRef,
+    MonitoringUseClass,
+    ObservationMatchClause,
+    ObservationMatcher,
+    RegisteredQueryTemplate,
+    RetrievalPlan,
 )
 from market_impact_agent.observations import (
     AvailabilityBasis,
@@ -211,13 +223,195 @@ def _collector(snapshot: DataSnapshot) -> Callable[[ProspectiveCollectionPolicy]
     return collect
 
 
+def collection_policy_for_monitoring_test() -> ProspectiveCollectionPolicy:
+    return _collection_policy()
+
+
+def snapshot_for_monitoring_test(
+    store: LocalDataSnapshotStore,
+    *,
+    policy: ProspectiveCollectionPolicy,
+    retrieved_at: datetime,
+    headline: str = "Policy decision",
+) -> DataSnapshot:
+    return _snapshot(
+        store,
+        policy=policy,
+        retrieved_at=retrieved_at,
+        headline=headline,
+    )
+
+
+def _headline_scope() -> MonitoringScope:
+    return MonitoringScope.build(
+        origin_refs=("event-envelope-example",),
+        subject=MonitoringSubjectRef(MonitoringSubjectKind.ISSUER, "cn.600000"),
+        query_template_ref=f"monitoring-query-template-{'a' * 64}",
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        freshness_max_age_seconds=300,
+        minimum_coverage_sources=1,
+        maximum_fetches=3,
+        maximum_bytes=1_000_000,
+        use_class=MonitoringUseClass.PRIVATE_INTERNAL,
+        matcher=ObservationMatcher(
+            (
+                ObservationMatchClause.build(
+                    field_path="headline",
+                    mode=MonitoringMatchMode.CONTAINS_ANY,
+                    terms=("target",),
+                ),
+            )
+        ),
+    )
+
+
+def _headline_template(*, maximum_match_clauses: int = 8) -> RegisteredQueryTemplate:
+    return RegisteredQueryTemplate(
+        template_ref=f"monitoring-query-template-{'a' * 64}",
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        maximum_match_clauses=maximum_match_clauses,
+    )
+
+
 def test_watch_policy_is_content_identified_and_schema_valid(tmp_path: Path) -> None:
     _, _, collection_policy, initial, service = _setup(tmp_path)
     policy = _watch_policy(collection_policy=collection_policy, initial_snapshot=initial)
 
     assert policy.watch_id == policy.expected_watch_id
+    assert attention_watch_policy_from_dict(policy.to_dict()).to_dict() == policy.to_dict()
     assert validate_agent_contract(policy.to_dict(), "attention-watch-policy.schema.json") == ()
     assert service.state(policy.watch_id).status is AttentionWatchStatus.ACTIVE
+
+
+def test_v2_watch_only_wakes_for_exact_bound_monitoring_scope(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    collection_policy = _collection_policy()
+    first_collection = _snapshot(store, policy=collection_policy, retrieved_at=FIRST_RECEIPT)
+    journal.record_snapshot(first_collection, policy=collection_policy)
+    initial = journal.freeze_snapshot(
+        policy_id=collection_policy.policy_id,
+        not_after=FIRST_RECEIPT,
+        window_start=collection_policy.window_start,
+        frozen_at=FIRST_RECEIPT,
+    )
+    scope = _headline_scope()
+    template = _headline_template()
+    plan = RetrievalPlan.bind(
+        scope=scope,
+        template=template,
+        collection_policy=collection_policy,
+    )
+    watch = AttentionWatchPolicy.build(
+        origin_ref="event-envelope-example",
+        collection_policy_id=collection_policy.policy_id,
+        initial_data_snapshot_id=initial.snapshot_id,
+        starts_at=SECOND_RECEIPT,
+        expires_at=FIRST_RECEIPT + timedelta(hours=1),
+        maximum_polls=3,
+        maximum_bytes=1_000_000,
+        maximum_wakes=1,
+        cooldown_seconds=0,
+        monitoring_scope=scope,
+        retrieval_plan=plan,
+        query_template=template,
+    )
+    service = AttentionWatchService(store, journal=journal)
+    service.create(watch, created_at=FIRST_RECEIPT)
+    unrelated = _snapshot(
+        store,
+        policy=collection_policy,
+        retrieved_at=SECOND_RECEIPT,
+        raw_record=b'{"headline":"Broad feed update"}',
+        headline="Broad feed update",
+    )
+
+    no_wake = service.run_due(
+        watch.watch_id,
+        now=SECOND_RECEIPT,
+        collector=_collector(unrelated),
+    )
+    state_after_unrelated = service.state(watch.watch_id)
+    target = _snapshot(
+        store,
+        policy=collection_policy,
+        retrieved_at=THIRD_RECEIPT,
+        raw_record=b'{"headline":"Target issuer policy update"}',
+        headline="Target issuer policy update",
+    )
+    wake = service.run_due(
+        watch.watch_id,
+        now=THIRD_RECEIPT,
+        collector=_collector(target),
+    )
+
+    assert watch.schema_version == "market-impact.attention-watch-policy.v2"
+    assert "event_cluster_key" not in watch.to_dict()
+    assert attention_watch_policy_from_dict(watch.to_dict()).to_dict() == watch.to_dict()
+    assert validate_agent_contract(watch.to_dict(), "attention-watch-policy.schema.json") == ()
+    assert no_wake.outcome == "no_change"
+    assert state_after_unrelated.wake_count == 0
+    assert service.state(watch.watch_id).wake_count == 1
+    assert wake.outcome == "triggered"
+    assert wake.wake is not None
+
+
+def test_v2_watch_rejects_a_matcher_that_exceeds_its_registered_template_bound(
+    tmp_path: Path,
+) -> None:
+    _, journal, collection_policy, initial, _ = _setup(tmp_path)
+    scope = MonitoringScope.build(
+        origin_refs=("event-envelope-example",),
+        subject=MonitoringSubjectRef(MonitoringSubjectKind.ISSUER, "cn.600000"),
+        query_template_ref=f"monitoring-query-template-{'a' * 64}",
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        freshness_max_age_seconds=300,
+        minimum_coverage_sources=1,
+        maximum_fetches=3,
+        maximum_bytes=1_000_000,
+        use_class=MonitoringUseClass.PRIVATE_INTERNAL,
+        matcher=ObservationMatcher(
+            (
+                ObservationMatchClause.build(
+                    field_path="headline",
+                    mode=MonitoringMatchMode.CONTAINS_ANY,
+                    terms=("target",),
+                ),
+                ObservationMatchClause.build(
+                    field_path="content",
+                    mode=MonitoringMatchMode.CONTAINS_ANY,
+                    terms=("policy",),
+                ),
+            )
+        ),
+    )
+    broad_template = _headline_template(maximum_match_clauses=2)
+    plan = RetrievalPlan.bind(
+        scope=scope,
+        template=broad_template,
+        collection_policy=collection_policy,
+    )
+
+    with pytest.raises(ValueError, match="clause bound"):
+        AttentionWatchPolicy.build(
+            origin_ref="event-envelope-example",
+            collection_policy_id=collection_policy.policy_id,
+            initial_data_snapshot_id=initial.snapshot_id,
+            starts_at=SECOND_RECEIPT,
+            expires_at=FIRST_RECEIPT + timedelta(hours=1),
+            maximum_polls=3,
+            maximum_bytes=1_000_000,
+            maximum_wakes=1,
+            cooldown_seconds=0,
+            monitoring_scope=scope,
+            retrieval_plan=plan,
+            query_template=_headline_template(maximum_match_clauses=1),
+        )
+
+    assert journal.policy(collection_policy.policy_id) == collection_policy
 
 
 def test_unchanged_content_does_not_enqueue_a_wake(tmp_path: Path) -> None:
@@ -234,6 +428,58 @@ def test_unchanged_content_does_not_enqueue_a_wake(tmp_path: Path) -> None:
     assert result.outcome == "no_change"
     assert result.wake is None
     assert service.pending_wakes() == ()
+
+
+def test_watch_wake_time_never_precedes_collection_receipt(tmp_path: Path) -> None:
+    store, _, policy, initial, service = _setup(tmp_path)
+    watch = _watch_policy(collection_policy=policy, initial_snapshot=initial)
+    completed_at = SECOND_RECEIPT + timedelta(seconds=15)
+    changed = _snapshot(
+        store,
+        policy=policy,
+        retrieved_at=completed_at,
+        raw_record=b'{"headline":"Policy decision revised"}',
+        headline="Policy decision revised",
+    )
+
+    result = service.run_due(
+        watch.watch_id,
+        now=SECOND_RECEIPT,
+        collector=_collector(changed),
+    )
+
+    assert result.outcome == "triggered"
+    assert result.wake is not None
+    assert result.wake.created_at == completed_at
+
+
+def test_watch_cannot_wake_after_expiry_during_collection(tmp_path: Path) -> None:
+    store, _, policy, initial, service = _setup(tmp_path)
+    watch = _watch_policy(
+        collection_policy=policy,
+        initial_snapshot=initial,
+        expires_at=SECOND_RECEIPT + timedelta(seconds=10),
+    )
+    service.create(watch, created_at=FIRST_RECEIPT)
+    changed = _snapshot(
+        store,
+        policy=policy,
+        retrieved_at=SECOND_RECEIPT + timedelta(seconds=15),
+        raw_record=b'{"headline":"Policy decision revised after expiry"}',
+        headline="Policy decision revised after expiry",
+    )
+
+    result = service.run_due(
+        watch.watch_id,
+        now=SECOND_RECEIPT,
+        collector=_collector(changed),
+    )
+
+    assert result.outcome == "expired"
+    assert result.wake is None
+    assert result.error_kind == "watch_expired_during_collection"
+    assert service.state(watch.watch_id).status is AttentionWatchStatus.EXPIRED
+    assert service.pending_wakes(watch_id=watch.watch_id) == ()
 
 
 def test_changed_content_freezes_snapshot_and_enqueues_one_wake(tmp_path: Path) -> None:

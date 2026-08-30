@@ -11,6 +11,16 @@ from typing import cast
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.data_inputs import DataSnapshot, LocalDataSnapshotStore
 from market_impact_agent.domain import require_aware
+from market_impact_agent.monitoring_scope import (
+    MonitoringScope,
+    RegisteredQueryTemplate,
+    RetrievalPlan,
+    assert_scope_aware_watch_admission,
+    matched_scope_versions,
+    monitoring_scope_from_dict,
+    query_template_from_matcher_contract,
+    retrieval_plan_from_dict,
+)
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
@@ -18,6 +28,7 @@ from market_impact_agent.prospective_data import (
 )
 
 ATTENTION_WATCH_POLICY_SCHEMA = "market-impact.attention-watch-policy.v1"
+ATTENTION_WATCH_POLICY_SCHEMA_V2 = "market-impact.attention-watch-policy.v2"
 ATTENTION_WATCH_WAKE_SCHEMA = "market-impact.attention-watch-wake.v1"
 ATTENTION_WATCH_TRIGGER = "new_observation_version"
 
@@ -41,7 +52,7 @@ class AttentionWatchStatus(StrEnum):
 class AttentionWatchPolicy:
     watch_id: str
     origin_ref: str
-    event_cluster_key: str
+    event_cluster_key: str | None
     collection_policy_id: str
     initial_data_snapshot_id: str
     starts_at: datetime
@@ -52,12 +63,17 @@ class AttentionWatchPolicy:
     cooldown_seconds: int
     trigger_kind: str = ATTENTION_WATCH_TRIGGER
     schema_version: str = ATTENTION_WATCH_POLICY_SCHEMA
+    monitoring_scope: MonitoringScope | None = None
+    retrieval_plan: RetrievalPlan | None = None
+    query_template: RegisteredQueryTemplate | None = None
 
     def __post_init__(self) -> None:
-        if self.schema_version != ATTENTION_WATCH_POLICY_SCHEMA:
+        if self.schema_version not in {
+            ATTENTION_WATCH_POLICY_SCHEMA,
+            ATTENTION_WATCH_POLICY_SCHEMA_V2,
+        }:
             raise ValueError("unsupported Attention Watch policy schema")
         _trimmed(self.origin_ref, "Attention Watch origin_ref")
-        _trimmed(self.event_cluster_key, "Attention Watch event_cluster_key")
         if not self.collection_policy_id.startswith("prospective-collection-policy-"):
             raise ValueError("Attention Watch requires a prospective collection policy ID")
         if not self.initial_data_snapshot_id.startswith("data-snapshot-"):
@@ -76,6 +92,31 @@ class AttentionWatchPolicy:
                 raise ValueError(f"Attention Watch {name} must be non-negative")
         if self.trigger_kind != ATTENTION_WATCH_TRIGGER:
             raise ValueError(f"Attention Watch trigger_kind must be {ATTENTION_WATCH_TRIGGER}")
+        if self.schema_version == ATTENTION_WATCH_POLICY_SCHEMA:
+            if self.event_cluster_key is None:
+                raise ValueError("Attention Watch v1 requires event_cluster_key")
+            _trimmed(self.event_cluster_key, "Attention Watch event_cluster_key")
+            if self.monitoring_scope is not None:
+                raise ValueError("Attention Watch v1 cannot carry a Monitoring Scope")
+            if self.retrieval_plan is not None or self.query_template is not None:
+                raise ValueError("Attention Watch v1 cannot carry Retrieval Plan bindings")
+        else:
+            if self.event_cluster_key is not None:
+                raise ValueError("Attention Watch v2 derives its subject from Monitoring Scope")
+            if self.monitoring_scope is None:
+                raise ValueError("Attention Watch v2 requires a Monitoring Scope")
+            if self.retrieval_plan is None or self.query_template is None:
+                raise ValueError("Attention Watch v2 requires Retrieval Plan and template bindings")
+            if self.origin_ref not in self.monitoring_scope.origin_refs:
+                raise ValueError("Attention Watch v2 origin_ref must be bound by Monitoring Scope")
+            assert_scope_aware_watch_admission(
+                self.monitoring_scope,
+                collection_policy_id=self.collection_policy_id,
+                retrieval_plan=self.retrieval_plan,
+                query_template=self.query_template,
+                maximum_polls=self.maximum_polls,
+                maximum_bytes=self.maximum_bytes,
+            )
         if self.watch_id != self.expected_watch_id:
             raise ValueError("Attention Watch watch_id does not match content")
 
@@ -84,10 +125,9 @@ class AttentionWatchPolicy:
         return f"attention-watch-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "schema_version": self.schema_version,
             "origin_ref": self.origin_ref,
-            "event_cluster_key": self.event_cluster_key,
             "collection_policy_id": self.collection_policy_id,
             "initial_data_snapshot_id": self.initial_data_snapshot_id,
             "starts_at": _timestamp(self.starts_at),
@@ -98,6 +138,15 @@ class AttentionWatchPolicy:
             "cooldown_seconds": self.cooldown_seconds,
             "trigger_kind": self.trigger_kind,
         }
+        if self.event_cluster_key is not None:
+            result["event_cluster_key"] = self.event_cluster_key
+        if self.monitoring_scope is not None:
+            result["monitoring_scope"] = self.monitoring_scope.to_dict()
+        if self.retrieval_plan is not None:
+            result["retrieval_plan"] = self.retrieval_plan.to_dict()
+        if self.query_template is not None:
+            result["template_matcher_contract"] = self.query_template.matcher_contract_dict()
+        return result
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "watch_id": self.watch_id}
@@ -107,7 +156,7 @@ class AttentionWatchPolicy:
         cls,
         *,
         origin_ref: str,
-        event_cluster_key: str,
+        event_cluster_key: str | None = None,
         collection_policy_id: str,
         initial_data_snapshot_id: str,
         starts_at: datetime,
@@ -116,11 +165,18 @@ class AttentionWatchPolicy:
         maximum_bytes: int,
         maximum_wakes: int,
         cooldown_seconds: int,
+        monitoring_scope: MonitoringScope | None = None,
+        retrieval_plan: RetrievalPlan | None = None,
+        query_template: RegisteredQueryTemplate | None = None,
     ) -> AttentionWatchPolicy:
-        core = {
-            "schema_version": ATTENTION_WATCH_POLICY_SCHEMA,
+        schema_version = (
+            ATTENTION_WATCH_POLICY_SCHEMA_V2
+            if monitoring_scope is not None
+            else ATTENTION_WATCH_POLICY_SCHEMA
+        )
+        core: dict[str, object] = {
+            "schema_version": schema_version,
             "origin_ref": origin_ref,
-            "event_cluster_key": event_cluster_key,
             "collection_policy_id": collection_policy_id,
             "initial_data_snapshot_id": initial_data_snapshot_id,
             "starts_at": _timestamp(starts_at),
@@ -131,6 +187,14 @@ class AttentionWatchPolicy:
             "cooldown_seconds": cooldown_seconds,
             "trigger_kind": ATTENTION_WATCH_TRIGGER,
         }
+        if event_cluster_key is not None:
+            core["event_cluster_key"] = event_cluster_key
+        if monitoring_scope is not None:
+            core["monitoring_scope"] = monitoring_scope.to_dict()
+        if retrieval_plan is not None:
+            core["retrieval_plan"] = retrieval_plan.to_dict()
+        if query_template is not None:
+            core["template_matcher_contract"] = query_template.matcher_contract_dict()
         return cls(
             watch_id=f"attention-watch-{canonical_hash(core)}",
             origin_ref=origin_ref,
@@ -143,6 +207,10 @@ class AttentionWatchPolicy:
             maximum_bytes=maximum_bytes,
             maximum_wakes=maximum_wakes,
             cooldown_seconds=cooldown_seconds,
+            schema_version=schema_version,
+            monitoring_scope=monitoring_scope,
+            retrieval_plan=retrieval_plan,
+            query_template=query_template,
         )
 
 
@@ -359,6 +427,22 @@ class AttentionWatchService:
         if created_at >= policy.expires_at:
             raise ValueError("cannot create an already expired Attention Watch")
         collection_policy = self.journal.policy(policy.collection_policy_id)
+        if policy.schema_version == ATTENTION_WATCH_POLICY_SCHEMA_V2:
+            if (
+                policy.monitoring_scope is None
+                or policy.retrieval_plan is None
+                or policy.query_template is None
+            ):
+                raise AssertionError("validated v2 Attention Watch bindings are missing")
+            assert_scope_aware_watch_admission(
+                policy.monitoring_scope,
+                collection_policy_id=policy.collection_policy_id,
+                retrieval_plan=policy.retrieval_plan,
+                query_template=policy.query_template,
+                maximum_polls=policy.maximum_polls,
+                maximum_bytes=policy.maximum_bytes,
+                collection_policy=collection_policy,
+            )
         initial = self.store.get(policy.initial_data_snapshot_id)
         self.journal.assert_frozen_snapshot(initial)
         if initial.query.source_policy_id != collection_policy.policy_id:
@@ -368,9 +452,7 @@ class AttentionWatchService:
             raise ValueError("Attention Watch baseline cutoff is missing")
         if _datetime(baseline_cutoff, "baseline cutoff") > created_at:
             raise ValueError("Attention Watch baseline cannot include future receipts")
-        version_ids = tuple(
-            prospective_observation_version_id(item) for item in initial.observations
-        )
+        version_ids = self._scope_version_ids(policy, initial)
         artifact = self.store.artifacts.put_json(policy.to_dict())
         with self._connect() as connection:
             existing = connection.execute(
@@ -486,11 +568,65 @@ class AttentionWatchService:
                 error_kind=error_kind,
             )
 
+        poll_completed_at = max(now, collection_snapshot.completed_at)
+        if poll_completed_at >= policy.expires_at:
+            recorded = self._record_poll(
+                watch_id,
+                lease_token=lease_token,
+                now=poll_completed_at,
+                status=AttentionWatchStatus.EXPIRED,
+                response_bytes=response_bytes,
+                last_snapshot_id=state.last_data_snapshot_id,
+                error_kind="watch_expired_during_collection",
+                cooldown_seconds=0,
+            )
+            if not recorded:
+                return _run_result(
+                    watch_id,
+                    "stale_claim",
+                    polled=True,
+                    collection_snapshot_id=collection_snapshot.snapshot_id,
+                    error_kind="watch_lease_lost",
+                )
+            return _run_result(
+                watch_id,
+                "expired",
+                polled=True,
+                collection_snapshot_id=collection_snapshot.snapshot_id,
+                error_kind="watch_expired_during_collection",
+            )
+        if collection_snapshot.query.as_of > collection_snapshot.completed_at:
+            recorded = self._record_poll(
+                watch_id,
+                lease_token=lease_token,
+                now=poll_completed_at,
+                status=AttentionWatchStatus.BACKING_OFF,
+                response_bytes=response_bytes,
+                last_snapshot_id=state.last_data_snapshot_id,
+                error_kind="watch_snapshot_future_cutoff",
+                cooldown_seconds=collection_policy.poll_interval_seconds * 2,
+            )
+            if not recorded:
+                return _run_result(
+                    watch_id,
+                    "stale_claim",
+                    polled=True,
+                    collection_snapshot_id=collection_snapshot.snapshot_id,
+                    error_kind="watch_lease_lost",
+                )
+            return _run_result(
+                watch_id,
+                "snapshot_invalid",
+                polled=True,
+                collection_snapshot_id=collection_snapshot.snapshot_id,
+                error_kind="watch_snapshot_future_cutoff",
+            )
+
         if state.byte_count + response_bytes > policy.maximum_bytes:
             recorded = self._record_poll(
                 watch_id,
                 lease_token=lease_token,
-                now=now,
+                now=poll_completed_at,
                 status=AttentionWatchStatus.EXPIRED,
                 response_bytes=response_bytes,
                 last_snapshot_id=state.last_data_snapshot_id,
@@ -516,7 +652,7 @@ class AttentionWatchService:
             recorded = self._record_poll(
                 watch_id,
                 lease_token=lease_token,
-                now=now,
+                now=poll_completed_at,
                 status=AttentionWatchStatus.BACKING_OFF,
                 response_bytes=response_bytes,
                 last_snapshot_id=state.last_data_snapshot_id,
@@ -543,13 +679,13 @@ class AttentionWatchService:
             policy_id=collection_policy.policy_id,
             not_after=collection_snapshot.query.as_of,
             window_start=collection_policy.window_start,
-            frozen_at=max(now, collection_snapshot.query.as_of),
+            frozen_at=poll_completed_at,
         )
         if not frozen.coverage_complete:
             recorded = self._record_poll(
                 watch_id,
                 lease_token=lease_token,
-                now=now,
+                now=poll_completed_at,
                 status=AttentionWatchStatus.BACKING_OFF,
                 response_bytes=response_bytes,
                 last_snapshot_id=state.last_data_snapshot_id,
@@ -574,16 +710,14 @@ class AttentionWatchService:
                 error_kind="watch_snapshot_incomplete",
             )
 
-        version_ids = tuple(
-            sorted(prospective_observation_version_id(item) for item in frozen.observations)
-        )
+        version_ids = self._scope_version_ids(policy, frozen)
         seen = self._seen_version_ids(watch_id)
         new_version_ids = tuple(item for item in version_ids if item not in seen)
         if not new_version_ids:
             committed, _ = self._commit_success(
                 watch_id,
                 lease_token=lease_token,
-                now=now,
+                now=poll_completed_at,
                 status=AttentionWatchStatus.ACTIVE,
                 response_bytes=response_bytes,
                 frozen=frozen,
@@ -614,13 +748,13 @@ class AttentionWatchService:
             data_snapshot_id=frozen.snapshot_id,
             prior_data_snapshot_id=state.last_data_snapshot_id,
             new_version_ids=new_version_ids,
-            created_at=now,
+            created_at=poll_completed_at,
         )
-        if now < state.wake_allowed_at:
+        if poll_completed_at < state.wake_allowed_at:
             recorded = self._record_poll(
                 watch_id,
                 lease_token=lease_token,
-                now=now,
+                now=poll_completed_at,
                 status=AttentionWatchStatus.TRIGGERED,
                 response_bytes=response_bytes,
                 last_snapshot_id=state.last_data_snapshot_id,
@@ -653,7 +787,7 @@ class AttentionWatchService:
         committed, enqueued = self._commit_success(
             watch_id,
             lease_token=lease_token,
-            now=now,
+            now=poll_completed_at,
             status=AttentionWatchStatus.TRIGGERED,
             response_bytes=response_bytes,
             frozen=frozen,
@@ -774,6 +908,17 @@ class AttentionWatchService:
                 (watch_id,),
             ).fetchall()
         return frozenset(cast(str, row["version_id"]) for row in rows)
+
+    @staticmethod
+    def _scope_version_ids(
+        policy: AttentionWatchPolicy,
+        snapshot: DataSnapshot,
+    ) -> tuple[str, ...]:
+        if policy.monitoring_scope is not None:
+            return matched_scope_versions(policy.monitoring_scope, snapshot)
+        return tuple(
+            sorted(prospective_observation_version_id(item) for item in snapshot.observations)
+        )
 
     def _claim_due(
         self,
@@ -993,10 +1138,35 @@ class AttentionWatchService:
 
 def attention_watch_policy_from_dict(value: object) -> AttentionWatchPolicy:
     payload = _object(value, "Attention Watch policy")
+    monitoring_scope_value = payload.get("monitoring_scope")
+    monitoring_scope = (
+        None
+        if monitoring_scope_value is None
+        else monitoring_scope_from_dict(monitoring_scope_value)
+    )
+    retrieval_plan_value = payload.get("retrieval_plan")
+    retrieval_plan = (
+        None if retrieval_plan_value is None else retrieval_plan_from_dict(retrieval_plan_value)
+    )
+    matcher_contract_value = payload.get("template_matcher_contract")
+    query_template = None
+    if matcher_contract_value is not None:
+        if retrieval_plan is None:
+            raise ValueError("Attention Watch matcher contract requires Retrieval Plan")
+        query_template = query_template_from_matcher_contract(
+            matcher_contract_value,
+            template_ref=retrieval_plan.query_template_ref,
+            capability=retrieval_plan.capability,
+            pit_lane=retrieval_plan.pit_lane,
+        )
     return AttentionWatchPolicy(
         watch_id=_string(payload, "watch_id"),
         origin_ref=_string(payload, "origin_ref"),
-        event_cluster_key=_string(payload, "event_cluster_key"),
+        event_cluster_key=(
+            None
+            if payload.get("event_cluster_key") is None
+            else _string(payload, "event_cluster_key")
+        ),
         collection_policy_id=_string(payload, "collection_policy_id"),
         initial_data_snapshot_id=_string(payload, "initial_data_snapshot_id"),
         starts_at=_datetime(_string(payload, "starts_at"), "starts_at"),
@@ -1007,6 +1177,9 @@ def attention_watch_policy_from_dict(value: object) -> AttentionWatchPolicy:
         cooldown_seconds=_integer(payload, "cooldown_seconds"),
         trigger_kind=_string(payload, "trigger_kind"),
         schema_version=_string(payload, "schema_version"),
+        monitoring_scope=monitoring_scope,
+        retrieval_plan=retrieval_plan,
+        query_template=query_template,
     )
 
 

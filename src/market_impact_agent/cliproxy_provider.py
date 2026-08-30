@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 from urllib.parse import urljoin
@@ -63,12 +64,15 @@ class CLIProxyUrllibJsonTransport(PinnedUrllibJsonTransport):
 
 
 class CLIProxyLunaProvider(OpenAIChatCompatibleProvider):
+    """Project-to-gateway adapter; gateway-internal retries are outside project proof."""
+
     def __init__(
         self,
         *,
         api_key: str,
         config: CLIProxyLunaConfig,
         transport: JsonHttpTransport | None = None,
+        request_id_factory: Callable[[], str] | None = None,
     ) -> None:
         if not api_key:
             raise ValueError("CLIProxyAPI project API key is required")
@@ -87,4 +91,5 @@ class CLIProxyLunaProvider(OpenAIChatCompatibleProvider):
             ),
             completion_parameters={"reasoning_effort": config.reasoning_effort},
             transport=transport or CLIProxyUrllibJsonTransport(),
+            request_id_factory=request_id_factory,
         )

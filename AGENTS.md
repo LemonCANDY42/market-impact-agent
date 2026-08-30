@@ -24,6 +24,12 @@ execution phases remain fail-closed until their acceptance gates pass.
 ## Domain and documentation
 
 - Use the canonical terms in `CONTEXT.md`.
+- Enforce only invariants that protect an owned boundary such as authority, PIT,
+  budget, idempotency, risk, or replay. Do not require Agents or Providers to
+  echo IDs, ordering, defaults, or optional fields the Harness can derive or
+  inject. Prefer typed absence or degradation over failure when safety and
+  evidence remain intact, and avoid wrapper contracts, duplicate state, or
+  formal symmetry without a concrete acceptance need.
 - Update the nearest owning document when a contract, boundary, claim gate, or
   user-visible behavior changes.
 - Record an ADR only for a hard-to-reverse, surprising trade-off.

@@ -375,13 +375,18 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       equivalent stored v2 without rewriting it.
     - [x] Preserve the second unlabelled real v4 batch as negative runtime evidence instead of
       replaying one ambiguous request. The frozen 39-version actual-receipt Candidate Set and
-      four-unit Manifest produced 39 Digests and 29 Cluster Seeds. Twenty-nine of thirty logical
-      members completed across 31 Provider attempts with 343,211 input and 151,024 output Tokens.
-      One classify request ended after dispatch without a completed response and was sealed
-      `_AmbiguousRun` / `human_input_required`; therefore the Work graph produced no Proposal,
-      authority receipt, Decision, Query Gate or execution authority. Restart must reopen that
-      terminal evidence without sending the request again. Any later operator-resolution or
-      replacement-run authority is a separate explicit contract decision, not an implicit retry.
+      four-unit Manifest produced 39 Digests and 29 Cluster Seeds. The full graph contains 34
+      members: four map, one partition, and 29 classify. Twenty-nine completed, thirty were
+      attempted, one classify member became `_AmbiguousRun` / `human_input_required`, and four
+      classify members never started; the attempts consumed 343,211 input and 151,024 output Tokens.
+      The Work graph produced no Proposal, authority receipt, Decision, Query Gate or execution
+      authority. Diagnosis found an upstream TLS `bad record MAC`, followed by an unsafe second
+      project generation POST and then gateway `auth_unavailable`; no quota, HTTP 429, or process
+      restart evidence exists. The prospective adapter now records each physical attempt and
+      generation state, forbids ambiguous POST retries, and supports durable circuit/cooldown/
+      operator-notice state. Restart must still reopen the old terminal evidence without sending the
+      request again. Any later operator-resolution or replacement-run authority is a separate
+      explicit contract decision, not an implicit retry.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
@@ -477,6 +482,15 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
 Stage 5 — automate bounded follow-up and open registered outcomes:
 
 - [ ] `PDI-40` Admit bounded Agent-proposed Watches without arbitrary network or execution access.
+  - [x] Add the authority-neutral scope/retrieval foundation: content-identified Monitoring Scopes
+    for event clusters, industries, issuers, instruments, ETFs, frozen subject sets and registered
+    information aspects; registered matcher contracts; exact Collection Policy-bound Retrieval
+    Plans; cutoff-bound local-first Resolutions; and v2 Attention Watch matching that ignores
+    unrelated broad-feed versions. Legacy v1 event Watches remain replayable. This does not install
+    an Agent proposal tool, fetch executor, scheduler, callback, or Wake dispatcher.
+  - [ ] Add the closed Agent Watch-request/admission contract, shared collection-opportunity fan-out,
+    installed scheduler and bounded acquisition executor. Every remote fetch must enter the Journal
+    and freeze a Snapshot before a fresh Agent Run can use it.
 - [ ] `PDI-41` Dispatch a claimed Wake idempotently into one fresh bounded Judgment Run.
 - [ ] `PDI-42` Open outcomes after the registered horizon and issue the next-research go/no-go.
 

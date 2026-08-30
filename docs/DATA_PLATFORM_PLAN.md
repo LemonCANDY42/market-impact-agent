@@ -921,13 +921,17 @@ Decision v3, bind the authority-derived Work `finished_at` and require it to equ
 equivalent retries may verify and return the stored v2 but never mutate it.
 
 A second real v4 treatment then froze 39 later actual-receipt versions into four Work Units, 39
-Digests and 29 Cluster Seeds. It completed 29 of 30 logical members across 31 Provider attempts,
-343,211 input and 151,024 output Tokens. One classify request ended after dispatch without a
-completed response and was sealed `_AmbiguousRun` / `human_input_required`. Consequently there is
-no Proposal, Work authority receipt, Decision, Query Gate or downstream authority. The 29 completed
-members are retained as negative runtime evidence only. Restart cannot resend the ambiguous
-request; continuing these versions requires a separately accepted operator-resolution or
-replacement-run contract rather than an implicit replay.
+Digests and 29 Cluster Seeds. Its complete graph contains 34 logical members: four map, one
+partition and 29 classify. Twenty-nine completed, thirty were attempted across 31 physical Provider
+attempts, one classify member became `_AmbiguousRun` / `human_input_required`, and four classify
+members never started; usage was 343,211 input and 151,024 output Tokens. Diagnosis found an
+upstream TLS `bad record MAC`; the old project adapter then issued an unsafe second generation POST,
+which the local gateway rejected as `auth_unavailable`. There is no quota, HTTP 429, or process
+restart evidence. Consequently there is no Proposal, Work authority receipt, Decision, Query Gate
+or downstream authority. The completed members remain negative runtime evidence only. Restart
+cannot resend the ambiguous request; continuing these versions requires a separately accepted
+operator-resolution or replacement-run contract rather than an implicit replay. The prospective
+repair is specified in [MODEL_PROVIDER_RELIABILITY.md](MODEL_PROVIDER_RELIABILITY.md).
 
 The exact real v2/v2 registration
 `event-impact-triage-work-comparison-e45b1d3cb71a5949a3418b82d06fbb32aab46eec062cde3e35cc61419ae2ff97`
@@ -1068,6 +1072,21 @@ sources, cadence, credentials, destination, and limits before creating an `Atten
 Tests reject arbitrary URLs, Provider IDs, destinations, execution capabilities, budget expansion,
 and unregistered event clusters.
 
+The authority-neutral foundation is now implemented: a content-identified `MonitoringScope` can
+name an event cluster, industry, issuer, instrument, ETF, frozen subject set, or registered
+information aspect; industry/ETF scopes bind then-effective membership context. A registered query
+template constrains deterministic matcher fields, modes, clause/term counts and lengths. A
+`RetrievalPlan` binds the exact accepted Collection Policy/source set, PIT lane, cadence, freshness,
+coverage and fetch/byte budgets. Its cutoff-bound `RetrievalResolution` checks cache first, then a
+Journal-frozen Snapshot, and otherwise returns either `fetch_required` or a typed blocking gap. A
+fetched result is usable only after the Harness records it and freezes a qualifying Snapshot; it is
+never appended directly to the requesting Agent Run. Attention Watch v2 embeds the exact Scope and
+wakes only on matching versions, while v1 remains replayable.
+
+This foundation does not complete PDI-40. The closed Agent proposal/admission tool, shared
+collection-opportunity fan-out, acquisition executor and installed scheduler remain open. A model
+cannot choose a URL, Provider, credential, destination, or same-run mutable context.
+
 **Blocked by:** PDI-17 and PDI-22.
 
 #### PDI-41 — Dispatch one claimed Wake to a fresh Judgment Run
@@ -1116,9 +1135,10 @@ larger prospective study is justified; a pass authorizes that next research regi
   accepted for the current tracer slice. Complete multi-policy operation, conditional HTTP caching,
   source-specific stream gap recovery, bounded retention, and the PDI-22 soak/fault matrix remain
   open.
-- Attention Watch provides durable `run_due` state and a local pending/delivered outbox, but no
-  installed scheduler or Agent-run dispatcher. An external supervisor must call it, and only the
-  new-observation-version trigger is accepted.
+- Attention Watch provides durable `run_due` state, scope-aware new-version filtering and a local
+  pending/delivered outbox, but no installed scheduler, shared acquisition executor, callback, or
+  Agent-run dispatcher. An external supervisor must call it, and only the new-observation-version
+  trigger is accepted.
 - CSRC and twenty-two unique Tushare route-level contracts are accepted for prospective private
   research, but
   this is not a globally complete A-share decision feed. Registered direct-publisher coverage,

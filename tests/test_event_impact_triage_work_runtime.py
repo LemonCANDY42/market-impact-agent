@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -20,6 +21,7 @@ from market_impact_agent.agent_runtime import (
     Utf8TokenEstimator,
 )
 from market_impact_agent.agent_schema import validate_agent_contract
+from market_impact_agent.cliproxy_provider import CLIProxyLunaConfig, CLIProxyLunaProvider
 from market_impact_agent.event_impact_triage import (
     EventImpactTriageCandidateSet,
     TriageAgentRole,
@@ -41,6 +43,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
+    TriageWorkRoleBinding,
     TriageWorkRunMember,
     build_event_impact_triage_work_execution_plan,
     build_event_impact_triage_work_execution_plan_v3,
@@ -48,8 +51,14 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import load_builtin_model_provider_profile
+from market_impact_agent.openai_chat_provider import JsonHttpTransport, OpenAIChatProviderError
 from market_impact_agent.prospective_diagnostic import (
     load_prospective_diagnostic_registration,
+)
+from market_impact_agent.provider_reliability import (
+    ProviderGenerationState,
+    ProviderHealthStore,
+    ProviderRetryDisposition,
 )
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
@@ -140,9 +149,15 @@ class ScriptedWorkProvider(ModelProvider):
                 for atom in atoms
             ]
             return {
-                "manifest_id": phase_input["manifest_id"],
-                "work_unit_id": phase_input["work_unit_id"],
-                "role": role,
+                **(
+                    {}
+                    if positional
+                    else {
+                        "manifest_id": phase_input["manifest_id"],
+                        "work_unit_id": phase_input["work_unit_id"],
+                        "role": role,
+                    }
+                ),
                 "atom_findings": findings,
             }
         if phase == TriageWorkPhase.MAP.value:
@@ -160,8 +175,14 @@ class ScriptedWorkProvider(ModelProvider):
                 for atom in atoms
             ]
             return {
-                "manifest_id": phase_input["manifest_id"],
-                "work_unit_id": phase_input["work_unit_id"],
+                **(
+                    {}
+                    if positional
+                    else {
+                        "manifest_id": phase_input["manifest_id"],
+                        "work_unit_id": phase_input["work_unit_id"],
+                    }
+                ),
                 "digests": digests,
             }
         if phase == TriageWorkPhase.PARTITION.value:
@@ -175,7 +196,7 @@ class ScriptedWorkProvider(ModelProvider):
             cross_unit = [identities[0], identities[-1]]
             singleton_ids = identities[1:-1]
             return {
-                "manifest_id": phase_input["manifest_id"],
+                **({} if positional else {"manifest_id": phase_input["manifest_id"]}),
                 "clusters": [
                     {
                         identity_field: cross_unit,
@@ -218,12 +239,112 @@ class SimulatedProcessCrash(BaseException):
     pass
 
 
+class OneFailureTransport(JsonHttpTransport):
+    def __init__(self, failure: OpenAIChatProviderError) -> None:
+        self.failure = failure
+        self.requests: list[dict[str, object]] = []
+
+    def request_json(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        payload: dict[str, object] | None,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        self.requests.append(
+            {
+                "method": method,
+                "url": url,
+                "headers": dict(headers),
+                "payload": payload,
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        raise self.failure
+
+
+class SafeRetryTransport(JsonHttpTransport):
+    def __init__(self) -> None:
+        self.requests: list[dict[str, object]] = []
+        self.rate_limit_emitted = False
+
+    def request_json(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        payload: dict[str, object] | None,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        assert payload is not None
+        self.requests.append(
+            {
+                "method": method,
+                "url": url,
+                "headers": dict(headers),
+                "payload": payload,
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        if not self.rate_limit_emitted:
+            self.rate_limit_emitted = True
+            raise OpenAIChatProviderError(
+                "rate limited before generation",
+                error_class="http",
+                diagnostic_code="rate_limited",
+                http_status=429,
+                generation_state=ProviderGenerationState.NOT_STARTED,
+                retry_disposition=ProviderRetryDisposition.SAFE,
+                attempts=1,
+            )
+        messages = cast(list[dict[str, object]], payload["messages"])
+        task = next(
+            decoded
+            for message in reversed(messages)
+            if message.get("role") == "user"
+            for decoded in (json.loads(str(message["content"])),)
+            if "phase" in decoded
+        )
+        output = ScriptedWorkProvider()._output(task)
+        content = canonical_json_bytes(output).decode()
+        response_id = f"safe-retry-{len(self.requests)}"
+        return {
+            "id": response_id,
+            "model": "gpt-5.6-luna",
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 120, "completion_tokens": 80},
+        }
+
+
 class CrashAfterDispatchProvider(ScriptedWorkProvider):
     async def complete(self, **kwargs: object) -> ModelTurn:
         messages = kwargs.get("messages")
         assert isinstance(messages, tuple)
         self.requests.append(cast(tuple[dict[str, object], ...], messages))
         raise SimulatedProcessCrash
+
+
+class CrashDuringValidationRunner(EventImpactTriageWorkRunner):
+    crashed = False
+
+    def _parse_output(
+        self,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+        assistant_message: dict[str, object],
+    ) -> object:
+        if not self.crashed:
+            self.crashed = True
+            raise SimulatedProcessCrash
+        return super()._parse_output(binding, unit_id, assistant_message)
 
 
 class SlowFirstProvider(ScriptedWorkProvider):
@@ -567,6 +688,7 @@ def test_work_runner_covers_121_candidates_crosses_units_and_restarts_without_ca
     result = asyncio.run(runner.run())
 
     assert result.status is RunStatus.COMPLETED
+    assert result.partition is not None
     assert len(result.digests) == 121
     assert result.partition is not None
     assert result.proposal is not None
@@ -622,6 +744,142 @@ def test_dispatched_ambiguous_unit_is_never_retried(tmp_path: Path) -> None:
         "model.request.dispatched",
         "model.request.ambiguous",
     ]
+
+
+def test_provider_failure_journals_each_physical_post_with_sanitized_fields(
+    tmp_path: Path,
+) -> None:
+    secret = "SUPERSECRET-PROVIDER-BODY"
+    transport = OneFailureTransport(
+        OpenAIChatProviderError(
+            f"must not persist {secret}",
+            error_class="tls",
+            diagnostic_code="tls_bad_record_mac",
+            http_status=500,
+            generation_state=ProviderGenerationState.UNKNOWN,
+            retry_disposition=ProviderRetryDisposition.FORBIDDEN,
+            attempts=1,
+        )
+    )
+    provider = CLIProxyLunaProvider(
+        api_key="dedicated-local-key",
+        config=CLIProxyLunaConfig(
+            origin="http://127.0.0.1:8317",
+            model="gpt-5.6-luna",
+            reasoning_effort="xhigh",
+            retry_backoff_seconds=0,
+        ),
+        transport=transport,
+        request_id_factory=lambda: "mia-runtime-tls-1",
+    )
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=cast(ScriptedWorkProvider, provider),
+    )
+    runner.provider_health_store = ProviderHealthStore(tmp_path / "provider-health.sqlite")
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
+    assert len(transport.requests) == 1
+    events = runner.journal.events(result.members[-1].run_id)
+    assert sum(item.event_type == "model.request.dispatched" for item in events) == 1
+    failed = next(item for item in events if item.event_type == "model.request.failed")
+    assert failed.payload["error_class"] == "tls"
+    assert failed.payload["diagnostic_code"] == "tls_bad_record_mac"
+    assert failed.payload["http_status"] == 500
+    assert failed.payload["request_id"] == "mia-runtime-tls-1"
+    assert failed.payload["generation_state"] == "unknown"
+    assert failed.payload["retry_disposition"] == "forbidden"
+    assert failed.payload["attempts"] == 1
+    assert result.members[-1].metrics.provider_attempts == 1
+    assert result.members[-1].metrics.latency_ms >= 0
+    serialized_events = canonical_json_bytes([item.to_dict() for item in events])
+    assert secret.encode() not in serialized_events
+    assert not runner.provider_health_store.admission(provider.provider_id, now=NOW).allowed
+
+
+def test_safe_pre_generation_retry_is_authoritative_and_counts_physical_posts(
+    tmp_path: Path,
+) -> None:
+    transport = SafeRetryTransport()
+    provider = CLIProxyLunaProvider(
+        api_key="dedicated-local-key",
+        config=CLIProxyLunaConfig(
+            origin="http://127.0.0.1:8317",
+            model="gpt-5.6-luna",
+            reasoning_effort="xhigh",
+            retry_backoff_seconds=0,
+        ),
+        transport=transport,
+        request_id_factory=lambda: "mia-runtime-safe-retry",
+    )
+    runner, _, _, manifest, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=cast(ScriptedWorkProvider, provider),
+        dialect="v4",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    first = result.members[0]
+    assert first.metrics.provider_attempts == 2
+    events = runner.journal.events(first.run_id)
+    assert [item.event_type for item in events[:4]] == [
+        "model.request.dispatched",
+        "model.request.failed",
+        "model.request.dispatched",
+        "model.response.completed",
+    ]
+    assert result.partition is not None
+    expected_calls = len(manifest.work_units) + 1 + len(result.partition.clusters)
+    assert len(transport.requests) == expected_calls + 1
+    calls_before_reopen = len(transport.requests)
+    reopened = asyncio.run(runner.run())
+    assert reopened.status is RunStatus.COMPLETED
+    assert len(transport.requests) == calls_before_reopen
+
+
+def test_restart_reuses_completed_response_after_validation_crash(tmp_path: Path) -> None:
+    runner, provider, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        runner_class=CrashDuringValidationRunner,
+        dialect="v4",
+    )
+
+    with pytest.raises(SimulatedProcessCrash):
+        asyncio.run(runner.run())
+    assert len(provider.requests) == 1
+
+    recovered = EventImpactTriageWorkRunner(
+        plan=plan,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        registration=_registration(),
+        provider=provider,
+        content_resolver=runner.content_resolver,
+        skills=runner.skills,
+        artifact_store=runner.artifact_store,
+        journal=runner.journal,
+        usage_ledger=runner.usage_ledger,
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(recovered.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partition is not None
+    expected_calls = len(manifest.work_units) + 1 + len(result.partition.clusters)
+    assert len(provider.requests) == expected_calls
+    first_events = recovered.journal.events(result.members[0].run_id)
+    assert [item.event_type for item in first_events].count("model.response.completed") == 1
+    assert all(item.event_type != "model.request.ambiguous" for item in first_events)
 
 
 def test_budget_failure_blocks_all_downstream_work(tmp_path: Path) -> None:
@@ -1024,6 +1282,8 @@ def test_v3_partition_contract_describes_an_accepted_payload(tmp_path: Path) -> 
         if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.PARTITION.value
     )
     contract = cast(dict[str, object], partition_task["required_output"])
+    assert contract["required_fields"] == ["clusters"]
+    assert "manifest_id" not in canonical_json_bytes(contract).decode()
     fields = cast(dict[str, dict[str, object]], contract["field_schemas"])
     assert fields["merge_state"] == {
         "type": "string",

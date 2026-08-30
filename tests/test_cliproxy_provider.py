@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import pytest
 
@@ -22,6 +22,10 @@ from market_impact_agent.model_provider import (
 from market_impact_agent.openai_chat_provider import (
     JsonHttpTransport,
     PinnedUrllibJsonTransport,
+)
+from market_impact_agent.provider_reliability import (
+    ProviderGenerationState,
+    ProviderRetryDisposition,
 )
 
 PROFILE = Path("examples/providers/cliproxyapi-luna-xhigh-v1.json")
@@ -64,6 +68,15 @@ class JsonServerHandler(BaseHTTPRequestHandler):
         type(self).hits.append((self.path, self.headers.get("Authorization")))
         body = json.dumps({"served_by": type(self).server_label}).encode()
         self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self) -> None:
+        type(self).hits.append((self.path, self.headers.get("Authorization")))
+        body = json.dumps({"error": type(self).server_label}).encode()
+        self.send_response(500)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -190,6 +203,56 @@ def test_exact_loopback_transport_never_sends_credentials_to_environment_proxy(
     assert ProxyHandler.hits == []
 
 
+def test_http_500_body_recognizes_tls_bad_record_mac_without_persisting_body() -> None:
+    with json_server("tls: bad record MAC SECRET-BODY") as (server, Handler):
+        origin = f"http://127.0.0.1:{server.server_port}"
+        with pytest.raises(CLIProxyProviderError) as captured:
+            PinnedUrllibJsonTransport(
+                allowed_origin=origin,
+                provider_label="CLIProxyAPI",
+            ).request_json(
+                method="POST",
+                url=f"{origin}/v1/chat/completions",
+                headers={"Authorization": "Bearer dedicated-local-key"},
+                payload={"model": "gpt-5.6-luna"},
+                timeout_seconds=2,
+            )
+
+    assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
+    assert captured.value.error_class == "tls"
+    assert captured.value.diagnostic_code == "tls_bad_record_mac"
+    assert captured.value.generation_state is ProviderGenerationState.UNKNOWN
+    assert captured.value.retry_disposition is ProviderRetryDisposition.FORBIDDEN
+    assert "SECRET-BODY" not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "diagnostic_code", ["auth_unavailable", "authentication_failed", "quota_exhausted"]
+)
+def test_http_5xx_explicit_pre_generation_diagnostics_are_terminal(
+    diagnostic_code: str,
+) -> None:
+    with json_server(diagnostic_code) as (server, Handler):
+        origin = f"http://127.0.0.1:{server.server_port}"
+        with pytest.raises(CLIProxyProviderError) as captured:
+            PinnedUrllibJsonTransport(
+                allowed_origin=origin,
+                provider_label="CLIProxyAPI",
+            ).request_json(
+                method="POST",
+                url=f"{origin}/v1/chat/completions",
+                headers={"Authorization": "Bearer dedicated-local-key"},
+                payload={"model": "gpt-5.6-luna"},
+                timeout_seconds=2,
+            )
+
+    assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
+    assert captured.value.error_class == "http"
+    assert captured.value.diagnostic_code == diagnostic_code
+    assert captured.value.generation_state is ProviderGenerationState.NOT_STARTED
+    assert captured.value.retry_disposition is ProviderRetryDisposition.TERMINAL
+
+
 def test_cliproxy_completion_sends_xhigh_and_preserves_tool_calls() -> None:
     transport = FixtureTransport([_completion()])
     selected = _provider(transport)
@@ -236,6 +299,112 @@ def test_cliproxy_completion_sends_xhigh_and_preserves_tool_calls() -> None:
         ],
         "tool_choice": "auto",
     }
+    headers = cast(dict[str, str], transport.requests[0]["headers"])
+    assert headers["X-Market-Impact-Request-Id"].startswith("mia-")
+
+
+@pytest.mark.parametrize(
+    ("error_class", "diagnostic_code"),
+    [
+        ("http", "upstream_server_error"),
+        ("tls", "tls_bad_record_mac"),
+    ],
+)
+def test_ambiguous_completion_failure_has_exactly_one_project_gateway_post(
+    error_class: str, diagnostic_code: str
+) -> None:
+    failure = CLIProxyProviderError(
+        "sanitized gateway failure",
+        error_class=error_class,
+        diagnostic_code=diagnostic_code,
+        http_status=500 if error_class == "http" else None,
+        generation_state=ProviderGenerationState.UNKNOWN,
+        retry_disposition=ProviderRetryDisposition.FORBIDDEN,
+        attempts=1,
+    )
+    transport = FixtureTransport([failure, _completion()])
+    selected = CLIProxyLunaProvider(
+        api_key="dedicated-local-key",
+        config=CLIProxyLunaConfig(
+            origin="http://127.0.0.1:8317",
+            model="gpt-5.6-luna",
+            reasoning_effort="xhigh",
+            retry_backoff_seconds=0,
+        ),
+        transport=transport,
+        request_id_factory=lambda: "mia-incident-1",
+    )
+
+    with pytest.raises(CLIProxyProviderError) as captured:
+        asyncio.run(
+            selected.complete(
+                messages=({"role": "user", "content": "inspect ev-1"},),
+                tools=(),
+                temperature=0.1,
+                top_p=0.95,
+                max_output_tokens=256,
+                timeout_seconds=5,
+            )
+        )
+
+    assert len(transport.requests) == 1
+    assert transport.requests[0]["method"] == "POST"
+    headers = cast(dict[str, str], transport.requests[0]["headers"])
+    assert headers["X-Market-Impact-Request-Id"] == "mia-incident-1"
+    assert captured.value.generation_state is ProviderGenerationState.UNKNOWN
+    assert captured.value.attempts == 1
+
+
+def test_explicit_429_rejection_retries_with_retry_after_and_exponential_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+
+    async def record_delay(seconds: float) -> None:
+        delays.append(seconds)
+
+    monkeypatch.setattr("market_impact_agent.openai_chat_provider.asyncio.sleep", record_delay)
+    rejected = CLIProxyProviderError(
+        "rate limited before generation",
+        error_class="http",
+        diagnostic_code="rate_limited",
+        http_status=429,
+        generation_state=ProviderGenerationState.NOT_STARTED,
+        retry_disposition=ProviderRetryDisposition.SAFE,
+        retry_after_seconds=1.5,
+        attempts=1,
+    )
+    transport = FixtureTransport([rejected, _completion()])
+    selected = CLIProxyLunaProvider(
+        api_key="dedicated-local-key",
+        config=CLIProxyLunaConfig(
+            origin="http://127.0.0.1:8317",
+            model="gpt-5.6-luna",
+            reasoning_effort="xhigh",
+            retry_backoff_seconds=0.25,
+        ),
+        transport=transport,
+        request_id_factory=lambda: "mia-rate-limit-1",
+    )
+
+    turn = asyncio.run(
+        selected.complete(
+            messages=({"role": "user", "content": "inspect ev-1"},),
+            tools=(),
+            temperature=0.1,
+            top_p=0.95,
+            max_output_tokens=256,
+            timeout_seconds=5,
+        )
+    )
+
+    assert turn.attempts == 2
+    assert delays == [1.5]
+    assert len(transport.requests) == 2
+    assert {
+        cast(dict[str, str], request["headers"])["X-Market-Impact-Request-Id"]
+        for request in transport.requests
+    } == {"mia-rate-limit-1"}
 
 
 @pytest.mark.parametrize(

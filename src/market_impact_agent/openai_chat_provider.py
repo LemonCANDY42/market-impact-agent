@@ -4,14 +4,25 @@ import asyncio
 import json
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import BaseHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from uuid import uuid4
 
 from market_impact_agent.agent_runtime import ModelTurn, ProviderUsage, ToolCall
+from market_impact_agent.provider_reliability import (
+    ProviderAttemptEvent,
+    ProviderAttemptObserver,
+    ProviderAttemptPhase,
+    ProviderFailure,
+    ProviderGenerationState,
+    ProviderRetryDisposition,
+)
 
 
 class JsonHttpTransport(Protocol):
@@ -26,19 +37,8 @@ class JsonHttpTransport(Protocol):
     ) -> dict[str, object]: ...
 
 
-class OpenAIChatProviderError(RuntimeError):
-    def __init__(
-        self,
-        message: str,
-        *,
-        error_class: str,
-        retryable: bool,
-        attempts: int,
-    ) -> None:
-        super().__init__(message)
-        self.error_class = error_class
-        self.retryable = retryable
-        self.attempts = attempts
+class OpenAIChatProviderError(ProviderFailure):
+    pass
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -89,25 +89,37 @@ class PinnedUrllibJsonTransport:
                 response_body = response.read()
         except HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")[:2000]
+            diagnostic_code = _http_diagnostic_code(exc.code, error_body)
+            generation_state = _http_generation_state(method, exc.code, diagnostic_code)
             raise OpenAIChatProviderError(
-                f"{self._provider_label} HTTP {exc.code}: "
-                f"{_bounded_error_text(_redact_header_values(error_body, headers))}",
-                error_class=f"http_{exc.code}",
-                retryable=exc.code == 429 or 500 <= exc.code < 600,
+                f"{self._provider_label} request was rejected with HTTP {exc.code}",
+                error_class=("tls" if diagnostic_code == "tls_bad_record_mac" else "http"),
+                diagnostic_code=diagnostic_code,
+                http_status=exc.code,
+                generation_state=generation_state,
+                retry_disposition=_http_retry_disposition(
+                    method, exc.code, diagnostic_code, generation_state
+                ),
+                retry_after_seconds=_retry_after_seconds(exc.headers.get("Retry-After")),
                 attempts=1,
             ) from exc
         except TimeoutError as exc:
             raise OpenAIChatProviderError(
                 f"{self._provider_label} request timed out",
                 error_class="timeout",
-                retryable=True,
+                diagnostic_code="request_timeout",
+                generation_state=_transport_generation_state(method),
+                retry_disposition=_transport_retry_disposition(method),
                 attempts=1,
             ) from exc
         except URLError as exc:
+            tls_bad_record_mac = _is_tls_bad_record_mac(exc)
             raise OpenAIChatProviderError(
                 f"{self._provider_label} transport failed",
-                error_class="transport",
-                retryable=True,
+                error_class="tls" if tls_bad_record_mac else "transport",
+                diagnostic_code=("tls_bad_record_mac" if tls_bad_record_mac else "transport_error"),
+                generation_state=_transport_generation_state(method),
+                retry_disposition=_transport_retry_disposition(method),
                 attempts=1,
             ) from exc
         try:
@@ -116,14 +128,18 @@ class PinnedUrllibJsonTransport:
             raise OpenAIChatProviderError(
                 f"{self._provider_label} returned invalid JSON",
                 error_class="invalid_json",
-                retryable=False,
+                diagnostic_code="invalid_json_response",
+                generation_state=ProviderGenerationState.RESPONSE_RECEIVED,
+                retry_disposition=ProviderRetryDisposition.TERMINAL,
                 attempts=1,
             ) from exc
         if not isinstance(decoded, dict):
             raise OpenAIChatProviderError(
                 f"{self._provider_label} returned a non-object response",
                 error_class="invalid_response",
-                retryable=False,
+                diagnostic_code="non_object_response",
+                generation_state=ProviderGenerationState.RESPONSE_RECEIVED,
+                retry_disposition=ProviderRetryDisposition.TERMINAL,
                 attempts=1,
             )
         return cast(dict[str, object], decoded)
@@ -183,6 +199,7 @@ class OpenAIChatCompatibleProvider:
         config: OpenAIChatProviderConfig,
         completion_parameters: Mapping[str, object],
         transport: JsonHttpTransport,
+        request_id_factory: Callable[[], str] | None = None,
     ) -> None:
         _nonempty(api_key, "API key")
         _nonempty(provider_id, "provider_id")
@@ -193,6 +210,7 @@ class OpenAIChatCompatibleProvider:
         self._config = config
         self._completion_parameters = dict(completion_parameters)
         self._transport = transport
+        self._request_id_factory = request_id_factory or (lambda: f"mia-{uuid4().hex}")
 
     @property
     def provider_id(self) -> str:
@@ -203,7 +221,7 @@ class OpenAIChatCompatibleProvider:
         return self._config.model
 
     async def assert_model_available(self, *, timeout_seconds: float) -> None:
-        response, _attempts = await self._request_with_retry(
+        response, _attempts, _request_id = await self._request_with_retry(
             method="GET",
             path=self._config.models_path,
             payload=None,
@@ -220,7 +238,9 @@ class OpenAIChatCompatibleProvider:
             raise OpenAIChatProviderError(
                 f"Configured {self._provider_label} model is unavailable: {self.model}",
                 error_class="model_unavailable",
-                retryable=False,
+                diagnostic_code="model_unavailable",
+                generation_state=ProviderGenerationState.RESPONSE_RECEIVED,
+                retry_disposition=ProviderRetryDisposition.TERMINAL,
                 attempts=1,
             )
 
@@ -233,6 +253,27 @@ class OpenAIChatCompatibleProvider:
         top_p: float,
         max_output_tokens: int,
         timeout_seconds: float,
+    ) -> ModelTurn:
+        return await self.complete_with_observer(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+            attempt_observer=None,
+        )
+
+    async def complete_with_observer(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+        attempt_observer: ProviderAttemptObserver | None,
     ) -> ModelTurn:
         if not messages:
             raise ValueError(f"{self._provider_label} completion requires at least one message")
@@ -253,20 +294,35 @@ class OpenAIChatCompatibleProvider:
             payload["tools"] = list(tools)
             payload["tool_choice"] = "auto"
         started = time.monotonic()
-        response, attempts = await self._request_with_retry(
+        response, attempts, request_id = await self._request_with_retry(
             method="POST",
             path=self._config.api_path,
             payload=payload,
             timeout_seconds=timeout_seconds,
+            attempt_observer=attempt_observer,
         )
         latency_ms = (time.monotonic() - started) * 1000
-        return _parse_completion(
-            response,
-            expected_model=self.model,
-            provider_label=self._provider_label,
-            latency_ms=latency_ms,
-            attempts=attempts,
-        )
+        try:
+            return _parse_completion(
+                response,
+                expected_model=self.model,
+                provider_label=self._provider_label,
+                latency_ms=latency_ms,
+                attempts=attempts,
+            )
+        except ProviderFailure as exc:
+            raise OpenAIChatProviderError(
+                str(exc),
+                error_class=exc.error_class,
+                diagnostic_code=exc.diagnostic_code,
+                http_status=exc.http_status,
+                request_id=request_id,
+                generation_state=ProviderGenerationState.RESPONSE_RECEIVED,
+                retry_disposition=ProviderRetryDisposition.TERMINAL,
+                retry_after_seconds=exc.retry_after_seconds,
+                attempts=attempts,
+                elapsed_latency_ms=latency_ms,
+            ) from exc
 
     async def _request_with_retry(
         self,
@@ -275,7 +331,8 @@ class OpenAIChatCompatibleProvider:
         path: str,
         payload: dict[str, object] | None,
         timeout_seconds: float,
-    ) -> tuple[dict[str, object], int]:
+        attempt_observer: ProviderAttemptObserver | None = None,
+    ) -> tuple[dict[str, object], int, str]:
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError(f"{self._provider_label} timeout_seconds must be finite and positive")
         headers = {
@@ -283,7 +340,22 @@ class OpenAIChatCompatibleProvider:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        request_id = self._request_id_factory()
+        _nonempty(request_id, "request_id")
+        headers["X-Market-Impact-Request-Id"] = request_id
+        started = time.monotonic()
         for attempt in range(1, self._config.max_attempts + 1):
+            attempt_started = time.monotonic()
+            _observe(
+                attempt_observer,
+                ProviderAttemptEvent(
+                    request_id=request_id,
+                    method=method,
+                    physical_attempt=attempt,
+                    phase=ProviderAttemptPhase.DISPATCHED,
+                    elapsed_latency_ms=0.0,
+                ),
+            )
             try:
                 response = await asyncio.to_thread(
                     self._transport.request_json,
@@ -293,17 +365,48 @@ class OpenAIChatCompatibleProvider:
                     payload=payload,
                     timeout_seconds=timeout_seconds,
                 )
-                return response, attempt
+                _observe(
+                    attempt_observer,
+                    ProviderAttemptEvent(
+                        request_id=request_id,
+                        method=method,
+                        physical_attempt=attempt,
+                        phase=ProviderAttemptPhase.SUCCEEDED,
+                        elapsed_latency_ms=(time.monotonic() - attempt_started) * 1000,
+                    ),
+                )
+                return response, attempt, request_id
             except OpenAIChatProviderError as exc:
-                if not exc.retryable or attempt >= self._config.max_attempts:
-                    raise OpenAIChatProviderError(
-                        _redact_secret(str(exc), self._api_key),
-                        error_class=exc.error_class,
-                        retryable=exc.retryable,
-                        attempts=attempt,
-                    ) from exc
-                if self._config.retry_backoff_seconds:
-                    await asyncio.sleep(self._config.retry_backoff_seconds * attempt)
+                contextual = OpenAIChatProviderError(
+                    _redact_secret(str(exc), self._api_key),
+                    error_class=exc.error_class,
+                    diagnostic_code=exc.diagnostic_code,
+                    http_status=exc.http_status,
+                    request_id=request_id,
+                    generation_state=exc.generation_state,
+                    retry_disposition=exc.retry_disposition,
+                    retry_after_seconds=exc.retry_after_seconds,
+                    attempts=attempt,
+                    elapsed_latency_ms=(time.monotonic() - started) * 1000,
+                )
+                _observe(
+                    attempt_observer,
+                    ProviderAttemptEvent(
+                        request_id=request_id,
+                        method=method,
+                        physical_attempt=attempt,
+                        phase=ProviderAttemptPhase.FAILED,
+                        elapsed_latency_ms=(time.monotonic() - attempt_started) * 1000,
+                        failure=contextual,
+                    ),
+                )
+                if not _retry_is_safe(method, contextual) or attempt >= self._config.max_attempts:
+                    raise contextual from exc
+                delay = self._config.retry_backoff_seconds * (2 ** (attempt - 1))
+                if contextual.retry_after_seconds is not None:
+                    delay = max(delay, min(contextual.retry_after_seconds, 60.0))
+                if delay:
+                    await asyncio.sleep(delay)
         raise AssertionError("bounded OpenAI-compatible retry loop did not return")
 
 
@@ -496,18 +599,123 @@ def _redact_secret(value: str, secret: str) -> str:
     return value.replace(secret, "[REDACTED]")
 
 
-def _bounded_error_text(value: str) -> str:
-    normalized = " ".join(value.split())
-    return normalized or "empty error response"
+def _http_diagnostic_code(status: int, body: str) -> str:
+    normalized = " ".join(body.lower().split())
+    if "bad record mac" in normalized or "decryption failed or bad record mac" in normalized:
+        return "tls_bad_record_mac"
+    if any(
+        marker in normalized
+        for marker in (
+            "auth_unavailable",
+            "auth unavailable",
+            "authentication unavailable",
+            "no available credential",
+            "no available account",
+            "no auth available",
+        )
+    ):
+        return "auth_unavailable"
+    if "authentication_failed" in normalized or "authentication failed" in normalized:
+        return "authentication_failed"
+    if (
+        "quota_exhausted" in normalized
+        or "quota exhausted" in normalized
+        or "insufficient_quota" in normalized
+        or "quota" in normalized
+    ):
+        return "quota_exhausted"
+    if status in {401, 403, 407}:
+        return "authentication_failed"
+    if status == 429:
+        return "rate_limited"
+    if 500 <= status < 600:
+        return "upstream_server_error"
+    return f"http_{status}"
 
 
-def _redact_header_values(value: str, headers: Mapping[str, str]) -> str:
-    cleaned = value
-    for name, header_value in headers.items():
-        if name.lower() != "authorization":
-            continue
-        cleaned = cleaned.replace(header_value, "[REDACTED]")
-        _scheme, separator, credential = header_value.partition(" ")
-        if separator and credential:
-            cleaned = cleaned.replace(credential, "[REDACTED]")
-    return cleaned
+def _http_generation_state(
+    method: str, status: int, diagnostic_code: str
+) -> ProviderGenerationState:
+    if method.upper() != "POST" or status < 500:
+        return ProviderGenerationState.NOT_STARTED
+    if diagnostic_code in {"auth_unavailable", "authentication_failed", "quota_exhausted"}:
+        return ProviderGenerationState.NOT_STARTED
+    return ProviderGenerationState.UNKNOWN
+
+
+def _http_retry_disposition(
+    method: str,
+    status: int,
+    diagnostic_code: str,
+    generation_state: ProviderGenerationState,
+) -> ProviderRetryDisposition:
+    if diagnostic_code in {"auth_unavailable", "authentication_failed", "quota_exhausted"}:
+        return ProviderRetryDisposition.TERMINAL
+    if method.upper() == "GET" and (status == 408 or status == 429 or 500 <= status < 600):
+        return ProviderRetryDisposition.SAFE
+    if (
+        method.upper() == "POST"
+        and status == 429
+        and diagnostic_code == "rate_limited"
+        and generation_state is ProviderGenerationState.NOT_STARTED
+    ):
+        return ProviderRetryDisposition.SAFE
+    if generation_state is ProviderGenerationState.UNKNOWN:
+        return ProviderRetryDisposition.FORBIDDEN
+    return ProviderRetryDisposition.TERMINAL
+
+
+def _transport_generation_state(method: str) -> ProviderGenerationState:
+    return (
+        ProviderGenerationState.NOT_STARTED
+        if method.upper() == "GET"
+        else ProviderGenerationState.UNKNOWN
+    )
+
+
+def _transport_retry_disposition(method: str) -> ProviderRetryDisposition:
+    return (
+        ProviderRetryDisposition.SAFE
+        if method.upper() == "GET"
+        else ProviderRetryDisposition.FORBIDDEN
+    )
+
+
+def _retry_is_safe(method: str, failure: ProviderFailure) -> bool:
+    if failure.retry_disposition is not ProviderRetryDisposition.SAFE:
+        return False
+    if method.upper() != "POST":
+        return True
+    return (
+        failure.generation_state is ProviderGenerationState.NOT_STARTED
+        and failure.http_status == 429
+        and failure.diagnostic_code == "rate_limited"
+    )
+
+
+def _retry_after_seconds(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            target = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=UTC)
+        seconds = (target - datetime.now(UTC)).total_seconds()
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
+
+
+def _is_tls_bad_record_mac(error: URLError) -> bool:
+    text = str(error.reason).lower()
+    return "bad record mac" in text or "decryption failed or bad record mac" in text
+
+
+def _observe(observer: ProviderAttemptObserver | None, event: ProviderAttemptEvent) -> None:
+    if observer is not None:
+        observer(event)

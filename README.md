@@ -90,10 +90,15 @@ The bootstrap implements:
   nine-version real v4 treatment completed all 13 members and produced a native Work Decision: no
   eligible policy checkpoint, five archive clusters, two EventAssessment routes and one Attention
   Watch route. That Decision classified each version once and granted no Query Gate, Judgment or
-  execution authority. A subsequent 39-version real v4 treatment completed 29 of 30 logical
-  members but sealed one post-dispatch Provider interruption as `human_input_required`; it produced
-  no Proposal or Decision and is retained only as negative runtime evidence, without automatic
-  replay. Typed Position Snapshot/historical-context
+  execution authority. A subsequent 39-version real v4 treatment completed 29 of 34 logical graph
+  members: 30 were attempted, one classify member sealed a post-dispatch Provider interruption as
+  `human_input_required`, and four classify members never started. Diagnosis traced the interruption
+  to an upstream TLS `bad record MAC`, an unsafe second project-level generation POST, and then local
+  gateway `auth_unavailable`; it was not quota or rate-limit evidence. The batch produced no Proposal
+  or Decision and remains immutable negative runtime evidence. The prospective repair now journals
+  each physical attempt with a correlation ID and generation state, forbids ambiguous POST retries,
+  and can persist sanitized circuit/cooldown/operator-notice state; see
+  [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed Position Snapshot/historical-context
   payloads, completed real comparison arms and passing blind semantic results remain open acceptance
   work. Order-time
   tradability and risk remain
@@ -132,10 +137,15 @@ The bootstrap implements:
   74.54 seconds and trigger-Job latency of 45.304 seconds. Longer multi-policy soak, retention and
   restore acceptance remain open;
   the append-only collector state is not reset or discarded;
-- a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
-  poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
+- a minimal Harness-owned Attention Watch runtime with immutable v1 event scope plus a v2
+  [Monitoring Scope](docs/DATA_INPUT_HARNESS.md#scoped-local-first-retrieval) for an event cluster,
+  industry, issuer, instrument, ETF, frozen list, or registered information aspect; registered
+  matcher contracts and Retrieval Plans enforce local-first cache/Journal resolution and return a
+  bounded fetch request or typed gap instead of exposing arbitrary network access. Watch TTL and
+  byte/poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
   due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,
-  and an idempotent local wake-up outbox that always binds a complete frozen Snapshot;
+  and an idempotent local wake-up outbox always bind a complete frozen Snapshot. The scheduler,
+  acquisition executor, Agent callback, and fresh-run dispatcher are not installed;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic

@@ -8,7 +8,6 @@
     "schema_version",
     "watch_id",
     "origin_ref",
-    "event_cluster_key",
     "collection_policy_id",
     "initial_data_snapshot_id",
     "starts_at",
@@ -20,7 +19,12 @@
     "trigger_kind"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.attention-watch-policy.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.attention-watch-policy.v1",
+        "market-impact.attention-watch-policy.v2"
+      ]
+    },
     "watch_id": {"type": "string", "pattern": "^attention-watch-[0-9a-f]{64}$"},
     "origin_ref": {"type": "string", "minLength": 1},
     "event_cluster_key": {"type": "string", "minLength": 1},
@@ -38,6 +42,96 @@
     "maximum_bytes": {"type": "integer", "minimum": 0},
     "maximum_wakes": {"type": "integer", "minimum": 0},
     "cooldown_seconds": {"type": "integer", "minimum": 0},
-    "trigger_kind": {"const": "new_observation_version"}
+    "trigger_kind": {"const": "new_observation_version"},
+    "monitoring_scope": {
+      "$ref": "https://schemas.market-impact-agent.local/monitoring-scope.schema.json"
+    },
+    "retrieval_plan": {
+      "$ref": "https://schemas.market-impact-agent.local/retrieval-plan.schema.json"
+    },
+    "template_matcher_contract": {
+      "$ref": "#/$defs/template_matcher_contract"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "market-impact.attention-watch-policy.v1"}
+        }
+      },
+      "then": {
+        "required": ["event_cluster_key"],
+        "not": {
+          "anyOf": [
+            {"required": ["monitoring_scope"]},
+            {"required": ["retrieval_plan"]},
+            {"required": ["template_matcher_contract"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "market-impact.attention-watch-policy.v2"}
+        }
+      },
+      "then": {
+        "required": ["monitoring_scope", "retrieval_plan", "template_matcher_contract"],
+        "not": {"required": ["event_cluster_key"]}
+      }
+    }
+  ],
+  "$defs": {
+    "template_matcher_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_match_field_paths",
+        "allowed_match_modes",
+        "maximum_match_clauses",
+        "maximum_terms_per_clause",
+        "maximum_term_length"
+      ],
+      "properties": {
+        "allowed_match_field_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "event_cluster_ids",
+              "industry_codes",
+              "issuer_ids",
+              "instrument_ids",
+              "etf_ids",
+              "subject_refs",
+              "information_aspects",
+              "tags",
+              "headline",
+              "title",
+              "content",
+              "channels",
+              "ts_code",
+              "record.title",
+              "record.headline",
+              "record.content",
+              "record.channels",
+              "record.ts_code"
+            ]
+          }
+        },
+        "allowed_match_modes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["exact", "contains_all", "contains_any"]}
+        },
+        "maximum_match_clauses": {"type": "integer", "minimum": 1},
+        "maximum_terms_per_clause": {"type": "integer", "minimum": 1},
+        "maximum_term_length": {"type": "integer", "minimum": 1, "maximum": 256}
+      }
+    }
   }
 }

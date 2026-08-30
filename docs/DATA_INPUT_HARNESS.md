@@ -671,5 +671,43 @@ If a real receipt gap occurs, later polls remain append-only and cannot make the
 complete; an operator must explicitly approve a new complete baseline/policy before wake eligibility
 resumes.
 
+### Scoped local-first retrieval
+
+Attention Watch v2 replaces the v1 event-only metadata boundary with a content-identified
+`MonitoringScope`. A Scope may name an event cluster, industry, issuer, instrument, ETF, frozen
+subject list, or registered information aspect such as earnings, regulation, supply disruption, or
+tradability. Industry and ETF scopes additionally bind the then-effective taxonomy/membership
+context; a frozen list records every exact member instead of referring to a mutable watchlist.
+
+The Scope contains a deterministic matcher over allowlisted normalized fields. A
+`RegisteredQueryTemplate` limits which fields and match modes are legal and caps clauses, terms and
+term lengths. `RetrievalPlan.bind` then resolves the Scope to one exact accepted Prospective
+Collection Policy, source set, PIT lane, cadence, freshness/coverage requirements, and fetch/byte
+budget. The Agent cannot name a URL, Provider route, credential, filesystem path, notification
+destination, or execution capability.
+
+`resolve_retrieval` implements the decision boundary, not network acquisition:
+
+1. accept an exact qualifying cached Snapshot;
+2. otherwise accept an exact qualifying Journal-frozen Snapshot;
+3. otherwise return `fetch_required` only when the registered Plan permits a positive fetch and byte
+   budget;
+4. after the Harness performs that registered acquisition, its existing Collection Usage Record
+   proves observable request/page/byte use, and the Journal freezes a qualifying Snapshot; a fresh
+   resolution may then return `journal_freeze` with that Snapshot ID;
+5. otherwise return typed PIT, source, coverage, freshness, cache, or acquisition gaps.
+
+The requested UTC instant participates in Retrieval Resolution identity, so a later freshness
+decision cannot alias an earlier one. Cache and Journal results are resolved by Snapshot ID through
+their owning stores; a caller-supplied Data Snapshot cannot merely claim cache or Journal
+provenance. Match outputs contain only Observation/version IDs, matched
+field paths, and license scope; licensed or raw bodies remain in the private store. A decision Agent
+may request additional information, but the current Run cannot consume mutable fetch output. The
+Harness must journal and freeze it, then start a fresh bounded Run over the exact Snapshot.
+
+This slice provides contracts and scope-aware Watch filtering. It does not yet install the Agent
+request tool, acquisition executor, shared due-opportunity fan-out, scheduler, callback, or fresh
+Run dispatcher; those remain PDI-40/PDI-41 acceptance work.
+
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.
