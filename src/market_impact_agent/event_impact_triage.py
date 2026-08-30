@@ -19,7 +19,10 @@ from market_impact_agent.research import EventArchetype, EventStage, Transmissio
 
 EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA = "market-impact.event-impact-triage-candidate-set.v1"
 EVENT_IMPACT_TRIAGE_PROPOSAL_SCHEMA = "market-impact.event-impact-triage-proposal.v1"
-EVENT_IMPACT_TRIAGE_DECISION_SCHEMA = "market-impact.event-impact-triage-decision.v1"
+EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1 = "market-impact.event-impact-triage-decision.v1"
+EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2 = "market-impact.event-impact-triage-decision.v2"
+EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3 = "market-impact.event-impact-triage-decision.v3"
+EVENT_IMPACT_TRIAGE_DECISION_SCHEMA = EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1
 
 
 class CheckpointEligibility(StrEnum):
@@ -684,11 +687,84 @@ class CompletedTriageRunAuthority(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class LegacyTriageWorkDecisionEvidence:
+    """Exact legacy v2 reference to a fully reopened multi-member Work run."""
+
+    plan_id: str
+    work_manifest_id: str
+    completed_member_count: int
+    usage_ledger_hash: str
+    authority_receipt_hash: str
+
+    def __post_init__(self) -> None:
+        _prefixed_hash(
+            self.plan_id,
+            "event-impact-triage-work-execution-plan-",
+            "triage work decision plan_id",
+        )
+        _prefixed_hash(
+            self.work_manifest_id,
+            "event-impact-triage-work-manifest-",
+            "triage work decision work_manifest_id",
+        )
+        if self.completed_member_count < 1:
+            raise ValueError("triage work decision requires a completed member")
+        _sha256(self.usage_ledger_hash, "triage work decision usage_ledger_hash")
+        _sha256(
+            self.authority_receipt_hash,
+            "triage work decision authority_receipt_hash",
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "plan_id": self.plan_id,
+            "work_manifest_id": self.work_manifest_id,
+            "completed_member_count": self.completed_member_count,
+            "usage_ledger_hash": self.usage_ledger_hash,
+            "authority_receipt_hash": self.authority_receipt_hash,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TriageWorkDecisionEvidence(LegacyTriageWorkDecisionEvidence):
+    """Current v3 Work evidence with authority-derived completion time."""
+
+    finished_at: datetime
+
+    def __post_init__(self) -> None:
+        LegacyTriageWorkDecisionEvidence.__post_init__(self)
+        _strict_utc(self.finished_at, "triage work decision finished_at")
+
+    def to_dict(self) -> dict[str, object]:
+        legacy = LegacyTriageWorkDecisionEvidence.to_dict(self)
+        return {
+            "plan_id": legacy["plan_id"],
+            "work_manifest_id": legacy["work_manifest_id"],
+            "completed_member_count": legacy["completed_member_count"],
+            "finished_at": _timestamp(self.finished_at),
+            "usage_ledger_hash": legacy["usage_ledger_hash"],
+            "authority_receipt_hash": legacy["authority_receipt_hash"],
+        }
+
+
+class CompletedTriageWorkRunAuthority(Protocol):
+    """Trusted Harness boundary that reopens one sealed multi-member Work run."""
+
+    def assert_authoritative_completed_triage_work_run(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        proposal: EventImpactTriageProposal,
+        run_evidence: TriageWorkDecisionEvidence,
+    ) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
 class EventImpactTriageDecision:
     decision_id: str
     candidate_set_id: str
     proposal_id: str
-    run_evidence: TriageRunEvidence
+    run_evidence: TriageRunEvidence | LegacyTriageWorkDecisionEvidence | TriageWorkDecisionEvidence
     status: TriageDecisionStatus
     selected_cluster_id: str | None
     blocking_review_cluster_ids: tuple[str, ...]
@@ -703,8 +779,27 @@ class EventImpactTriageDecision:
     schema_version: str = EVENT_IMPACT_TRIAGE_DECISION_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != EVENT_IMPACT_TRIAGE_DECISION_SCHEMA:
+        if self.schema_version not in {
+            EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1,
+            EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2,
+            EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3,
+        }:
             raise ValueError("unsupported Event Impact Triage Decision schema")
+        if (
+            (
+                self.schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1
+                and not isinstance(self.run_evidence, TriageRunEvidence)
+            )
+            or (
+                self.schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2
+                and type(self.run_evidence) is not LegacyTriageWorkDecisionEvidence
+            )
+            or (
+                self.schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3
+                and type(self.run_evidence) is not TriageWorkDecisionEvidence
+            )
+        ):
+            raise ValueError("triage Decision schema and run evidence revision differ")
         _prefixed_hash(
             self.candidate_set_id,
             "event-impact-triage-candidate-set-",
@@ -790,6 +885,147 @@ class EventImpactTriageDecision:
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "decision_id": self.decision_id}
+
+
+def event_impact_triage_decision_from_dict(value: object) -> EventImpactTriageDecision:
+    """Reopen one content-identified Decision without granting run authority."""
+
+    payload = _object(value, "Event Impact Triage Decision")
+    expected = {
+        "schema_version",
+        "decision_id",
+        "candidate_set_id",
+        "proposal_id",
+        "run_evidence",
+        "status",
+        "selected_cluster_id",
+        "blocking_review_cluster_ids",
+        "unselected_eligible_cluster_ids",
+        "event_assessment_cluster_ids",
+        "attention_watch_cluster_ids",
+        "archive_cluster_ids",
+        "decided_at",
+        "historical_pit_claim",
+        "judgment_model_calls_authorized",
+        "execution_capability",
+    }
+    if set(payload) != expected:
+        raise ValueError("Event Impact Triage Decision fields are invalid")
+    schema_version = _string(payload, "schema_version")
+    run_evidence = _triage_decision_run_evidence_from_dict(
+        payload.get("run_evidence"), schema_version=schema_version
+    )
+    selected = payload.get("selected_cluster_id")
+    if selected is not None and not isinstance(selected, str):
+        raise TypeError("selected_cluster_id must be null or text")
+    result = EventImpactTriageDecision(
+        decision_id=_string(payload, "decision_id"),
+        candidate_set_id=_string(payload, "candidate_set_id"),
+        proposal_id=_string(payload, "proposal_id"),
+        run_evidence=run_evidence,
+        status=TriageDecisionStatus(_string(payload, "status")),
+        selected_cluster_id=selected,
+        blocking_review_cluster_ids=_string_tuple(
+            payload.get("blocking_review_cluster_ids"),
+            "blocking_review_cluster_ids",
+        ),
+        unselected_eligible_cluster_ids=_string_tuple(
+            payload.get("unselected_eligible_cluster_ids"),
+            "unselected_eligible_cluster_ids",
+        ),
+        event_assessment_cluster_ids=_string_tuple(
+            payload.get("event_assessment_cluster_ids"),
+            "event_assessment_cluster_ids",
+        ),
+        attention_watch_cluster_ids=_string_tuple(
+            payload.get("attention_watch_cluster_ids"),
+            "attention_watch_cluster_ids",
+        ),
+        archive_cluster_ids=_string_tuple(
+            payload.get("archive_cluster_ids"), "archive_cluster_ids"
+        ),
+        decided_at=_datetime(_string(payload, "decided_at")),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=schema_version,
+    )
+    if result.to_dict() != payload:
+        raise ValueError("Event Impact Triage Decision is not canonical")
+    return result
+
+
+def _triage_decision_run_evidence_from_dict(
+    value: object, *, schema_version: str
+) -> TriageRunEvidence | LegacyTriageWorkDecisionEvidence | TriageWorkDecisionEvidence:
+    run_payload = _object(value, "triage run evidence")
+    if schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2:
+        expected = {
+            "plan_id",
+            "work_manifest_id",
+            "completed_member_count",
+            "usage_ledger_hash",
+            "authority_receipt_hash",
+        }
+        if set(run_payload) != expected:
+            raise ValueError("triage work decision evidence fields are invalid")
+        return LegacyTriageWorkDecisionEvidence(
+            plan_id=_string(run_payload, "plan_id"),
+            work_manifest_id=_string(run_payload, "work_manifest_id"),
+            completed_member_count=_integer(run_payload, "completed_member_count"),
+            usage_ledger_hash=_string(run_payload, "usage_ledger_hash"),
+            authority_receipt_hash=_string(run_payload, "authority_receipt_hash"),
+        )
+    if schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3:
+        expected = {
+            "plan_id",
+            "work_manifest_id",
+            "completed_member_count",
+            "finished_at",
+            "usage_ledger_hash",
+            "authority_receipt_hash",
+        }
+        if set(run_payload) != expected:
+            raise ValueError("triage work decision evidence fields are invalid")
+        return TriageWorkDecisionEvidence(
+            plan_id=_string(run_payload, "plan_id"),
+            work_manifest_id=_string(run_payload, "work_manifest_id"),
+            completed_member_count=_integer(run_payload, "completed_member_count"),
+            finished_at=_datetime(_string(run_payload, "finished_at")),
+            usage_ledger_hash=_string(run_payload, "usage_ledger_hash"),
+            authority_receipt_hash=_string(run_payload, "authority_receipt_hash"),
+        )
+    if schema_version != EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1:
+        raise ValueError("unsupported Event Impact Triage Decision schema")
+    if set(run_payload) != {"members", "usage_ledger_hash"}:
+        raise ValueError("triage run evidence fields are invalid")
+    member_fields = {
+        "role",
+        "run_id",
+        "terminal_artifact_hash",
+        "metrics_hash",
+        "validation_event_hash",
+        "execution_binding_hash",
+    }
+    members: list[TriageRunMemberEvidence] = []
+    for raw in _array(run_payload.get("members"), "triage run members"):
+        member = _object(raw, "triage run member")
+        if set(member) != member_fields:
+            raise ValueError("triage run member fields are invalid")
+        members.append(
+            TriageRunMemberEvidence(
+                role=TriageAgentRole(_string(member, "role")),
+                run_id=_string(member, "run_id"),
+                terminal_artifact_hash=_string(member, "terminal_artifact_hash"),
+                metrics_hash=_string(member, "metrics_hash"),
+                validation_event_hash=_string(member, "validation_event_hash"),
+                execution_binding_hash=_string(member, "execution_binding_hash"),
+            )
+        )
+    return TriageRunEvidence(
+        members=tuple(members),
+        usage_ledger_hash=_string(run_payload, "usage_ledger_hash"),
+    )
 
 
 def freeze_event_impact_triage_candidate_set(
@@ -914,6 +1150,55 @@ def admit_event_impact_triage(
         proposal=proposal,
         run_evidence=run_evidence,
     )
+    return _build_event_impact_triage_decision(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=run_evidence,
+        decided_at=decided_at,
+        schema_version=EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1,
+    )
+
+
+def admit_event_impact_triage_work(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    proposal: EventImpactTriageProposal,
+    run_evidence: TriageWorkDecisionEvidence,
+    run_authority: CompletedTriageWorkRunAuthority,
+    decided_at: datetime,
+) -> EventImpactTriageDecision:
+    """Admit a fully reopened Work proposal without collapsing its run graph."""
+
+    proposal.validate_against(candidate_set)
+    _strict_utc(decided_at, "triage decision decided_at")
+    run_authority.assert_authoritative_completed_triage_work_run(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=run_evidence,
+    )
+    if decided_at != run_evidence.finished_at:
+        raise ValueError("triage Work Decision decided_at must equal authoritative finished_at")
+    if decided_at < candidate_set.frozen_at:
+        raise ValueError("triage decision cannot predate its frozen candidate set")
+    return _build_event_impact_triage_decision(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=run_evidence,
+        decided_at=decided_at,
+        schema_version=EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3,
+    )
+
+
+def _build_event_impact_triage_decision(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    proposal: EventImpactTriageProposal,
+    run_evidence: (
+        TriageRunEvidence | LegacyTriageWorkDecisionEvidence | TriageWorkDecisionEvidence
+    ),
+    decided_at: datetime,
+    schema_version: str,
+) -> EventImpactTriageDecision:
 
     availability = {item.version_id: item.first_available_at for item in candidate_set.observations}
     ready_at = {
@@ -983,7 +1268,7 @@ def admit_event_impact_triage(
         sorted(item.cluster_id for item in ordered if item.recommended_route is TriageRoute.ARCHIVE)
     )
     core = {
-        "schema_version": EVENT_IMPACT_TRIAGE_DECISION_SCHEMA,
+        "schema_version": schema_version,
         "candidate_set_id": candidate_set.candidate_set_id,
         "proposal_id": proposal.proposal_id,
         "run_evidence": run_evidence.to_dict(),
@@ -1012,6 +1297,7 @@ def admit_event_impact_triage(
         attention_watch_cluster_ids=attention_watch,
         archive_cluster_ids=archive,
         decided_at=decided_at,
+        schema_version=schema_version,
     )
 
 
@@ -1091,6 +1377,13 @@ def _number(payload: dict[str, object], name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"{name} must be numeric")
     return float(value)
+
+
+def _integer(payload: dict[str, object], name: str) -> int:
+    value = payload.get(name)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    return value
 
 
 def _boolean(payload: dict[str, object], name: str) -> bool:

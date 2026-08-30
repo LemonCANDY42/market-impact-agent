@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.data_inputs import LocalDataSnapshotStore
@@ -33,6 +33,20 @@ class CheckpointReadinessStatus(StrEnum):
     TRIGGER_ROUTE_UNCONFIGURED = "trigger_route_unconfigured"
     WAITING_FOR_POST_ADMISSION_TRIGGER = "waiting_for_post_admission_trigger"
     UNCLASSIFIED_TRIGGER_CANDIDATE_OBSERVED = "unclassified_trigger_candidate_observed"
+
+
+class CompletedTriageClassificationAuthority(Protocol):
+    """Read-only boundary for versions already covered by formal Triage Decisions."""
+
+    def classified_version_ids(
+        self,
+        *,
+        registration_id: str,
+        checkpoint_key: str,
+        route_plan_id: str,
+        route_admission_id: str,
+        at: datetime,
+    ) -> tuple[str, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -840,6 +854,7 @@ def evaluate_prospective_checkpoint_readiness(
     admission_store: ProspectiveCheckpointAdmissionStore,
     runtime: ProspectiveCollectionRuntime,
     evaluated_at: datetime,
+    classification_authority: CompletedTriageClassificationAuthority | None = None,
 ) -> ProspectiveCheckpointReadinessReport:
     if registration.schema_version not in {
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
@@ -956,6 +971,18 @@ def evaluate_prospective_checkpoint_readiness(
             and value.operational
         )
         operational_job_ids = tuple(sorted({value.job_id for _, value in trigger_rows}))
+        classified = (
+            ()
+            if classification_authority is None
+            else classification_authority.classified_version_ids(
+                registration_id=registration.registration_id,
+                checkpoint_key=checkpoint.checkpoint_key,
+                route_plan_id=route_plan.plan_id,
+                route_admission_id=admission.admission_id,
+                at=evaluated_at,
+            )
+        )
+        classified_ids = set(classified)
         candidate_refs = {
             item.version_id: item
             for _, value in trigger_rows
@@ -965,6 +992,7 @@ def evaluate_prospective_checkpoint_readiness(
                 not_before=admission.recorded_at,
                 not_after=evaluated_at,
             )
+            if item.version_id not in classified_ids
         }
         candidate_ids = tuple(sorted(candidate_refs))
         latest = max(

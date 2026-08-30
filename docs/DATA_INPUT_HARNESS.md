@@ -352,6 +352,14 @@ Query Gate pass. A historical `--evaluated-at` may fail once that Job has newer 
 current report or adding a future versioned health-snapshot contract is required instead of
 retroactively reusing live aggregates.
 
+Readiness also reopens the append-only Event Impact Triage Decision Store for the exact registration,
+checkpoint, route plan and admission epoch. Only a fully admitted direct-run v1, immutable legacy
+Work v2 or current authority-time-bound Work v3 Decision suppresses a candidate version; operator
+inspection, a Proposal alone, a failed Work plan or a Decision from another route epoch cannot mark
+it classified. The first real legacy Work v2 Decision removed its exact nine versions from readiness
+while leaving 26 later actual-receipt versions as new unclassified candidates. New Work admissions
+use v3 and require `decided_at` to equal the fully reopened Work receipt's `finished_at`.
+
 In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` and start prospective
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or
 open paper/live execution. Provider-specific adapters follow only after one sample passes its frozen

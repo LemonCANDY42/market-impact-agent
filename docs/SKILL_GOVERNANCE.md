@@ -10,6 +10,10 @@ scores practical Judgment quality under precommitted tolerance bands.
 The formal term for the requested "full-information hindsight" view is **Outcome-Opened
 Full-Information Review**. "Full" means complete within one registered corpus and realized horizon;
 it does not claim that the corpus contains every fact in the world.
+The registered corpus may span arbitrary instrument baskets, industries, issuers, cross-assets,
+macro regimes, horizons, volatility states and rotations. Breadth changes the study scope, not the
+admission rule: one discovery plus two additional independent validations and material-countercase
+closure are still required for each scoped conclusion.
 
 ## Authority and lifecycle
 
@@ -159,4 +163,5 @@ Still open:
 - a real registered multi-case Skill Research Study and first admitted candidate;
 - candidate effectiveness on a later pristine holdout or prospective cohort;
 - any explicitly authorized active-catalog edit; and
-- restoration of the prospective collector route-health drift before the first real checkpoint.
+- accumulation of enough traced prospective Judgments to evaluate individual Skill routing and
+  reported influence by model and domain without treating self-report as causal proof.

@@ -306,10 +306,13 @@ _Avoid_: Headline filter, trading recommendation, portfolio priority
 
 **Event Impact Triage Decision**:
 A content-identified Harness disposition produced only after it reopens the authoritative
-coordinator/specialist run bundle, Usage Ledger, complete candidate partition, citations, and receipt
-order. An earlier unresolved candidate blocks first-eligible selection; non-selected material events
-may still enter EventAssessment or Attention Watch, and the Decision grants no downstream model or
-execution authority.
+coordinator/specialist run bundle or native multi-member Work graph, Usage Ledger, complete candidate
+partition, citations, and receipt order. Decision v1 retains bounded direct-run evidence. Legacy v2
+binds the Work Plan, Manifest, completed-member count and authoritative receipt without pretending
+repeated Work roles are one direct role bundle; current v3 additionally binds the authority-derived
+finish time and requires it to equal `decided_at`. An earlier unresolved candidate blocks first-eligible
+selection; non-selected material events may still enter EventAssessment or Attention Watch, and the
+Decision grants no downstream model or execution authority.
 _Avoid_: Model label, zero-impact finding, Signal Intent
 
 **Event Impact Triage Execution Plan**:
@@ -323,10 +326,13 @@ _Avoid_: Dynamic debate, opaque Agent team, retry policy, trading plan
 **Event Impact Triage Work Execution Plan**:
 A content-identified pre-model binding of the exact Candidate Set and Work Manifest hashes to one
 comparison arm and Model Provider Profile. Schema v2 preserves the original exact-ID model-output
-dialect byte for byte. Schema v3 changes only that model-facing dialect: map outputs bind to atoms
-by exact array position and partition outputs use validated zero-based global atom ordinals; the
-Harness injects the authoritative atom identities into the unchanged canonical Digest and
-Partition artifacts. Both schemas freeze the repeated map roles per Work Unit, one
+dialect byte for byte. Schema v3 changes the map/partition model-facing dialect: map outputs bind to
+atoms by exact array position and partition outputs use validated zero-based global atom ordinals.
+Schema v4 retains those positional bindings and adds full classify field types, enums and numeric
+bounds while the Harness injects Cluster Seed candidate identities rather than asking the model to
+echo them. The Harness injects authoritative atom and cluster identities into the unchanged
+canonical Digest, Partition and Proposal artifacts. All schemas freeze the repeated map roles per
+Work Unit, one
 partition coordinator, bounded classify fan-out, exact Skill/prompt/output contracts and per-unit,
 per-phase and aggregate request/token/cost ceilings. Run identity is phase plus Work Unit or Cluster
 Seed plus role. Labels, tools, PIT, Judgment and execution remain absent, and an ambiguous dispatched
@@ -339,8 +345,9 @@ and before either Manifest-bound arm starts. It fixes exact Candidate Set and Wo
 IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, checkpoint contract,
 Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
 stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
-authority. Both plans must use the same Work Plan schema revision; mixed v2/v3 comparisons fail
-before registration, while v3/v3 comparisons retain the existing Registration and Report authority.
+authority. Both plans must use the same Work Plan schema revision; mixed revisions fail before
+registration, while equal-revision v3/v3 or v4/v4 comparisons retain the existing Registration and
+Report authority.
 _Avoid_: v1 comparison mutation, caller clock, revealed-label prompt, repaired failed arm
 
 **Event Impact Triage Work Comparison Report**:

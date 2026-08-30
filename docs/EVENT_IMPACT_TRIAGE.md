@@ -140,6 +140,14 @@ comparison may register v2/v2 or v3/v3 Plans, never a mixed pair; the existing W
 Registration and Report remain the authority for v3/v3 because their semantic inputs and evidence
 requirements did not change.
 
+The v4 Work Execution Plan keeps v3 map and partition byte semantics but closes the remaining
+classify-contract gap exposed by a real nine-version batch. Its classify prompt specifies each
+field's scalar/array type, every eligibility/route/archetype/stage/channel enum, bounded narrative
+arrays and `triage_confidence` in `[0, 1]`. The model no longer returns
+`candidate_version_ids`; the Harness injects the exact Cluster Seed identities before building the
+canonical Proposal. V4 has distinct Plan, prompt, runtime and terminal artifact revisions. It does
+not relax parsing, coverage, budget or authority checks, and v2/v3 evidence remains immutable.
+
 Every Provider call has a durable request-dispatched event first. A timeout or process interruption
 after dispatch without a completed response becomes `human_input_required`; restart never sends
 that request again. Completed units reopen without a Provider call. Run identity includes phase,
@@ -162,7 +170,10 @@ identity/tool/secret responses, cross-Manifest input and artifact/event/pointer/
 predecessor corruption rejection. V3 also covers every specialist role, positional coordinator
 binding, the twelve-item substituted-atom-ID failure shape, typed correction/Usage evidence, every
 ordinal validation class, schema packaging and v3/v3 reporting. This is mechanics evidence only;
-private real-run terminal evidence and semantic quality remain separate acceptance layers.
+private real-run terminal evidence and semantic quality remain separate acceptance layers. A later
+actual-receipt v4 treatment completed all 13 expected members over nine Digests and eight Cluster
+Seeds, then fully reopened its Proposal and Usage Ledger; that is one real process result, not a
+semantic promotion result.
 
 The first real v2/v2 Work Comparison is terminal negative evidence. It registered the exact sealed
 121-version Candidate Set, operator-exposed Label Set and eleven-unit Manifest as comparison
@@ -211,9 +222,9 @@ supported; the contract never forces the model to invent a fact. A Cluster Parti
 every Digest and atom exactly once. It may join atoms from different Work Units, requires evidence
 for a definite multi-atom merge, and represents an unresolved grouping as `needs_review`. Neither
 artifact contains labels, eligibility, impact route, PIT, Judgment or execution authority. Their
-schemas, deterministic assembly tests and scripted-provider runtime tests pass, but no real Provider
-run has produced a Digest or Partition yet. The batch, atom, work-unit, Digest and Cluster surfaces
-all cap retained candidate
+schemas and deterministic assembly tests pass. The nine-version v4 run produced nine real Digests,
+one exhaustive Partition with eight Cluster Seeds and a complete Proposal. The batch, atom,
+work-unit, Digest and Cluster surfaces all cap retained candidate
 identities at 128. Digest and merge narratives reject reserved label, route and authority control
 tokens; arbitrary semantic paraphrases still require the later typed classifier and Harness
 validation rather than being treated as structurally impossible.
@@ -285,13 +296,21 @@ Implemented contract evidence:
   authorize promotion; an append-only SQLite store records the complete label/plan identity under
   the Harness clock, each arm must start afterward, and Provider-reported token/cost usage must stay
   inside the frozen ceilings and reopen from the authoritative Usage Ledger.
+- append-only Decision authority for direct-run v1 evidence, immutable legacy Work v2 evidence and
+  current multi-member Work v3 evidence. V3 additionally binds the authority-derived Work finish
+  time and requires it to equal `decided_at`; an equivalent retry may verify and reopen an existing
+  v2 Decision but never rewrite it. The real nine-version legacy v2 Decision classified every
+  candidate exactly once, producing
+  five archive, two EventAssessment and one Attention Watch cluster with no eligible checkpoint;
+  the subsequent readiness audit excluded all nine and exposed 26 genuinely new candidates.
 
 Still required for real acceptance:
 
 - typed, secret-free Position Snapshot and evidence-lane-preserving Historical Analogy Pack payload
   bindings before their optional specialists can be enabled;
-- complete PDI-29E Work Manifest and bounded work-unit recovery of the sealed 121-version batch;
-  the existing monolithic attempt failed before a Comparison Report and remains negative evidence;
+- a complete labelled Work comparison: the original 121-version monolithic and v2 Work attempts
+  remain terminal negative evidence, while the later nine-version v4 treatment has no sealed labels
+  or baseline arm and therefore cannot establish classifier quality;
 - replay through both arms with complete per-unit Run Records and costs, followed by a later pristine
   blind batch and an explicit cross-batch promotion disposition;
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,

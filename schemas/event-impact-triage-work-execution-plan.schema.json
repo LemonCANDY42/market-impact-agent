@@ -35,7 +35,11 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "market-impact.event-impact-triage-work-execution-plan.v2"
+      "enum": [
+        "market-impact.event-impact-triage-work-execution-plan.v2",
+        "market-impact.event-impact-triage-work-execution-plan.v3",
+        "market-impact.event-impact-triage-work-execution-plan.v4"
+      ]
     },
     "plan_id": {
       "type": "string",

@@ -37,11 +37,14 @@ from market_impact_agent.event_impact_triage_work import (
 from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
+    EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
     TriageWorkRunMember,
     build_event_impact_triage_work_execution_plan,
     build_event_impact_triage_work_execution_plan_v3,
+    build_event_impact_triage_work_execution_plan_v4,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import load_builtin_model_provider_profile
@@ -121,7 +124,9 @@ class ScriptedWorkProvider(ModelProvider):
     def _output(self, task: dict[str, object]) -> dict[str, object]:
         phase = str(task["phase"])
         role = str(task["role"])
-        positional = str(task["prompt_template_id"]).endswith("-v3")
+        prompt_template_id = str(task["prompt_template_id"])
+        positional = prompt_template_id.endswith(("-v3", "-v4"))
+        typed_classify = prompt_template_id.endswith("-v4")
         phase_input = cast(dict[str, object], task["phase_input"])
         if phase == TriageWorkPhase.MAP.value and role != "coordinator":
             field = {
@@ -192,7 +197,7 @@ class ScriptedWorkProvider(ModelProvider):
         partition_cluster = cast(dict[str, object], phase_input["partition_cluster"])
         versions = cast(list[str], partition_cluster["candidate_version_ids"])
         return {
-            "candidate_version_ids": versions,
+            **({} if typed_classify else {"candidate_version_ids": versions}),
             "checkpoint_eligibility": "ineligible",
             "recommended_route": "archive",
             "event_archetypes": [],
@@ -399,6 +404,19 @@ class InvalidPartitionNarrativeProvider(ScriptedWorkProvider):
         return output
 
 
+class InvalidV4ClassifyOnceProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.invalid_classify_emitted = False
+
+    def _output(self, task: dict[str, object]) -> dict[str, object]:
+        output = super()._output(task)
+        if task["phase"] == TriageWorkPhase.CLASSIFY.value and not self.invalid_classify_emitted:
+            self.invalid_classify_emitted = True
+            output["recommended_route"] = ["archive"]
+        return output
+
+
 class PointerTamperRunner(EventImpactTriageWorkRunner):
     tampered = False
 
@@ -509,11 +527,11 @@ def _runtime(
     )
     skills = SkillRegistry(ROOT / "skills")
     profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
-    builder = (
-        build_event_impact_triage_work_execution_plan
-        if dialect == "v2"
-        else build_event_impact_triage_work_execution_plan_v3
-    )
+    builder = {
+        "v2": build_event_impact_triage_work_execution_plan,
+        "v3": build_event_impact_triage_work_execution_plan_v3,
+        "v4": build_event_impact_triage_work_execution_plan_v4,
+    }[dialect]
     plan = builder(
         candidate_set=candidate_set,
         work_manifest=manifest,
@@ -678,6 +696,42 @@ def test_authority_rejects_tamper_cross_manifest_and_partial_usage(tmp_path: Pat
             partition=result.partition,
             proposal=result.proposal,
             run_evidence=evidence,
+        )
+
+
+def test_work_decision_authority_compacts_only_after_full_reopening(tmp_path: Path) -> None:
+    runner, _, candidate_set, manifest, _ = _runtime(
+        tmp_path, arm=TriageComparisonArm.TREATMENT, count=3, dialect="v4"
+    )
+    result = asyncio.run(runner.run())
+    assert result.status is RunStatus.COMPLETED
+    assert result.partition is not None
+    assert result.proposal is not None
+    assert result.run_evidence is not None
+    authority = EventImpactTriageWorkDecisionAuthority(
+        runner=runner,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        digests=result.digests,
+        partition=result.partition,
+        proposal=result.proposal,
+        run_evidence=result.run_evidence,
+    )
+
+    evidence = authority.decision_evidence()
+    assert evidence.plan_id == runner.plan.plan_id
+    assert evidence.work_manifest_id == manifest.manifest_id
+    assert evidence.completed_member_count == len(result.members)
+    authority.assert_authoritative_completed_triage_work_run(
+        candidate_set=candidate_set,
+        proposal=result.proposal,
+        run_evidence=evidence,
+    )
+    with pytest.raises(ValueError, match="differs from authoritative reopening"):
+        authority.assert_authoritative_completed_triage_work_run(
+            candidate_set=candidate_set,
+            proposal=result.proposal,
+            run_evidence=replace(evidence, authority_receipt_hash="f" * 64),
         )
 
 
@@ -1077,6 +1131,149 @@ def test_v3_correction_usage_roundtrip_schema_and_parent_revision(tmp_path: Path
     payload["schema_version"] = EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2
     with pytest.raises(ValueError, match="Plan and role binding revisions"):
         event_impact_triage_work_execution_plan_from_dict(payload)
+
+
+def test_v4_classify_contract_is_typed_and_harness_binds_cluster_identity(
+    tmp_path: Path,
+) -> None:
+    runner, provider, candidate_set, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=3,
+        dialect="v4",
+    )
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4
+    assert result.proposal is not None
+    assert {
+        version_id
+        for cluster in result.proposal.clusters
+        for version_id in cluster.candidate_version_ids
+    } == set(candidate_set.version_ids)
+    classify_tasks = [
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    ]
+    assert classify_tasks
+    for task in classify_tasks:
+        assert str(task["prompt_template_id"]).endswith("-v4")
+        contract = cast(dict[str, object], task["required_output"])
+        assert contract["contract_version"] == "v4"
+        assert contract["candidate_version_ids_injected_by_harness"] is True
+        assert "candidate_version_ids" not in cast(list[str], contract["required_fields"])
+        fields = cast(dict[str, dict[str, object]], contract["field_schemas"])
+        assert fields["checkpoint_eligibility"]["enum"] == [
+            "eligible",
+            "ineligible",
+            "needs_review",
+        ]
+        assert fields["recommended_route"]["enum"] == [
+            "checkpoint_candidate",
+            "event_assessment",
+            "attention_watch",
+            "archive",
+        ]
+        assert fields["triage_confidence"] == {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+        }
+        for field in (
+            "changed_facts",
+            "rule_reasons",
+            "uncertainty_notes",
+            "countercases",
+            "affected_entity_refs",
+            "watch_questions",
+        ):
+            assert fields[field]["max_items"] == 8
+            assert cast(dict[str, object], fields[field]["items"])["max_chars"] == 600
+        for field in ("event_archetypes", "evidence_version_ids", "transmission_channels"):
+            assert fields[field]["unique_items"] is True
+    assert event_impact_triage_work_execution_plan_from_dict(plan.to_dict()) == plan
+    assert not validate_agent_contract(
+        plan.to_dict(), "event-impact-triage-work-execution-plan.schema.json"
+    )
+
+
+def test_v4_invalid_classify_scalar_is_corrected_under_same_typed_contract(
+    tmp_path: Path,
+) -> None:
+    provider = InvalidV4ClassifyOnceProvider()
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=provider,
+        dialect="v4",
+    )
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    classify_member = next(
+        item for item in result.members if item.phase is TriageWorkPhase.CLASSIFY
+    )
+    assert classify_member.metrics.turns == 2
+    correction = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if "output_contract_version" in str(request[-1]["content"])
+    )
+    assert correction["output_contract_version"] == "v4"
+    assert correction["validation_error"] == "closed_output_contract_invalid"
+    contract = cast(dict[str, object], correction["required_output"])
+    assert contract["contract_version"] == "v4"
+    assert contract["candidate_version_ids_injected_by_harness"] is True
+
+
+@pytest.mark.parametrize(
+    ("kind", "message"),
+    [
+        ("too_many_narratives", "v4 item limit"),
+        ("long_narrative", "v4 character limit"),
+        ("untrimmed_narrative", "trimmed strings"),
+        ("duplicate_archetype", "event_archetypes must contain unique items"),
+        ("duplicate_evidence", "evidence_version_ids must contain unique items"),
+        ("duplicate_channel", "transmission_channels must contain unique items"),
+    ],
+)
+def test_v4_classify_parser_rejects_declared_contract_bound_violations(
+    tmp_path: Path, kind: str, message: str
+) -> None:
+    runner, provider, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        dialect="v4",
+    )
+    result = asyncio.run(runner.run())
+    assert result.status is RunStatus.COMPLETED
+    assert result.partition is not None
+    task = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    )
+    output = provider._output(task)
+    versions = cast(list[str], output["evidence_version_ids"])
+    if kind == "too_many_narratives":
+        output["changed_facts"] = [f"fact {index}" for index in range(9)]
+    elif kind == "long_narrative":
+        output["rule_reasons"] = ["x" * 601]
+    elif kind == "untrimmed_narrative":
+        output["uncertainty_notes"] = [" not trimmed"]
+    elif kind == "duplicate_archetype":
+        output["event_archetypes"] = ["policy_regulatory", "policy_regulatory"]
+    elif kind == "duplicate_evidence":
+        output["evidence_version_ids"] = [versions[0], versions[0]]
+    else:
+        output["transmission_channels"] = ["policy_access", "policy_access"]
+
+    with pytest.raises((TypeError, ValueError), match=message):
+        runner._parse_cluster_proposal(output, result.partition.clusters[0])
 
 
 def test_v2_plan_prompt_and_output_contract_bytes_remain_frozen(tmp_path: Path) -> None:

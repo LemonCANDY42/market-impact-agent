@@ -23,7 +23,13 @@
     "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.event-impact-triage-decision.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.event-impact-triage-decision.v1",
+        "market-impact.event-impact-triage-decision.v2",
+        "market-impact.event-impact-triage-decision.v3"
+      ]
+    },
     "decision_id": {
       "type": "string",
       "pattern": "^event-impact-triage-decision-[0-9a-f]{64}$"
@@ -36,7 +42,7 @@
       "type": "string",
       "pattern": "^event-impact-triage-proposal-[0-9a-f]{64}$"
     },
-    "run_evidence": {"$ref": "#/$defs/runEvidence"},
+    "run_evidence": {"type": "object"},
     "status": {"enum": ["eligible_selected", "needs_review", "no_eligible_candidate"]},
     "selected_cluster_id": {
       "oneOf": [
@@ -54,6 +60,48 @@
     "judgment_model_calls_authorized": {"const": false},
     "execution_capability": {"const": false}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-decision.v1"
+          }
+        }
+      },
+      "then": {
+        "properties": {"run_evidence": {"$ref": "#/$defs/runEvidence"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-decision.v2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "run_evidence": {"$ref": "#/$defs/legacyWorkRunEvidence"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-decision.v3"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "run_evidence": {"$ref": "#/$defs/workRunEvidence"}
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "clusters": {
@@ -77,6 +125,56 @@
           "items": {"$ref": "#/$defs/runMember"}
         },
         "usage_ledger_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "legacyWorkRunEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_id",
+        "work_manifest_id",
+        "completed_member_count",
+        "usage_ledger_hash",
+        "authority_receipt_hash"
+      ],
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-work-execution-plan-[0-9a-f]{64}$"
+        },
+        "work_manifest_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-work-manifest-[0-9a-f]{64}$"
+        },
+        "completed_member_count": {"type": "integer", "minimum": 1},
+        "usage_ledger_hash": {"$ref": "#/$defs/sha256"},
+        "authority_receipt_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "workRunEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_id",
+        "work_manifest_id",
+        "completed_member_count",
+        "finished_at",
+        "usage_ledger_hash",
+        "authority_receipt_hash"
+      ],
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-work-execution-plan-[0-9a-f]{64}$"
+        },
+        "work_manifest_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-work-manifest-[0-9a-f]{64}$"
+        },
+        "completed_member_count": {"type": "integer", "minimum": 1},
+        "finished_at": {"type": "string", "format": "date-time"},
+        "usage_ledger_hash": {"$ref": "#/$defs/sha256"},
+        "authority_receipt_hash": {"$ref": "#/$defs/sha256"}
       }
     },
     "runMember": {

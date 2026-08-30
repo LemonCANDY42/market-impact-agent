@@ -43,12 +43,18 @@ from market_impact_agent.research import EventArchetype, EventStage, Transmissio
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
-EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA = "market-impact.event-impact-triage-execution-plan.v1"
+EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1 = "market-impact.event-impact-triage-execution-plan.v1"
+EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2 = "market-impact.event-impact-triage-execution-plan.v2"
+EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA = EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1
 EVENT_IMPACT_TRIAGE_SPECIALIST_ARTIFACT_SCHEMA = (
     "market-impact.event-impact-triage-specialist-artifact.v1"
 )
-EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA = "market-impact.event-impact-triage-run-artifact.v1"
-TRIAGE_RUNTIME_REF = "event-impact-triage-runtime-v1"
+EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V1 = "market-impact.event-impact-triage-run-artifact.v1"
+EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V2 = "market-impact.event-impact-triage-run-artifact.v2"
+EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA = EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V1
+TRIAGE_RUNTIME_REF_V1 = "event-impact-triage-runtime-v1"
+TRIAGE_RUNTIME_REF_V2 = "event-impact-triage-runtime-v2"
+TRIAGE_RUNTIME_REF = TRIAGE_RUNTIME_REF_V1
 TRIAGE_CANDIDATE_CONTENT_VIEW = "normalized-observation-payload-v1"
 TRIAGE_TOOL_SURFACE_HASH = canonical_hash([])
 
@@ -86,13 +92,16 @@ _ALLOWED_FINDING_TYPES = {
     ),
 }
 
-_ROLE_TEMPLATE_IDS = {
+_ROLE_TEMPLATE_IDS_V1 = {
     TriageAgentRole.COORDINATOR: "triage-coordinator-json-v1",
     TriageAgentRole.FACT_VERIFIER: "triage-fact-verifier-json-v1",
     TriageAgentRole.TRANSMISSION_MAPPER: "triage-transmission-mapper-json-v1",
     TriageAgentRole.PORTFOLIO_IMPACT: "triage-portfolio-impact-json-v1",
     TriageAgentRole.HISTORICAL_ANALOGY: "triage-historical-analogy-json-v1",
     TriageAgentRole.COUNTERCASE_REVIEWER: "triage-countercase-reviewer-json-v1",
+}
+_ROLE_TEMPLATE_IDS_V2 = {
+    role: template.removesuffix("-v1") + "-v2" for role, template in _ROLE_TEMPLATE_IDS_V1.items()
 }
 
 _BASELINE_ROLE_SKILLS = {
@@ -136,12 +145,13 @@ class TriageRoleBinding:
     max_estimated_cost_microusd: int
 
     def __post_init__(self) -> None:
-        if self.prompt_template_id != _ROLE_TEMPLATE_IDS[self.role]:
+        revision = _direct_contract_revision(self.prompt_template_id)
+        if self.prompt_template_id != _role_template_ids(revision)[self.role]:
             raise ValueError("triage role prompt template is not Harness-owned")
         if self.role is TriageAgentRole.COORDINATOR:
-            expected_contract = _coordinator_output_contract()
+            expected_contract = _coordinator_output_contract(revision=revision)
         else:
-            expected_contract = _specialist_output_contract(self.role)
+            expected_contract = _specialist_output_contract(self.role, revision=revision)
         if self.output_contract_hash != canonical_hash(expected_contract):
             raise ValueError("triage role output contract hash is invalid")
         _unique(self.requested_skills, "triage requested skills")
@@ -199,8 +209,17 @@ class EventImpactTriageExecutionPlan:
     schema_version: str = EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA:
+        if self.schema_version not in {
+            EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
+            EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
+        }:
             raise ValueError("unsupported Event Impact Triage Execution Plan schema")
+        revision = _direct_plan_revision(self.schema_version)
+        if any(
+            _direct_contract_revision(binding.prompt_template_id) != revision
+            for binding in self.role_bindings
+        ):
+            raise ValueError("triage Plan and role binding revisions differ")
         _prefixed_hash(self.candidate_set_id, "event-impact-triage-candidate-set-", "candidate")
         _prefixed_hash(self.registration_id, "prospective-diagnostic-registration-", "registration")
         _prefixed_hash(self.data_snapshot_id, "data-snapshot-", "Data Snapshot")
@@ -313,7 +332,15 @@ def build_event_impact_triage_execution_plan(
     skills: SkillRegistry,
     position_snapshot_id: str | None = None,
     historical_analogy_pack_id: str | None = None,
+    _schema_version: str = EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
 ) -> EventImpactTriageExecutionPlan:
+    if _schema_version not in {
+        EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
+        EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
+    }:
+        raise ValueError("unsupported direct triage plan revision")
+    revision = "v1" if _schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1 else "v2"
+    role_template_ids = _role_template_ids(revision)
     if candidate_set.registration_id != registration.registration_id:
         raise ValueError("triage Candidate Set belongs to another registration")
     checkpoint = registration.checkpoint(candidate_set.checkpoint_key)
@@ -343,11 +370,11 @@ def build_event_impact_triage_execution_plan(
                 requested_skills=requested[role],
                 resolved_skill_names=tuple(item.manifest.name for item in loaded),
                 skill_manifest_hashes=tuple(item.manifest.manifest_hash for item in loaded),
-                prompt_template_id=_ROLE_TEMPLATE_IDS[role],
+                prompt_template_id=role_template_ids[role],
                 output_contract_hash=canonical_hash(
-                    _coordinator_output_contract()
+                    _coordinator_output_contract(revision=revision)
                     if role is TriageAgentRole.COORDINATOR
-                    else _specialist_output_contract(role)
+                    else _specialist_output_contract(role, revision=revision)
                 ),
                 max_turns=min(3, profile_budget.max_turns),
                 max_input_tokens=profile_budget.max_input_tokens,
@@ -357,7 +384,7 @@ def build_event_impact_triage_execution_plan(
         )
     ordered = tuple(bindings)
     core = {
-        "schema_version": EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA,
+        "schema_version": _schema_version,
         "arm": arm.value,
         "candidate_set_id": candidate_set.candidate_set_id,
         "registration_id": registration.registration_id,
@@ -400,6 +427,33 @@ def build_event_impact_triage_execution_plan(
         max_total_input_tokens=sum(item.max_input_tokens for item in ordered),
         max_total_output_tokens=sum(item.max_output_tokens for item in ordered),
         max_total_estimated_cost_microusd=sum(item.max_estimated_cost_microusd for item in ordered),
+        schema_version=_schema_version,
+    )
+
+
+def build_event_impact_triage_execution_plan_v2(
+    *,
+    arm: TriageComparisonArm,
+    candidate_set: EventImpactTriageCandidateSet,
+    registration: ProspectiveDiagnosticRegistration,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+    position_snapshot_id: str | None = None,
+    historical_analogy_pack_id: str | None = None,
+) -> EventImpactTriageExecutionPlan:
+    """Build a backward-compatible direct plan with a typed model-output contract."""
+
+    return build_event_impact_triage_execution_plan(
+        arm=arm,
+        candidate_set=candidate_set,
+        registration=registration,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        position_snapshot_id=position_snapshot_id,
+        historical_analogy_pack_id=historical_analogy_pack_id,
+        _schema_version=EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
     )
 
 
@@ -859,7 +913,7 @@ class EventImpactTriageRunner:
         prompt_hash = canonical_hash(messages)
         execution_binding_hash = canonical_hash(
             {
-                "runtime_ref": TRIAGE_RUNTIME_REF,
+                "runtime_ref": _direct_runtime_ref(self.plan.schema_version),
                 "plan_id": self.plan.plan_id,
                 "role_binding": binding.to_dict(),
                 "runtime_config_hash": (
@@ -964,11 +1018,7 @@ class EventImpactTriageRunner:
                                     "do not add IDs, Markdown, commentary, tools, or extra fields."
                                 ),
                                 "validation_error": f"{type(exc).__name__}: {exc}",
-                                "required_output": (
-                                    _coordinator_output_contract()
-                                    if binding.role is TriageAgentRole.COORDINATOR
-                                    else _specialist_output_contract(binding.role)
-                                ),
+                                "required_output": _binding_output_contract(binding),
                             }
                         ).decode(),
                     }
@@ -1050,11 +1100,7 @@ class EventImpactTriageRunner:
             "specialist_artifacts": [item.to_dict() for item in specialist_artifacts],
             "position_snapshot_id": self.plan.position_snapshot_id,
             "historical_analogy_pack_id": self.plan.historical_analogy_pack_id,
-            "required_output": (
-                _coordinator_output_contract()
-                if binding.role is TriageAgentRole.COORDINATOR
-                else _specialist_output_contract(binding.role)
-            ),
+            "required_output": _binding_output_contract(binding),
         }
         messages.append(
             {
@@ -1121,7 +1167,7 @@ class EventImpactTriageRunner:
         )
         finished_at = self._now()
         terminal_payload = {
-            "schema_version": EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA,
+            "schema_version": _direct_run_artifact_schema(self.plan.schema_version),
             "run_id": run_record.run_id,
             "plan_id": self.plan.plan_id,
             "role": binding.role.value,
@@ -1174,7 +1220,7 @@ class EventImpactTriageRunner:
         message = self._redact(str(error)) or type(error).__name__
         terminal = self.artifact_store.put_json(
             {
-                "schema_version": "market-impact.event-impact-triage-run-error.v1",
+                "schema_version": _direct_error_artifact_schema(self.plan.schema_version),
                 "run_id": run_record.run_id,
                 "plan_id": self.plan.plan_id,
                 "role": binding.role.value,
@@ -1278,7 +1324,7 @@ class EventImpactTriageRunner:
         }
         if set(payload) != expected:
             raise ValueError("triage terminal artifact fields are invalid")
-        if payload.get("schema_version") != EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA:
+        if payload.get("schema_version") != _direct_run_artifact_schema(self.plan.schema_version):
             raise ValueError("unsupported triage terminal artifact schema")
         if payload.get("plan_id") != self.plan.plan_id:
             raise ValueError("triage terminal artifact belongs to another plan")
@@ -1350,6 +1396,17 @@ class EventImpactTriageRunner:
         )
 
     def _validate_static_bindings(self) -> None:
+        revision = _direct_plan_revision(self.plan.schema_version)
+        for binding in self.plan.role_bindings:
+            expected_contract = (
+                _coordinator_output_contract(revision=revision)
+                if binding.role is TriageAgentRole.COORDINATOR
+                else _specialist_output_contract(binding.role, revision=revision)
+            )
+            if binding.prompt_template_id != _role_template_ids(revision)[
+                binding.role
+            ] or binding.output_contract_hash != canonical_hash(expected_contract):
+                raise ValueError("triage runtime Plan and role binding revisions differ")
         if (
             self.plan.position_snapshot_id is not None
             or self.plan.historical_analogy_pack_id is not None
@@ -1771,74 +1828,277 @@ def event_impact_triage_execution_plan_from_dict(
     return result
 
 
-def _coordinator_output_contract() -> dict[str, object]:
+def _role_template_ids(revision: str) -> dict[TriageAgentRole, str]:
+    if revision == "v1":
+        return _ROLE_TEMPLATE_IDS_V1
+    if revision == "v2":
+        return _ROLE_TEMPLATE_IDS_V2
+    raise ValueError("unsupported direct triage contract revision")
+
+
+def _direct_contract_revision(prompt_template_id: str) -> str:
+    if prompt_template_id.endswith("-json-v1"):
+        return "v1"
+    if prompt_template_id.endswith("-json-v2"):
+        return "v2"
+    raise ValueError("unsupported direct triage prompt-template revision")
+
+
+def _direct_plan_revision(schema_version: str) -> str:
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1:
+        return "v1"
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
+        return "v2"
+    raise ValueError("unsupported direct triage plan revision")
+
+
+def _direct_runtime_ref(schema_version: str) -> str:
+    return {"v1": TRIAGE_RUNTIME_REF_V1, "v2": TRIAGE_RUNTIME_REF_V2}[
+        _direct_plan_revision(schema_version)
+    ]
+
+
+def _direct_run_artifact_schema(schema_version: str) -> str:
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1:
+        return EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V1
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
+        return EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V2
+    raise ValueError("unsupported direct triage plan revision")
+
+
+def _direct_error_artifact_schema(schema_version: str) -> str:
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1:
+        revision = "v1"
+    elif schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
+        revision = "v2"
+    else:
+        raise ValueError("unsupported direct triage plan revision")
+    return f"market-impact.event-impact-triage-run-error.{revision}"
+
+
+def _binding_output_contract(binding: TriageRoleBinding) -> dict[str, object]:
+    revision = _direct_contract_revision(binding.prompt_template_id)
+    if binding.role is TriageAgentRole.COORDINATOR:
+        return _coordinator_output_contract(revision=revision)
+    return _specialist_output_contract(binding.role, revision=revision)
+
+
+def _typed_string() -> dict[str, object]:
+    return {"type": "string", "trimmed": True, "min_chars": 1}
+
+
+def _typed_string_array(*, min_items: int = 0) -> dict[str, object]:
     return {
-        "closed_object": True,
+        "type": "array",
+        "min_items": min_items,
+        "unique_items": True,
+        "items": _typed_string(),
+    }
+
+
+def _typed_enum_array(values: list[str]) -> dict[str, object]:
+    return {
+        "type": "array",
+        "unique_items": True,
+        "items": {"type": "string", "enum": values},
+    }
+
+
+def _coordinator_output_contract(*, revision: str = "v1") -> dict[str, object]:
+    if revision == "v1":
+        return {
+            "closed_object": True,
+            "required_fields": ["candidate_set_id", "clusters"],
+            "cluster_contract": _cluster_draft_contract(),
+            "harness_mints_content_ids": True,
+        }
+    if revision != "v2":
+        raise ValueError("unsupported direct triage contract revision")
+    return {
+        "contract_version": "v2",
+        "type": "object",
         "required_fields": ["candidate_set_id", "clusters"],
-        "cluster_contract": _cluster_draft_contract(),
+        "field_schemas": {
+            "candidate_set_id": _typed_string(),
+            "clusters": {
+                "type": "array",
+                "min_items": 1,
+                "items": _cluster_draft_contract(revision="v2"),
+            },
+        },
+        "additional_properties": False,
         "harness_mints_content_ids": True,
     }
 
 
-def _cluster_draft_contract() -> dict[str, object]:
-    return {
-        "closed_object": True,
-        "required_fields": [
-            "candidate_version_ids",
-            "checkpoint_eligibility",
-            "recommended_route",
-            "event_archetypes",
-            "event_stage",
+def _cluster_draft_contract(*, revision: str = "v1") -> dict[str, object]:
+    required_fields = [
+        "candidate_version_ids",
+        "checkpoint_eligibility",
+        "recommended_route",
+        "event_archetypes",
+        "event_stage",
+        "changed_facts",
+        "rule_reasons",
+        "evidence_version_ids",
+        "uncertainty_notes",
+        "countercases",
+        "transmission_channels",
+        "affected_entity_refs",
+        "watch_questions",
+        "triage_confidence",
+    ]
+    if revision == "v1":
+        return {
+            "closed_object": True,
+            "required_fields": required_fields,
+            "checkpoint_eligibility_values": [item.value for item in CheckpointEligibility],
+            "recommended_route_values": [item.value for item in TriageRoute],
+            "event_archetype_values": [item.value for item in EventArchetype],
+            "event_stage_values": [item.value for item in EventStage],
+            "transmission_channel_values": [item.value for item in TransmissionChannel],
+        }
+    if revision != "v2":
+        raise ValueError("unsupported direct triage contract revision")
+    string_arrays = {
+        name: _typed_string_array()
+        for name in (
             "changed_facts",
             "rule_reasons",
-            "evidence_version_ids",
             "uncertainty_notes",
             "countercases",
-            "transmission_channels",
             "affected_entity_refs",
             "watch_questions",
-            "triage_confidence",
-        ],
-        "checkpoint_eligibility_values": [item.value for item in CheckpointEligibility],
-        "recommended_route_values": [item.value for item in TriageRoute],
-        "event_archetype_values": [item.value for item in EventArchetype],
-        "event_stage_values": [item.value for item in EventStage],
-        "transmission_channel_values": [item.value for item in TransmissionChannel],
+        )
+    }
+    return {
+        "type": "object",
+        "required_fields": required_fields,
+        "field_schemas": {
+            "candidate_version_ids": _typed_string_array(min_items=1),
+            "checkpoint_eligibility": {
+                "type": "string",
+                "enum": [item.value for item in CheckpointEligibility],
+            },
+            "recommended_route": {
+                "type": "string",
+                "enum": [item.value for item in TriageRoute],
+            },
+            "event_archetypes": _typed_enum_array([item.value for item in EventArchetype]),
+            "event_stage": {
+                "type": "string",
+                "enum": [item.value for item in EventStage],
+            },
+            **string_arrays,
+            "evidence_version_ids": _typed_string_array(min_items=1),
+            "transmission_channels": _typed_enum_array(
+                [item.value for item in TransmissionChannel]
+            ),
+            "triage_confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+            },
+        },
+        "additional_properties": False,
     }
 
 
-def _specialist_output_contract(role: TriageAgentRole) -> dict[str, object]:
+def _specialist_output_contract(
+    role: TriageAgentRole, *, revision: str = "v1"
+) -> dict[str, object]:
     if role is TriageAgentRole.COORDINATOR:
         raise ValueError("coordinator uses the Triage Proposal contract")
+    if revision == "v1":
+        return {
+            "closed_object": True,
+            "required_fields": [
+                "candidate_set_id",
+                "role",
+                "covered_candidate_version_ids",
+                "findings",
+            ],
+            "role": role.value,
+            "allowed_finding_types": sorted(item.value for item in _ALLOWED_FINDING_TYPES[role]),
+            "finding_contract": _finding_draft_contract(),
+            "harness_mints_content_ids": True,
+        }
+    if revision != "v2":
+        raise ValueError("unsupported direct triage contract revision")
     return {
-        "closed_object": True,
+        "contract_version": "v2",
+        "type": "object",
         "required_fields": [
             "candidate_set_id",
             "role",
             "covered_candidate_version_ids",
             "findings",
         ],
-        "role": role.value,
-        "allowed_finding_types": sorted(item.value for item in _ALLOWED_FINDING_TYPES[role]),
-        "finding_contract": _finding_draft_contract(),
+        "field_schemas": {
+            "candidate_set_id": _typed_string(),
+            "role": {"type": "string", "const": role.value},
+            "covered_candidate_version_ids": _typed_string_array(min_items=1),
+            "findings": {
+                "type": "array",
+                "items": _finding_draft_contract(role=role, revision="v2"),
+            },
+        },
+        "additional_properties": False,
         "harness_mints_content_ids": True,
     }
 
 
-def _finding_draft_contract() -> dict[str, object]:
+def _finding_draft_contract(
+    *, role: TriageAgentRole | None = None, revision: str = "v1"
+) -> dict[str, object]:
+    required_fields = [
+        "finding_type",
+        "candidate_version_ids",
+        "evidence_version_ids",
+        "statement",
+        "uncertainty_notes",
+        "affected_entity_refs",
+        "transmission_channels",
+        "evidence_lane",
+    ]
+    if revision == "v1":
+        return {
+            "closed_object": True,
+            "required_fields": required_fields,
+            "evidence_lane_values": [
+                None,
+                *(item.value for item in TriageEvidenceLane),
+            ],
+        }
+    if revision != "v2" or role is None or role is TriageAgentRole.COORDINATOR:
+        raise ValueError("v2 finding contract requires one specialist role")
+    evidence_lane: dict[str, object]
+    if role is TriageAgentRole.HISTORICAL_ANALOGY:
+        evidence_lane = {
+            "type": "string",
+            "enum": [item.value for item in TriageEvidenceLane],
+        }
+    else:
+        evidence_lane = {"const": None}
     return {
-        "closed_object": True,
-        "required_fields": [
-            "finding_type",
-            "candidate_version_ids",
-            "evidence_version_ids",
-            "statement",
-            "uncertainty_notes",
-            "affected_entity_refs",
-            "transmission_channels",
-            "evidence_lane",
-        ],
-        "evidence_lane_values": [None, *(item.value for item in TriageEvidenceLane)],
+        "type": "object",
+        "required_fields": required_fields,
+        "field_schemas": {
+            "finding_type": {
+                "type": "string",
+                "enum": sorted(item.value for item in _ALLOWED_FINDING_TYPES[role]),
+            },
+            "candidate_version_ids": _typed_string_array(min_items=1),
+            "evidence_version_ids": _typed_string_array(min_items=1),
+            "statement": _typed_string(),
+            "uncertainty_notes": _typed_string_array(),
+            "affected_entity_refs": _typed_string_array(),
+            "transmission_channels": _typed_enum_array(
+                [item.value for item in TransmissionChannel]
+            ),
+            "evidence_lane": evidence_lane,
+        },
+        "additional_properties": False,
     }
 
 

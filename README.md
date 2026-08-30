@@ -75,8 +75,10 @@ The bootstrap implements:
   report; an arm-neutral Work Manifest partitions the exact input into eleven bounded units, and a
   Manifest-bound runtime now preserves the byte-exact v2 dialect and adds a v3 positional-identity
   dialect: specialist findings and coordinator Digest drafts bind by exact array position, while
-  partition drafts use strictly validated zero-based global atom ordinals. The Harness translates
-  both dialects into the same canonical Digest, Partition and Proposal contracts and retains
+  partition drafts use strictly validated zero-based global atom ordinals. V4 retains those
+  positional bindings and adds full typed classify contracts while the Harness injects Cluster Seed
+  candidate identities. The Harness translates every dialect into the same canonical Digest,
+  Partition and Proposal contracts and retains
   fail-closed map, partition, per-cluster classification, restart and Usage reopening. A distinct Work Comparison
   Registration/Report pre-binds the Candidate Set, Manifest, plans and frozen gates, then scores
   only two fully reopened completed arms using Journal-derived timing and exact Usage cost. Its
@@ -84,7 +86,11 @@ The bootstrap implements:
   use. The real v2/v2 replay was safely terminal but incomplete: baseline stopped
   `budget_exhausted` after four completed members and treatment stopped `failed` after five, so no
   Report or semantic authority exists. Its v3 121-candidate positional proof is scripted mechanics
-  evidence that addresses those identity/type-contract failures without rewriting v2. Typed Position Snapshot/historical-context
+  evidence that addresses those identity/type-contract failures without rewriting v2. A later
+  nine-version real v4 treatment completed all 13 members and produced a native Work Decision: no
+  eligible policy checkpoint, five archive clusters, two EventAssessment routes and one Attention
+  Watch route. That Decision classified each version once and granted no Query Gate, Judgment or
+  execution authority. Typed Position Snapshot/historical-context
   payloads, completed real comparison arms and passing blind semantic results remain open acceptance
   work. Order-time
   tradability and risk remain
@@ -102,7 +108,6 @@ The bootstrap implements:
   capture, stored-bundle replay, and the seven route gates without exposing the purchased token or
   licensed rows. The purchased news entitlement now has seven active short-news source Jobs and one
   `major_news` Job at 2-, 5-, or 15-minute cadence. Two documented short-news sources remain
-  configured but inactive after valid empty probes, and `anns_d` remains unavailable to this token;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
@@ -113,13 +118,16 @@ The bootstrap implements:
   proved request/page/byte/row/latency totals and averages; a real CSRC-plus-Tushare
   market tracer and the authorized host process-supervisor acceptance have passed, while complete
   multi-policy operations, retention, and restore acceptance remains a separate gate. A 30 August
-  runtime audit found current route-plan drift: one serial worker could spend 291 seconds across
+  runtime audit found route-plan drift: one serial worker could spend 291 seconds across
   thirteen due Jobs while two-minute news Jobs have a 90-second grace window, producing post-
   admission misses and zero currently operational checkpoints. The repository repair now orders
   automatically selected work by absolute deadline, samples the Harness clock at each actual claim,
   and runs a plan-bound maximum of four opportunities concurrently. Route-plan v2 adds an explicit
   predecessor, one atomic current head, immutable effective intervals, and a freeze-time authority
-  recheck. Private host reload, a fresh route epoch, and multi-cycle runtime acceptance remain open;
+  recheck. The host now runs supervisor v4 under the admitted v2 route epoch; the first accepted
+  ten-opportunity window recorded zero misses and failures, with maximum all-Job claim latency of
+  74.54 seconds and trigger-Job latency of 45.304 seconds. Longer multi-policy soak, retention and
+  restore acceptance remain open;
   the append-only collector state is not reset or discarded;
 - a minimal Harness-owned Attention Watch runtime with immutable event/query scope, TTL and byte/
   poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable

@@ -30,7 +30,12 @@
     "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.event-impact-triage-execution-plan.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.event-impact-triage-execution-plan.v1",
+        "market-impact.event-impact-triage-execution-plan.v2"
+      ]
+    },
     "plan_id": {
       "type": "string",
       "pattern": "^event-impact-triage-execution-plan-[0-9a-f]{64}$"
@@ -76,6 +81,40 @@
     "judgment_model_calls_authorized": {"const": false},
     "execution_capability": {"const": false}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-execution-plan.v1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "role_bindings": {
+            "items": {"$ref": "#/$defs/roleBindingV1"}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-execution-plan.v2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "role_bindings": {
+            "items": {"$ref": "#/$defs/roleBindingV2"}
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "strings": {
@@ -123,6 +162,46 @@
         "max_output_tokens": {"type": "integer", "minimum": 1},
         "max_estimated_cost_microusd": {"type": "integer", "minimum": 0}
       }
+    },
+    "roleBindingV1": {
+      "allOf": [
+        {"$ref": "#/$defs/roleBinding"},
+        {
+          "properties": {
+            "prompt_template_id": {"pattern": "-json-v1$"},
+            "output_contract_hash": {
+              "enum": [
+                "97b4a0909e3ca1f517b130b5258f4b0938a54eaee636edea8802acbf36a895d6",
+                "684f535502d10ff1d449e72fa761646f176398ba09d0c5824f8af4bcf8a95e7e",
+                "3a2fabdd6ac8a0ae6cc40cffaae14dec1626b1397518cd9a5472ae8449dd1f14",
+                "dce997eb543d0b64ef081199a4ec202c10e211e84005ec90cc5f69624985e602",
+                "dc9daf45a94738c5e720f447b1f48e6db6e9c595001eb449578de6ed0a1a5c4d",
+                "2a96390eb1e36410288b6d65377b0f000914d55f8a61596b23d52bb669dd6f1b"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "roleBindingV2": {
+      "allOf": [
+        {"$ref": "#/$defs/roleBinding"},
+        {
+          "properties": {
+            "prompt_template_id": {"pattern": "-json-v2$"},
+            "output_contract_hash": {
+              "enum": [
+                "15c5374d2196548d104cc80fa0d916da9afa039d536e7df345575a2fb46d3059",
+                "457968be915384562526bf7c7a9682811e036fb05aeac4619a1fabaae3541e87",
+                "c2c7401dbf6c2d2b329dbe64ad35ce00edb08185e0a0ed719391617ede379dbc",
+                "92e94e629e0d745156ec520ab5df863c8f395c2bd7698805cefa0a80cfa0684f",
+                "673d6107a66478e4bf82c81db80d623a086913af89d3834d10de9fb8b3e9f750",
+                "50567e07d897d81fabd6886d730a3393bb6776028a8ada0ad376a97e6ff48929"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

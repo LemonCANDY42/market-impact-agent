@@ -211,9 +211,12 @@ Stage 3 — operate continuous collection:
     plan v2 uses explicit predecessor CAS, one durable current head, immutable effective intervals,
     and readiness plus triage-freeze effective-time checks. No Job or historical opportunity is
     deleted or reset.
-  - [ ] Reload and accept the new private supervisor plan, explicitly replace the currently selected
-    legacy route, and prove zero new deadline misses across several two-minute cycles. This runtime
-    evidence is separate from repository acceptance.
+  - [x] Reload and accept the new private supervisor v4 plan, atomically replace the legacy route
+    with admitted route plan
+    `prospective-checkpoint-route-plan-d00d86beb190b6c94460ee824c846f7d4f2d1de78472133d35f96a1ce4cfdf08`,
+    and accept the first ten-opportunity runtime window with zero misses/failures, 74.54-second
+    maximum all-Job claim latency and 45.304-second maximum trigger-Job latency. Longer multi-policy
+    soak, retention and restore acceptance remain separate.
 - [x] `PDI-21` Install and accept the authorized host process supervisor.
   - [x] Freeze a content-identified, secret-free launchd pre-install plan and a private
     environment-file boundary, then install and explicitly enable the authorized v3 plan on the
@@ -351,6 +354,25 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       correction/Usage reopening and ordinal failures. Private real-run evidence remains a separate
       acceptance record; its purpose is to correct the two exact failure classes above, not to
       upgrade that failed v2 batch into a semantic result.
+    - [x] Add the v4 typed-classify dialect and accept it on a later nine-version actual-receipt
+      batch. Direct v2 triage first completed one single-candidate run, but the next nine-candidate
+      run failed after three classify responses violated the field contract. Work v3 then completed
+      map and partition but stopped at its first classify member because the field-name-only
+      classify contract did not state enum, scalar and array types. V4 retains v3 positional map and
+      partition bindings, gives classify the complete field schemas and lets the Harness inject the
+      exact Cluster Seed candidate identities. The frozen real v4 plan
+      `event-impact-triage-work-execution-plan-4c8a73ea782b70c00f7601429607e1b2f277905ee000c5236ee624a0e1eab26e`
+      completed all 13 members over nine Digests and eight Cluster Seeds with 15 Provider attempts,
+      87,041 input and 57,827 output Tokens. Native Work Decision v2
+      `event-impact-triage-decision-47b969246b1c414410afa3fdba564ed615691ecaab2b2e0b239bcc6fe09ea78e`
+      reopened the Plan, Manifest, exact Usage Ledger and authority receipt, then classified all nine
+      versions once: five archive clusters, two EventAssessment clusters and one Attention Watch,
+      with no eligible policy checkpoint. This is real process and semantic-routing evidence for
+      one unlabelled batch, not classifier promotion, alpha evidence, Query Gate authority or
+      permission to create a broad-source Watch that would wake on unrelated news. The immutable
+      first Decision remains readable as legacy v2; new Work admissions use Decision v3, bind
+      authority `finished_at`, require exact `decided_at`, and can idempotently verify/reopen that
+      equivalent stored v2 without rewriting it.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate

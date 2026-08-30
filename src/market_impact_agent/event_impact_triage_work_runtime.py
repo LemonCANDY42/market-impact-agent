@@ -27,6 +27,7 @@ from market_impact_agent.event_impact_triage import (
     TriageAgentRole,
     TriageClusterProposal,
     TriageRoute,
+    TriageWorkDecisionEvidence,
 )
 from market_impact_agent.event_impact_triage_runtime import (
     TriageCandidateContent,
@@ -60,6 +61,9 @@ EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2 = (
 EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3 = (
     "market-impact.event-impact-triage-work-execution-plan.v3"
 )
+EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4 = (
+    "market-impact.event-impact-triage-work-execution-plan.v4"
+)
 EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA = EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2 = (
     "market-impact.event-impact-triage-work-run-artifact.v2"
@@ -67,9 +71,13 @@ EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2 = (
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V3 = (
     "market-impact.event-impact-triage-work-run-artifact.v3"
 )
+EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V4 = (
+    "market-impact.event-impact-triage-work-run-artifact.v4"
+)
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA = EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2
 TRIAGE_WORK_RUNTIME_REF_V2 = "event-impact-triage-work-runtime-v2"
 TRIAGE_WORK_RUNTIME_REF_V3 = "event-impact-triage-work-runtime-v3"
+TRIAGE_WORK_RUNTIME_REF_V4 = "event-impact-triage-work-runtime-v4"
 TRIAGE_WORK_RUNTIME_REF = TRIAGE_WORK_RUNTIME_REF_V2
 TRIAGE_WORK_TOOL_SURFACE_HASH = canonical_hash([])
 
@@ -252,6 +260,7 @@ class EventImpactTriageWorkExecutionPlan:
         if self.schema_version not in {
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2,
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3,
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
         }:
             raise ValueError("unsupported Event Impact Triage Work Execution Plan schema")
         dialect = _plan_dialect(self.schema_version)
@@ -467,6 +476,30 @@ def build_event_impact_triage_work_execution_plan_v3(
         model_profile=model_profile,
         skills=skills,
         schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3,
+    )
+
+
+def build_event_impact_triage_work_execution_plan_v4(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    work_manifest: EventImpactTriageWorkManifest,
+    registration: ProspectiveDiagnosticRegistration,
+    arm: TriageComparisonArm,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+) -> EventImpactTriageWorkExecutionPlan:
+    """Build positional map/partition plus typed classify execution dialect."""
+
+    return _build_event_impact_triage_work_execution_plan(
+        candidate_set=candidate_set,
+        work_manifest=work_manifest,
+        registration=registration,
+        arm=arm,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
     )
 
 
@@ -1677,7 +1710,7 @@ class EventImpactTriageWorkRunner:
                 atom_input = {"atom_id": atom.atom_id, **atom_input}
             atoms.append(atom_input)
         model_upstream = list(upstream)
-        if dialect == "v3":
+        if dialect in {"v3", "v4"}:
             model_upstream = [
                 {
                     **finding,
@@ -1706,7 +1739,7 @@ class EventImpactTriageWorkRunner:
         }
 
     def _partition_input(self, digests: tuple[TriageCandidateDigest, ...]) -> dict[str, object]:
-        if _plan_dialect(self.plan.schema_version) == "v3":
+        if _plan_dialect(self.plan.schema_version) in {"v3", "v4"}:
             return {
                 "manifest_id": self.work_manifest.manifest_id,
                 "digests": [
@@ -1817,7 +1850,7 @@ class EventImpactTriageWorkRunner:
             if set(finding) != required:
                 raise ValueError("triage map specialist atom fields are invalid")
             values = _string_tuple(finding.get(expected_fields), expected_fields)
-            if dialect == "v3":
+            if dialect in {"v3", "v4"}:
                 _validate_v3_text_array(values, expected_fields)
             accepted_findings.append({"atom_id": atom_id, expected_fields: list(values)})
         if dialect == "v2":
@@ -1924,7 +1957,7 @@ class EventImpactTriageWorkRunner:
                     ),
                 )
             )
-        if dialect == "v3" and seen_ordinals != set(range(len(self.work_manifest.atoms))):
+        if dialect in {"v3", "v4"} and seen_ordinals != set(range(len(self.work_manifest.atoms))):
             raise ValueError(
                 "triage partition atom ordinals must cover every Work Atom exactly once"
             )
@@ -1943,8 +1976,8 @@ class EventImpactTriageWorkRunner:
         self, output: object | None, cluster: TriageClusterSeed
     ) -> TriageClusterProposal:
         payload = _object(output, "triage classify output")
+        dialect = _plan_dialect(self.plan.schema_version)
         expected = {
-            "candidate_version_ids",
             "checkpoint_eligibility",
             "recommended_route",
             "event_archetypes",
@@ -1959,11 +1992,57 @@ class EventImpactTriageWorkRunner:
             "watch_questions",
             "triage_confidence",
         }
+        if dialect != "v4":
+            expected.add("candidate_version_ids")
         if set(payload) != expected:
             raise ValueError("triage classify output fields are invalid")
-        versions = _string_tuple(payload.get("candidate_version_ids"), "candidate_version_ids")
-        if set(versions) != set(cluster.candidate_version_ids):
-            raise ValueError("triage classify output differs from its exact cluster seed")
+        if dialect == "v4":
+            versions = cluster.candidate_version_ids
+        else:
+            versions = _string_tuple(payload.get("candidate_version_ids"), "candidate_version_ids")
+            if set(versions) != set(cluster.candidate_version_ids):
+                raise ValueError("triage classify output differs from its exact cluster seed")
+        if dialect == "v4":
+            event_archetypes = _unique_string_tuple(
+                payload.get("event_archetypes"), "event_archetypes"
+            )
+            evidence_version_ids = _unique_string_tuple(
+                payload.get("evidence_version_ids"), "evidence_version_ids"
+            )
+            transmission_channels = _unique_string_tuple(
+                payload.get("transmission_channels"), "transmission_channels"
+            )
+            narrative = {
+                name: _v4_narrative_array(payload.get(name), name)
+                for name in (
+                    "changed_facts",
+                    "rule_reasons",
+                    "uncertainty_notes",
+                    "countercases",
+                    "affected_entity_refs",
+                    "watch_questions",
+                )
+            }
+            return TriageClusterProposal.build(
+                candidate_version_ids=versions,
+                checkpoint_eligibility=CheckpointEligibility(
+                    _string(payload, "checkpoint_eligibility")
+                ),
+                recommended_route=TriageRoute(_string(payload, "recommended_route")),
+                event_archetypes=tuple(EventArchetype(item) for item in event_archetypes),
+                event_stage=EventStage(_string(payload, "event_stage")),
+                changed_facts=narrative["changed_facts"],
+                rule_reasons=narrative["rule_reasons"],
+                evidence_version_ids=evidence_version_ids,
+                uncertainty_notes=narrative["uncertainty_notes"],
+                countercases=narrative["countercases"],
+                transmission_channels=tuple(
+                    TransmissionChannel(item) for item in transmission_channels
+                ),
+                affected_entity_refs=narrative["affected_entity_refs"],
+                watch_questions=narrative["watch_questions"],
+                triage_confidence=_number(payload, "triage_confidence"),
+            )
         return TriageClusterProposal.build(
             candidate_version_ids=versions,
             checkpoint_eligibility=CheckpointEligibility(
@@ -2599,6 +2678,49 @@ class EventImpactTriageWorkRunner:
         return value.astimezone(UTC)
 
 
+@dataclass(frozen=True, slots=True)
+class EventImpactTriageWorkDecisionAuthority:
+    """Adapter from a reopened Work graph to compact Decision evidence."""
+
+    runner: EventImpactTriageWorkRunner
+    candidate_set: EventImpactTriageCandidateSet
+    work_manifest: EventImpactTriageWorkManifest
+    digests: tuple[TriageCandidateDigest, ...]
+    partition: TriageClusterPartition
+    proposal: EventImpactTriageProposal
+    run_evidence: EventImpactTriageWorkRunEvidence
+
+    def decision_evidence(self) -> TriageWorkDecisionEvidence:
+        receipt = self.runner.authoritative_completed_work_run_receipt(
+            candidate_set=self.candidate_set,
+            work_manifest=self.work_manifest,
+            digests=self.digests,
+            partition=self.partition,
+            proposal=self.proposal,
+            run_evidence=self.run_evidence,
+        )
+        return TriageWorkDecisionEvidence(
+            plan_id=receipt.plan_id,
+            work_manifest_id=self.work_manifest.manifest_id,
+            completed_member_count=receipt.completed_run_count,
+            finished_at=receipt.finished_at,
+            usage_ledger_hash=self.run_evidence.usage_ledger_hash,
+            authority_receipt_hash=receipt.receipt_hash,
+        )
+
+    def assert_authoritative_completed_triage_work_run(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        proposal: EventImpactTriageProposal,
+        run_evidence: TriageWorkDecisionEvidence,
+    ) -> None:
+        if candidate_set != self.candidate_set or proposal != self.proposal:
+            raise ValueError("triage Work Decision authority received another frozen result")
+        if run_evidence != self.decision_evidence():
+            raise ValueError("triage Work Decision evidence differs from authoritative reopening")
+
+
 @dataclass(slots=True)
 class _MutableMetrics:
     turns: int = 0
@@ -2706,7 +2828,7 @@ def _run_id(plan_id: str, phase: TriageWorkPhase, unit_id: str, role: TriageAgen
 
 def _correction_message(binding: TriageWorkRoleBinding, error: Exception) -> dict[str, object]:
     dialect = _binding_dialect(binding.prompt_template_id)
-    if dialect == "v3":
+    if dialect in {"v3", "v4"}:
         return {
             "role": MessageRole.USER.value,
             "content": canonical_json_bytes(
@@ -2715,9 +2837,11 @@ def _correction_message(binding: TriageWorkRoleBinding, error: Exception) -> dic
                         "Correct the prior answer; return only the closed JSON object. "
                         "Preserve every required positional array length and order."
                     ),
-                    "output_contract_version": "v3",
+                    "output_contract_version": dialect,
                     "validation_error": _v3_validation_error(error),
-                    "required_output": _output_contract(binding.phase, binding.role, dialect="v3"),
+                    "required_output": _output_contract(
+                        binding.phase, binding.role, dialect=dialect
+                    ),
                 }
             ).decode(),
         }
@@ -2736,8 +2860,84 @@ def _correction_message(binding: TriageWorkRoleBinding, error: Exception) -> dic
 def _output_contract(
     phase: TriageWorkPhase, role: TriageAgentRole, *, dialect: str = "v2"
 ) -> dict[str, object]:
-    if dialect not in {"v2", "v3"}:
+    if dialect not in {"v2", "v3", "v4"}:
         raise ValueError("unsupported triage work output contract revision")
+    if dialect == "v4":
+        if phase is not TriageWorkPhase.CLASSIFY:
+            positional = _output_contract(phase, role, dialect="v3")
+            return {**positional, "contract_version": "v4"}
+        narrative = _v3_text_array_contract(forbid_control=False)
+        return {
+            "contract_version": "v4",
+            "type": "object",
+            "required_fields": [
+                "checkpoint_eligibility",
+                "recommended_route",
+                "event_archetypes",
+                "event_stage",
+                "changed_facts",
+                "rule_reasons",
+                "evidence_version_ids",
+                "uncertainty_notes",
+                "countercases",
+                "transmission_channels",
+                "affected_entity_refs",
+                "watch_questions",
+                "triage_confidence",
+            ],
+            "field_schemas": {
+                "checkpoint_eligibility": {
+                    "type": "string",
+                    "enum": [item.value for item in CheckpointEligibility],
+                },
+                "recommended_route": {
+                    "type": "string",
+                    "enum": [item.value for item in TriageRoute],
+                },
+                "event_archetypes": {
+                    "type": "array",
+                    "unique_items": True,
+                    "items": {
+                        "type": "string",
+                        "enum": [item.value for item in EventArchetype],
+                    },
+                },
+                "event_stage": {
+                    "type": "string",
+                    "enum": [item.value for item in EventStage],
+                },
+                "changed_facts": narrative,
+                "rule_reasons": narrative,
+                "evidence_version_ids": {
+                    "type": "array",
+                    "min_items": 1,
+                    "unique_items": True,
+                    "items": {
+                        "type": "string",
+                        "pattern": "^prospective-observation-version-[0-9a-f]{64}$",
+                    },
+                },
+                "uncertainty_notes": narrative,
+                "countercases": narrative,
+                "transmission_channels": {
+                    "type": "array",
+                    "unique_items": True,
+                    "items": {
+                        "type": "string",
+                        "enum": [item.value for item in TransmissionChannel],
+                    },
+                },
+                "affected_entity_refs": narrative,
+                "watch_questions": narrative,
+                "triage_confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                },
+            },
+            "additional_properties": False,
+            "candidate_version_ids_injected_by_harness": True,
+        }
     if dialect == "v3":
         text_array = _v3_text_array_contract()
         if phase is TriageWorkPhase.MAP and role is not TriageAgentRole.COORDINATOR:
@@ -2989,6 +3189,8 @@ def _binding_dialect(prompt_template_id: str) -> str:
         return "v2"
     if prompt_template_id.endswith("-json-v3"):
         return "v3"
+    if prompt_template_id.endswith("-json-v4"):
+        return "v4"
     raise ValueError("unsupported triage work role binding revision")
 
 
@@ -2997,23 +3199,25 @@ def _plan_dialect(schema_version: str) -> str:
         return "v2"
     if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3:
         return "v3"
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4:
+        return "v4"
     raise ValueError("unsupported Event Impact Triage Work Execution Plan schema")
 
 
 def _runtime_ref(schema_version: str) -> str:
-    return (
-        TRIAGE_WORK_RUNTIME_REF_V2
-        if _plan_dialect(schema_version) == "v2"
-        else TRIAGE_WORK_RUNTIME_REF_V3
-    )
+    return {
+        "v2": TRIAGE_WORK_RUNTIME_REF_V2,
+        "v3": TRIAGE_WORK_RUNTIME_REF_V3,
+        "v4": TRIAGE_WORK_RUNTIME_REF_V4,
+    }[_plan_dialect(schema_version)]
 
 
 def _run_artifact_schema(schema_version: str) -> str:
-    return (
-        EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2
-        if _plan_dialect(schema_version) == "v2"
-        else EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V3
-    )
+    return {
+        "v2": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2,
+        "v3": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V3,
+        "v4": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V4,
+    }[_plan_dialect(schema_version)]
 
 
 def _busy_artifact_schema(schema_version: str) -> str:
@@ -3059,6 +3263,22 @@ def _string_tuple(value: object, label: str) -> tuple[str, ...]:
     if not all(isinstance(item, str) and item and item == item.strip() for item in values):
         raise TypeError(f"{label} must contain trimmed strings")
     return tuple(cast(list[str], values))
+
+
+def _unique_string_tuple(value: object, label: str) -> tuple[str, ...]:
+    values = _string_tuple(value, label)
+    if len(values) != len(set(values)):
+        raise ValueError(f"{label} must contain unique items")
+    return values
+
+
+def _v4_narrative_array(value: object, label: str) -> tuple[str, ...]:
+    values = _string_tuple(value, label)
+    if len(values) > 8:
+        raise ValueError(f"{label} exceeds the v4 item limit")
+    if any(len(item) > 600 for item in values):
+        raise ValueError(f"{label} exceeds the v4 character limit")
+    return values
 
 
 def _integer(payload: dict[str, object], name: str) -> int:

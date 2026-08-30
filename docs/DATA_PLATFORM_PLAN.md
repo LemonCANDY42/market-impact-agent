@@ -684,10 +684,12 @@ a real host are reported separately; installing a host service requires explicit
 **Multi-policy drift repair, 2026-08-30:** the one-shot worker now orders automatically selected due
 Jobs by absolute deadline, samples a fresh Harness claim time inside each opportunity, and applies
 the supervisor plan's content-identified bounded concurrency (1-16, default 4). Deterministic tests
-prove the bound, deadline order, actual-claim clocks, and deterministic returned result order. This
-is repository acceptance only: the existing v3 host receipt remains valid historical evidence for
-that exact plan, while a v4 reload and several real two-minute cycles are required to accept the new
-runtime. Per-Job state-size preflight is not represented as a global atomic byte reservation.
+prove the bound, deadline order, actual-claim clocks, and deterministic returned result order. The
+host now runs the content-identified supervisor v4 plan under a clean environment and admitted route
+v2 epoch. Its first ten-opportunity acceptance window recorded zero misses or failures, maximum
+all-Job claim latency of 74.54 seconds and maximum trigger-Job latency of 45.304 seconds. Longer
+multi-policy soak and restore evidence remain open. Per-Job state-size preflight is not represented
+as a global atomic byte reservation.
 
 **Accepted in the repository on 2026-08-28:** the one-shot worker now persists content-identified
 Jobs and unique logical opportunities, uses expiring leases, resumes a staged Snapshot after a
@@ -902,7 +904,23 @@ string-array types and reserved control vocabulary, have distinct Plan/prompt/ru
 revisions, and never relax the label/route/authority guard. Mixed v2/v3 comparison registration is
 invalid; v3/v3 uses the existing append-only comparison and replay authority. Scripted 121-item,
 restart, correction/Usage and ordinal-failure acceptance is mechanics evidence only; private
-real-run terminal evidence is maintained separately. The exact real v2/v2 registration
+real-run terminal evidence is maintained separately.
+
+V4 retains v3 positional map/partition behavior and adds complete typed classify contracts. The
+Harness injects exact Cluster Seed candidate identities, while the model receives explicit
+eligibility, route, archetype, stage and transmission enums, bounded text arrays and numeric
+confidence limits. One frozen nine-version actual-receipt treatment completed all 13 Work members,
+nine Digests and eight clusters with 15 Provider attempts, 87,041 input and 57,827 output Tokens.
+Native Work Decision v2 reopened its Plan, Manifest, Usage Ledger and authority receipt, classified
+all nine versions exactly once and selected no eligible policy checkpoint; five clusters archived,
+two routed to EventAssessment and one to Attention Watch. Readiness then excluded those nine and
+reported 26 later actual-receipt candidates. This accepts a real Work/Decision path for one
+unlabelled batch, not classifier promotion, Query Gate, Judgment or execution.
+That first immutable Decision remains a readable legacy v2 artifact. New Work admissions use
+Decision v3, bind the authority-derived Work `finished_at` and require it to equal `decided_at`;
+equivalent retries may verify and return the stored v2 but never mutate it.
+
+The exact real v2/v2 registration
 `event-impact-triage-work-comparison-e45b1d3cb71a5949a3418b82d06fbb32aab46eec062cde3e35cc61419ae2ff97`
 is terminal: baseline completed four members before a fifth map/coordinator member exhausted its
 32,768 output-token ceiling after three invalid contract responses; treatment completed five
@@ -1020,26 +1038,16 @@ can make or abstain from a decision under the information actually observed. Mis
 evaluation dimension, not silently completed. Required-gate failure returns work to its owning data
 or input Task and keeps automatic dispatch closed.
 
-**Route-readiness status, 2026-08-30:** the private v3 route plan
-`prospective-checkpoint-route-plan-edbac9b9e7d2313fe61e6e0a69810779f109a372f3010c269cc3ca7be0ac1354`
-canonically binds `sqlite_begin_immediate_then_harness_clock_v1`. Any SQLite admission and readiness
-report for the retired pre-protocol plan remain historical rows only and cannot satisfy this plan's
-identity. The plan was durably admitted as
-`prospective-checkpoint-route-admission-a05108e79d88f68cf3ed08ac1d918d7cffdf2c8de55869f82ab3b226f9fe0eee`
-at `2026-08-30T00:16:35.798593Z`; private readiness report
-`prospective-checkpoint-readiness-report-40114fdf675cb49a0fec1aef90d64e9e695f958fb36e55a0d67b4f25acb7a1cc`
-then found one operational policy checkpoint with CSRC and two-minute Tushare/Sina trigger Jobs and
-five post-admission content versions. A temporary operator-style inspection found no obvious match,
-but the Harness did not classify those versions; they remain unclassified until PDI-29 runs with
-sealed model/runtime and cost evidence. Issuer and macro trigger routes remain unconfigured. CSRC
-still cannot be relabeled as `issuer_event` or `official_macro_release`. No formal eligibility
-selection, Snapshot Set, Evidence Pack, Query Gate pass, downstream model call, paper admission, or
-execution authority was created.
-
-The repository now contains the v2 replacement authority and supervisor v4 scheduling repair, but
-the private current head has not been changed and the host has not been reloaded. Those runtime
-actions require a content-distinct replacement plan plus fresh multi-cycle evidence; repository
-tests do not retroactively repair or erase the historical misses described above.
+**Route-readiness status, 2026-08-31:** the current private head is route plan
+`prospective-checkpoint-route-plan-d00d86beb190b6c94460ee824c846f7d4f2d1de78472133d35f96a1ce4cfdf08`
+under admission
+`prospective-checkpoint-route-admission-a0468ddea15ddd8b6291ffdf9bb88319d235d5123f52951d67194bf9ff401228`.
+The host is loaded with supervisor v4 and the accepted deadline/concurrency behavior above; historical
+misses and predecessor admissions remain immutable evidence. Formal Work Decision
+`event-impact-triage-decision-47b969246b1c414410afa3fdba564ed615691ecaab2b2e0b239bcc6fe09ea78e`
+classified its exact nine versions once, after which readiness exposed 26 later actual-receipt
+candidates. Issuer and macro trigger routes remain unconfigured. No selected checkpoint, Snapshot
+Set, Evidence Pack, Query Gate pass, Judgment, paper admission or execution authority exists.
 
 ### Stage 5 — Automate bounded follow-up and open registered outcomes
 

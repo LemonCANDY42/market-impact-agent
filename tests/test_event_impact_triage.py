@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier
+from typing import cast
 
 import pytest
 
-from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.data_inputs import (
     DataFetchStatus,
@@ -21,19 +24,30 @@ from market_impact_agent.data_inputs import (
     sha256_bytes,
 )
 from market_impact_agent.event_impact_triage import (
+    EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2,
+    EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3,
     CheckpointEligibility,
     CompletedTriageRunAuthority,
+    CompletedTriageWorkRunAuthority,
     EventImpactTriageCandidateSet,
+    EventImpactTriageDecision,
     EventImpactTriageProposal,
+    LegacyTriageWorkDecisionEvidence,
     TriageAgentRole,
     TriageClusterProposal,
     TriageDecisionStatus,
     TriageRoute,
     TriageRunEvidence,
     TriageRunMemberEvidence,
+    TriageWorkDecisionEvidence,
     admit_event_impact_triage,
+    admit_event_impact_triage_work,
     event_impact_triage_candidate_set_from_dict,
+    event_impact_triage_decision_from_dict,
     freeze_event_impact_triage_candidate_set,
+)
+from market_impact_agent.event_impact_triage_store import (
+    EventImpactTriageDecisionStore,
 )
 from market_impact_agent.observations import (
     AvailabilityBasis,
@@ -82,6 +96,36 @@ class RecordingRunAuthority(CompletedTriageRunAuthority):
         )
         assert coordinator.run_id == "triage-run-1"
         self.called = True
+
+
+@dataclass
+class RecordingWorkRunAuthority(CompletedTriageWorkRunAuthority):
+    expected_candidate_set_id: str
+    expected_proposal_id: str
+    expected_evidence: TriageWorkDecisionEvidence
+    called: bool = False
+
+    def assert_authoritative_completed_triage_work_run(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        proposal: EventImpactTriageProposal,
+        run_evidence: TriageWorkDecisionEvidence,
+    ) -> None:
+        assert candidate_set.candidate_set_id == self.expected_candidate_set_id
+        assert proposal.proposal_id == self.expected_proposal_id
+        assert run_evidence == self.expected_evidence
+        self.called = True
+
+
+class LegacySeedTriageDecisionStore(EventImpactTriageDecisionStore):
+    def persist_legacy(
+        self,
+        candidate_set: EventImpactTriageCandidateSet,
+        proposal: EventImpactTriageProposal,
+        decision: EventImpactTriageDecision,
+    ) -> EventImpactTriageDecision:
+        return self._persist_decision(candidate_set, proposal, decision)
 
 
 def _observation(index: int, *, available_at: datetime) -> SourceObservation:
@@ -347,6 +391,36 @@ def _run_evidence() -> TriageRunEvidence:
     )
 
 
+def _work_run_evidence() -> TriageWorkDecisionEvidence:
+    return TriageWorkDecisionEvidence(
+        plan_id="event-impact-triage-work-execution-plan-" + "a" * 64,
+        work_manifest_id="event-impact-triage-work-manifest-" + "b" * 64,
+        completed_member_count=13,
+        finished_at=DECIDED_AT,
+        usage_ledger_hash="c" * 64,
+        authority_receipt_hash="d" * 64,
+    )
+
+
+def _legacy_work_decision(
+    decision: EventImpactTriageDecision,
+    *,
+    decided_at: datetime = DECIDED_AT,
+    authority_receipt_hash: str | None = None,
+) -> EventImpactTriageDecision:
+    payload = decision.to_dict()
+    payload["schema_version"] = EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2
+    evidence = dict(cast(dict[str, object], payload["run_evidence"]))
+    evidence.pop("finished_at")
+    if authority_receipt_hash is not None:
+        evidence["authority_receipt_hash"] = authority_receipt_hash
+    payload["run_evidence"] = evidence
+    payload["decided_at"] = decided_at.isoformat().replace("+00:00", "Z")
+    core = {key: value for key, value in payload.items() if key != "decision_id"}
+    payload["decision_id"] = "event-impact-triage-decision-" + canonical_hash(core)
+    return event_impact_triage_decision_from_dict(payload)
+
+
 def test_triage_selects_first_eligible_without_erasing_other_financial_impact(
     tmp_path: Path,
 ) -> None:
@@ -424,6 +498,295 @@ def test_triage_selects_first_eligible_without_erasing_other_financial_impact(
     )
 
 
+def test_work_decision_keeps_native_authority_and_store_reopens_v2(
+    tmp_path: Path,
+) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(
+            TriageClusterProposal.build(
+                candidate_version_ids=candidate_set.version_ids,
+                checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                recommended_route=TriageRoute.ARCHIVE,
+                event_archetypes=(),
+                event_stage=EventStage.FIRST_OBSERVED,
+                changed_facts=(),
+                rule_reasons=("No candidate changes the registered checkpoint rule.",),
+                evidence_version_ids=candidate_set.version_ids,
+                triage_confidence=0.9,
+            ),
+        ),
+    )
+    evidence = _work_run_evidence()
+    authority = RecordingWorkRunAuthority(
+        candidate_set.candidate_set_id,
+        proposal.proposal_id,
+        evidence,
+    )
+
+    with pytest.raises(ValueError, match="must equal authoritative finished_at"):
+        admit_event_impact_triage_work(
+            candidate_set=candidate_set,
+            proposal=proposal,
+            run_evidence=evidence,
+            run_authority=authority,
+            decided_at=DECIDED_AT + timedelta(seconds=1),
+        )
+    decision = admit_event_impact_triage_work(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=evidence,
+        run_authority=authority,
+        decided_at=DECIDED_AT,
+    )
+
+    assert authority.called
+    assert decision.schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3
+    assert decision.run_evidence == evidence
+    assert decision.status is TriageDecisionStatus.NO_ELIGIBLE_CANDIDATE
+    assert event_impact_triage_decision_from_dict(decision.to_dict()) == decision
+    assert not validate_agent_contract(
+        decision.to_dict(), "event-impact-triage-decision.schema.json"
+    )
+
+    legacy = _legacy_work_decision(decision)
+    legacy_bytes = canonical_json_bytes(legacy.to_dict())
+    reopened_legacy = event_impact_triage_decision_from_dict(legacy.to_dict())
+    assert type(reopened_legacy.run_evidence) is LegacyTriageWorkDecisionEvidence
+    assert canonical_json_bytes(reopened_legacy.to_dict()) == legacy_bytes
+    assert not validate_agent_contract(legacy.to_dict(), "event-impact-triage-decision.schema.json")
+
+    store = EventImpactTriageDecisionStore(tmp_path / "work-state")
+    stored = store.admit_work(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=evidence,
+        run_authority=authority,
+        decided_at=DECIDED_AT,
+    )
+    with pytest.raises(ValueError, match="must equal authoritative finished_at"):
+        store.admit_work(
+            candidate_set=candidate_set,
+            proposal=proposal,
+            run_evidence=evidence,
+            run_authority=authority,
+            decided_at=DECIDED_AT + timedelta(minutes=1),
+        )
+    reopened = store.admit_work(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=evidence,
+        run_authority=authority,
+        decided_at=DECIDED_AT,
+    )
+    assert stored == decision
+    assert reopened == decision
+    assert store.classified_version_ids(
+        registration_id=candidate_set.registration_id,
+        checkpoint_key=candidate_set.checkpoint_key,
+        route_plan_id=candidate_set.route_plan_id,
+        route_admission_id=candidate_set.route_admission_id,
+        at=DECIDED_AT,
+    ) == tuple(sorted(candidate_set.version_ids))
+
+    legacy_store = LegacySeedTriageDecisionStore(tmp_path / "legacy-work-state")
+    assert legacy_store.persist_legacy(candidate_set, proposal, legacy) == legacy
+    authority.called = False
+    legacy_retry = legacy_store.admit_work(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=evidence,
+        run_authority=authority,
+        decided_at=DECIDED_AT,
+    )
+    assert legacy_retry == legacy
+    assert legacy_retry.schema_version == EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2
+    assert authority.called
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    ["evidence", "time"],
+)
+def test_current_work_retry_rejects_conflicting_legacy_decision(
+    tmp_path: Path, legacy: str
+) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(
+            TriageClusterProposal.build(
+                candidate_version_ids=candidate_set.version_ids,
+                checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                recommended_route=TriageRoute.ARCHIVE,
+                event_archetypes=(),
+                event_stage=EventStage.FIRST_OBSERVED,
+                changed_facts=(),
+                rule_reasons=("No candidate changes the registered checkpoint rule.",),
+                evidence_version_ids=candidate_set.version_ids,
+                triage_confidence=0.9,
+            ),
+        ),
+    )
+    evidence = _work_run_evidence()
+    authority = RecordingWorkRunAuthority(
+        candidate_set.candidate_set_id,
+        proposal.proposal_id,
+        evidence,
+    )
+    current = admit_event_impact_triage_work(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=evidence,
+        run_authority=authority,
+        decided_at=DECIDED_AT,
+    )
+    stored_legacy = _legacy_work_decision(
+        current,
+        decided_at=(DECIDED_AT + timedelta(seconds=1) if legacy == "time" else DECIDED_AT),
+        authority_receipt_hash=("e" * 64 if legacy == "evidence" else None),
+    )
+    store = LegacySeedTriageDecisionStore(tmp_path / f"legacy-{legacy}")
+    store.persist_legacy(candidate_set, proposal, stored_legacy)
+
+    authority.called = False
+    with pytest.raises(ValueError, match="conflicts"):
+        store.admit_work(
+            candidate_set=candidate_set,
+            proposal=proposal,
+            run_evidence=evidence,
+            run_authority=authority,
+            decided_at=DECIDED_AT,
+        )
+    assert authority.called
+
+
+def test_concurrent_identical_admissions_reopen_the_exact_stored_decision(
+    tmp_path: Path,
+) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(
+            TriageClusterProposal.build(
+                candidate_version_ids=candidate_set.version_ids,
+                checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                recommended_route=TriageRoute.ARCHIVE,
+                event_archetypes=(),
+                event_stage=EventStage.FIRST_OBSERVED,
+                changed_facts=(),
+                rule_reasons=("No candidate changes the registered checkpoint rule.",),
+                evidence_version_ids=candidate_set.version_ids,
+                triage_confidence=0.9,
+            ),
+        ),
+    )
+    evidence = _run_evidence()
+    barrier = Barrier(2)
+
+    @dataclass
+    class ConcurrentAuthority(CompletedTriageRunAuthority):
+        def assert_authoritative_completed_triage_run(
+            self,
+            *,
+            candidate_set: EventImpactTriageCandidateSet,
+            proposal: EventImpactTriageProposal,
+            run_evidence: TriageRunEvidence,
+        ) -> None:
+            barrier.wait()
+
+    store = EventImpactTriageDecisionStore(tmp_path / "concurrent-identical")
+
+    def admit() -> EventImpactTriageDecision:
+        return store.admit(
+            candidate_set=candidate_set,
+            proposal=proposal,
+            run_evidence=evidence,
+            run_authority=ConcurrentAuthority(),
+            decided_at=DECIDED_AT,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = (executor.submit(admit), executor.submit(admit))
+        decisions = tuple(future.result() for future in futures)
+
+    assert decisions[0] == decisions[1]
+    assert decisions[0] is not decisions[1]
+    assert decisions[0] == event_impact_triage_decision_from_dict(decisions[0].to_dict())
+
+
+def test_concurrent_overlapping_candidate_sets_still_fail_closed(tmp_path: Path) -> None:
+    first_candidate = _candidate_set(tmp_path)
+    second_payload = first_candidate.to_dict()
+    second_payload["frozen_at"] = (
+        (FROZEN_AT + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
+    )
+    second_core = {key: value for key, value in second_payload.items() if key != "candidate_set_id"}
+    second_payload["candidate_set_id"] = "event-impact-triage-candidate-set-" + canonical_hash(
+        second_core
+    )
+    second_candidate = event_impact_triage_candidate_set_from_dict(second_payload)
+
+    def proposal_for(candidate_set: EventImpactTriageCandidateSet) -> EventImpactTriageProposal:
+        return EventImpactTriageProposal.build(
+            candidate_set=candidate_set,
+            clusters=(
+                TriageClusterProposal.build(
+                    candidate_version_ids=candidate_set.version_ids,
+                    checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                    recommended_route=TriageRoute.ARCHIVE,
+                    event_archetypes=(),
+                    event_stage=EventStage.FIRST_OBSERVED,
+                    changed_facts=(),
+                    rule_reasons=("No candidate changes the registered checkpoint rule.",),
+                    evidence_version_ids=candidate_set.version_ids,
+                    triage_confidence=0.9,
+                ),
+            ),
+        )
+
+    barrier = Barrier(2)
+
+    @dataclass
+    class ConcurrentAuthority(CompletedTriageRunAuthority):
+        def assert_authoritative_completed_triage_run(
+            self,
+            *,
+            candidate_set: EventImpactTriageCandidateSet,
+            proposal: EventImpactTriageProposal,
+            run_evidence: TriageRunEvidence,
+        ) -> None:
+            barrier.wait()
+
+    store = EventImpactTriageDecisionStore(tmp_path / "concurrent-conflict")
+
+    def admit(candidate_set: EventImpactTriageCandidateSet) -> EventImpactTriageDecision:
+        return store.admit(
+            candidate_set=candidate_set,
+            proposal=proposal_for(candidate_set),
+            run_evidence=_run_evidence(),
+            run_authority=ConcurrentAuthority(),
+            decided_at=DECIDED_AT,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = tuple(
+            executor.submit(admit, candidate) for candidate in (first_candidate, second_candidate)
+        )
+        outcomes: list[EventImpactTriageDecision | Exception] = []
+        for future in futures:
+            try:
+                outcomes.append(future.result())
+            except ValueError as error:
+                outcomes.append(error)
+
+    assert sum(isinstance(item, EventImpactTriageDecision) for item in outcomes) == 1
+    conflicts = [item for item in outcomes if isinstance(item, ValueError)]
+    assert len(conflicts) == 1
+    assert "already classified by another Decision" in str(conflicts[0])
+
+
 def test_earlier_needs_review_blocks_later_checkpoint_selection(tmp_path: Path) -> None:
     candidate_set = _candidate_set(tmp_path)
     first, second, third = candidate_set.version_ids
@@ -480,6 +843,65 @@ def test_earlier_needs_review_blocks_later_checkpoint_selection(tmp_path: Path) 
     assert decision.blocking_review_cluster_ids == (review.cluster_id,)
     assert decision.attention_watch_cluster_ids == (review.cluster_id,)
     assert decision.unselected_eligible_cluster_ids == (eligible.cluster_id,)
+
+
+def test_decision_store_reopens_authority_and_classifies_each_version_once(
+    tmp_path: Path,
+) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(
+            TriageClusterProposal.build(
+                candidate_version_ids=candidate_set.version_ids,
+                checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                recommended_route=TriageRoute.ARCHIVE,
+                event_archetypes=(),
+                event_stage=EventStage.FIRST_OBSERVED,
+                changed_facts=(),
+                rule_reasons=("No candidate changes the registered checkpoint rule.",),
+                evidence_version_ids=candidate_set.version_ids,
+                triage_confidence=0.9,
+            ),
+        ),
+    )
+    authority = RecordingRunAuthority(candidate_set.candidate_set_id, proposal.proposal_id)
+    store = EventImpactTriageDecisionStore(tmp_path / "state")
+
+    decision = store.admit(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=_run_evidence(),
+        run_authority=authority,
+        decided_at=DECIDED_AT,
+    )
+    reopened = store.admit(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=_run_evidence(),
+        run_authority=authority,
+        decided_at=DECIDED_AT + timedelta(minutes=1),
+    )
+
+    assert reopened == decision
+    assert event_impact_triage_decision_from_dict(decision.to_dict()) == decision
+    assert (
+        store.classified_version_ids(
+            registration_id=candidate_set.registration_id,
+            checkpoint_key=candidate_set.checkpoint_key,
+            route_plan_id=candidate_set.route_plan_id,
+            route_admission_id=candidate_set.route_admission_id,
+            at=DECIDED_AT - timedelta(seconds=1),
+        )
+        == ()
+    )
+    assert store.classified_version_ids(
+        registration_id=candidate_set.registration_id,
+        checkpoint_key=candidate_set.checkpoint_key,
+        route_plan_id=candidate_set.route_plan_id,
+        route_admission_id=candidate_set.route_admission_id,
+        at=DECIDED_AT,
+    ) == tuple(sorted(candidate_set.version_ids))
 
 
 def test_cluster_ready_time_uses_latest_member_before_blocking_selection(tmp_path: Path) -> None:

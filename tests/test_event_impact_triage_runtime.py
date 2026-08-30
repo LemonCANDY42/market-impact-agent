@@ -1,4 +1,5 @@
 import asyncio
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,6 +37,8 @@ from market_impact_agent.event_impact_triage_evaluation import (
     event_impact_triage_label_set_from_dict,
 )
 from market_impact_agent.event_impact_triage_runtime import (
+    EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
+    EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
     EventImpactTriageExecutionPlan,
     EventImpactTriageRunner,
     TriageCandidateContent,
@@ -44,6 +47,7 @@ from market_impact_agent.event_impact_triage_runtime import (
     TriageSpecialistArtifact,
     TriageSpecialistFinding,
     build_event_impact_triage_execution_plan,
+    build_event_impact_triage_execution_plan_v2,
     event_impact_triage_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import load_builtin_model_provider_profile
@@ -303,6 +307,19 @@ def _plan(arm: TriageComparisonArm) -> EventImpactTriageExecutionPlan:
     )
 
 
+def _plan_v2(arm: TriageComparisonArm) -> EventImpactTriageExecutionPlan:
+    candidate_set, _ = _candidate_set()
+    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
+    return build_event_impact_triage_execution_plan_v2(
+        arm=arm,
+        candidate_set=candidate_set,
+        registration=_registration(),
+        model_profile_alias=PROFILE_ALIAS,
+        model_profile=profile,
+        skills=SkillRegistry(ROOT / "skills"),
+    )
+
+
 def _ineligible_draft(candidate_set: EventImpactTriageCandidateSet) -> dict[str, object]:
     return {
         "candidate_set_id": candidate_set.candidate_set_id,
@@ -372,6 +389,51 @@ def test_execution_plans_freeze_distinct_bounded_role_graphs() -> None:
     assert not validate_agent_contract(
         treatment.to_dict(), "event-impact-triage-execution-plan.schema.json"
     )
+
+
+def test_v2_execution_plan_preserves_v1_and_freezes_typed_role_contracts() -> None:
+    v1 = _plan(TriageComparisonArm.TREATMENT)
+    v2 = _plan_v2(TriageComparisonArm.TREATMENT)
+
+    assert v1.schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1
+    assert v2.schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2
+    assert v1.plan_id != v2.plan_id
+    assert all(item.prompt_template_id.endswith("-json-v1") for item in v1.role_bindings)
+    assert all(item.prompt_template_id.endswith("-json-v2") for item in v2.role_bindings)
+    assert event_impact_triage_execution_plan_from_dict(v1.to_dict()) == v1
+    assert event_impact_triage_execution_plan_from_dict(v2.to_dict()) == v2
+    assert not validate_agent_contract(
+        v2.to_dict(), "event-impact-triage-execution-plan.schema.json"
+    )
+
+
+def test_direct_plan_schema_rejects_role_binding_revision_mismatch() -> None:
+    plan = _plan_v2(TriageComparisonArm.TREATMENT)
+    payload = plan.to_dict()
+    payload["schema_version"] = EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1
+
+    with pytest.raises(ValueError, match="Plan and role binding revisions differ"):
+        event_impact_triage_execution_plan_from_dict(payload)
+    assert validate_agent_contract(payload, "event-impact-triage-execution-plan.schema.json")
+
+
+def test_direct_runtime_rechecks_plan_and_role_binding_revision(tmp_path: Path) -> None:
+    candidate_set, contents = _candidate_set()
+    plan = _plan_v2(TriageComparisonArm.BASELINE)
+    object.__setattr__(plan, "schema_version", EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1)
+
+    with pytest.raises(ValueError, match="runtime Plan and role binding revisions differ"):
+        EventImpactTriageRunner(
+            plan=plan,
+            candidate_set=candidate_set,
+            registration=_registration(),
+            provider=FixtureProvider((_ineligible_draft(candidate_set),)),
+            content_resolver=StaticContentResolver(contents),
+            skills=SkillRegistry(ROOT / "skills"),
+            artifact_store=ArtifactStore(tmp_path / "artifacts"),
+            journal=RunJournal(tmp_path / "runs.sqlite3"),
+            usage_ledger=UsageLedger(tmp_path / "usage.sqlite3"),
+        )
 
 
 def test_specialist_artifact_schema_accepts_harness_minted_content_ids() -> None:
@@ -529,6 +591,55 @@ def test_treatment_runs_bounded_specialists_before_coordinator(tmp_path: Path) -
     coordinator_task = provider.requests[-1][-1]["content"]
     assert isinstance(coordinator_task, str)
     assert "event-impact-triage-specialist-artifact-" in coordinator_task
+
+
+def test_v2_specialist_prompt_exposes_array_enum_and_evidence_lane_types(
+    tmp_path: Path,
+) -> None:
+    candidate_set, contents = _candidate_set()
+    provider = FixtureProvider(
+        (
+            _specialist_draft(
+                candidate_set,
+                role=TriageAgentRole.COUNTERCASE_REVIEWER,
+                finding_type="countercase",
+            ),
+            _specialist_draft(
+                candidate_set,
+                role=TriageAgentRole.FACT_VERIFIER,
+                finding_type="changed_fact",
+            ),
+            _specialist_draft(
+                candidate_set,
+                role=TriageAgentRole.TRANSMISSION_MAPPER,
+                finding_type="transmission_path",
+            ),
+            _ineligible_draft(candidate_set),
+        )
+    )
+    runner = EventImpactTriageRunner(
+        plan=_plan_v2(TriageComparisonArm.TREATMENT),
+        candidate_set=candidate_set,
+        registration=_registration(),
+        provider=provider,
+        content_resolver=StaticContentResolver(contents),
+        skills=SkillRegistry(ROOT / "skills"),
+        artifact_store=ArtifactStore(tmp_path / "artifacts"),
+        journal=RunJournal(tmp_path / "runs.sqlite3"),
+        usage_ledger=UsageLedger(tmp_path / "usage.sqlite3"),
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    task = json.loads(str(provider.requests[0][-1]["content"]))
+    finding = task["required_output"]["field_schemas"]["findings"]["items"]
+    fields = finding["field_schemas"]
+    assert fields["uncertainty_notes"]["type"] == "array"
+    assert fields["transmission_channels"]["items"]["enum"] == [
+        item.value for item in TransmissionChannel
+    ]
+    assert fields["evidence_lane"] == {"const": None}
 
 
 def test_interrupted_inference_requires_review_and_is_never_retried(tmp_path: Path) -> None:

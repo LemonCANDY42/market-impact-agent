@@ -76,6 +76,9 @@ from market_impact_agent.data_inputs import (
     LocalDataSnapshotStore,
 )
 from market_impact_agent.energy_monitor import EnergySourceMonitor
+from market_impact_agent.event_impact_triage_store import (
+    EventImpactTriageDecisionStore,
+)
 from market_impact_agent.events import event_transmission_chronology_errors
 from market_impact_agent.evidence_freeze import freeze_due_evidence_packs
 from market_impact_agent.frozen_research import FrozenResearchRepository
@@ -1176,6 +1179,7 @@ def prospective_checkpoint_readiness(
         admission_store=admission_store,
         runtime=runtime,
         evaluated_at=datetime.now(UTC) if evaluated_at is None else evaluated_at,
+        classification_authority=EventImpactTriageDecisionStore(state_root),
     )
     artifact = store.artifacts.put_json(report.to_dict())
     return {

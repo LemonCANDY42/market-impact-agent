@@ -723,6 +723,48 @@ def test_post_admission_candidate_still_requires_explicit_eligibility_selection(
     assert report.model_calls_authorized is False
 
 
+def test_readiness_excludes_versions_reopened_from_formal_triage_decisions(
+    tmp_path: Path,
+) -> None:
+    candidate = ProspectiveObservationVersionRef(
+        version_id="prospective-observation-version-" + "e" * 64,
+        first_available_at=ADMITTED_AT + timedelta(seconds=30),
+        provider_id="official-source",
+        provider_version="1",
+        upstream_source="official-events",
+    )
+
+    class ClassificationAuthority:
+        def classified_version_ids(self, **kwargs: object) -> tuple[str, ...]:
+            assert kwargs["registration_id"] == _registration().registration_id
+            assert kwargs["checkpoint_key"] in {
+                "next-a-share-earnings-surprise",
+                "next-a-share-policy-event",
+                "next-nbs-cpi-ppi-release",
+            }
+            return (
+                (candidate.version_id,)
+                if kwargs["checkpoint_key"] == "next-a-share-policy-event"
+                else ()
+            )
+
+    report = evaluate_prospective_checkpoint_readiness(
+        registration=_registration(),
+        route_plan=_plan(),
+        admission_store=_admissions(tmp_path),
+        runtime=_runtime((candidate,)),
+        evaluated_at=ADMITTED_AT + timedelta(minutes=1),
+        classification_authority=ClassificationAuthority(),
+    )
+
+    checkpoint = next(
+        item for item in report.checkpoints if item.checkpoint_key == "next-a-share-policy-event"
+    )
+    assert checkpoint.status is CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+    assert checkpoint.trigger_candidate_version_ids == ()
+    assert report.candidate_checkpoint_count == 0
+
+
 def test_route_plan_rejects_unregistered_post_hoc_route_kind(tmp_path: Path) -> None:
     plan = ProspectiveCheckpointRoutePlan.build(
         registration_id=_registration().registration_id,
