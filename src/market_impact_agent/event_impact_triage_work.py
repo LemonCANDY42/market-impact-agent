@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
@@ -12,10 +13,46 @@ if TYPE_CHECKING:
     from market_impact_agent.event_impact_triage_runtime import TriageCandidateContent
 
 EVENT_IMPACT_TRIAGE_WORK_MANIFEST_SCHEMA = "market-impact.event-impact-triage-work-manifest.v1"
+EVENT_IMPACT_TRIAGE_CANDIDATE_DIGEST_SCHEMA = (
+    "market-impact.event-impact-triage-candidate-digest.v1"
+)
+EVENT_IMPACT_TRIAGE_CLUSTER_PARTITION_SCHEMA = (
+    "market-impact.event-impact-triage-cluster-partition.v1"
+)
 TRIAGE_WORK_MANIFEST_CONTENT_VIEW = "normalized-observation-payload-v1"
 TRIAGE_WORK_MANIFEST_TOKEN_ESTIMATOR = "canonical-json-utf8-upper-bound-v1"
 TRIAGE_WORK_MANIFEST_SERIALIZED_PROMPT_FORMAT = "triage-work-unit-content.v1"
 MAX_TRIAGE_WORK_ATOMS = 128
+MAX_TRIAGE_WORK_CANDIDATE_VERSIONS = 128
+MAX_TRIAGE_DIGEST_TEXT_ITEMS = 8
+MAX_TRIAGE_DIGEST_TEXT_CHARS = 600
+MAX_TRIAGE_CLUSTER_SEED_ATOMS = MAX_TRIAGE_WORK_ATOMS
+MAX_TRIAGE_CLUSTER_MERGE_EVIDENCE = 8
+MAX_TRIAGE_CLUSTER_UNCERTAINTY_NOTES = 8
+_RESERVED_TRIAGE_CONTROL_TOKENS = (
+    "gold_label",
+    "label_set_id",
+    "checkpoint_eligibility",
+    "expected_route",
+    "recommended_route",
+    "must_catch",
+    "material_transmission_expected",
+    "batch_gate_passed",
+    "promotion_eligible",
+    "eligible",
+    "ineligible",
+    "needs_review",
+    "checkpoint_candidate",
+    "event_assessment",
+    "attention_watch",
+    "signal_intent",
+    "order_intent",
+    "trading_mandate",
+    "approval_decision",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +74,8 @@ class TriageWorkManifestPolicy:
             raise ValueError("triage work max_atoms_per_work_unit must be within the atom cap")
         if self.max_candidate_versions_per_work_unit < 1:
             raise ValueError("triage work max_candidate_versions_per_work_unit must be positive")
+        if self.max_candidate_versions_per_work_unit > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage work candidate-version ceiling exceeds the batch cap")
         if self.max_estimated_serialized_prompt_utf8_tokens < 1:
             raise ValueError(
                 "triage work max_estimated_serialized_prompt_utf8_tokens must be positive"
@@ -71,6 +110,8 @@ class TriageWorkAtom:
         if self.serialized_payload_bytes < 1:
             raise ValueError("triage work atom serialized_payload_bytes must be positive")
         _version_ids(self.candidate_version_ids, "triage work atom candidate versions")
+        if len(self.candidate_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage work atom exceeds the candidate-version cap")
         if self.atom_id != self.expected_atom_id:
             raise ValueError("triage work atom_id does not match content")
 
@@ -113,6 +154,8 @@ class TriageWorkUnit:
             "triage work unit atom IDs",
         )
         _version_ids(self.candidate_version_ids, "triage work unit candidate versions")
+        if len(self.candidate_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage work unit exceeds the candidate-version cap")
         if self.atom_count != len(self.atom_ids):
             raise ValueError("triage work unit atom_count does not match atom IDs")
         if self.candidate_version_count != len(self.candidate_version_ids):
@@ -178,6 +221,8 @@ class EventImpactTriageWorkManifest:
         if self.candidate_content_view != TRIAGE_WORK_MANIFEST_CONTENT_VIEW:
             raise ValueError("unsupported triage work candidate content view")
         _version_ids(self.ordered_candidate_version_ids, "triage work ordered candidate versions")
+        if len(self.ordered_candidate_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage work manifest exceeds the 128 candidate-version cap")
         if not self.atoms:
             raise ValueError("triage work manifest requires at least one atom")
         if len(self.atoms) > MAX_TRIAGE_WORK_ATOMS:
@@ -615,6 +660,781 @@ def _work_unit_from_dict(value: object) -> TriageWorkUnit:
             payload, "estimated_serialized_prompt_utf8_tokens"
         ),
     )
+
+
+class TriageClusterMergeState(StrEnum):
+    MERGED = "merged"
+    NEEDS_REVIEW = "needs_review"
+
+
+@dataclass(frozen=True, slots=True)
+class TriageCandidateDigest:
+    """One bounded, no-authority summary of one Manifest Atom."""
+
+    digest_id: str
+    manifest_id: str
+    manifest_hash: str
+    work_unit_id: str
+    atom_id: str
+    candidate_version_ids: tuple[str, ...]
+    changed_facts: tuple[str, ...]
+    source_conflicts: tuple[str, ...]
+    transmission_paths: tuple[str, ...]
+    countercases: tuple[str, ...]
+    uncertainty_notes: tuple[str, ...]
+    checkpoint_rule_evidence: tuple[str, ...]
+    historical_pit_claim: bool = False
+    judgment_model_calls_authorized: bool = False
+    execution_capability: bool = False
+    schema_version: str = EVENT_IMPACT_TRIAGE_CANDIDATE_DIGEST_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != EVENT_IMPACT_TRIAGE_CANDIDATE_DIGEST_SCHEMA:
+            raise ValueError("unsupported Triage Candidate Digest schema")
+        _prefixed_hash(
+            self.digest_id,
+            "event-impact-triage-candidate-digest-",
+            "triage candidate digest_id",
+        )
+        _prefixed_hash(
+            self.manifest_id,
+            "event-impact-triage-work-manifest-",
+            "triage digest manifest_id",
+        )
+        _sha256(self.manifest_hash, "triage digest manifest_hash")
+        _prefixed_hash(
+            self.work_unit_id,
+            "event-impact-triage-work-unit-",
+            "triage digest work_unit_id",
+        )
+        _prefixed_hash(
+            self.atom_id,
+            "event-impact-triage-work-atom-",
+            "triage digest atom_id",
+        )
+        _version_ids(self.candidate_version_ids, "triage digest candidate versions")
+        if len(self.candidate_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage candidate digest exceeds the candidate-version cap")
+        _canonical_digest_texts(self.changed_facts, "changed_facts")
+        _canonical_digest_texts(self.source_conflicts, "source_conflicts")
+        _canonical_digest_texts(self.transmission_paths, "transmission_paths")
+        _canonical_digest_texts(self.countercases, "countercases")
+        _canonical_digest_texts(self.uncertainty_notes, "uncertainty_notes")
+        _canonical_digest_texts(
+            self.checkpoint_rule_evidence,
+            "checkpoint_rule_evidence",
+        )
+        if (
+            self.historical_pit_claim
+            or self.judgment_model_calls_authorized
+            or self.execution_capability
+        ):
+            raise ValueError(
+                "triage candidate digest cannot grant PIT, Judgment, or execution authority"
+            )
+        if self.digest_id != self.expected_digest_id:
+            raise ValueError("triage candidate digest_id does not match content")
+
+    @property
+    def expected_digest_id(self) -> str:
+        return f"event-impact-triage-candidate-digest-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "manifest_id": self.manifest_id,
+            "manifest_hash": self.manifest_hash,
+            "work_unit_id": self.work_unit_id,
+            "atom_id": self.atom_id,
+            "candidate_version_ids": list(self.candidate_version_ids),
+            "changed_facts": list(self.changed_facts),
+            "source_conflicts": list(self.source_conflicts),
+            "transmission_paths": list(self.transmission_paths),
+            "countercases": list(self.countercases),
+            "uncertainty_notes": list(self.uncertainty_notes),
+            "checkpoint_rule_evidence": list(self.checkpoint_rule_evidence),
+            "historical_pit_claim": self.historical_pit_claim,
+            "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {"digest_id": self.digest_id, **self.core_dict()}
+
+    def validate_against(self, manifest: EventImpactTriageWorkManifest) -> None:
+        if self.manifest_id != manifest.manifest_id or self.manifest_hash != canonical_hash(
+            manifest.to_dict()
+        ):
+            raise ValueError("triage candidate digest belongs to another manifest")
+        atom = next((item for item in manifest.atoms if item.atom_id == self.atom_id), None)
+        if atom is None:
+            raise ValueError("triage candidate digest references an unknown manifest atom")
+        unit = next((item for item in manifest.work_units if self.atom_id in item.atom_ids), None)
+        if unit is None:
+            raise ValueError("triage candidate digest atom is outside every manifest work unit")
+        if self.work_unit_id != unit.work_unit_id:
+            raise ValueError("triage candidate digest work unit differs from the manifest")
+        if self.candidate_version_ids != atom.candidate_version_ids:
+            raise ValueError("triage candidate digest versions differ from the manifest atom")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        manifest: EventImpactTriageWorkManifest,
+        atom_id: str,
+        changed_facts: tuple[str, ...],
+        uncertainty_notes: tuple[str, ...],
+        checkpoint_rule_evidence: tuple[str, ...],
+        source_conflicts: tuple[str, ...] = (),
+        transmission_paths: tuple[str, ...] = (),
+        countercases: tuple[str, ...] = (),
+    ) -> TriageCandidateDigest:
+        atom = next((item for item in manifest.atoms if item.atom_id == atom_id), None)
+        if atom is None:
+            raise ValueError("triage candidate digest references an unknown manifest atom")
+        unit = next((item for item in manifest.work_units if atom_id in item.atom_ids), None)
+        if unit is None:
+            raise ValueError("triage candidate digest atom is outside every manifest work unit")
+        canonical_changed_facts = _build_digest_texts(changed_facts, "changed_facts")
+        canonical_source_conflicts = _build_digest_texts(source_conflicts, "source_conflicts")
+        canonical_transmission_paths = _build_digest_texts(
+            transmission_paths,
+            "transmission_paths",
+        )
+        canonical_countercases = _build_digest_texts(countercases, "countercases")
+        canonical_uncertainty_notes = _build_digest_texts(
+            uncertainty_notes,
+            "uncertainty_notes",
+        )
+        canonical_checkpoint_rule_evidence = _build_digest_texts(
+            checkpoint_rule_evidence,
+            "checkpoint_rule_evidence",
+        )
+        core = {
+            "schema_version": EVENT_IMPACT_TRIAGE_CANDIDATE_DIGEST_SCHEMA,
+            "manifest_id": manifest.manifest_id,
+            "manifest_hash": canonical_hash(manifest.to_dict()),
+            "work_unit_id": unit.work_unit_id,
+            "atom_id": atom.atom_id,
+            "candidate_version_ids": list(atom.candidate_version_ids),
+            "changed_facts": list(canonical_changed_facts),
+            "source_conflicts": list(canonical_source_conflicts),
+            "transmission_paths": list(canonical_transmission_paths),
+            "countercases": list(canonical_countercases),
+            "uncertainty_notes": list(canonical_uncertainty_notes),
+            "checkpoint_rule_evidence": list(canonical_checkpoint_rule_evidence),
+            "historical_pit_claim": False,
+            "judgment_model_calls_authorized": False,
+            "execution_capability": False,
+        }
+        result = cls(
+            digest_id=f"event-impact-triage-candidate-digest-{canonical_hash(core)}",
+            manifest_id=manifest.manifest_id,
+            manifest_hash=canonical_hash(manifest.to_dict()),
+            work_unit_id=unit.work_unit_id,
+            atom_id=atom.atom_id,
+            candidate_version_ids=atom.candidate_version_ids,
+            changed_facts=canonical_changed_facts,
+            source_conflicts=canonical_source_conflicts,
+            transmission_paths=canonical_transmission_paths,
+            countercases=canonical_countercases,
+            uncertainty_notes=canonical_uncertainty_notes,
+            checkpoint_rule_evidence=canonical_checkpoint_rule_evidence,
+        )
+        result.validate_against(manifest)
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class TriageClusterSeed:
+    """A bounded, no-decision grouping of one or more Atom Digests."""
+
+    cluster_seed_id: str
+    digest_ids: tuple[str, ...]
+    atom_ids: tuple[str, ...]
+    candidate_version_ids: tuple[str, ...]
+    merge_state: TriageClusterMergeState
+    merge_evidence: tuple[str, ...]
+    uncertainty_notes: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        _prefixed_hash(
+            self.cluster_seed_id,
+            "event-impact-triage-cluster-seed-",
+            "triage cluster seed_id",
+        )
+        _prefixed_hashes(
+            self.digest_ids,
+            "event-impact-triage-candidate-digest-",
+            "triage cluster digest IDs",
+        )
+        _prefixed_hashes(
+            self.atom_ids,
+            "event-impact-triage-work-atom-",
+            "triage cluster atom IDs",
+        )
+        if len(self.digest_ids) > MAX_TRIAGE_CLUSTER_SEED_ATOMS:
+            raise ValueError("triage cluster seed exceeds the digest ceiling")
+        if len(self.atom_ids) > MAX_TRIAGE_CLUSTER_SEED_ATOMS:
+            raise ValueError("triage cluster seed exceeds the atom ceiling")
+        if len(self.digest_ids) != len(self.atom_ids):
+            raise ValueError("triage cluster seed requires one digest per atom")
+        _version_ids(self.candidate_version_ids, "triage cluster candidate versions")
+        if len(self.candidate_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage cluster seed exceeds the candidate-version cap")
+        _canonical_texts(
+            self.merge_evidence,
+            "triage cluster merge_evidence",
+            maximum=MAX_TRIAGE_CLUSTER_MERGE_EVIDENCE,
+            minimum=(
+                1
+                if len(self.atom_ids) > 1 and self.merge_state is TriageClusterMergeState.MERGED
+                else 0
+            ),
+        )
+        _canonical_texts(
+            self.uncertainty_notes,
+            "triage cluster uncertainty_notes",
+            maximum=MAX_TRIAGE_CLUSTER_UNCERTAINTY_NOTES,
+            minimum=1 if self.merge_state is TriageClusterMergeState.NEEDS_REVIEW else 0,
+        )
+        if self.cluster_seed_id != self.expected_cluster_seed_id:
+            raise ValueError("triage cluster seed_id does not match content")
+
+    @property
+    def expected_cluster_seed_id(self) -> str:
+        return f"event-impact-triage-cluster-seed-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "digest_ids": list(self.digest_ids),
+            "atom_ids": list(self.atom_ids),
+            "candidate_version_ids": list(self.candidate_version_ids),
+            "merge_state": self.merge_state.value,
+            "merge_evidence": list(self.merge_evidence),
+            "uncertainty_notes": list(self.uncertainty_notes),
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {"cluster_seed_id": self.cluster_seed_id, **self.core_dict()}
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        manifest: EventImpactTriageWorkManifest,
+        digests: tuple[TriageCandidateDigest, ...],
+        atom_ids: tuple[str, ...],
+        merge_state: TriageClusterMergeState,
+        merge_evidence: tuple[str, ...],
+        uncertainty_notes: tuple[str, ...] = (),
+    ) -> TriageClusterSeed:
+        atom_by_id = {item.atom_id: item for item in manifest.atoms}
+        _prefixed_hashes(atom_ids, "event-impact-triage-work-atom-", "triage cluster atom IDs")
+        digest_by_atom: dict[str, TriageCandidateDigest] = {}
+        for digest in digests:
+            digest.validate_against(manifest)
+            if digest.atom_id in digest_by_atom:
+                raise ValueError("triage cluster digest bindings must be unique")
+            digest_by_atom[digest.atom_id] = digest
+        unknown = set(atom_ids) - set(atom_by_id)
+        if unknown:
+            raise ValueError("triage cluster seed references an unknown manifest atom")
+        if len(atom_ids) > MAX_TRIAGE_CLUSTER_SEED_ATOMS:
+            raise ValueError("triage cluster seed exceeds the atom ceiling")
+        positions = {item.atom_id: index for index, item in enumerate(manifest.atoms)}
+        canonical_atom_ids = tuple(sorted(atom_ids, key=positions.__getitem__))
+        if atom_ids != canonical_atom_ids:
+            raise ValueError("triage cluster atoms must use manifest receipt order")
+        if set(digest_by_atom) != set(atom_ids):
+            raise ValueError("triage cluster atom IDs do not match digest bindings")
+        ordered_digests = tuple(digest_by_atom[atom_id] for atom_id in atom_ids)
+        candidate_versions = {
+            version_id
+            for atom_id in atom_ids
+            for version_id in atom_by_id[atom_id].candidate_version_ids
+        }
+        canonical_versions = tuple(
+            value for value in manifest.ordered_candidate_version_ids if value in candidate_versions
+        )
+        canonical_merge_evidence = _build_texts(
+            merge_evidence,
+            "triage cluster merge_evidence",
+            maximum=MAX_TRIAGE_CLUSTER_MERGE_EVIDENCE,
+            minimum=(
+                1 if len(atom_ids) > 1 and merge_state is TriageClusterMergeState.MERGED else 0
+            ),
+        )
+        canonical_uncertainty_notes = _build_texts(
+            uncertainty_notes,
+            "triage cluster uncertainty_notes",
+            maximum=MAX_TRIAGE_CLUSTER_UNCERTAINTY_NOTES,
+            minimum=1 if merge_state is TriageClusterMergeState.NEEDS_REVIEW else 0,
+        )
+        core = {
+            "digest_ids": [item.digest_id for item in ordered_digests],
+            "atom_ids": list(atom_ids),
+            "candidate_version_ids": list(canonical_versions),
+            "merge_state": merge_state.value,
+            "merge_evidence": list(canonical_merge_evidence),
+            "uncertainty_notes": list(canonical_uncertainty_notes),
+        }
+        return cls(
+            cluster_seed_id=f"event-impact-triage-cluster-seed-{canonical_hash(core)}",
+            digest_ids=tuple(item.digest_id for item in ordered_digests),
+            atom_ids=atom_ids,
+            candidate_version_ids=canonical_versions,
+            merge_state=merge_state,
+            merge_evidence=canonical_merge_evidence,
+            uncertainty_notes=canonical_uncertainty_notes,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TriageClusterPartition:
+    """Arm-neutral, exhaustive clustering of every Digest from one Work Manifest."""
+
+    partition_id: str
+    manifest_id: str
+    manifest_hash: str
+    ordered_digest_ids: tuple[str, ...]
+    ordered_candidate_version_ids: tuple[str, ...]
+    clusters: tuple[TriageClusterSeed, ...]
+    historical_pit_claim: bool = False
+    judgment_model_calls_authorized: bool = False
+    execution_capability: bool = False
+    schema_version: str = EVENT_IMPACT_TRIAGE_CLUSTER_PARTITION_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != EVENT_IMPACT_TRIAGE_CLUSTER_PARTITION_SCHEMA:
+            raise ValueError("unsupported Triage Cluster Partition schema")
+        _prefixed_hash(
+            self.partition_id,
+            "event-impact-triage-cluster-partition-",
+            "triage cluster partition_id",
+        )
+        _prefixed_hash(
+            self.manifest_id,
+            "event-impact-triage-work-manifest-",
+            "triage partition manifest_id",
+        )
+        _sha256(self.manifest_hash, "triage partition manifest_hash")
+        _prefixed_hashes(
+            self.ordered_digest_ids,
+            "event-impact-triage-candidate-digest-",
+            "triage partition ordered digest IDs",
+        )
+        if len(self.ordered_digest_ids) > MAX_TRIAGE_WORK_ATOMS:
+            raise ValueError("triage cluster partition exceeds the digest ceiling")
+        _version_ids(
+            self.ordered_candidate_version_ids,
+            "triage cluster partition ordered candidate versions",
+        )
+        if len(self.ordered_candidate_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage cluster partition exceeds the candidate-version cap")
+        if not self.clusters:
+            raise ValueError("triage cluster partition requires at least one cluster seed")
+        if len(self.clusters) > MAX_TRIAGE_WORK_ATOMS:
+            raise ValueError("triage cluster partition exceeds the cluster seed ceiling")
+        if len({item.cluster_seed_id for item in self.clusters}) != len(self.clusters):
+            raise ValueError("triage cluster partition seed IDs must be unique")
+        if tuple(item.cluster_seed_id for item in self.clusters) != tuple(
+            sorted(item.cluster_seed_id for item in self.clusters)
+        ):
+            raise ValueError("triage cluster partition seeds must use canonical ID order")
+        cluster_digest_ids = tuple(
+            digest_id for cluster in self.clusters for digest_id in cluster.digest_ids
+        )
+        if len(set(cluster_digest_ids)) != len(cluster_digest_ids) or set(
+            cluster_digest_ids
+        ) != set(self.ordered_digest_ids):
+            raise ValueError("triage cluster partition must consume every digest exactly once")
+        cluster_atom_ids = tuple(
+            atom_id for cluster in self.clusters for atom_id in cluster.atom_ids
+        )
+        if len(cluster_atom_ids) != len(self.ordered_digest_ids) or len(
+            set(cluster_atom_ids)
+        ) != len(cluster_atom_ids):
+            raise ValueError("triage cluster partition must consume every atom exactly once")
+        cluster_version_ids = tuple(
+            version_id for cluster in self.clusters for version_id in cluster.candidate_version_ids
+        )
+        if len(cluster_version_ids) > MAX_TRIAGE_WORK_CANDIDATE_VERSIONS:
+            raise ValueError("triage cluster partition exceeds the candidate-version cap")
+        if len(set(cluster_version_ids)) != len(cluster_version_ids) or set(
+            cluster_version_ids
+        ) != set(self.ordered_candidate_version_ids):
+            raise ValueError(
+                "triage cluster partition must consume every candidate version exactly once"
+            )
+        if (
+            self.historical_pit_claim
+            or self.judgment_model_calls_authorized
+            or self.execution_capability
+        ):
+            raise ValueError(
+                "triage cluster partition cannot grant PIT, Judgment, or execution authority"
+            )
+        if self.partition_id != self.expected_partition_id:
+            raise ValueError("triage cluster partition_id does not match content")
+
+    @property
+    def expected_partition_id(self) -> str:
+        return f"event-impact-triage-cluster-partition-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "manifest_id": self.manifest_id,
+            "manifest_hash": self.manifest_hash,
+            "ordered_digest_ids": list(self.ordered_digest_ids),
+            "ordered_candidate_version_ids": list(self.ordered_candidate_version_ids),
+            "clusters": [item.to_dict() for item in self.clusters],
+            "historical_pit_claim": self.historical_pit_claim,
+            "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {"partition_id": self.partition_id, **self.core_dict()}
+
+    def validate_against(
+        self,
+        manifest: EventImpactTriageWorkManifest,
+        digests: tuple[TriageCandidateDigest, ...],
+    ) -> None:
+        if self.manifest_id != manifest.manifest_id or self.manifest_hash != canonical_hash(
+            manifest.to_dict()
+        ):
+            raise ValueError("triage cluster partition belongs to another manifest")
+        if len(digests) != len(manifest.atoms):
+            raise ValueError("triage cluster partition requires one digest for every Work Atom")
+        digest_by_id: dict[str, TriageCandidateDigest] = {}
+        digest_by_atom: dict[str, TriageCandidateDigest] = {}
+        for digest in digests:
+            digest.validate_against(manifest)
+            if digest.digest_id in digest_by_id or digest.atom_id in digest_by_atom:
+                raise ValueError("triage cluster partition digest bindings must be unique")
+            digest_by_id[digest.digest_id] = digest
+            digest_by_atom[digest.atom_id] = digest
+        expected_atom_ids = tuple(item.atom_id for item in manifest.atoms)
+        if set(digest_by_atom) != set(expected_atom_ids):
+            raise ValueError("triage cluster partition digests do not cover every Work Atom")
+        expected_digest_ids = tuple(
+            digest_by_atom[atom_id].digest_id for atom_id in expected_atom_ids
+        )
+        if self.ordered_digest_ids != expected_digest_ids:
+            raise ValueError("triage cluster partition digest order differs from the manifest")
+        if self.ordered_candidate_version_ids != manifest.ordered_candidate_version_ids:
+            raise ValueError("triage cluster partition candidate order differs from the manifest")
+        cluster_digest_ids = tuple(
+            digest_id for cluster in self.clusters for digest_id in cluster.digest_ids
+        )
+        cluster_atom_ids = tuple(
+            atom_id for cluster in self.clusters for atom_id in cluster.atom_ids
+        )
+        if len(set(cluster_digest_ids)) != len(cluster_digest_ids) or set(
+            cluster_digest_ids
+        ) != set(expected_digest_ids):
+            raise ValueError("triage cluster partition must consume every digest exactly once")
+        if len(set(cluster_atom_ids)) != len(cluster_atom_ids) or set(cluster_atom_ids) != set(
+            expected_atom_ids
+        ):
+            raise ValueError("triage cluster partition must consume every atom exactly once")
+        atom_by_id = {item.atom_id: item for item in manifest.atoms}
+        positions = {item.atom_id: index for index, item in enumerate(manifest.atoms)}
+        for cluster in self.clusters:
+            if cluster.atom_ids != tuple(sorted(cluster.atom_ids, key=positions.__getitem__)):
+                raise ValueError("triage cluster atoms must use manifest receipt order")
+            if (
+                tuple(digest_by_id[digest_id].atom_id for digest_id in cluster.digest_ids)
+                != cluster.atom_ids
+            ):
+                raise ValueError("triage cluster digest-to-atom bindings are invalid")
+            expected_versions = {
+                version_id
+                for atom_id in cluster.atom_ids
+                for version_id in atom_by_id[atom_id].candidate_version_ids
+            }
+            canonical_versions = tuple(
+                value
+                for value in manifest.ordered_candidate_version_ids
+                if value in expected_versions
+            )
+            if cluster.candidate_version_ids != canonical_versions:
+                raise ValueError("triage cluster candidate coverage is not canonical")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        manifest: EventImpactTriageWorkManifest,
+        digests: tuple[TriageCandidateDigest, ...],
+        clusters: tuple[TriageClusterSeed, ...],
+    ) -> TriageClusterPartition:
+        if len({item.digest_id for item in digests}) != len(digests) or len(
+            {item.atom_id for item in digests}
+        ) != len(digests):
+            raise ValueError("triage cluster partition digest bindings must be unique")
+        if len(digests) != len(manifest.atoms):
+            raise ValueError("triage cluster partition requires one digest for every Work Atom")
+        digest_by_atom: dict[str, TriageCandidateDigest] = {}
+        for digest in digests:
+            digest.validate_against(manifest)
+            if digest.atom_id in digest_by_atom:
+                raise ValueError("triage cluster partition digest bindings must be unique")
+            digest_by_atom[digest.atom_id] = digest
+        expected_atom_ids = tuple(item.atom_id for item in manifest.atoms)
+        if set(digest_by_atom) != set(expected_atom_ids):
+            raise ValueError("triage cluster partition digests do not cover every Work Atom")
+        ordered_digest_ids = tuple(
+            digest_by_atom[atom_id].digest_id for atom_id in expected_atom_ids
+        )
+        ordered_clusters = tuple(sorted(clusters, key=lambda item: item.cluster_seed_id))
+        core = {
+            "schema_version": EVENT_IMPACT_TRIAGE_CLUSTER_PARTITION_SCHEMA,
+            "manifest_id": manifest.manifest_id,
+            "manifest_hash": canonical_hash(manifest.to_dict()),
+            "ordered_digest_ids": list(ordered_digest_ids),
+            "ordered_candidate_version_ids": list(manifest.ordered_candidate_version_ids),
+            "clusters": [item.to_dict() for item in ordered_clusters],
+            "historical_pit_claim": False,
+            "judgment_model_calls_authorized": False,
+            "execution_capability": False,
+        }
+        result = cls(
+            partition_id=f"event-impact-triage-cluster-partition-{canonical_hash(core)}",
+            manifest_id=manifest.manifest_id,
+            manifest_hash=canonical_hash(manifest.to_dict()),
+            ordered_digest_ids=ordered_digest_ids,
+            ordered_candidate_version_ids=manifest.ordered_candidate_version_ids,
+            clusters=ordered_clusters,
+        )
+        result.validate_against(manifest, digests)
+        return result
+
+
+def triage_candidate_digest_from_dict(value: object) -> TriageCandidateDigest:
+    payload = _object(value, "Triage Candidate Digest")
+    _exact_keys(
+        payload,
+        {
+            "schema_version",
+            "digest_id",
+            "manifest_id",
+            "manifest_hash",
+            "work_unit_id",
+            "atom_id",
+            "candidate_version_ids",
+            "changed_facts",
+            "source_conflicts",
+            "transmission_paths",
+            "countercases",
+            "uncertainty_notes",
+            "checkpoint_rule_evidence",
+            "historical_pit_claim",
+            "judgment_model_calls_authorized",
+            "execution_capability",
+        },
+        "Triage Candidate Digest",
+    )
+    result = TriageCandidateDigest(
+        digest_id=_string(payload, "digest_id"),
+        manifest_id=_string(payload, "manifest_id"),
+        manifest_hash=_string(payload, "manifest_hash"),
+        work_unit_id=_string(payload, "work_unit_id"),
+        atom_id=_string(payload, "atom_id"),
+        candidate_version_ids=_version_id_tuple(
+            payload.get("candidate_version_ids"), "triage digest candidate versions"
+        ),
+        changed_facts=_digest_text_tuple(payload.get("changed_facts"), "changed_facts"),
+        source_conflicts=_digest_text_tuple(payload.get("source_conflicts"), "source_conflicts"),
+        transmission_paths=_digest_text_tuple(
+            payload.get("transmission_paths"), "transmission_paths"
+        ),
+        countercases=_digest_text_tuple(payload.get("countercases"), "countercases"),
+        uncertainty_notes=_digest_text_tuple(payload.get("uncertainty_notes"), "uncertainty_notes"),
+        checkpoint_rule_evidence=_digest_text_tuple(
+            payload.get("checkpoint_rule_evidence"),
+            "checkpoint_rule_evidence",
+        ),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("Triage Candidate Digest is not canonical")
+    return result
+
+
+def triage_cluster_partition_from_dict(value: object) -> TriageClusterPartition:
+    payload = _object(value, "Triage Cluster Partition")
+    _exact_keys(
+        payload,
+        {
+            "schema_version",
+            "partition_id",
+            "manifest_id",
+            "manifest_hash",
+            "ordered_digest_ids",
+            "ordered_candidate_version_ids",
+            "clusters",
+            "historical_pit_claim",
+            "judgment_model_calls_authorized",
+            "execution_capability",
+        },
+        "Triage Cluster Partition",
+    )
+    result = TriageClusterPartition(
+        partition_id=_string(payload, "partition_id"),
+        manifest_id=_string(payload, "manifest_id"),
+        manifest_hash=_string(payload, "manifest_hash"),
+        ordered_digest_ids=_prefixed_hash_tuple(
+            payload.get("ordered_digest_ids"),
+            "event-impact-triage-candidate-digest-",
+            "triage partition ordered digest IDs",
+        ),
+        ordered_candidate_version_ids=_version_id_tuple(
+            payload.get("ordered_candidate_version_ids"),
+            "triage cluster partition ordered candidate versions",
+        ),
+        clusters=tuple(
+            _cluster_seed_from_dict(item)
+            for item in _array(payload.get("clusters"), "triage partition clusters")
+        ),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("Triage Cluster Partition is not canonical")
+    return result
+
+
+def _cluster_seed_from_dict(value: object) -> TriageClusterSeed:
+    payload = _object(value, "triage cluster seed")
+    _exact_keys(
+        payload,
+        {
+            "cluster_seed_id",
+            "digest_ids",
+            "atom_ids",
+            "candidate_version_ids",
+            "merge_state",
+            "merge_evidence",
+            "uncertainty_notes",
+        },
+        "triage cluster seed",
+    )
+    merge_state = TriageClusterMergeState(_string(payload, "merge_state"))
+    return TriageClusterSeed(
+        cluster_seed_id=_string(payload, "cluster_seed_id"),
+        digest_ids=_prefixed_hash_tuple(
+            payload.get("digest_ids"),
+            "event-impact-triage-candidate-digest-",
+            "triage cluster digest IDs",
+        ),
+        atom_ids=_prefixed_hash_tuple(
+            payload.get("atom_ids"),
+            "event-impact-triage-work-atom-",
+            "triage cluster atom IDs",
+        ),
+        candidate_version_ids=_version_id_tuple(
+            payload.get("candidate_version_ids"), "triage cluster candidate versions"
+        ),
+        merge_state=merge_state,
+        merge_evidence=_text_tuple(
+            payload.get("merge_evidence"),
+            "triage cluster merge_evidence",
+            maximum=MAX_TRIAGE_CLUSTER_MERGE_EVIDENCE,
+            minimum=(
+                1
+                if len(_array(payload.get("atom_ids"), "triage cluster atom IDs")) > 1
+                and merge_state is TriageClusterMergeState.MERGED
+                else 0
+            ),
+        ),
+        uncertainty_notes=_text_tuple(
+            payload.get("uncertainty_notes"),
+            "triage cluster uncertainty_notes",
+            maximum=MAX_TRIAGE_CLUSTER_UNCERTAINTY_NOTES,
+            minimum=1 if merge_state is TriageClusterMergeState.NEEDS_REVIEW else 0,
+        ),
+    )
+
+
+def _canonical_digest_texts(values: tuple[str, ...], name: str, *, minimum: int = 0) -> None:
+    _canonical_texts(
+        values,
+        f"triage digest {name}",
+        maximum=MAX_TRIAGE_DIGEST_TEXT_ITEMS,
+        minimum=minimum,
+    )
+
+
+def _build_digest_texts(values: tuple[str, ...], name: str, *, minimum: int = 0) -> tuple[str, ...]:
+    return _build_texts(
+        values,
+        f"triage digest {name}",
+        maximum=MAX_TRIAGE_DIGEST_TEXT_ITEMS,
+        minimum=minimum,
+    )
+
+
+def _canonical_texts(values: tuple[str, ...], name: str, *, maximum: int, minimum: int = 0) -> None:
+    if not minimum <= len(values) <= maximum:
+        raise ValueError(f"{name} must contain between {minimum} and {maximum} items")
+    if values != tuple(sorted(set(values))):
+        raise ValueError(f"{name} must be sorted and unique")
+    for value in values:
+        _trimmed(value, name)
+        if len(value) > MAX_TRIAGE_DIGEST_TEXT_CHARS:
+            raise ValueError(f"{name} text exceeds the conservative character ceiling")
+        normalized = re.sub(r"[\s-]+", "_", value.casefold())
+        if any(
+            re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", normalized)
+            for token in _RESERVED_TRIAGE_CONTROL_TOKENS
+        ):
+            raise ValueError(f"{name} contains a reserved eligibility, route, or authority token")
+
+
+def _build_texts(
+    values: tuple[object, ...], name: str, *, maximum: int, minimum: int = 0
+) -> tuple[str, ...]:
+    if not all(isinstance(value, str) for value in values):
+        raise TypeError(f"{name} must contain text")
+    result = tuple(sorted(set(cast(tuple[str, ...], values))))
+    _canonical_texts(result, name, maximum=maximum, minimum=minimum)
+    return result
+
+
+def _digest_text_tuple(value: object, name: str, *, minimum: int = 0) -> tuple[str, ...]:
+    return _text_tuple(
+        value,
+        f"triage digest {name}",
+        maximum=MAX_TRIAGE_DIGEST_TEXT_ITEMS,
+        minimum=minimum,
+    )
+
+
+def _text_tuple(
+    value: object,
+    name: str,
+    *,
+    maximum: int,
+    minimum: int = 0,
+) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise TypeError(f"{name} must be an array")
+    values = tuple(cast(list[object], value))
+    if not all(isinstance(item, str) for item in values):
+        raise TypeError(f"{name} must contain text")
+    result = cast(tuple[str, ...], values)
+    _canonical_texts(result, name, maximum=maximum, minimum=minimum)
+    return result
 
 
 def _object(value: object, name: str) -> dict[str, object]:

@@ -33,6 +33,8 @@ AGENT_SCHEMA_FILES = (
     "prospective-checkpoint-readiness-report.schema.json",
     "event-impact-triage-candidate-set.schema.json",
     "event-impact-triage-work-manifest.schema.json",
+    "event-impact-triage-candidate-digest.schema.json",
+    "event-impact-triage-cluster-partition.schema.json",
     "event-impact-triage-proposal.schema.json",
     "event-impact-triage-decision.schema.json",
     "event-impact-triage-execution-plan.schema.json",

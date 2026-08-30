@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-candidate-digest.schema.json",
+  "title": "Market Impact Event Impact Triage Candidate Digest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "digest_id",
+    "manifest_id",
+    "manifest_hash",
+    "work_unit_id",
+    "atom_id",
+    "candidate_version_ids",
+    "changed_facts",
+    "source_conflicts",
+    "transmission_paths",
+    "countercases",
+    "uncertainty_notes",
+    "checkpoint_rule_evidence",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-candidate-digest.v1"},
+    "digest_id": {"type": "string", "pattern": "^event-impact-triage-candidate-digest-[0-9a-f]{64}$"},
+    "manifest_id": {"type": "string", "pattern": "^event-impact-triage-work-manifest-[0-9a-f]{64}$"},
+    "manifest_hash": {"$ref": "#/$defs/sha256"},
+    "work_unit_id": {"type": "string", "pattern": "^event-impact-triage-work-unit-[0-9a-f]{64}$"},
+    "atom_id": {"type": "string", "pattern": "^event-impact-triage-work-atom-[0-9a-f]{64}$"},
+    "candidate_version_ids": {"$ref": "#/$defs/versionIds"},
+    "changed_facts": {"$ref": "#/$defs/optionalTexts"},
+    "source_conflicts": {"$ref": "#/$defs/optionalTexts"},
+    "transmission_paths": {"$ref": "#/$defs/optionalTexts"},
+    "countercases": {"$ref": "#/$defs/optionalTexts"},
+    "uncertainty_notes": {"$ref": "#/$defs/optionalTexts"},
+    "checkpoint_rule_evidence": {"$ref": "#/$defs/optionalTexts"},
+    "historical_pit_claim": {"const": false},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "versionIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^prospective-observation-version-[0-9a-f]{64}$"}
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600,
+      "not": {
+        "pattern": "(?i)(gold[ _-]*label|label[ _-]*set[ _-]*id|checkpoint[ _-]*eligibility|expected[ _-]*route|recommended[ _-]*route|must[ _-]*catch|material[ _-]*transmission[ _-]*expected|batch[ _-]*gate[ _-]*passed|promotion[ _-]*eligible|\\beligible\\b|\\bineligible\\b|needs[ _-]*review|checkpoint[ _-]*candidate|event[ _-]*assessment|attention[ _-]*watch|signal[ _-]*intent|order[ _-]*intent|trading[ _-]*mandate|approval[ _-]*decision|historical[ _-]*pit[ _-]*claim|judgment[ _-]*model[ _-]*calls[ _-]*authorized|execution[ _-]*capability)"
+      }
+    },
+    "optionalTexts": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/text"}
+    }
+  }
+}

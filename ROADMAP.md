@@ -294,6 +294,14 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       23,687 under a frozen 32,768 ceiling; no singleton or 128-atom cap failed. This accepts real
       preflight partition mechanics only; neither arm is yet bound to or executed through these
       units.
+    - [x] Add closed Candidate Digest and Cluster Partition contracts for the map and partition
+      phases. A Digest binds one exact Manifest atom without requiring invented facts; the
+      Partition consumes every Digest/atom exactly once, supports cross-Work-Unit seeds, requires
+      evidence for a definite multi-atom merge, and retains uncertain grouping as `needs_review`.
+      Both artifacts are content-identified, cap retained candidate identities at 128, and reject
+      reserved label/route/authority control tokens in narrative fields. They contain no typed
+      labels, eligibility, route, PIT, Judgment or execution authority. Provider execution and
+      per-unit Run/Usage reopening remain the next gate.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan

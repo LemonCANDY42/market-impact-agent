@@ -290,10 +290,29 @@ _Avoid_: Dynamic debate, opaque Agent team, retry policy, trading plan
 An arm-neutral, content-identified pre-model partition of one exact Candidate Set. It collapses only
 byte-identical normalized payloads into atoms while retaining every Observation Version identity,
 then assigns those atoms deterministically by first receipt under frozen candidate-count and
-conservative canonical-JSON UTF-8 size ceilings. It contains no source payloads or labels and grants
-no PIT, Judgment, classification, or execution authority. Baseline and treatment must bind the same
+conservative canonical-JSON UTF-8 size ceilings. The v1 batch caps both atoms and retained
+Observation Versions at 128. It contains no source payloads or label fields and grants no PIT,
+Judgment, classification, or execution authority. Baseline and treatment must bind the same
 Manifest before bounded work-unit execution can be accepted.
 _Avoid_: News summary, model shortlist, Provider-token estimate, completed triage run
+
+**Event Impact Triage Candidate Digest**:
+A bounded, content-identified map-stage proposal for exactly one Work Manifest atom. It may preserve
+supported changed facts, source conflicts, possible transmission paths, countercases, uncertainty
+and checkpoint-rule evidence, including an entirely empty extraction when the frozen content
+supports none. It binds the exact Manifest, Work Unit, atom and Observation Version identities but
+contains no payload, label, eligibility, route, PIT, Judgment or execution authority.
+Reserved label, route and authority control tokens are rejected from its narrative fields; this is
+a deterministic contract guard, not a claim that arbitrary natural-language semantics can be
+perfectly classified.
+_Avoid_: Headline classification, EventAssessment, checkpoint decision, required invented summary
+
+**Event Impact Triage Cluster Partition**:
+A content-identified, exhaustive grouping of one complete Digest set into provisional Event Cluster
+seeds. Every Digest and atom is consumed exactly once; a seed may cross Work Units, and unsupported
+multi-atom merges are rejected. An uncertain grouping is marked `needs_review`. The Partition does
+not classify checkpoint eligibility, choose impact routing, or grant downstream authority.
+_Avoid_: Eligible Event, final Event Cluster, semantic acceptance, Signal
 
 **Event Impact Triage Comparison Registration**:
 A content-identified pre-execution comparison of coordinator-only and bounded-specialist plans over

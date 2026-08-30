@@ -34,6 +34,7 @@
     "ordered_candidate_version_ids": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 128,
       "uniqueItems": true,
       "items": {"$ref": "#/$defs/versionId"}
     },
@@ -76,7 +77,11 @@
       ],
       "properties": {
         "max_atoms_per_work_unit": {"type": "integer", "minimum": 1, "maximum": 128},
-        "max_candidate_versions_per_work_unit": {"type": "integer", "minimum": 1},
+        "max_candidate_versions_per_work_unit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        },
         "max_estimated_serialized_prompt_utf8_tokens": {
           "type": "integer",
           "minimum": 1,
@@ -102,6 +107,7 @@
         "candidate_version_ids": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 128,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/versionId"}
         }
@@ -134,6 +140,7 @@
         "candidate_version_ids": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 128,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/versionId"}
         },

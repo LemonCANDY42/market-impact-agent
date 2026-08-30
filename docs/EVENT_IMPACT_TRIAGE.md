@@ -111,6 +111,19 @@ below the frozen 32,768 ceiling. No payload or label is present in the Manifest.
 that the current input can be partitioned deterministically; runtime phase binding, per-unit Usage
 authority and completed comparison arms remain unimplemented.
 
+The map/partition artifact layer is also closed. One Candidate Digest binds one exact Manifest atom
+and may record bounded supported facts, conflicts, transmission hypotheses, countercases,
+uncertainty and checkpoint-rule evidence. Every field may remain empty when extraction is not
+supported; the contract never forces the model to invent a fact. A Cluster Partition then consumes
+every Digest and atom exactly once. It may join atoms from different Work Units, requires evidence
+for a definite multi-atom merge, and represents an unresolved grouping as `needs_review`. Neither
+artifact contains labels, eligibility, impact route, PIT, Judgment or execution authority. Their
+schemas and deterministic assembly tests pass, but no Provider run has produced a real Digest or
+Partition yet. The batch, atom, work-unit, Digest and Cluster surfaces all cap retained candidate
+identities at 128. Digest and merge narratives reject reserved label, route and authority control
+tokens; arbitrary semantic paraphrases still require the later typed classifier and Harness
+validation rather than being treated as structurally impossible.
+
 Position and historical IDs are deliberately not accepted yet. The Harness must first define and
 reopen their typed payloads so the model receives actual cutoff-bound content rather than an opaque
 identifier. Their absence does not block portfolio-independent triage. Until those contracts pass,
