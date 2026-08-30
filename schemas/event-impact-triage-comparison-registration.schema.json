@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-comparison-registration.schema.json",
+  "title": "Market Impact Event Impact Triage Comparison Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "comparison_id",
+    "candidate_set_id",
+    "label_set_id",
+    "baseline_plan_id",
+    "treatment_plan_id",
+    "model_profile_id",
+    "registered_at",
+    "metric_ids",
+    "max_must_catch_false_negatives",
+    "max_unsupported_material_routes",
+    "require_treatment_not_worse_eligibility",
+    "require_treatment_not_worse_routing",
+    "max_aggregate_estimated_cost_microusd",
+    "second_pristine_blind_batch_required",
+    "labels_hidden_from_arms",
+    "historical_pit_claim",
+    "strategy_or_execution_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-comparison-registration.v1"},
+    "comparison_id": {"type": "string", "pattern": "^event-impact-triage-comparison-[0-9a-f]{64}$"},
+    "candidate_set_id": {"type": "string", "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"},
+    "label_set_id": {"type": "string", "pattern": "^event-impact-triage-label-set-[0-9a-f]{64}$"},
+    "baseline_plan_id": {"type": "string", "pattern": "^event-impact-triage-execution-plan-[0-9a-f]{64}$"},
+    "treatment_plan_id": {"type": "string", "pattern": "^event-impact-triage-execution-plan-[0-9a-f]{64}$"},
+    "model_profile_id": {"type": "string", "pattern": "^model-provider-[0-9a-f]{64}$"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "metric_ids": {
+      "const": [
+        "candidate_coverage",
+        "checkpoint_eligibility_accuracy",
+        "eligible_false_negatives",
+        "eligible_false_positives",
+        "must_catch_false_negatives",
+        "needs_review_accuracy",
+        "route_accuracy",
+        "unsupported_material_routes",
+        "estimated_cost_microusd"
+      ]
+    },
+    "max_must_catch_false_negatives": {"const": 0},
+    "max_unsupported_material_routes": {"const": 0},
+    "require_treatment_not_worse_eligibility": {"const": true},
+    "require_treatment_not_worse_routing": {"const": true},
+    "max_aggregate_estimated_cost_microusd": {"type": "integer", "minimum": 0},
+    "second_pristine_blind_batch_required": {"const": true},
+    "labels_hidden_from_arms": {"const": true},
+    "historical_pit_claim": {"const": false},
+    "strategy_or_execution_authority": {"const": false}
+  }
+}

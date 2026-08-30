@@ -9,7 +9,8 @@ from referencing import Registry
 from referencing.jsonschema import DRAFT202012, Schema
 
 from market_impact_agent.backtests import backtest_request_from_dict
-from market_impact_agent.research import EventArchetype
+from market_impact_agent.event_impact_triage import TriageAgentRole
+from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 
 ROOT = Path(__file__).parents[1]
 
@@ -37,6 +38,9 @@ class Validator(Protocol):
         "prospective-diagnostic-registration.schema.json",
         "prospective-checkpoint-route-plan.schema.json",
         "prospective-checkpoint-readiness-report.schema.json",
+        "event-impact-triage-candidate-set.schema.json",
+        "event-impact-triage-proposal.schema.json",
+        "event-impact-triage-decision.schema.json",
         "prospective-checkpoint-snapshot-set.schema.json",
         "prospective-query-gate-result.schema.json",
         "prospective-execution-plan.schema.json",
@@ -328,6 +332,30 @@ def test_method_quality_outcome_seal_event_archetype_matches_runtime() -> None:
     event_archetype = cast(dict[str, Any], properties["event_archetype"])
 
     assert event_archetype["enum"] == [item.value for item in EventArchetype]
+
+
+def test_event_impact_triage_schemas_match_runtime_enums() -> None:
+    proposal = load_json(ROOT / "schemas" / "event-impact-triage-proposal.schema.json")
+    proposal_definitions = cast(dict[str, Any], proposal["$defs"])
+    cluster = cast(dict[str, Any], proposal_definitions["cluster"])
+    cluster_properties = cast(dict[str, Any], cluster["properties"])
+    archetypes = cast(dict[str, Any], cluster_properties["event_archetypes"])
+    stages = cast(dict[str, Any], cluster_properties["event_stage"])
+    channels = cast(dict[str, Any], cluster_properties["transmission_channels"])
+    assert cast(dict[str, Any], archetypes["items"])["enum"] == [
+        item.value for item in EventArchetype
+    ]
+    assert stages["enum"] == [item.value for item in EventStage]
+    assert cast(dict[str, Any], channels["items"])["enum"] == [
+        item.value for item in TransmissionChannel
+    ]
+
+    decision = load_json(ROOT / "schemas" / "event-impact-triage-decision.schema.json")
+    decision_definitions = cast(dict[str, Any], decision["$defs"])
+    member = cast(dict[str, Any], decision_definitions["runMember"])
+    member_properties = cast(dict[str, Any], member["properties"])
+    role = cast(dict[str, Any], member_properties["role"])
+    assert role["enum"] == [item.value for item in TriageAgentRole]
 
 
 def test_method_quality_schema_accepts_runtime_decimal_upper_bound() -> None:

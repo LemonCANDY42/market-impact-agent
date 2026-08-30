@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-execution-plan.schema.json",
+  "title": "Market Impact Event Impact Triage Execution Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "arm",
+    "candidate_set_id",
+    "registration_id",
+    "checkpoint_key",
+    "checkpoint_contract_hash",
+    "data_snapshot_id",
+    "candidate_content_view",
+    "model_profile_alias",
+    "model_provider_profile",
+    "role_bindings",
+    "position_snapshot_id",
+    "historical_analogy_pack_id",
+    "max_child_count",
+    "max_total_input_tokens",
+    "max_total_output_tokens",
+    "max_total_estimated_cost_microusd",
+    "allowed_tools",
+    "allowed_mcp_servers",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-execution-plan.v1"},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-execution-plan-[0-9a-f]{64}$"
+    },
+    "arm": {"enum": ["coordinator_only", "bounded_specialists"]},
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "checkpoint_contract_hash": {"$ref": "#/$defs/sha256"},
+    "data_snapshot_id": {"type": "string", "pattern": "^data-snapshot-[0-9a-f]{64}$"},
+    "candidate_content_view": {"const": "normalized-observation-payload-v1"},
+    "model_profile_alias": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "model_provider_profile": {
+      "$ref": "https://schemas.market-impact-agent.local/model-provider-profile.schema.json"
+    },
+    "role_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/roleBinding"}
+    },
+    "position_snapshot_id": {
+      "type": ["string", "null"],
+      "pattern": "^position-snapshot-[0-9a-f]{64}$"
+    },
+    "historical_analogy_pack_id": {
+      "type": ["string", "null"],
+      "pattern": "^historical-analogy-pack-[0-9a-f]{64}$"
+    },
+    "max_child_count": {"type": "integer", "minimum": 0},
+    "max_total_input_tokens": {"type": "integer", "minimum": 1},
+    "max_total_output_tokens": {"type": "integer", "minimum": 1},
+    "max_total_estimated_cost_microusd": {"type": "integer", "minimum": 0},
+    "allowed_tools": {"type": "array", "maxItems": 0},
+    "allowed_mcp_servers": {"type": "array", "maxItems": 0},
+    "historical_pit_claim": {"const": false},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "roleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "requested_skills",
+        "resolved_skill_names",
+        "skill_manifest_hashes",
+        "prompt_template_id",
+        "output_contract_hash",
+        "max_turns",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_estimated_cost_microusd"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "coordinator",
+            "fact_verifier",
+            "transmission_mapper",
+            "portfolio_impact",
+            "historical_analogy",
+            "countercase_reviewer"
+          ]
+        },
+        "requested_skills": {"$ref": "#/$defs/strings"},
+        "resolved_skill_names": {"$ref": "#/$defs/strings"},
+        "skill_manifest_hashes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "prompt_template_id": {"type": "string", "minLength": 1},
+        "output_contract_hash": {"$ref": "#/$defs/sha256"},
+        "max_turns": {"type": "integer", "minimum": 1},
+        "max_input_tokens": {"type": "integer", "minimum": 1},
+        "max_output_tokens": {"type": "integer", "minimum": 1},
+        "max_estimated_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

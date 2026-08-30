@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-comparison-report.schema.json",
+  "title": "Market Impact Event Impact Triage Comparison Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "comparison_id",
+    "label_set_id",
+    "label_exposure",
+    "baseline_score",
+    "treatment_score",
+    "batch_gate_passed",
+    "promotion_eligible",
+    "blockers",
+    "evaluated_at",
+    "historical_pit_claim",
+    "strategy_or_execution_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-comparison-report.v1"},
+    "report_id": {"type": "string", "pattern": "^event-impact-triage-comparison-report-[0-9a-f]{64}$"},
+    "comparison_id": {"type": "string", "pattern": "^event-impact-triage-comparison-[0-9a-f]{64}$"},
+    "label_set_id": {"type": "string", "pattern": "^event-impact-triage-label-set-[0-9a-f]{64}$"},
+    "label_exposure": {"enum": ["pristine_blind", "operator_exposed"]},
+    "baseline_score": {"$ref": "#/$defs/score"},
+    "treatment_score": {"$ref": "#/$defs/score"},
+    "batch_gate_passed": {"type": "boolean"},
+    "promotion_eligible": {"const": false},
+    "blockers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "historical_pit_claim": {"const": false},
+    "strategy_or_execution_authority": {"const": false}
+  },
+  "$defs": {
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_count",
+        "classified_count",
+        "candidate_coverage",
+        "checkpoint_eligibility_correct",
+        "checkpoint_eligibility_accuracy",
+        "eligible_false_negatives",
+        "eligible_false_positives",
+        "must_catch_false_negatives",
+        "needs_review_correct",
+        "needs_review_label_count",
+        "needs_review_accuracy",
+        "route_correct",
+        "route_accuracy",
+        "unsupported_material_routes",
+        "estimated_cost_microusd"
+      ],
+      "properties": {
+        "candidate_count": {"type": "integer", "minimum": 1},
+        "classified_count": {"type": "integer", "minimum": 0},
+        "candidate_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "checkpoint_eligibility_correct": {"type": "integer", "minimum": 0},
+        "checkpoint_eligibility_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "eligible_false_negatives": {"type": "integer", "minimum": 0},
+        "eligible_false_positives": {"type": "integer", "minimum": 0},
+        "must_catch_false_negatives": {"type": "integer", "minimum": 0},
+        "needs_review_correct": {"type": "integer", "minimum": 0},
+        "needs_review_label_count": {"type": "integer", "minimum": 0},
+        "needs_review_accuracy": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "route_correct": {"type": "integer", "minimum": 0},
+        "route_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "unsupported_material_routes": {"type": "integer", "minimum": 0},
+        "estimated_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

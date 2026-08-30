@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-label-set.schema.json",
+  "title": "Market Impact Event Impact Triage Label Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "label_set_id", "candidate_set_id", "exposure", "labels", "sealed_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-label-set.v1"},
+    "label_set_id": {"type": "string", "pattern": "^event-impact-triage-label-set-[0-9a-f]{64}$"},
+    "candidate_set_id": {"type": "string", "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"},
+    "exposure": {"enum": ["pristine_blind", "operator_exposed"]},
+    "labels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version_id",
+          "checkpoint_eligibility",
+          "expected_route",
+          "must_catch",
+          "material_transmission_expected",
+          "rationale"
+        ],
+        "properties": {
+          "version_id": {"type": "string", "pattern": "^prospective-observation-version-[0-9a-f]{64}$"},
+          "checkpoint_eligibility": {"enum": ["eligible", "ineligible", "needs_review"]},
+          "expected_route": {"enum": ["checkpoint_candidate", "event_assessment", "attention_watch", "archive"]},
+          "must_catch": {"type": "boolean"},
+          "material_transmission_expected": {"type": "boolean"},
+          "rationale": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "sealed_at": {"type": "string", "format": "date-time"}
+  }
+}

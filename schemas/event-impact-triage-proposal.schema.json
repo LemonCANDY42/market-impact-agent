@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-proposal.schema.json",
+  "title": "Market Impact Event Impact Triage Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "proposal_id", "candidate_set_id", "clusters"],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-proposal.v1"},
+    "proposal_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-proposal-[0-9a-f]{64}$"
+    },
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "clusters": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/cluster"}
+    }
+  },
+  "$defs": {
+    "strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cluster_id",
+        "candidate_version_ids",
+        "checkpoint_eligibility",
+        "recommended_route",
+        "event_archetypes",
+        "event_stage",
+        "changed_facts",
+        "rule_reasons",
+        "evidence_version_ids",
+        "uncertainty_notes",
+        "countercases",
+        "transmission_channels",
+        "affected_entity_refs",
+        "watch_questions",
+        "triage_confidence",
+        "zero_financial_impact_claim",
+        "signal_or_execution_capability"
+      ],
+      "properties": {
+        "cluster_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"
+        },
+        "candidate_version_ids": {"$ref": "#/$defs/versions"},
+        "checkpoint_eligibility": {"enum": ["eligible", "ineligible", "needs_review"]},
+        "recommended_route": {
+          "enum": ["checkpoint_candidate", "event_assessment", "attention_watch", "archive"]
+        },
+        "event_archetypes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "issuer_corporate",
+              "macro_real_economy",
+              "policy_regulatory",
+              "geopolitical_security",
+              "physical_supply_logistics",
+              "climate_natural_hazard",
+              "technology_demand_adoption",
+              "financial_market_mechanics"
+            ]
+          }
+        },
+        "event_stage": {
+          "enum": [
+            "pre_event",
+            "first_observed",
+            "corroborated",
+            "quantified_or_realized",
+            "diffusing",
+            "resolved",
+            "revised_or_invalidated"
+          ]
+        },
+        "changed_facts": {"$ref": "#/$defs/strings"},
+        "rule_reasons": {
+          "allOf": [{"$ref": "#/$defs/strings"}, {"minItems": 1}]
+        },
+        "evidence_version_ids": {"$ref": "#/$defs/versions"},
+        "uncertainty_notes": {"$ref": "#/$defs/strings"},
+        "countercases": {"$ref": "#/$defs/strings"},
+        "transmission_channels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "revenue_demand",
+              "capacity_cost_inventory",
+              "claims_capital_allocation",
+              "policy_access",
+              "funding_discount_fx",
+              "risk_uncertainty_insurance",
+              "expectations_attention",
+              "positioning_liquidity_mechanics"
+            ]
+          }
+        },
+        "affected_entity_refs": {"$ref": "#/$defs/strings"},
+        "watch_questions": {"$ref": "#/$defs/strings"},
+        "triage_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "zero_financial_impact_claim": {"const": false},
+        "signal_or_execution_capability": {"const": false}
+      }
+    }
+  }
+}

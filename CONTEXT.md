@@ -255,6 +255,46 @@ unclassified candidate. It does not perform semantic eligibility selection, calc
 trading-session barrier, freeze a Snapshot Set, or authorize a model call.
 _Avoid_: Query Gate pass, Event Envelope, trigger decision, execution readiness
 
+**Event Impact Triage Candidate Set**:
+A content-identified freeze of every still-unclassified post-admission Observation Version for one
+registered checkpoint through one persisted prospective Data Snapshot and Readiness Report. It
+preserves receipt order and exact content identities but performs no semantic classification and
+grants no model, PIT, Judgment, or execution authority.
+_Avoid_: Selected Event, news shortlist, eligibility result
+
+**Event Impact Triage Proposal**:
+A typed Agent proposal that partitions every frozen candidate version into cited Event Clusters,
+classifies each only against the registered checkpoint rule as `eligible`, `ineligible`, or
+`needs_review`, and separately recommends checkpoint, EventAssessment, Attention Watch, or archive
+routing. `Ineligible` never means zero financial impact, and current holdings cannot change factual
+or checkpoint-rule classification.
+_Avoid_: Headline filter, trading recommendation, portfolio priority
+
+**Event Impact Triage Decision**:
+A content-identified Harness disposition produced only after it reopens the authoritative
+coordinator/specialist run bundle, Usage Ledger, complete candidate partition, citations, and receipt
+order. An earlier unresolved candidate blocks first-eligible selection; non-selected material events
+may still enter EventAssessment or Attention Watch, and the Decision grants no downstream model or
+execution authority.
+_Avoid_: Model label, zero-impact finding, Signal Intent
+
+**Event Impact Triage Execution Plan**:
+A content-identified pre-model binding of one frozen Candidate Set to one Model Provider Profile,
+comparison arm, closed role graph, exact Skill manifests, prompt/output contracts, no-tool surface,
+child count and aggregate token/cost ceilings. The current executable roles are coordinator-only or
+fact/transmission/countercase specialists plus coordinator; an interrupted inference is not retried
+automatically. It grants no PIT, Judgment, or execution authority.
+_Avoid_: Dynamic debate, opaque Agent team, retry policy, trading plan
+
+**Event Impact Triage Comparison Registration**:
+A content-identified pre-execution comparison of coordinator-only and bounded-specialist plans over
+the same Candidate Set, checkpoint contract, Model Provider Profile and complete sealed label set.
+The Harness durably records it under its own clock before either arm starts and later reopens actual
+token/cost usage. One batch, operator-exposed labels, or fixture success can validate mechanics but
+cannot promote a classifier; at least one later pristine blind batch and all registered metric gates
+are required.
+_Avoid_: Backtest score, alpha proof, model leaderboard
+
 **Prospective Checkpoint Snapshot Set**:
 A content-identified reconciliation of one registered checkpoint's immutable barrier with the
 accepted route reports, Collection Policies, internally complete Journal-frozen Data Snapshots, raw
@@ -325,6 +365,19 @@ triggers, and may enqueue one idempotent Agent wake-up bound to a newly frozen D
 Agent may propose a Watch; it cannot choose arbitrary network routes, keep itself resident, bypass
 budgets, mutate prior Judgments, notify arbitrary destinations, or submit an order from the Watch.
 _Avoid_: Long-running Agent, cron prompt, market-data stream, order trigger
+
+**Position Snapshot**:
+A cutoff-bound, content-identified view of held instruments, sides, quantities, environment and
+reconciled account-state provenance exposed without broker credentials. It may prioritize an Event
+Assessment or risk response but cannot change event facts, checkpoint eligibility, a Trading
+Mandate, approval, or execution state.
+_Avoid_: Broker session, mutable portfolio object, order authority
+
+**Historical Analogy Pack**:
+A content-identified set of structurally comparable past Event Assessments whose exact evidence lane
+is retained as strict PIT, Modeled-PIT, or outcome-opened review. It supports analogy and countercase
+reasoning but cannot promote evidence lanes, prove causality, or supply a historical fill.
+_Avoid_: Pattern truth, backtest result, hindsight label
 
 **Regime Agent Experiment Report**:
 A private, content-identified development diagnostic binding qualified checkpoint Evidence Packs,

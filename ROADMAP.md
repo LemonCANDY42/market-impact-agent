@@ -7,16 +7,19 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 The shortest accepted path to Agent-directed paper operation is:
 
-1. observe one real post-admission trigger and freeze the internally verifiable selected Snapshot
-   Set, explicit optional gaps, Prospective Evidence Lineage, tools, and Query Gate;
-2. run two complete paired Judgment replicates, add a third complete pair only when either arm's
+1. freeze every real post-admission trigger candidate, run formal Event Impact Triage inside the
+   Harness, and either select the first rule-eligible event, block on `needs_review`, or route a
+   checkpoint-ineligible but potentially material event to EventAssessment/Attention Watch;
+2. for the selected event, freeze the internally verifiable Snapshot Set, explicit optional gaps,
+   Prospective Evidence Lineage, tools, and Query Gate;
+3. run two complete paired Judgment replicates, add a third complete pair only when either arm's
    first two decisions disagree, and freeze one Decision Run Manifest;
-3. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
+4. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
    or the matching first two when the registered early-stop rule applies; otherwise archive without a
    Signal or Order; the control arm is comparison-only;
-4. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
+5. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
    the already accepted durable mock outbox;
-5. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
+6. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
    account-scoped reconciliation before any real broker-paper claim.
 
 Strict historical PIT recovery, optional information-quality improvements, and the five-run physical
@@ -24,6 +27,17 @@ energy study remain parallel research lanes. They may improve evidence or claims
 globally block prospective Judgment under actual-receipt inputs. Only trigger, target/universe,
 cutoff/input identity, model/cost, order-time tradability, safety, approval, and execution-state gates
 are hard at their owning boundary.
+
+### Dual-track evidence contract
+
+Historical backtest/calibration and prospective paper/live development advance in parallel through
+shared engine-neutral EventAssessment, Signal, Intent and Policy contracts, but they never share
+authority by implication. Strict historical PIT admits only versions and authority provable at the
+cutoff; late-retrieved history remains Modeled-PIT or outcome-opened review. Prospective actual
+receipt may support process diagnostics and later `manual_each` paper work with optional gaps
+visible, without waiting for every old PIT gap to be repaired. Strategy-labeled paper/live promotion
+still requires registered multi-case calibration plus its mandate, tradability, approval,
+reconciliation and execution gates. See `docs/EVENT_IMPACT_TRIAGE.md`.
 
 ## Phase 0 — Auditable skeleton
 
@@ -226,6 +240,33 @@ Stage 3 — operate continuous collection:
 
 Stage 4 — prove bounded Judgment inputs before automatic dispatch:
 
+- [ ] `PDI-29` Accept formal Event Impact Triage between Readiness and checkpoint selection.
+  - [x] Add content-identified Candidate Set, Agent Proposal and Harness Decision contracts. Freeze
+    every readiness candidate version through one persisted actual-receipt Data Snapshot; require an
+    exact cited partition; distinguish checkpoint eligibility from impact routing; block a later
+    eligible cluster behind an earlier `needs_review`; and bind authoritative coordinator/specialist
+    Run Records plus the Usage Ledger without granting Judgment or execution authority.
+  - [x] `PDI-29A` Add the triage-specific Model Provider runtime and content-identified pre-model
+    execution plan. Freeze either a coordinator-only baseline or a bounded fact, transmission and
+    countercase treatment plus coordinator, exact Skills, no-tool/no-MCP surface, prompts, child
+    count, token/cost ceilings and typed outputs. Seal every member in the Run Journal, artifact
+    store and Usage Ledger; reopen completed authority exactly; and convert an interrupted,
+    ambiguous inference to `human_input_required` without automatic retry. Fixture acceptance
+    covers both arms and restart behavior but does not prove classifier quality.
+  - [x] `PDI-29B` Freeze a baseline/treatment comparison registration and complete pre-reveal label
+    set. Score candidate coverage, checkpoint classification, must-catch misses, false positives,
+    `needs_review`, route accuracy, unsupported material routes and cost. Operator-exposed labels
+    and any single batch are structurally promotion-ineligible; durably register the complete label
+    and plan identities under the Harness clock before either arm starts, and reconcile Provider-
+    reported token/cost usage to the frozen ceilings and Usage Ledger; a second pristine blind batch
+    is required. This is accepted protocol mechanics, not a semantic result.
+  - [ ] `PDI-29C` Freeze typed, secret-free Position Snapshot and evidence-lane-preserving Historical
+    Analogy Pack payload contracts before enabling those optional specialists. IDs alone are not
+    accepted model context and these optional inputs do not block portfolio-independent triage.
+  - [ ] `PDI-29D` Seal labels before model execution, then replay the currently unclassified
+    post-admission versions through both arms and a later pristine blind batch. Pass the registered
+    evaluation of classification, `needs_review`, impact route, unsupported transmission paths,
+    hidden-case family recall and cost. Fixture contract acceptance is not real semantic acceptance.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan
@@ -237,14 +278,13 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     and audited in private report
     `prospective-checkpoint-readiness-report-40114fdf675cb49a0fec1aef90d64e9e695f958fb36e55a0d67b4f25acb7a1cc`:
     the policy checkpoint has operational CSRC and two-minute Tushare/Sina trigger Jobs and observed
-    five post-admission versions by 2026-08-30 00:29 UTC. Manual semantic inspection found no
-    capital-market policy or market-structure change among them, so no eligibility selection,
-    Snapshot Set, Query Gate, or model call was created. Issuer and macro trigger routes remain
-    unconfigured.
-  - [ ] After a post-admission candidate appears, seal its registered eligibility selection and
-    trading-session barrier, then freeze the actual Snapshot Set, Evidence Pack, read-only tools,
-    Prospective Evidence Lineage, and Prospective Execution Plan. Pre-admission observations remain
-    ineligible.
+    five post-admission versions by 2026-08-30 00:29 UTC. A temporary operator-style inspection found
+    no obvious match, but the Harness did not classify them; they remain unclassified pending PDI-29.
+    No eligibility selection, Snapshot Set, Query Gate, or model call was created. Issuer and macro
+    trigger routes remain unconfigured.
+  - [ ] After PDI-29 selects one post-admission candidate, seal its trading-session barrier and
+    freeze the actual Snapshot Set, Evidence Pack, read-only tools, Prospective Evidence Lineage, and
+    Prospective Execution Plan. Pre-admission observations remain ineligible.
 - [ ] `PDI-31` Pass Query Gate preflight for two or three registered checkpoints.
   - [x] Implement the content-identified v4 Query Gate contract: required trigger/structural gaps
     block without model cost; optional and corroboration gaps remain nonblocking Agent inputs; the

@@ -440,7 +440,8 @@ flowchart LR
     M --> A[pre-bind routes and audit trigger readiness]
     D --> A
     O --> A
-    A --> F[PDI-17 freeze observed checkpoint Snapshot sets]
+    A --> T[PDI-29 formal Event Impact Triage]
+    T --> F[PDI-17 freeze observed checkpoint Snapshot sets]
     O --> I[PDI-21 install host supervisor]
     I --> H[PDI-22 operations and restore gate]
     F --> H
@@ -843,6 +844,46 @@ external event`, `trigger route unconfigured`, `candidate requires eligibility s
 `Query Gate blocked` are different states. Historical or optional information gaps remain archived
 inputs and evaluation strata; they do not collapse these states into one global completeness gate.
 
+#### PDI-29 — Classify and route every frozen trigger candidate
+
+Freeze every unclassified post-admission Observation Version for one checkpoint through one
+persisted prospective Data Snapshot. A bounded Agent run must partition the complete Candidate Set,
+cite only frozen versions, classify checkpoint eligibility independently of current holdings, and
+separately recommend checkpoint, EventAssessment, Attention Watch, or archive routing. The Harness
+reopens every coordinator/specialist Run Record and the Usage Ledger, preserves receipt ordering,
+blocks a later eligible cluster behind an earlier `needs_review`, and selects at most the first
+eligible cluster. `Ineligible` is relative to the registered checkpoint rule and cannot assert zero
+financial impact.
+
+The semantic runtime may use the existing Model Provider adapter with a bounded coordinator and only
+the fact-verification, transmission, portfolio-impact, historical-analogy, and countercase
+specialists justified by its frozen inputs. Factual/checkpoint classification is portfolio-
+independent. A later impact-priority layer may bind a cutoff Position Snapshot, Historical Analogy
+Pack and registered Skills; those inputs may prioritize held-position risk but cannot rewrite facts
+or eligibility. Role graph, prompt, Skill/tool/MCP surfaces, input identities, child count and total
+cost are frozen before execution. Open-ended debate, recursive delegation, broker tools and
+unrecorded operator judgment are outside the contract.
+
+**Implemented contract slice:** content-identified Candidate Set, Proposal and Decision contracts;
+actual-receipt Snapshot reopening; exact candidate partition and evidence validation; separate
+checkpoint/impact routes; first-eligible ordering; coordinator-only baseline and bounded
+fact/transmission/countercase treatment execution plans; no-tool Model Provider execution; closed
+specialist/coordinator outputs; authoritative Run Journal, artifact and Usage Ledger reopening;
+fail-closed ambiguous-interruption recovery; Provider-reported token/cost postflight; and an
+append-only, Harness-clock pre-reveal comparison/scoring registration that rejects incomplete labels,
+pre-registration arm starts or caller-supplied cost drift. All current execution and comparison
+evidence is fixture acceptance, not classifier quality.
+
+**Blocked by:** typed Position Snapshot and Historical Analogy Pack payload bindings before their
+optional roles can be enabled; labels sealed before execution; replay of the current unclassified
+versions through both arms; a second pristine blind batch; and passing semantic metrics. Opaque
+context IDs are not sufficient model inputs, while missing optional contexts do not block factual or
+checkpoint-rule triage.
+
+**Boundary:** no Triage artifact grants historical PIT, downstream Judgment, Strategy Admission,
+paper/live execution, account access, approval, or broker authority. Full design and dual-track
+evidence semantics are in `docs/EVENT_IMPACT_TRIAGE.md`.
+
 #### PDI-30 — Assemble bounded prospective Judgment inputs
 
 Promote only policy-admitted observations into the existing Event Envelope/Evidence Pack, bind all
@@ -861,7 +902,7 @@ report may identify an operational route waiting for the market without treating
 collector failure. It may also identify missing issuer or macro trigger infrastructure without
 blocking unrelated checkpoint mechanisms.
 
-**Blocked by:** one registered post-route-admission trigger plus the Snapshot routes actually
+**Blocked by:** one PDI-29-selected post-route-admission trigger plus the Snapshot routes actually
 selected at its barrier. Optional slot absence is retained, not fabricated.
 
 #### PDI-31 — Qualify two or three registered checkpoints
@@ -924,11 +965,12 @@ identity. The plan was durably admitted as
 at `2026-08-30T00:16:35.798593Z`; private readiness report
 `prospective-checkpoint-readiness-report-40114fdf675cb49a0fec1aef90d64e9e695f958fb36e55a0d67b4f25acb7a1cc`
 then found one operational policy checkpoint with CSRC and two-minute Tushare/Sina trigger Jobs and
-five post-admission content versions. Manual semantic inspection found none eligible under the
-registered capital-market-policy or market-structure-change rule, so no selection or model authority
-was created. Issuer and macro trigger routes remain unconfigured. CSRC still cannot be relabeled as `issuer_event`
-or `official_macro_release`. No model call, Snapshot Set, Evidence Pack, Query Gate pass, paper
-admission, or execution authority was created.
+five post-admission content versions. A temporary operator-style inspection found no obvious match,
+but the Harness did not classify those versions; they remain unclassified until PDI-29 runs with
+sealed model/runtime and cost evidence. Issuer and macro trigger routes remain unconfigured. CSRC
+still cannot be relabeled as `issuer_event` or `official_macro_release`. No formal eligibility
+selection, Snapshot Set, Evidence Pack, Query Gate pass, downstream model call, paper admission, or
+execution authority was created.
 
 ### Stage 5 — Automate bounded follow-up and open registered outcomes
 

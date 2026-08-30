@@ -64,7 +64,15 @@ The bootstrap implements:
   registration and Query Gate block missing trigger/structural inputs while allowing the Agent to
   reason or abstain with optional information missing. A content-identified route plan now binds
   accepted Collection Jobs before any new trigger, and a read-only readiness report distinguishes
-  expected waiting from missing trigger infrastructure without starting a model. Order-time
+  expected waiting from missing trigger infrastructure without starting a model. The formal
+  [Event Impact Triage](docs/EVENT_IMPACT_TRIAGE.md) contract freezes every unclassified candidate,
+  requires a cited complete Agent partition, separates checkpoint eligibility from broader market
+  or held-position impact routing, and leaves first-eligible selection to the Harness after
+  authoritative coordinator/specialist Run and Usage Ledger verification. A fixture-accepted,
+  no-tool Model Provider runtime now freezes coordinator-only and bounded-specialist comparison
+  arms, budgets, restart behavior and pre-reveal evaluation mechanics. Typed
+  position/historical-context payloads, real candidate replay and passing blind semantic results
+  remain open acceptance work. Order-time
   tradability and risk remain
   independently fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source

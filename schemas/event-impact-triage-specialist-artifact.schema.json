@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-specialist-artifact.schema.json",
+  "title": "Market Impact Event Impact Triage Specialist Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "candidate_set_id",
+    "role",
+    "covered_candidate_version_ids",
+    "findings"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-specialist-artifact.v1"},
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-specialist-artifact-[0-9a-f]{64}$"
+    },
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "role": {
+      "enum": [
+        "fact_verifier",
+        "transmission_mapper",
+        "portfolio_impact",
+        "historical_analogy",
+        "countercase_reviewer"
+      ]
+    },
+    "covered_candidate_version_ids": {"$ref": "#/$defs/versions"},
+    "findings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/finding"}
+    }
+  },
+  "$defs": {
+    "strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "finding_type",
+        "candidate_version_ids",
+        "evidence_version_ids",
+        "statement",
+        "uncertainty_notes",
+        "affected_entity_refs",
+        "transmission_channels",
+        "evidence_lane"
+      ],
+      "properties": {
+        "finding_id": {
+          "type": "string",
+          "pattern": "^event-impact-triage-finding-[0-9a-f]{64}$"
+        },
+        "finding_type": {
+          "enum": [
+            "changed_fact",
+            "source_conflict",
+            "transmission_path",
+            "portfolio_exposure",
+            "historical_analogy",
+            "countercase",
+            "invalidation_condition"
+          ]
+        },
+        "candidate_version_ids": {"$ref": "#/$defs/versions"},
+        "evidence_version_ids": {"$ref": "#/$defs/versions"},
+        "statement": {"type": "string", "minLength": 1},
+        "uncertainty_notes": {"$ref": "#/$defs/strings"},
+        "affected_entity_refs": {"$ref": "#/$defs/strings"},
+        "transmission_channels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "revenue_demand",
+              "capacity_cost_inventory",
+              "claims_capital_allocation",
+              "policy_access",
+              "funding_discount_fx",
+              "risk_uncertainty_insurance",
+              "expectations_attention",
+              "positioning_liquidity_mechanics"
+            ]
+          }
+        },
+        "evidence_lane": {
+          "type": ["string", "null"],
+          "enum": ["strict", "modeled_pit", "outcome_opened_review", null]
+        }
+      }
+    }
+  }
+}

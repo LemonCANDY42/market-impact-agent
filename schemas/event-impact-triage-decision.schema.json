@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/event-impact-triage-decision.schema.json",
+  "title": "Market Impact Event Impact Triage Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "candidate_set_id",
+    "proposal_id",
+    "run_evidence",
+    "status",
+    "selected_cluster_id",
+    "blocking_review_cluster_ids",
+    "unselected_eligible_cluster_ids",
+    "event_assessment_cluster_ids",
+    "attention_watch_cluster_ids",
+    "archive_cluster_ids",
+    "decided_at",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.event-impact-triage-decision.v1"},
+    "decision_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-decision-[0-9a-f]{64}$"
+    },
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "proposal_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-proposal-[0-9a-f]{64}$"
+    },
+    "run_evidence": {"$ref": "#/$defs/runEvidence"},
+    "status": {"enum": ["eligible_selected", "needs_review", "no_eligible_candidate"]},
+    "selected_cluster_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"}
+      ]
+    },
+    "blocking_review_cluster_ids": {"$ref": "#/$defs/clusters"},
+    "unselected_eligible_cluster_ids": {"$ref": "#/$defs/clusters"},
+    "event_assessment_cluster_ids": {"$ref": "#/$defs/clusters"},
+    "attention_watch_cluster_ids": {"$ref": "#/$defs/clusters"},
+    "archive_cluster_ids": {"$ref": "#/$defs/clusters"},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "historical_pit_claim": {"const": false},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "clusters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"
+      }
+    },
+    "runEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["members", "usage_ledger_hash"],
+      "properties": {
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/runMember"}
+        },
+        "usage_ledger_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "run_id",
+        "terminal_artifact_hash",
+        "metrics_hash",
+        "validation_event_hash",
+        "execution_binding_hash"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "coordinator",
+            "fact_verifier",
+            "transmission_mapper",
+            "portfolio_impact",
+            "historical_analogy",
+            "countercase_reviewer"
+          ]
+        },
+        "run_id": {"type": "string", "minLength": 1},
+        "terminal_artifact_hash": {"$ref": "#/$defs/sha256"},
+        "metrics_hash": {"$ref": "#/$defs/sha256"},
+        "validation_event_hash": {"$ref": "#/$defs/sha256"},
+        "execution_binding_hash": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
