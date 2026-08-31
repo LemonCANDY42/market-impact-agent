@@ -872,6 +872,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(".market-impact/event-impact-triage/current"),
     )
     prospective_triage_parser.add_argument("--prepare-only", action="store_true")
+    prospective_triage_recovery_parser = agent_subparsers.add_parser(
+        "prospective-triage-format-recover",
+        help="Authorize one bounded zero-Provider JSON format recovery in the active batch",
+    )
+    prospective_triage_recovery_parser.add_argument("--registration", required=True, type=Path)
+    prospective_triage_recovery_parser.add_argument("--route-plan", required=True, type=Path)
+    prospective_triage_recovery_parser.add_argument("--checkpoint-key", required=True)
+    prospective_triage_recovery_parser.add_argument("--run-id", required=True)
+    prospective_triage_recovery_parser.add_argument("--authorized-at", type=_aware_timestamp)
+    prospective_triage_recovery_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    prospective_triage_recovery_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    prospective_triage_recovery_parser.add_argument(
+        "--run-root",
+        type=Path,
+        default=Path(".market-impact/event-impact-triage/current"),
+    )
     agent_ensemble_parser = agent_subparsers.add_parser(
         "study-run-ensemble",
         help="Run five independent frozen Agent replicates and aggregate three-of-five",
@@ -4257,6 +4281,48 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.prepare_only:
             return 0
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
+    if args.command == "agent" and args.agent_command == "prospective-triage-format-recover":
+        try:
+            from market_impact_agent.prospective_triage import (
+                authorize_prepared_prospective_triage_format_recovery,
+                reopen_active_prospective_triage_work,
+            )
+
+            registration = load_prospective_diagnostic_registration(args.registration)
+            route_plan = load_prospective_checkpoint_route_plan(args.route_plan)
+            prepared = reopen_active_prospective_triage_work(
+                registration=registration,
+                route_plan=route_plan,
+                checkpoint_key=args.checkpoint_key,
+                state_root=args.state_root,
+                run_root=args.run_root,
+            )
+            result = authorize_prepared_prospective_triage_format_recovery(
+                prepared=prepared,
+                registration=registration,
+                state_root=args.state_root,
+                run_root=args.run_root,
+                skill_root=args.skill_root,
+                original_run_id=args.run_id,
+                authorized_at=(
+                    datetime.now(UTC) if args.authorized_at is None else args.authorized_at
+                ),
+            )
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "agent" and args.agent_command == "run":
         try:
             result = asyncio.run(

@@ -111,10 +111,16 @@ The bootstrap implements:
   physical attempts and 396,709 input / 172,508 output Tokens. Same-batch v5/v6 work is
   infrastructure revalidation, not blind semantic evidence. The first 32-version current-route
   bounded batch later produced all Digests and a 25-cluster Partition but stopped on one classify
-  member after three fully received malformed closed-JSON responses; its 40 physical attempts used
-  385,712 input / 197,568 output Tokens and 314,244 microusd CPA-equivalent cost. The durable Active
-  Batch head remains installed, so restart cannot create overlapping work or a split Usage Ledger;
-  no Proposal or Decision exists. The prospective repair now journals each physical attempt with a
+  member after three fully received malformed JSON responses. A pinned, one-structural-edit
+  `json-repair` policy proved the final response was semantically unchanged; an append-only Format
+  Recovery Grant preserved the failed Run/Usage and materialized a zero-Provider recovery Run. One
+  never-started classify member then made the only new Provider request. The graph completed all 38
+  members at 41 physical attempts, 389,749 input / 200,654 output Tokens and 318,755 microusd, and
+  admitted a Decision with two archive and 23 `needs_review` Attention Watch clusters. No eligible
+  checkpoint, Query Gate, Judgment or execution authority exists. Future batches use v7, where
+  `json-repair==0.63.4` is the direct parser and every strict or bounded-repair result carries parse
+  evidence; semantic or multi-edit repair remains rejected. The prospective repair also journals
+  each physical attempt with a
   correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized
   circuit/cooldown/operator-notice state; see
   [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed minimum Position Snapshot

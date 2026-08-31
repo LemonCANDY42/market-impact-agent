@@ -466,10 +466,22 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       three Work Units, produced 32 Digests and 25 Cluster Seeds, and completed 36 of 37 attempted
       logical members. The last classify member exhausted three fully received malformed closed-JSON
       responses. The 40 physical attempts consumed 385,712 input / 197,568 output Tokens and
-      314,244 microusd CPA-equivalent cost. No Proposal or Decision exists. The adopted Active Batch
-      head remains blocking and a concurrent request for 128 candidates reopened the same Plan with
-      no new model calls, proving restart/overlap prevention while preserving this failure as
-      negative evidence.
+      314,244 microusd CPA-equivalent cost. A pinned `json-repair` probe proved the final response
+      differed from valid JSON by one extra structural bracket without changing semantic tokens.
+      One append-only Format Recovery Grant then bound the failed Run/Journal/Usage and materialized
+      a distinct zero-Provider recovery Run; the failed Usage remained immutable and charged. Only
+      the one never-started classify member called the Provider. The authoritative graph completed
+      all 38 logical members at 41 physical attempts, 389,749 input / 200,654 output Tokens and
+      318,755 microusd. Decision
+      `event-impact-triage-decision-2c01a7f0347b9463bdd43fa8abc5b06f86de227928a7bd62ff01219d7038b14d`
+      classified 25 clusters as two archive and 23 `needs_review` Attention Watch routes; no cluster
+      reached checkpoint selection, Query Gate, Judgment or execution. Completion released the
+      Active Batch head. This is runtime/recovery evidence, not semantic-quality or alpha evidence.
+    - [x] Add the v7 direct model-JSON parser boundary for future batches. `json-repair==0.63.4` is
+      the single parser entry and retains its standard-JSON fast path. Harness acceptance is narrower
+      than the library: strict JSON or exactly one punctuation insertion/deletion with identical
+      strings, field identities, number text and literals. Every Run persists parse evidence;
+      schema-guided coercion, multiple edits and semantic repair remain rejected.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate

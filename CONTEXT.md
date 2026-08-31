@@ -391,6 +391,9 @@ increasing ordinals into the frozen Cluster Seed; the Harness resolves those ord
 evidence identities. Schema v6 retains that concise identity seam and declares the existing
 eligibility/route conditional requirements, including the evidence needed for EventAssessment and
 Attention Watch, so corrections can name a bounded semantic violation without exposing content.
+Schema v7 keeps the v6 prompt and semantic contract but parses model JSON through pinned
+`json-repair`; the Harness accepts only strict JSON or exactly one semantics-preserving structural
+punctuation insertion/deletion and persists content-identified parse evidence.
 The Harness injects authoritative atom, cluster and cited-evidence identities
 into the unchanged canonical Digest, Partition and Proposal artifacts. All schemas freeze the
 repeated map roles per Work Unit, one
@@ -411,6 +414,16 @@ terminal events bind one real preceding dispatch. The Grant carries no label, Ju
 execution authority.
 _Avoid_: Hidden retry, overwritten dispatch, response merge, replacement chain
 
+**Event Impact Triage Work Format Recovery Grant**:
+An append-only Harness authority for one terminal pre-v7 Work member whose entire turn budget was
+received and whose final response satisfies the current closed output contract after exactly one
+semantics-preserving structural punctuation repair. It binds the immutable failed terminal,
+Journal, Usage, assistant/raw response hashes, pinned parser/policy and repaired output hash. A
+distinct recovery Run makes no Provider request and creates no Usage record; the source failed Usage
+remains authoritative and charged. The recovery cannot recover another recovery, alter semantic
+tokens, accept multiple edits or grant Judgment, Signal or execution authority.
+_Avoid_: Silent old-plan reinterpretation, model retry, semantic repair, unbounded cleanup
+
 **Event Impact Triage Work Comparison Registration**:
 A content-identified, append-only Harness-clock binding created after a complete Label Set is sealed
 and before either Manifest-bound arm starts. It fixes exact Candidate Set and Work Manifest
@@ -418,7 +431,7 @@ IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, c
 Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
 stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
 authority. Both plans must use the same Work Plan schema revision; mixed revisions fail before
-registration, while equal-revision v3/v3, v4/v4, v5/v5 or v6/v6 comparisons retain the existing
+registration, while equal-revision v3/v3, v4/v4, v5/v5, v6/v6 or v7/v7 comparisons retain the existing
 Registration and Report authority.
 _Avoid_: v1 comparison mutation, caller clock, revealed-label prompt, repaired failed arm
 

@@ -96,6 +96,27 @@ def test_prospective_triage_cli_binds_one_receipt_ordered_batch() -> None:
     assert args.prepare_only is True
 
 
+def test_prospective_triage_format_recovery_cli_requires_exact_source_run() -> None:
+    args = build_parser().parse_args(
+        [
+            "agent",
+            "prospective-triage-format-recover",
+            "--registration",
+            "registration.json",
+            "--route-plan",
+            "route-plan.json",
+            "--checkpoint-key",
+            "next-material-a-share-event",
+            "--run-id",
+            "triage-work-source",
+        ]
+    )
+
+    assert args.agent_command == "prospective-triage-format-recover"
+    assert args.checkpoint_key == "next-material-a-share-event"
+    assert args.run_id == "triage-work-source"
+
+
 def test_feed_capture_cli_generates_cutoff_from_frozen_source_receipts() -> None:
     args = build_parser().parse_args(
         [

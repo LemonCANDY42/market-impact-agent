@@ -36,6 +36,9 @@ from market_impact_agent.event_impact_triage_work import (
     TriageWorkManifestPolicy,
     build_event_impact_triage_work_manifest,
 )
+from market_impact_agent.event_impact_triage_work_format_recovery import (
+    EventImpactTriageWorkFormatRecoveryStore,
+)
 from market_impact_agent.event_impact_triage_work_replacement import (
     EventImpactTriageWorkReplacementStore,
 )
@@ -45,6 +48,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V7,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
@@ -56,6 +60,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v4,
     build_event_impact_triage_work_execution_plan_v5,
     build_event_impact_triage_work_execution_plan_v6,
+    build_event_impact_triage_work_execution_plan_v7,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import load_builtin_model_provider_profile
@@ -142,9 +147,9 @@ class ScriptedWorkProvider(ModelProvider):
         phase = str(task["phase"])
         role = str(task["role"])
         prompt_template_id = str(task["prompt_template_id"])
-        positional = prompt_template_id.endswith(("-v3", "-v4", "-v5", "-v6"))
-        typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6"))
-        ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6"))
+        positional = prompt_template_id.endswith(("-v3", "-v4", "-v5", "-v6", "-v7"))
+        typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6", "-v7"))
+        ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6", "-v7"))
         phase_input = cast(dict[str, object], task["phase_input"])
         if phase == TriageWorkPhase.MAP.value and role != "coordinator":
             field = {
@@ -287,6 +292,99 @@ class InvalidV6RouteOnceProvider(ScriptedWorkProvider):
             )
             self.invalid_emitted = True
         return output
+
+
+class OneExtraBracketProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.malformed_emitted = False
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        turn = await super().complete(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        task = next(
+            decoded
+            for message in reversed(messages)
+            if message.get("role") == "user"
+            for decoded in (json.loads(str(message["content"])),)
+            if "phase" in decoded
+        )
+        if self.malformed_emitted or task["phase"] != TriageWorkPhase.CLASSIFY.value:
+            return turn
+        content = cast(str, turn.assistant_message["content"])
+        malformed = content.replace('],"triage_confidence"', ']],"triage_confidence"', 1)
+        assert malformed != content
+        self.malformed_emitted = True
+        return ModelTurn(
+            response_id=turn.response_id,
+            model=turn.model,
+            assistant_message={"role": "assistant", "content": malformed},
+            tool_calls=turn.tool_calls,
+            finish_reason=turn.finish_reason,
+            usage=turn.usage,
+            raw_response={"id": turn.response_id, "content": malformed},
+            latency_ms=turn.latency_ms,
+            attempts=turn.attempts,
+        )
+
+
+class AlwaysExtraBracketProvider(ScriptedWorkProvider):
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        turn = await super().complete(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        task = next(
+            decoded
+            for message in reversed(messages)
+            if message.get("role") == "user"
+            for decoded in (json.loads(str(message["content"])),)
+            if "phase" in decoded
+        )
+        if task["phase"] != TriageWorkPhase.CLASSIFY.value:
+            return turn
+        content = cast(str, turn.assistant_message["content"])
+        malformed = content.replace('],"triage_confidence"', ']],"triage_confidence"', 1)
+        assert malformed != content
+        return ModelTurn(
+            response_id=turn.response_id,
+            model=turn.model,
+            assistant_message={"role": "assistant", "content": malformed},
+            tool_calls=turn.tool_calls,
+            finish_reason=turn.finish_reason,
+            usage=turn.usage,
+            raw_response={"id": turn.response_id, "content": malformed},
+            latency_ms=turn.latency_ms,
+            attempts=turn.attempts,
+        )
 
 
 class SimulatedProcessCrash(BaseException):
@@ -765,6 +863,7 @@ def _runtime(
     secret_values: tuple[str, ...] = (),
     dialect: str = "v2",
     replacement_store: EventImpactTriageWorkReplacementStore | None = None,
+    format_recovery_store: EventImpactTriageWorkFormatRecoveryStore | None = None,
 ):
     candidate_set, contents = _batch(count)
     manifest = build_event_impact_triage_work_manifest(
@@ -784,6 +883,7 @@ def _runtime(
         "v4": build_event_impact_triage_work_execution_plan_v4,
         "v5": build_event_impact_triage_work_execution_plan_v5,
         "v6": build_event_impact_triage_work_execution_plan_v6,
+        "v7": build_event_impact_triage_work_execution_plan_v7,
     }[dialect]
     plan = builder(
         candidate_set=candidate_set,
@@ -807,6 +907,7 @@ def _runtime(
         journal=RunJournal(tmp_path / "journal.sqlite"),
         usage_ledger=UsageLedger(tmp_path / "usage.sqlite"),
         replacement_store=replacement_store,
+        format_recovery_store=format_recovery_store,
         secret_values=secret_values,
         clock=lambda: NOW,
     )
@@ -2255,6 +2356,128 @@ def test_v6_route_violation_gets_actionable_correction(tmp_path: Path) -> None:
         "event_assessment_requires_fact_archetype_and_transmission"
     )
     assert "conditional route requirements" in correction["instruction"]
+
+
+def test_v7_direct_json_repair_is_bounded_and_reopens_authoritatively(
+    tmp_path: Path,
+) -> None:
+    provider = OneExtraBracketProvider()
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=provider,
+        dialect="v7",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V7
+    assert result.proposal is not None
+    assert result.partition is not None
+    assert result.run_evidence is not None
+    first = next(item for item in result.members if item.phase is TriageWorkPhase.CLASSIFY)
+    assert first.metrics.turns == 1
+    terminal = cast(
+        dict[str, object], runner.artifact_store.read_json(first.terminal_artifact_hash)
+    )
+    evidence_hash = cast(str, terminal["json_parse_evidence_hash"])
+    evidence = cast(dict[str, object], runner.artifact_store.read_json(evidence_hash))
+    assert evidence["parser_id"] == "json-repair-0.63.4"
+    assert evidence["repair_applied"] is True
+    assert cast(list[dict[str, object]], evidence["structural_edits"])[0]["operation"] == "delete"
+    assert cast(list[dict[str, object]], evidence["structural_edits"])[0]["token"] == "]"
+    runner.assert_authoritative_completed_work_run(
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        digests=result.digests,
+        partition=result.partition,
+        proposal=result.proposal,
+        run_evidence=result.run_evidence,
+    )
+
+
+def test_v6_exhausted_format_failure_recovers_once_without_provider_call(
+    tmp_path: Path,
+) -> None:
+    provider = AlwaysExtraBracketProvider()
+    recovery_store = EventImpactTriageWorkFormatRecoveryStore(tmp_path / "format-recovery.sqlite3")
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=provider,
+        dialect="v6",
+        format_recovery_store=recovery_store,
+    )
+
+    blocked = asyncio.run(runner.run())
+
+    assert blocked.status is RunStatus.FAILED
+    original = blocked.members[-1]
+    assert original.phase is TriageWorkPhase.CLASSIFY
+    assert original.metrics.turns == plan.classify_binding.max_turns
+    original_record = runner.journal.get_run(original.run_id)
+    original_events = runner.journal.events(original.run_id)
+    original_usage = tuple(runner.usage_ledger.records())
+    provider_request_count = len(provider.requests)
+
+    grant = runner.authorize_format_recovery(
+        original_run_id=original.run_id,
+        authorized_at=NOW + timedelta(minutes=1),
+    )
+    assert (
+        runner.authorize_format_recovery(
+            original_run_id=original.run_id,
+            authorized_at=NOW + timedelta(minutes=2),
+        )
+        == grant
+    )
+
+    recovered_runner = EventImpactTriageWorkRunner(
+        plan=plan,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        registration=_registration(),
+        provider=provider,
+        content_resolver=runner.content_resolver,
+        skills=runner.skills,
+        artifact_store=runner.artifact_store,
+        journal=runner.journal,
+        usage_ledger=runner.usage_ledger,
+        format_recovery_store=recovery_store,
+        clock=lambda: NOW + timedelta(minutes=3),
+    )
+    result = asyncio.run(recovered_runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partition is not None
+    assert result.proposal is not None
+    assert result.run_evidence is not None
+    recovered = next(
+        member
+        for member in result.members
+        if member.phase is original.phase and member.unit_id == original.unit_id
+    )
+    assert recovered.run_id == grant.recovery_run_id
+    assert recovered.metrics == original.metrics
+    assert len(provider.requests) == provider_request_count
+    assert recovered_runner.journal.get_run(original.run_id) == original_record
+    assert recovered_runner.journal.events(original.run_id) == original_events
+    assert tuple(recovered_runner.usage_ledger.records()) == original_usage
+    assert all(item.record.run_id != grant.recovery_run_id for item in original_usage)
+    assert (
+        sum(
+            item.record.status is RunStatus.FAILED
+            for item in recovered_runner.usage_ledger.records()
+        )
+        == 1
+    )
+
+    reopened = asyncio.run(recovered_runner.run())
+    assert reopened == result
+    assert len(provider.requests) == provider_request_count
 
 
 def test_v2_plan_prompt_and_output_contract_bytes_remain_frozen(tmp_path: Path) -> None:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash
-from market_impact_agent.agent_runtime import ModelProvider, SkillRegistry
+from market_impact_agent.agent_runtime import ModelProvider, ModelTurn, SkillRegistry
 from market_impact_agent.data_inputs import DataSnapshot, LocalDataSnapshotStore
 from market_impact_agent.event_impact_triage import (
     EventImpactTriageBatchSelection,
@@ -29,11 +29,14 @@ from market_impact_agent.event_impact_triage_work import (
     build_event_impact_triage_work_manifest,
     event_impact_triage_work_manifest_from_dict,
 )
+from market_impact_agent.event_impact_triage_work_format_recovery import (
+    EventImpactTriageWorkFormatRecoveryStore,
+)
 from market_impact_agent.event_impact_triage_work_runtime import (
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunner,
-    build_event_impact_triage_work_execution_plan_v6,
+    build_event_impact_triage_work_execution_plan_v7,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -56,6 +59,33 @@ from market_impact_agent.usage_ledger import UsageLedger
 
 class _AvailabilityModelProvider(ModelProvider, Protocol):
     async def assert_model_available(self, *, timeout_seconds: float) -> None: ...
+
+
+class _NoCallModelProvider:
+    def __init__(self, *, provider_id: str, model: str) -> None:
+        self._provider_id = provider_id
+        self._model = model
+
+    @property
+    def provider_id(self) -> str:
+        return self._provider_id
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        _ = (messages, tools, temperature, top_p, max_output_tokens, timeout_seconds)
+        raise AssertionError("format recovery cannot call a Model Provider")
 
 
 @dataclass(frozen=True, slots=True)
@@ -656,7 +686,7 @@ def prepare_next_prospective_triage_work(
     evaluated_at: datetime,
     maximum_candidate_count: int = 32,
 ) -> PreparedProspectiveTriageWork:
-    """Freeze the next actual-receipt prefix and its v6 treatment Work plan."""
+    """Freeze the next actual-receipt prefix and its v7 treatment Work plan."""
 
     if evaluated_at.tzinfo is None or evaluated_at.utcoffset() is None:
         raise ValueError("prospective triage evaluated_at must be timezone-aware")
@@ -710,7 +740,7 @@ def prepare_next_prospective_triage_work(
         ),
     )
     profile = load_builtin_model_provider_profile(registration.model_profile_id)
-    plan = build_event_impact_triage_work_execution_plan_v6(
+    plan = build_event_impact_triage_work_execution_plan_v7(
         candidate_set=candidate_set,
         work_manifest=manifest,
         registration=registration,
@@ -822,6 +852,118 @@ def prepare_or_reopen_prospective_triage_work(
     )
 
 
+def reopen_active_prospective_triage_work(
+    *,
+    registration: ProspectiveDiagnosticRegistration,
+    route_plan: ProspectiveCheckpointRoutePlan,
+    checkpoint_key: str,
+    state_root: Path,
+    run_root: Path,
+) -> PreparedProspectiveTriageWork:
+    """Reopen an existing active batch without selecting or freezing new receipts."""
+
+    admission_store = ProspectiveCheckpointAdmissionStore(state_root)
+    if admission_store.current_plan_id(registration.registration_id) != route_plan.plan_id:
+        raise ValueError("prospective Triage route plan is not the current admitted plan")
+    admission = admission_store.admission(route_plan.plan_id)
+    active = ProspectiveTriageActiveBatchStore(run_root).active(
+        registration_id=registration.registration_id,
+        checkpoint_key=checkpoint_key,
+        route_plan_id=route_plan.plan_id,
+        route_admission_id=admission.admission_id,
+    )
+    if active is None:
+        raise ValueError("prospective Triage has no active batch to reopen")
+    return _load_prepared_prospective_triage_work(
+        record=active,
+        registration=registration,
+        state_root=state_root,
+        run_root=run_root,
+    )
+
+
+def _build_prospective_triage_runner(
+    *,
+    prepared: PreparedProspectiveTriageWork,
+    registration: ProspectiveDiagnosticRegistration,
+    state_root: Path,
+    run_root: Path,
+    skill_root: Path,
+    provider: ModelProvider,
+) -> EventImpactTriageWorkRunner:
+    if (
+        provider.provider_id != prepared.profile.provider_id
+        or provider.model != prepared.profile.model
+    ):
+        raise ValueError("prospective triage Provider differs from the frozen profile")
+    credential = os.environ.get(prepared.profile.credential_env, "")
+    work_root = run_root / "runs" / prepared.plan.plan_id
+    return EventImpactTriageWorkRunner(
+        plan=prepared.plan,
+        candidate_set=prepared.candidate_set,
+        work_manifest=prepared.manifest,
+        registration=registration,
+        provider=provider,
+        content_resolver=SnapshotTriageCandidateContentResolver(LocalDataSnapshotStore(state_root)),
+        skills=SkillRegistry(skill_root),
+        artifact_store=ArtifactStore(work_root / "artifacts"),
+        journal=RunJournal(work_root / "runs.sqlite3"),
+        usage_ledger=UsageLedger(work_root / "usage.sqlite3"),
+        format_recovery_store=EventImpactTriageWorkFormatRecoveryStore(
+            work_root / "format-recovery.sqlite3"
+        ),
+        provider_health_store=ProviderHealthStore(work_root / "provider-health.sqlite3"),
+        secret_values=(() if not credential else (credential,)),
+    )
+
+
+def authorize_prepared_prospective_triage_format_recovery(
+    *,
+    prepared: PreparedProspectiveTriageWork,
+    registration: ProspectiveDiagnosticRegistration,
+    state_root: Path,
+    run_root: Path,
+    skill_root: Path,
+    original_run_id: str,
+    authorized_at: datetime,
+    provider: ModelProvider | None = None,
+) -> dict[str, object]:
+    """Authorize one bounded old-plan parse recovery without a Provider request."""
+
+    selected_provider = (
+        _NoCallModelProvider(
+            provider_id=prepared.profile.provider_id,
+            model=prepared.profile.model,
+        )
+        if provider is None
+        else provider
+    )
+    runner = _build_prospective_triage_runner(
+        prepared=prepared,
+        registration=registration,
+        state_root=state_root,
+        run_root=run_root,
+        skill_root=skill_root,
+        provider=selected_provider,
+    )
+    grant = runner.authorize_format_recovery(
+        original_run_id=original_run_id,
+        authorized_at=authorized_at,
+    )
+    return {
+        **prepared.summary(),
+        "grant_id": grant.grant_id,
+        "source_run_id": grant.original_run_id,
+        "recovery_run_id": grant.recovery_run_id,
+        "parser_id": grant.parser_id,
+        "repair_policy_id": grant.repair_policy_id,
+        "authorized_at": grant.to_dict()["authorized_at"],
+        "provider_calls": 0,
+        "usage_record_created": False,
+        "judgment_or_execution_authority": False,
+    }
+
+
 async def run_prepared_prospective_triage_work(
     *,
     prepared: PreparedProspectiveTriageWork,
@@ -838,29 +980,16 @@ async def run_prepared_prospective_triage_work(
         if provider is None
         else provider
     )
-    if (
-        selected_provider.provider_id != prepared.profile.provider_id
-        or selected_provider.model != prepared.profile.model
-    ):
-        raise ValueError("prospective triage Provider differs from the frozen profile")
     await cast(_AvailabilityModelProvider, selected_provider).assert_model_available(
         timeout_seconds=30
     )
-    credential = os.environ.get(prepared.profile.credential_env, "")
-    work_root = run_root / "runs" / prepared.plan.plan_id
-    runner = EventImpactTriageWorkRunner(
-        plan=prepared.plan,
-        candidate_set=prepared.candidate_set,
-        work_manifest=prepared.manifest,
+    runner = _build_prospective_triage_runner(
+        prepared=prepared,
         registration=registration,
+        state_root=state_root,
+        run_root=run_root,
+        skill_root=skill_root,
         provider=selected_provider,
-        content_resolver=SnapshotTriageCandidateContentResolver(LocalDataSnapshotStore(state_root)),
-        skills=SkillRegistry(skill_root),
-        artifact_store=ArtifactStore(work_root / "artifacts"),
-        journal=RunJournal(work_root / "runs.sqlite3"),
-        usage_ledger=UsageLedger(work_root / "usage.sqlite3"),
-        provider_health_store=ProviderHealthStore(work_root / "provider-health.sqlite3"),
-        secret_values=(() if not credential else (credential,)),
     )
     result = await runner.run()
     summary: dict[str, object] = {

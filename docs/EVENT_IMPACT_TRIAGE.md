@@ -230,6 +230,15 @@ transmission channels. No eligible checkpoint, Query Gate, Judgment or execution
 Because v4, v5 and v6 reuse the same exposed Candidate Set, this is contract/runtime evidence only,
 not a pristine blind semantic promotion result.
 
+The v7 Work Execution Plan leaves the v6 prompt, identities and semantic output contract unchanged.
+It uses pinned `json-repair==0.63.4` as the direct parser; the library internally keeps its standard-
+JSON fast path. Harness admission remains deliberately narrower: a non-strict response is accepted
+only when repair is exactly one structural punctuation insertion or deletion and the complete
+sequence of strings, field identities, number text and literals is unchanged. The Run persists the
+raw-content hash, parsed-output hash, parser/policy identity and structural edit as a content-
+identified parse-evidence artifact. Multiple edits, quote/literal/number changes, schema-guided
+coercion and untrimmed wrappers still fail closed.
+
 Every Provider call has a durable request-dispatched event first. A timeout or process interruption
 after dispatch without a completed response becomes `human_input_required`; restart never sends
 that request again. Completed units reopen without a Provider call. Run identity includes phase,
@@ -240,6 +249,12 @@ ambiguous, over-budget or tampered unit blocks all downstream phases and produce
 An explicit replacement retains the original ambiguous Usage beside the new Run and consumes the
 same turn, input, output, cost, phase and aggregate ceilings rather than receiving a fresh budget.
 Its Journal start must not precede the Grant time.
+An old pre-v7 member that already exhausted its received-response budget may instead use one explicit
+Format Recovery Grant, but only when the final immutable response passes the bounded v7 punctuation
+policy and the closed semantic contract. This is not a Provider retry: a separate recovery Run makes
+zero Provider calls and creates no Usage, while authority keeps the source failed Usage charged and
+reopens the original prompt/response chain. Recovery-of-recovery and silent old-plan reinterpretation
+are forbidden.
 An exclusive crash-safe claim rooted beside the Run Journal gives exactly one process ownership of a
 Run while it may dispatch; a concurrent same-plan caller returns fail-closed without calling the
 Provider. Every correction turn binds its own dispatch prompt to the preceding invalid assistant
@@ -426,14 +441,20 @@ Implemented contract evidence:
   the extra attempt is the immutable old HTTP 408 dispatch retained beside its one replacement.
   This proves the replacement and v6 contract can complete and reopen, but not blind classifier
   quality or alpha.
-- the first batch claimed through the new bounded current-route ingress froze the earliest 32 of
-  293 unclassified actual-receipt versions into three Work Units. It produced all 32 Digests and a
+- the first batch claimed through the bounded current-route ingress froze the earliest 32 of 293
+  unclassified actual-receipt versions into three Work Units. It produced all 32 Digests and a
   25-cluster Partition, then stopped after 36 completed logical members when one classify member
-  exhausted three fully received responses that were not valid closed JSON. The Ledger contains 40
-  physical attempts, 385,712 input and 197,568 output Tokens at 314,244 microusd CPA-equivalent
-  cost. No Proposal or Decision exists. Its durable Active Batch head remains installed, so restart
-  or a larger requested batch cannot reissue overlapping work or split the cost ledger. This is
-  real negative output-format evidence; it does not authorize an automatic retry or release.
+  exhausted three fully received malformed JSON responses. The final response had one extra closing
+  bracket and otherwise identical semantic tokens. One explicit Format Recovery Grant preserved the
+  failed terminal, Journal and Usage, then created a zero-Provider recovery Run. The one remaining
+  never-started classify member made one normal Provider request. The graph completed all 38 logical
+  members with 41 physical attempts, 389,749 input / 200,654 output Tokens and 318,755 microusd
+  CPA-equivalent cost. Decision
+  `event-impact-triage-decision-2c01a7f0347b9463bdd43fa8abc5b06f86de227928a7bd62ff01219d7038b14d`
+  contains two archive clusters and 23 `needs_review` Attention Watch clusters; no eligible
+  checkpoint, EventAssessment, Query Gate, Judgment or execution authority exists. The completed
+  Decision released the Active Batch head. This proves recovery/reopening mechanics, not semantic
+  quality, alpha or a pristine blind promotion.
 
 Still required for real acceptance:
 

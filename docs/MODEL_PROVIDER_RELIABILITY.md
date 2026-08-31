@@ -80,6 +80,15 @@ against the original frozen unit/phase/aggregate ceilings, and grants no Judgmen
 authority. Equivalent authorization reopens the same Grant instead of issuing another.
 Provider reliability acceptance remains a prerequisite, not replacement authority by itself.
 
+A fully received response with locally malformed JSON is not an ambiguous Provider failure. Future
+v7 Work Plans parse through pinned `json-repair` and accept only strict JSON or one semantics-
+preserving structural punctuation edit, with content-identified evidence. For an already terminal
+pre-v7 member, one explicit Format Recovery Grant may bind the immutable failed terminal, Journal,
+Usage and final response and create a separate zero-Provider recovery Run. It never resends the
+request, creates no new Usage, leaves the failed source Usage charged, and cannot repair semantic
+tokens or another recovery. This format path is distinct from Provider retry, circuit and Replacement
+Grant authority.
+
 The real Grant was consumed for the ambiguous classify member above. Its replacement completed and
 the v4 graph advanced to 39 completed logical members. A later classify member then failed normally
 after three received responses violated the same output contract; it was not a network, quota,
