@@ -19,6 +19,8 @@ AGENT_SCHEMA_FILES = (
     "source-route-acceptance-report.schema.json",
     "attention-watch-policy.schema.json",
     "attention-watch-wake.schema.json",
+    "agent-watch-request.schema.json",
+    "agent-watch-admission.schema.json",
     "monitoring-scope.schema.json",
     "retrieval-plan.schema.json",
     "retrieval-resolution.schema.json",

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
+from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.event_impact_triage import (
     CompletedTriageRunAuthority,
     CompletedTriageWorkRunAuthority,
@@ -24,9 +26,62 @@ from market_impact_agent.event_impact_triage import (
 )
 from market_impact_agent.runtime_store import ArtifactStore
 
+if TYPE_CHECKING:
+    from market_impact_agent.event_impact_triage_evaluation import EventImpactTriageLabelSet
+    from market_impact_agent.event_impact_triage_work import EventImpactTriageWorkManifest
+    from market_impact_agent.event_impact_triage_work_evaluation import (
+        EventImpactTriageWorkComparisonRegistration,
+        EventImpactTriageWorkComparisonReport,
+        TriageWorkArmOutcome,
+        TriageWorkComparisonReportAuthority,
+        TriageWorkComparisonRunAuthority,
+    )
+
+EVENT_IMPACT_TRIAGE_TERMINAL_BATCH_SCHEMA = "market-impact.event-impact-triage-terminal-batch.v1"
+
+
+@dataclass(frozen=True, slots=True)
+class EventImpactTriageTerminalBatch:
+    terminal_id: str
+    candidate_set_id: str
+    registration_id: str
+    checkpoint_key: str
+    route_plan_id: str
+    route_admission_id: str
+    comparison_id: str
+    candidate_set_hash: str
+    comparison_registration_hash: str
+    comparison_report_id: str
+    comparison_report_hash: str
+    candidate_version_ids: tuple[str, ...]
+    blockers: tuple[str, ...]
+    terminalized_at: datetime
+    schema_version: str = EVENT_IMPACT_TRIAGE_TERMINAL_BATCH_SCHEMA
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "candidate_set_id": self.candidate_set_id,
+            "registration_id": self.registration_id,
+            "checkpoint_key": self.checkpoint_key,
+            "route_plan_id": self.route_plan_id,
+            "route_admission_id": self.route_admission_id,
+            "comparison_id": self.comparison_id,
+            "candidate_set_hash": self.candidate_set_hash,
+            "comparison_registration_hash": self.comparison_registration_hash,
+            "comparison_report_id": self.comparison_report_id,
+            "comparison_report_hash": self.comparison_report_hash,
+            "candidate_version_ids": list(self.candidate_version_ids),
+            "blockers": list(self.blockers),
+            "terminalized_at": _timestamp(self.terminalized_at),
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {"terminal_id": self.terminal_id, **self.core_dict()}
+
 
 class EventImpactTriageDecisionStore:
-    """Append-only authority for versions completed by formal Event Impact Triage."""
+    """Append-only authority for completed or terminally failed Triage versions."""
 
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
@@ -74,6 +129,24 @@ class EventImpactTriageDecisionStore:
                         REFERENCES event_impact_triage_decisions(decision_id),
                     PRIMARY KEY(route_admission_id, checkpoint_key, version_id)
                 );
+                CREATE TABLE IF NOT EXISTS event_impact_triage_terminal_batches (
+                    terminal_id TEXT PRIMARY KEY,
+                    candidate_set_id TEXT NOT NULL UNIQUE,
+                    registration_id TEXT NOT NULL,
+                    checkpoint_key TEXT NOT NULL,
+                    route_plan_id TEXT NOT NULL,
+                    route_admission_id TEXT NOT NULL,
+                    terminalized_at TEXT NOT NULL,
+                    artifact_hash TEXT NOT NULL UNIQUE
+                );
+                CREATE TABLE IF NOT EXISTS event_impact_triage_terminal_versions (
+                    route_admission_id TEXT NOT NULL,
+                    checkpoint_key TEXT NOT NULL,
+                    version_id TEXT NOT NULL,
+                    terminal_id TEXT NOT NULL
+                        REFERENCES event_impact_triage_terminal_batches(terminal_id),
+                    PRIMARY KEY(route_admission_id, checkpoint_key, version_id)
+                );
                 CREATE TRIGGER IF NOT EXISTS event_impact_triage_decisions_no_update
                     BEFORE UPDATE ON event_impact_triage_decisions
                     BEGIN SELECT RAISE(ABORT, 'triage decisions are append-only'); END;
@@ -90,6 +163,18 @@ class EventImpactTriageDecisionStore:
                     BEGIN SELECT RAISE(
                         ABORT, 'triage version classifications are append-only'
                     ); END;
+                CREATE TRIGGER IF NOT EXISTS event_impact_triage_terminal_batches_no_update
+                    BEFORE UPDATE ON event_impact_triage_terminal_batches
+                    BEGIN SELECT RAISE(ABORT, 'triage terminal batches are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS event_impact_triage_terminal_batches_no_delete
+                    BEFORE DELETE ON event_impact_triage_terminal_batches
+                    BEGIN SELECT RAISE(ABORT, 'triage terminal batches are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS event_impact_triage_terminal_versions_no_update
+                    BEFORE UPDATE ON event_impact_triage_terminal_versions
+                    BEGIN SELECT RAISE(ABORT, 'triage terminal versions are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS event_impact_triage_terminal_versions_no_delete
+                    BEFORE DELETE ON event_impact_triage_terminal_versions
+                    BEGIN SELECT RAISE(ABORT, 'triage terminal versions are append-only'); END;
                 """
             )
 
@@ -164,6 +249,244 @@ class EventImpactTriageDecisionStore:
         )
         return self._persist_decision(candidate_set, proposal, decision)
 
+    def terminalize_failed_work_comparison(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        comparison: EventImpactTriageWorkComparisonRegistration,
+        report: EventImpactTriageWorkComparisonReport,
+        label_set: EventImpactTriageLabelSet,
+        work_manifest: EventImpactTriageWorkManifest,
+        baseline: TriageWorkArmOutcome,
+        treatment: TriageWorkArmOutcome,
+        baseline_authority: TriageWorkComparisonRunAuthority,
+        treatment_authority: TriageWorkComparisonRunAuthority,
+        comparison_authority: TriageWorkComparisonReportAuthority,
+        terminalized_at: datetime,
+    ) -> EventImpactTriageTerminalBatch:
+        """Record a failed blind batch without manufacturing a semantic Decision."""
+
+        from market_impact_agent.event_impact_triage_work_evaluation import (
+            EventImpactTriageWorkComparisonStore,
+        )
+
+        _strict_utc(terminalized_at, "triage terminalized_at")
+        if type(comparison_authority) is not EventImpactTriageWorkComparisonStore:
+            raise TypeError("triage terminalization requires durable Comparison Store authority")
+        comparison_authority.assert_authoritative_report(
+            report=report,
+            registration=comparison,
+            candidate_set=candidate_set,
+            label_set=label_set,
+            work_manifest=work_manifest,
+            baseline=baseline,
+            treatment=treatment,
+            baseline_authority=baseline_authority,
+            treatment_authority=treatment_authority,
+        )
+        if terminalized_at < report.evaluated_at:
+            raise ValueError("triage terminalization cannot predate its comparison report")
+        if (
+            comparison.candidate_set_id != candidate_set.candidate_set_id
+            or report.comparison_id != comparison.comparison_id
+            or report.batch_gate_passed
+        ):
+            raise ValueError("triage terminalization requires one failed bound comparison")
+        if not report.blockers:
+            raise ValueError("failed triage comparison must retain its blockers")
+        candidate_artifact = self.artifacts.put_json(candidate_set.to_dict())
+        comparison_artifact = self.artifacts.put_json(comparison.to_dict())
+        report_artifact = self.artifacts.put_json(report.to_dict())
+        core = {
+            "schema_version": EVENT_IMPACT_TRIAGE_TERMINAL_BATCH_SCHEMA,
+            "candidate_set_id": candidate_set.candidate_set_id,
+            "registration_id": candidate_set.registration_id,
+            "checkpoint_key": candidate_set.checkpoint_key,
+            "route_plan_id": candidate_set.route_plan_id,
+            "route_admission_id": candidate_set.route_admission_id,
+            "comparison_id": comparison.comparison_id,
+            "candidate_set_hash": candidate_artifact.content_hash,
+            "comparison_registration_hash": comparison_artifact.content_hash,
+            "comparison_report_id": report.report_id,
+            "comparison_report_hash": report_artifact.content_hash,
+            "candidate_version_ids": list(candidate_set.version_ids),
+            "blockers": list(report.blockers),
+            "terminalized_at": _timestamp(terminalized_at),
+        }
+        terminal = _terminal_batch_from_dict(
+            {
+                "terminal_id": ("event-impact-triage-terminal-batch-" + canonical_hash(core)),
+                **core,
+            }
+        )
+        terminal_artifact = self.artifacts.put_json(terminal.to_dict())
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT artifact_hash FROM event_impact_triage_terminal_batches
+                WHERE candidate_set_id = ?
+                """,
+                (candidate_set.candidate_set_id,),
+            ).fetchone()
+            if existing is not None:
+                stored = _terminal_batch_from_dict(
+                    self.artifacts.read_json(cast(str, existing["artifact_hash"]))
+                )
+                if stored != terminal:
+                    raise ValueError("stored triage terminal batch conflicts with caller")
+                return stored
+            completed = connection.execute(
+                """
+                SELECT decision_id FROM event_impact_triage_decisions
+                WHERE candidate_set_id = ?
+                """,
+                (candidate_set.candidate_set_id,),
+            ).fetchone()
+            if completed is not None:
+                raise ValueError("a completed triage Decision cannot be terminalized")
+            placeholders = ",".join("?" for _ in candidate_set.version_ids)
+            classified = connection.execute(
+                f"""
+                SELECT version_id FROM event_impact_triage_classified_versions
+                WHERE route_admission_id = ? AND checkpoint_key = ?
+                  AND version_id IN ({placeholders})
+                """,
+                (
+                    candidate_set.route_admission_id,
+                    candidate_set.checkpoint_key,
+                    *candidate_set.version_ids,
+                ),
+            ).fetchone()
+            terminal_conflict = connection.execute(
+                f"""
+                SELECT version_id FROM event_impact_triage_terminal_versions
+                WHERE route_admission_id = ? AND checkpoint_key = ?
+                  AND version_id IN ({placeholders})
+                """,
+                (
+                    candidate_set.route_admission_id,
+                    candidate_set.checkpoint_key,
+                    *candidate_set.version_ids,
+                ),
+            ).fetchone()
+            if classified is not None or terminal_conflict is not None:
+                raise ValueError("triage terminal batch overlaps an already handled version")
+            connection.execute(
+                """
+                INSERT INTO event_impact_triage_terminal_batches(
+                    terminal_id, candidate_set_id, registration_id, checkpoint_key,
+                    route_plan_id, route_admission_id, terminalized_at, artifact_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    terminal.terminal_id,
+                    terminal.candidate_set_id,
+                    terminal.registration_id,
+                    terminal.checkpoint_key,
+                    terminal.route_plan_id,
+                    terminal.route_admission_id,
+                    _timestamp(terminal.terminalized_at),
+                    terminal_artifact.content_hash,
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO event_impact_triage_terminal_versions(
+                    route_admission_id, checkpoint_key, version_id, terminal_id
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    (
+                        terminal.route_admission_id,
+                        terminal.checkpoint_key,
+                        version_id,
+                        terminal.terminal_id,
+                    )
+                    for version_id in terminal.candidate_version_ids
+                ),
+            )
+        for content_hash, expected in (
+            (candidate_artifact.content_hash, candidate_set.to_dict()),
+            (comparison_artifact.content_hash, comparison.to_dict()),
+            (report_artifact.content_hash, report.to_dict()),
+        ):
+            if self.artifacts.read_json(content_hash) != expected:
+                raise ValueError("triage terminal authority artifact changed after commit")
+        return terminal
+
+    def terminal_batch(self, candidate_set_id: str) -> EventImpactTriageTerminalBatch:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT artifact_hash FROM event_impact_triage_terminal_batches
+                WHERE candidate_set_id = ?
+                """,
+                (candidate_set_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown triage terminal batch: {candidate_set_id}")
+        terminal = _terminal_batch_from_dict(
+            self.artifacts.read_json(cast(str, row["artifact_hash"]))
+        )
+        candidate = self.artifacts.read_json(terminal.candidate_set_hash)
+        comparison = self.artifacts.read_json(terminal.comparison_registration_hash)
+        report = self.artifacts.read_json(terminal.comparison_report_hash)
+        if not all(isinstance(item, dict) for item in (candidate, comparison, report)):
+            raise ValueError("triage terminal batch authority artifacts must be objects")
+        candidate_payload = cast(dict[str, object], candidate)
+        comparison_payload = cast(dict[str, object], comparison)
+        report_payload = cast(dict[str, object], report)
+        if (
+            candidate_payload.get("candidate_set_id") != terminal.candidate_set_id
+            or comparison_payload.get("comparison_id") != terminal.comparison_id
+            or comparison_payload.get("candidate_set_id") != terminal.candidate_set_id
+            or report_payload.get("report_id") != terminal.comparison_report_id
+            or report_payload.get("comparison_id") != terminal.comparison_id
+            or report_payload.get("batch_gate_passed") is not False
+        ):
+            raise ValueError("triage terminal batch authority artifacts are inconsistent")
+        return terminal
+
+    def reopen_failed_work_comparison_terminal(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        comparison: EventImpactTriageWorkComparisonRegistration,
+        report: EventImpactTriageWorkComparisonReport,
+    ) -> EventImpactTriageTerminalBatch | None:
+        """Reopen the exact terminal committed for one already-replayed failed Report."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT terminal_id FROM event_impact_triage_terminal_batches
+                WHERE candidate_set_id = ?
+                """,
+                (candidate_set.candidate_set_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        terminal = self.terminal_batch(candidate_set.candidate_set_id)
+        if (
+            terminal.terminal_id != cast(str, row["terminal_id"])
+            or terminal.candidate_set_id != candidate_set.candidate_set_id
+            or terminal.registration_id != candidate_set.registration_id
+            or terminal.checkpoint_key != candidate_set.checkpoint_key
+            or terminal.route_plan_id != candidate_set.route_plan_id
+            or terminal.route_admission_id != candidate_set.route_admission_id
+            or terminal.candidate_set_hash != canonical_hash(candidate_set.to_dict())
+            or terminal.comparison_id != comparison.comparison_id
+            or terminal.comparison_registration_hash != canonical_hash(comparison.to_dict())
+            or terminal.comparison_report_id != report.report_id
+            or terminal.comparison_report_hash != canonical_hash(report.to_dict())
+            or terminal.candidate_version_ids != candidate_set.version_ids
+            or terminal.blockers != report.blockers
+            or report.batch_gate_passed
+        ):
+            raise ValueError("stored triage terminal batch differs from failed comparison")
+        return terminal
+
     def _persist_decision(
         self,
         candidate_set: EventImpactTriageCandidateSet,
@@ -192,6 +515,15 @@ class EventImpactTriageDecisionStore:
                 elif stored_decision.run_evidence != decision.run_evidence:
                     raise ValueError("stored triage Run Evidence conflicts with caller")
                 return stored_decision
+            terminal_batch = connection.execute(
+                """
+                SELECT terminal_id FROM event_impact_triage_terminal_batches
+                WHERE candidate_set_id = ?
+                """,
+                (candidate_set.candidate_set_id,),
+            ).fetchone()
+            if terminal_batch is not None:
+                raise ValueError("a terminally failed triage batch cannot become a Decision")
             conflict = connection.execute(
                 """
                 SELECT version_id, decision_id
@@ -209,6 +541,21 @@ class EventImpactTriageDecisionStore:
                 raise ValueError(
                     "triage candidate version was already classified by another Decision"
                 )
+            terminal_conflict = connection.execute(
+                """
+                SELECT version_id
+                FROM event_impact_triage_terminal_versions
+                WHERE route_admission_id = ? AND checkpoint_key = ?
+                  AND version_id IN ({})
+                """.format(",".join("?" for _ in candidate_set.version_ids)),
+                (
+                    candidate_set.route_admission_id,
+                    candidate_set.checkpoint_key,
+                    *candidate_set.version_ids,
+                ),
+            ).fetchone()
+            if terminal_conflict is not None:
+                raise ValueError("triage candidate version belongs to a terminally failed batch")
             connection.execute(
                 """
                 INSERT INTO event_impact_triage_decisions(
@@ -281,7 +628,7 @@ class EventImpactTriageDecisionStore:
         route_admission_id: str,
         at: datetime,
     ) -> tuple[str, ...]:
-        """Return only fully reopened Decisions visible in one route epoch at ``at``."""
+        """Return versions completed or terminally handled in one route epoch."""
 
         _strict_utc(at, "triage classification query at")
         with self._connect() as connection:
@@ -306,6 +653,27 @@ class EventImpactTriageDecisionStore:
                     ),
                 ).fetchall()
             )
+            terminal_rows = tuple(
+                connection.execute(
+                    """
+                    SELECT terminal.*
+                    FROM event_impact_triage_terminal_batches AS terminal
+                    WHERE terminal.registration_id = ?
+                      AND terminal.checkpoint_key = ?
+                      AND terminal.route_plan_id = ?
+                      AND terminal.route_admission_id = ?
+                      AND terminal.terminalized_at <= ?
+                    ORDER BY terminal.terminalized_at, terminal.terminal_id
+                    """,
+                    (
+                        registration_id,
+                        checkpoint_key,
+                        route_plan_id,
+                        route_admission_id,
+                        _timestamp(at),
+                    ),
+                ).fetchall()
+            )
         versions: set[str] = set()
         for row in rows:
             candidate_set, _, decision = self._reopen(row)
@@ -318,6 +686,19 @@ class EventImpactTriageDecisionStore:
             ):
                 raise ValueError("triage Decision index differs from its stored artifacts")
             versions.update(candidate_set.version_ids)
+        for row in terminal_rows:
+            terminal = _terminal_batch_from_dict(
+                self.artifacts.read_json(cast(str, row["artifact_hash"]))
+            )
+            if (
+                terminal.registration_id != registration_id
+                or terminal.checkpoint_key != checkpoint_key
+                or terminal.route_plan_id != route_plan_id
+                or terminal.route_admission_id != route_admission_id
+                or terminal.terminalized_at > at
+            ):
+                raise ValueError("triage terminal index differs from its stored artifact")
+            versions.update(terminal.candidate_version_ids)
         return tuple(sorted(versions))
 
     def get_context(
@@ -463,6 +844,88 @@ class EventImpactTriageDecisionStore:
         ):
             raise ValueError("triage Decision index differs from its stored artifacts")
         return candidate_set, proposal, decision
+
+
+def _terminal_batch_from_dict(value: object) -> EventImpactTriageTerminalBatch:
+    if not isinstance(value, dict):
+        raise TypeError("triage terminal batch must be an object")
+    payload = cast(dict[str, object], value)
+    expected = {
+        "schema_version",
+        "terminal_id",
+        "candidate_set_id",
+        "registration_id",
+        "checkpoint_key",
+        "route_plan_id",
+        "route_admission_id",
+        "comparison_id",
+        "candidate_set_hash",
+        "comparison_registration_hash",
+        "comparison_report_id",
+        "comparison_report_hash",
+        "candidate_version_ids",
+        "blockers",
+        "terminalized_at",
+    }
+    if set(payload) != expected or payload.get("schema_version") != (
+        EVENT_IMPACT_TRIAGE_TERMINAL_BATCH_SCHEMA
+    ):
+        raise ValueError("triage terminal batch fields are invalid")
+
+    def text(name: str) -> str:
+        item = payload.get(name)
+        if not isinstance(item, str) or not item or item != item.strip():
+            raise ValueError(f"triage terminal batch {name} is invalid")
+        return item
+
+    def texts(name: str) -> tuple[str, ...]:
+        raw = payload.get(name)
+        if not isinstance(raw, list):
+            raise ValueError(f"triage terminal batch {name} is invalid")
+        values = cast(list[object], raw)
+        if any(not isinstance(item, str) or not item or item != item.strip() for item in values):
+            raise ValueError(f"triage terminal batch {name} is invalid")
+        return tuple(cast(list[str], values))
+
+    version_ids = texts("candidate_version_ids")
+    blockers = texts("blockers")
+    if not version_ids or len(version_ids) != len(set(version_ids)):
+        raise ValueError("triage terminal batch versions must be non-empty and unique")
+    if not blockers or blockers != tuple(sorted(set(blockers))):
+        raise ValueError("triage terminal batch blockers must be sorted and unique")
+    candidate_hash = text("candidate_set_hash")
+    comparison_hash = text("comparison_registration_hash")
+    report_hash = text("comparison_report_hash")
+    for content_hash, label in (
+        (candidate_hash, "Candidate Set"),
+        (comparison_hash, "comparison registration"),
+        (report_hash, "comparison report"),
+    ):
+        if len(content_hash) != 64:
+            raise ValueError(f"triage terminal {label} hash is invalid")
+        int(content_hash, 16)
+    terminalized_at = datetime.fromisoformat(text("terminalized_at").replace("Z", "+00:00"))
+    _strict_utc(terminalized_at, "triage terminalized_at")
+    terminal = EventImpactTriageTerminalBatch(
+        terminal_id=text("terminal_id"),
+        candidate_set_id=text("candidate_set_id"),
+        registration_id=text("registration_id"),
+        checkpoint_key=text("checkpoint_key"),
+        route_plan_id=text("route_plan_id"),
+        route_admission_id=text("route_admission_id"),
+        comparison_id=text("comparison_id"),
+        candidate_set_hash=candidate_hash,
+        comparison_registration_hash=comparison_hash,
+        comparison_report_id=text("comparison_report_id"),
+        comparison_report_hash=report_hash,
+        candidate_version_ids=version_ids,
+        blockers=blockers,
+        terminalized_at=terminalized_at,
+    )
+    expected_id = f"event-impact-triage-terminal-batch-{canonical_hash(terminal.core_dict())}"
+    if terminal.terminal_id != expected_id or terminal.to_dict() != payload:
+        raise ValueError("triage terminal batch is not canonical")
+    return terminal
 
 
 def _strict_utc(value: datetime, label: str) -> None:

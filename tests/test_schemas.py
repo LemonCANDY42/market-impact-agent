@@ -31,6 +31,8 @@ class Validator(Protocol):
         "source-route-acceptance-report.schema.json",
         "attention-watch-policy.schema.json",
         "attention-watch-wake.schema.json",
+        "agent-watch-request.schema.json",
+        "agent-watch-admission.schema.json",
         "prospective-collection-policy.schema.json",
         "prospective-collection-job.schema.json",
         "prospective-collection-tracer-report.schema.json",
@@ -182,8 +184,11 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/prospective-diagnostic-registration-v1.json",
         "examples/research/prospective-diagnostic-registration-v3.json",
         "examples/research/prospective-diagnostic-registration-v4.json",
+        "examples/research/prospective-diagnostic-registration-v5.json",
         "examples/research/prospective-checkpoint-route-plan-v1.json",
         "examples/research/prospective-checkpoint-route-plan-v4.json",
+        "examples/research/prospective-checkpoint-route-plan-v5.json",
+        "examples/research/prospective-checkpoint-route-plan-v6.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -247,6 +252,7 @@ def test_examples_conform_to_schema(example_path: str) -> None:
             "prospective-diagnostic-registration-v1.json",
             "prospective-diagnostic-registration-v3.json",
             "prospective-diagnostic-registration-v4.json",
+            "prospective-diagnostic-registration-v5.json",
         )
     ):
         schema_name = "prospective-diagnostic-registration.schema.json"
@@ -254,6 +260,8 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         (
             "prospective-checkpoint-route-plan-v1.json",
             "prospective-checkpoint-route-plan-v4.json",
+            "prospective-checkpoint-route-plan-v5.json",
+            "prospective-checkpoint-route-plan-v6.json",
         )
     ):
         schema_name = "prospective-checkpoint-route-plan.schema.json"

@@ -1,0 +1,204 @@
+{
+  "schema_version": "market-impact.prospective-checkpoint-route-plan.v2",
+  "registration_id": "prospective-diagnostic-registration-cbd6330be9ba30422db941d413888ec708af3f5906084704c5df600bf616cdce",
+  "admission_timing_protocol": "sqlite_begin_immediate_then_harness_clock_v1",
+  "bindings": [
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "event_revelation",
+      "route_kind": "issuer_event",
+      "job_id": "prospective-collection-job-21294990fa851d0d64cc913e04bb5c21529685b54167660074906ab5a78b2ba6"
+    },
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "event_revelation",
+      "route_kind": "issuer_event",
+      "job_id": "prospective-collection-job-37b6f6cc6c1149e9a3e200d83a64308fda2d0e4e3d9d82f83f2beae4e9cf0533"
+    },
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-cf1fa7f0bed68a250bcf21d0a147642e2641b841227abdf900737b4c9a391601"
+    },
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-414d65ba67b007dfa7a2e1353b8a09fbf29820a2e87a6a5fd0a8d425dd450ead"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-6854c9819c453b746dd9b1cba24eb313a9184a1c177b4fb475a6df386e3d86a7"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-75950fb4962c40ed7d87e982d3c06916a9642cb3e3921613e22bc5c69afcec0e"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-a8d98080997cfdd1bc6aaf60c2f93baeaf1a3b09c0bc32fb9c138ab46a4d8cde"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-b2960c57b05bf98017a98f1a0b0507d18014346abb26769267f5d083a767f303"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-c2c038492f381993183387aca74a5852cf52a731c917012e2b6bb467da222396"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-df964d1dd6f599a3c63bae02cfeb0de986b0eca8721b50568023433c04c7eae9"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-e275fa1f9a6d6cb4a7ab37bb1869db8f2f5229db7f8227144b944654cb00814c"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "event_revelation",
+      "route_kind": "official_event",
+      "job_id": "prospective-collection-job-ff06ba788efbf292f725bed5e282b58cce3316375b58fd085c759b4d2a1eead6"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-cf1fa7f0bed68a250bcf21d0a147642e2641b841227abdf900737b4c9a391601"
+    },
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-414d65ba67b007dfa7a2e1353b8a09fbf29820a2e87a6a5fd0a8d425dd450ead"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-6854c9819c453b746dd9b1cba24eb313a9184a1c177b4fb475a6df386e3d86a7"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-75950fb4962c40ed7d87e982d3c06916a9642cb3e3921613e22bc5c69afcec0e"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-a8d98080997cfdd1bc6aaf60c2f93baeaf1a3b09c0bc32fb9c138ab46a4d8cde"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-b2960c57b05bf98017a98f1a0b0507d18014346abb26769267f5d083a767f303"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-c2c038492f381993183387aca74a5852cf52a731c917012e2b6bb467da222396"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-df964d1dd6f599a3c63bae02cfeb0de986b0eca8721b50568023433c04c7eae9"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "event_revelation",
+      "route_kind": "established_news",
+      "job_id": "prospective-collection-job-e275fa1f9a6d6cb4a7ab37bb1869db8f2f5229db7f8227144b944654cb00814c"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-cf1fa7f0bed68a250bcf21d0a147642e2641b841227abdf900737b4c9a391601"
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "capability": "event_revelation",
+      "route_kind": "official_macro_release",
+      "job_id": "prospective-collection-job-6035118eec87bf767a7ac86c294f0a517c844182cd6350bdace941ca1e071b6d"
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-488181db9f794bf89ba253889e904bfa16e1c0f33e705990be024f76558d8045"
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "capability": "exposure_candidates",
+      "route_kind": "industry_to_tradable_mapping",
+      "job_id": "prospective-collection-job-cf1fa7f0bed68a250bcf21d0a147642e2641b841227abdf900737b4c9a391601"
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "capability": "market_context",
+      "route_kind": "market_index_price",
+      "job_id": "prospective-collection-job-a8e71f1c12f68a6aaf56b8796475a4a863d68425d06e44fb7a800ab853e10193"
+    }
+  ],
+  "historical_pit_claim": false,
+  "model_calls_authorized": false,
+  "execution_capability": false,
+  "replaces_plan_id": null,
+  "plan_id": "prospective-checkpoint-route-plan-e660cf0ca491af828e6c8ec1c720dee2f1319c0b49d81302730ff183afa2426f"
+}

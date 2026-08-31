@@ -7,10 +7,12 @@ from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
+import market_impact_agent.prospective_triage as prospective_triage
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_runtime import (
     ModelProvider,
@@ -49,6 +51,8 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V7,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V8,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
@@ -61,14 +65,27 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v5,
     build_event_impact_triage_work_execution_plan_v6,
     build_event_impact_triage_work_execution_plan_v7,
+    build_event_impact_triage_work_execution_plan_v8,
+    build_event_impact_triage_work_execution_plan_v9,
     event_impact_triage_work_execution_plan_from_dict,
 )
-from market_impact_agent.model_provider import load_builtin_model_provider_profile
+from market_impact_agent.model_provider import (
+    ModelProviderFactory,
+    load_builtin_model_provider_profile,
+)
 from market_impact_agent.openai_chat_provider import JsonHttpTransport, OpenAIChatProviderError
 from market_impact_agent.prospective_diagnostic import (
+    ProspectiveDiagnosticRegistration,
     load_prospective_diagnostic_registration,
 )
+from market_impact_agent.prospective_triage import (
+    PreparedProspectiveTriageWork,
+    ProspectiveTriageActiveBatchStore,
+    _LazyAvailabilityModelProvider,
+    run_prepared_prospective_triage_work,
+)
 from market_impact_agent.provider_reliability import (
+    ProviderFailure,
     ProviderGenerationState,
     ProviderHealthStore,
     ProviderRetryDisposition,
@@ -147,10 +164,23 @@ class ScriptedWorkProvider(ModelProvider):
         phase = str(task["phase"])
         role = str(task["role"])
         prompt_template_id = str(task["prompt_template_id"])
-        positional = prompt_template_id.endswith(("-v3", "-v4", "-v5", "-v6", "-v7"))
-        typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6", "-v7"))
-        ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6", "-v7"))
+        positional = prompt_template_id.endswith(("-v3", "-v4", "-v5", "-v6", "-v7", "-v8", "-v8m"))
+        typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6", "-v7", "-v8", "-v8m"))
+        ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6", "-v7", "-v8", "-v8m"))
         phase_input = cast(dict[str, object], task["phase_input"])
+        if prompt_template_id.endswith("-v9"):
+            atoms = cast(list[dict[str, object]], phase_input["atoms"])
+            return {
+                "routes": [
+                    {
+                        "route": "archive",
+                        "changed_fact": "The supplied item reports a fixture fact.",
+                        "transmission": None,
+                        "watch_for": None,
+                    }
+                    for _ in atoms
+                ]
+            }
         if phase == TriageWorkPhase.MAP.value and role != "coordinator":
             field = {
                 "fact_verifier": "fact_findings",
@@ -231,9 +261,10 @@ class ScriptedWorkProvider(ModelProvider):
             }
         partition_cluster = cast(dict[str, object], phase_input["partition_cluster"])
         versions = cast(list[str], partition_cluster["candidate_version_ids"])
+        material_stage_one = prompt_template_id.endswith("-v8m")
         return {
             **({} if typed_classify else {"candidate_version_ids": versions}),
-            "checkpoint_eligibility": "ineligible",
+            **({} if material_stage_one else {"checkpoint_eligibility": "ineligible"}),
             "recommended_route": "archive",
             "event_archetypes": [],
             "event_stage": "first_observed",
@@ -253,6 +284,25 @@ class ScriptedWorkProvider(ModelProvider):
         }
 
 
+class FailOnceAvailabilityProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.availability_calls = 0
+
+    async def assert_model_available(self, *, timeout_seconds: float) -> None:
+        _ = timeout_seconds
+        self.availability_calls += 1
+        if self.availability_calls == 1:
+            raise ProviderFailure(
+                "fixture model is unavailable",
+                error_class="model_unavailable",
+                diagnostic_code="model_unavailable",
+                generation_state=ProviderGenerationState.RESPONSE_RECEIVED,
+                retry_disposition=ProviderRetryDisposition.TERMINAL,
+                attempts=1,
+            )
+
+
 class InvalidV5EvidenceOnceProvider(ScriptedWorkProvider):
     def __init__(self) -> None:
         super().__init__()
@@ -268,6 +318,60 @@ class InvalidV5EvidenceOnceProvider(ScriptedWorkProvider):
             output["evidence_ordinals"] = [999]
             self.invalid_emitted = True
         return output
+
+
+class MaterialWatchProvider(ScriptedWorkProvider):
+    def _output(self, task: dict[str, object]) -> dict[str, object]:
+        output = super()._output(task)
+        if task["phase"] != TriageWorkPhase.CLASSIFY.value:
+            return output
+        assert str(task["prompt_template_id"]).endswith("-v8m")
+        assert "checkpoint_eligibility" not in output
+        output.update(
+            {
+                "recommended_route": "attention_watch",
+                "event_archetypes": ["issuer_corporate"],
+                "changed_facts": ["A frozen issuer fact changed."],
+                "rule_reasons": ["Target exposure still requires evidence."],
+                "uncertainty_notes": ["The affected tradable target is unresolved."],
+                "countercases": ["The event may remain operationally immaterial."],
+                "watch_questions": ["Which registered target has direct exposure?"],
+                "triage_confidence": 0.7,
+            }
+        )
+        return output
+
+
+class MixedMaterialIngressProvider(ScriptedWorkProvider):
+    def _output(self, task: dict[str, object]) -> dict[str, object]:
+        if not str(task["prompt_template_id"]).endswith("-v9"):
+            return super()._output(task)
+        atoms = cast(list[dict[str, object]], cast(dict[str, object], task["phase_input"])["atoms"])
+        fixtures = (
+            {
+                "route": "event_assessment",
+                "changed_fact": "A shipping route was interrupted.",
+                "transmission": {
+                    "event_archetype": "physical_supply_logistics",
+                    "channel": "capacity_cost_inventory",
+                    "path": "The interruption can raise delivered input costs.",
+                },
+                "watch_for": None,
+            },
+            {
+                "route": "attention_watch",
+                "changed_fact": "A company announced exploratory cooperation.",
+                "transmission": None,
+                "watch_for": "A binding contract with quantified economics.",
+            },
+            {
+                "route": "archive",
+                "changed_fact": "The item repeats a routine calendar notice.",
+                "transmission": None,
+                "watch_for": None,
+            },
+        )
+        return {"routes": list(fixtures[: len(atoms)])}
 
 
 class InvalidV6RouteOnceProvider(ScriptedWorkProvider):
@@ -785,10 +889,19 @@ def _registration():
     )
 
 
+def _material_registration():
+    return load_prospective_diagnostic_registration(
+        ROOT / "examples" / "research" / "prospective-diagnostic-registration-v4.json"
+    )
+
+
 def _batch(
     count: int,
+    *,
+    registration: ProspectiveDiagnosticRegistration | None = None,
+    checkpoint_key: str = "next-a-share-policy-event",
 ) -> tuple[EventImpactTriageCandidateSet, tuple[TriageCandidateContent, ...]]:
-    registration = _registration()
+    registration = registration or _registration()
     observations: list[TriageObservationRef] = []
     contents: list[TriageCandidateContent] = []
     for index in range(1, count + 1):
@@ -824,7 +937,7 @@ def _batch(
     core = {
         "schema_version": "market-impact.event-impact-triage-candidate-set.v1",
         "registration_id": registration.registration_id,
-        "checkpoint_key": "next-a-share-policy-event",
+        "checkpoint_key": checkpoint_key,
         "route_plan_id": "prospective-checkpoint-route-plan-" + "7" * 64,
         "route_admission_id": "prospective-checkpoint-route-admission-" + "8" * 64,
         "readiness_report_id": "prospective-checkpoint-readiness-report-" + "9" * 64,
@@ -840,7 +953,7 @@ def _batch(
         EventImpactTriageCandidateSet(
             candidate_set_id=f"event-impact-triage-candidate-set-{canonical_hash(core)}",
             registration_id=registration.registration_id,
-            checkpoint_key="next-a-share-policy-event",
+            checkpoint_key=checkpoint_key,
             route_plan_id="prospective-checkpoint-route-plan-" + "7" * 64,
             route_admission_id="prospective-checkpoint-route-admission-" + "8" * 64,
             readiness_report_id="prospective-checkpoint-readiness-report-" + "9" * 64,
@@ -864,8 +977,15 @@ def _runtime(
     dialect: str = "v2",
     replacement_store: EventImpactTriageWorkReplacementStore | None = None,
     format_recovery_store: EventImpactTriageWorkFormatRecoveryStore | None = None,
+    registration: ProspectiveDiagnosticRegistration | None = None,
+    checkpoint_key: str = "next-a-share-policy-event",
 ):
-    candidate_set, contents = _batch(count)
+    registration = registration or _registration()
+    candidate_set, contents = _batch(
+        count,
+        registration=registration,
+        checkpoint_key=checkpoint_key,
+    )
     manifest = build_event_impact_triage_work_manifest(
         candidate_set=candidate_set,
         contents=contents,
@@ -884,11 +1004,13 @@ def _runtime(
         "v5": build_event_impact_triage_work_execution_plan_v5,
         "v6": build_event_impact_triage_work_execution_plan_v6,
         "v7": build_event_impact_triage_work_execution_plan_v7,
+        "v8": build_event_impact_triage_work_execution_plan_v8,
+        "v9": build_event_impact_triage_work_execution_plan_v9,
     }[dialect]
     plan = builder(
         candidate_set=candidate_set,
         work_manifest=manifest,
-        registration=_registration(),
+        registration=registration,
         arm=arm,
         model_profile_alias=PROFILE_ALIAS,
         model_profile=profile,
@@ -899,7 +1021,7 @@ def _runtime(
         plan=plan,
         candidate_set=candidate_set,
         work_manifest=manifest,
-        registration=_registration(),
+        registration=registration,
         provider=actual_provider,
         content_resolver=StaticResolver(contents),
         skills=skills,
@@ -1472,6 +1594,223 @@ def test_safe_pre_generation_retry_is_authoritative_and_counts_physical_posts(
     reopened = asyncio.run(runner.run())
     assert reopened.status is RunStatus.COMPLETED
     assert len(transport.requests) == calls_before_reopen
+
+
+def test_lazy_availability_failure_stays_nonterminal_until_later_recovery(
+    tmp_path: Path,
+) -> None:
+    provider = FailOnceAvailabilityProvider()
+    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
+    lazy_provider = _LazyAvailabilityModelProvider(profile=profile, provider=provider)
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=1,
+        provider=cast(ScriptedWorkProvider, lazy_provider),
+        dialect="v9",
+        registration=_material_registration(),
+        checkpoint_key="next-material-a-share-event",
+    )
+
+    first = asyncio.run(runner.run())
+
+    assert first.status is RunStatus.HUMAN_INPUT_REQUIRED
+    assert provider.availability_calls == 1
+    assert provider.requests == []
+    assert len(first.members) == 1
+    member = first.members[0]
+    assert member.metrics.provider_attempts == 0
+    record = runner.journal.get_run(member.run_id)
+    assert record.status is RunStatus.RUNNING
+    assert record.terminal_artifact_id is None
+    events = runner.journal.events(member.run_id)
+    assert [event.event_type for event in events] == ["provider.preparation.failed"]
+    failure = events[0].payload
+    assert failure["model_generation_state"] == "not_started"
+    assert failure["model_retry_disposition"] == "safe"
+    assert failure["provider_attempts"] == 0
+    assert failure["preparation_retry_disposition"] == "terminal"
+    assert runner.usage_ledger.records() == ()
+
+    recovered = asyncio.run(runner.run())
+
+    assert recovered.status is RunStatus.COMPLETED
+    assert provider.availability_calls == 2
+    assert len(provider.requests) == 1
+    assert runner.journal.get_run(member.run_id).status is RunStatus.COMPLETED
+    recovered_events = runner.journal.events(member.run_id)
+    assert sum(event.event_type == "model.request.dispatched" for event in recovered_events) == 1
+    assert not any(event.event_type == "model.request.ambiguous" for event in recovered_events)
+    assert len(runner.usage_ledger.records()) == 1
+    assert runner.usage_ledger.records()[0].record.metrics.provider_attempts == 1
+
+
+def test_lazy_factory_failure_retries_only_on_later_invocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = FailOnceAvailabilityProvider()
+    provider.availability_calls = 1
+    factory_calls = 0
+
+    class FlakyFactory:
+        def create(self, _profile: object) -> ModelProvider:
+            nonlocal factory_calls
+            factory_calls += 1
+            if factory_calls == 1:
+                raise RuntimeError("fixture Provider factory is unavailable")
+            return provider
+
+    factory = FlakyFactory()
+
+    def build_factory(_cls: type[ModelProviderFactory]) -> FlakyFactory:
+        return factory
+
+    monkeypatch.setattr(
+        ModelProviderFactory,
+        "with_builtin_adapters",
+        classmethod(build_factory),
+    )
+    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
+    lazy_provider = _LazyAvailabilityModelProvider(profile=profile, provider=None)
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=1,
+        provider=cast(ScriptedWorkProvider, lazy_provider),
+        dialect="v9",
+        registration=_material_registration(),
+        checkpoint_key="next-material-a-share-event",
+    )
+
+    first = asyncio.run(runner.run())
+
+    assert first.status is RunStatus.HUMAN_INPUT_REQUIRED
+    assert factory_calls == 1
+    assert provider.availability_calls == 1
+    assert provider.requests == []
+    assert first.members[0].metrics.provider_attempts == 0
+    assert runner.journal.get_run(first.members[0].run_id).status is RunStatus.RUNNING
+    assert runner.usage_ledger.records() == ()
+    assert [event.event_type for event in runner.journal.events(first.members[0].run_id)] == [
+        "provider.preparation.failed"
+    ]
+
+    recovered = asyncio.run(runner.run())
+
+    assert recovered.status is RunStatus.COMPLETED
+    assert factory_calls == 2
+    assert provider.availability_calls == 2
+    assert len(provider.requests) == 1
+    assert len(runner.usage_ledger.records()) == 1
+
+    reopened = asyncio.run(runner.run())
+
+    assert reopened.status is RunStatus.COMPLETED
+    assert factory_calls == 2
+    assert provider.availability_calls == 2
+    assert len(provider.requests) == 1
+
+
+def test_recovered_preparation_failure_completes_and_releases_active_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_root = tmp_path / "prospective"
+    state_root = tmp_path / "state"
+    registration = _material_registration()
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path / "runner",
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        dialect="v8",
+        registration=registration,
+        checkpoint_key="next-material-a-share-event",
+    )
+    runner._clock = lambda: candidate_set.frozen_at + timedelta(minutes=1)
+    protocol_hashes = {
+        "readiness": canonical_hash({"fixture": "readiness"}),
+        "selection": canonical_hash({"fixture": "selection"}),
+        "candidate_set": canonical_hash(candidate_set.to_dict()),
+        "work_manifest": canonical_hash(manifest.to_dict()),
+        "execution_plan": canonical_hash(plan.to_dict()),
+    }
+    active_core = {
+        "schema_version": "market-impact.prospective-triage-active-batch.v1",
+        "registration_id": candidate_set.registration_id,
+        "checkpoint_key": candidate_set.checkpoint_key,
+        "route_plan_id": candidate_set.route_plan_id,
+        "route_admission_id": candidate_set.route_admission_id,
+        "readiness_report_id": candidate_set.readiness_report_id,
+        "unclassified_candidate_count": len(candidate_set.version_ids),
+        "data_snapshot_id": candidate_set.data_snapshot_id,
+        "profile_id": plan.model_provider_profile.profile_id,
+        "protocol_artifact_hashes": protocol_hashes,
+        "created_at": candidate_set.frozen_at.isoformat().replace("+00:00", "Z"),
+    }
+    prepared = PreparedProspectiveTriageWork(
+        active_batch_id=f"prospective-triage-active-batch-{canonical_hash(active_core)}",
+        readiness_report_id=candidate_set.readiness_report_id,
+        unclassified_candidate_count=len(candidate_set.version_ids),
+        selection=cast(
+            Any,
+            SimpleNamespace(
+                selection_id="event-impact-triage-batch-selection-fixture",
+                selected_at=candidate_set.frozen_at,
+                selected_version_ids=candidate_set.version_ids,
+            ),
+        ),
+        snapshot=cast(Any, SimpleNamespace(snapshot_id=candidate_set.data_snapshot_id)),
+        candidate_set=candidate_set,
+        manifest=manifest,
+        plan=plan,
+        profile=plan.model_provider_profile,
+        protocol_artifact_hashes=protocol_hashes,
+    )
+    active_store = ProspectiveTriageActiveBatchStore(run_root)
+    active_store.install(prepared, expected_epoch_revision=0)
+    lookup = {
+        "registration_id": candidate_set.registration_id,
+        "checkpoint_key": candidate_set.checkpoint_key,
+        "route_plan_id": candidate_set.route_plan_id,
+        "route_admission_id": candidate_set.route_admission_id,
+    }
+
+    def build_runner(**kwargs: object) -> EventImpactTriageWorkRunner:
+        runner.provider = cast(ModelProvider, kwargs["provider"])
+        return runner
+
+    monkeypatch.setattr(prospective_triage, "_build_prospective_triage_runner", build_runner)
+    provider = FailOnceAvailabilityProvider()
+
+    first = asyncio.run(
+        run_prepared_prospective_triage_work(
+            prepared=prepared,
+            registration=registration,
+            state_root=state_root,
+            run_root=run_root,
+            skill_root=ROOT / "skills",
+            provider=provider,
+        )
+    )
+
+    assert first["status"] == RunStatus.HUMAN_INPUT_REQUIRED.value
+    assert provider.availability_calls == 1
+    assert provider.requests == []
+    assert active_store.active(**lookup) is not None
+
+    recovered = asyncio.run(
+        run_prepared_prospective_triage_work(
+            prepared=prepared,
+            registration=registration,
+            state_root=state_root,
+            run_root=run_root,
+            skill_root=ROOT / "skills",
+            provider=provider,
+        )
+    )
+
+    assert recovered["status"] == RunStatus.COMPLETED.value
+    assert provider.availability_calls == 2
+    assert active_store.active(**lookup) is None
 
 
 def test_restart_reuses_completed_response_after_validation_crash(tmp_path: Path) -> None:
@@ -2398,6 +2737,141 @@ def test_v7_direct_json_repair_is_bounded_and_reopens_authoritatively(
     )
 
 
+def test_v8_material_stage_one_omits_and_derives_checkpoint_eligibility(
+    tmp_path: Path,
+) -> None:
+    provider = MaterialWatchProvider()
+    registration = _material_registration()
+    runner, _, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=provider,
+        dialect="v8",
+        registration=registration,
+        checkpoint_key="next-material-a-share-event",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V8
+    assert plan.classify_binding is not None
+    assert plan.classify_binding.prompt_template_id.endswith("-json-v8m")
+    assert result.proposal is not None
+    assert all(
+        item.checkpoint_eligibility.value == "needs_review"
+        and item.recommended_route.value == "attention_watch"
+        for item in result.proposal.clusters
+    )
+    classify_request = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    )
+    contract = cast(dict[str, object], classify_request["required_output"])
+    assert "checkpoint_eligibility" not in cast(list[str], contract["required_fields"])
+    assert "checkpoint_eligibility" not in cast(dict[str, object], contract["field_schemas"])
+    assert contract["checkpoint_eligibility"] == ("derived_by_harness_after_route_selection")
+    route = cast(
+        dict[str, object],
+        cast(dict[str, object], contract["field_schemas"])["recommended_route"],
+    )
+    assert "checkpoint_candidate" not in cast(list[str], route["enum"])
+    checkpoint_rule = cast(
+        dict[str, object],
+        cast(dict[str, object], classify_request["phase_input"])["checkpoint_rule"],
+    )
+    assert checkpoint_rule["stage_one_authority"] == (
+        "harness_derives_provisional_status;final_eligibility_requires_materiality_gate"
+    )
+
+
+def test_v8_direct_checkpoint_keeps_model_eligibility_classification(tmp_path: Path) -> None:
+    runner, provider, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        dialect="v8",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.classify_binding is not None
+    assert plan.classify_binding.prompt_template_id.endswith("-json-v8")
+    classify_request = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    )
+    contract = cast(dict[str, object], classify_request["required_output"])
+    assert "checkpoint_eligibility" in cast(list[str], contract["required_fields"])
+
+
+def test_v9_material_ingress_uses_one_positional_call_and_derives_downstream_artifacts(
+    tmp_path: Path,
+) -> None:
+    provider = MixedMaterialIngressProvider()
+    registration = _material_registration()
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=3,
+        provider=provider,
+        dialect="v9",
+        registration=registration,
+        checkpoint_key="next-material-a-share-event",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9
+    assert plan.partition_binding is None
+    assert plan.classify_binding is None
+    assert plan.max_total_runs == len(manifest.work_units) == 1
+    assert len(provider.requests) == 1
+    assert {item.phase for item in result.members} == {TriageWorkPhase.MAP}
+    assert result.partition is not None
+    assert result.proposal is not None
+    assert result.run_evidence is not None
+    assert len(result.partition.clusters) == len(manifest.atoms) == 3
+    assert [item.recommended_route.value for item in result.proposal.clusters].count(
+        "event_assessment"
+    ) == 1
+    assert [item.recommended_route.value for item in result.proposal.clusters].count(
+        "attention_watch"
+    ) == 1
+    assert [item.recommended_route.value for item in result.proposal.clusters].count("archive") == 1
+    assert all(item.triage_confidence == 0.0 for item in result.proposal.clusters)
+    request = json.loads(str(provider.requests[0][-1]["content"]))
+    phase_input = cast(dict[str, object], request["phase_input"])
+    assert set(phase_input) == {"work_unit_ordinal", "atoms"}
+    assert all(
+        set(item) == {"normalized_payload", "license_scope", "instruction_boundary"}
+        for item in cast(list[dict[str, object]], phase_input["atoms"])
+    )
+    assert "atom_id" not in canonical_json_bytes(request["required_output"]).decode()
+    assert event_impact_triage_work_execution_plan_from_dict(plan.to_dict()) == plan
+    assert not validate_agent_contract(
+        plan.to_dict(), "event-impact-triage-work-execution-plan.schema.json"
+    )
+    runner.assert_authoritative_completed_work_run(
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        digests=result.digests,
+        partition=result.partition,
+        proposal=result.proposal,
+        run_evidence=result.run_evidence,
+    )
+
+    restarted = asyncio.run(runner.run())
+
+    assert restarted == result
+    assert len(provider.requests) == 1
+
+
 def test_v6_exhausted_format_failure_recovers_once_without_provider_call(
     tmp_path: Path,
 ) -> None:
@@ -2417,6 +2891,7 @@ def test_v6_exhausted_format_failure_recovers_once_without_provider_call(
     assert blocked.status is RunStatus.FAILED
     original = blocked.members[-1]
     assert original.phase is TriageWorkPhase.CLASSIFY
+    assert plan.classify_binding is not None
     assert original.metrics.turns == plan.classify_binding.max_turns
     original_record = runner.journal.get_run(original.run_id)
     original_events = runner.journal.events(original.run_id)

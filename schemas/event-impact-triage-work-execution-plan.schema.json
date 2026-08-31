@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.market-impact-agent.local/event-impact-triage-work-execution-plan.schema.json",
-  "title": "Market Impact Event Impact Triage Work Execution Plan v2",
+  "title": "Market Impact Event Impact Triage Work Execution Plan v2-v9",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -38,7 +38,12 @@
       "enum": [
         "market-impact.event-impact-triage-work-execution-plan.v2",
         "market-impact.event-impact-triage-work-execution-plan.v3",
-        "market-impact.event-impact-triage-work-execution-plan.v4"
+        "market-impact.event-impact-triage-work-execution-plan.v4",
+        "market-impact.event-impact-triage-work-execution-plan.v5",
+        "market-impact.event-impact-triage-work-execution-plan.v6",
+        "market-impact.event-impact-triage-work-execution-plan.v7",
+        "market-impact.event-impact-triage-work-execution-plan.v8",
+        "market-impact.event-impact-triage-work-execution-plan.v9"
       ]
     },
     "plan_id": {
@@ -72,8 +77,12 @@
       "maxItems": 4,
       "items": {"$ref": "#/$defs/roleBinding"}
     },
-    "partition_binding": {"$ref": "#/$defs/roleBinding"},
-    "classify_binding": {"$ref": "#/$defs/roleBinding"},
+    "partition_binding": {
+      "oneOf": [{"$ref": "#/$defs/roleBinding"}, {"type": "null"}]
+    },
+    "classify_binding": {
+      "oneOf": [{"$ref": "#/$defs/roleBinding"}, {"type": "null"}]
+    },
     "ordered_map_work_unit_ids": {
       "type": "array",
       "minItems": 1,
@@ -84,14 +93,14 @@
         "pattern": "^event-impact-triage-work-unit-[0-9a-f]{64}$"
       }
     },
-    "max_classify_clusters": {"type": "integer", "minimum": 1, "maximum": 128},
+    "max_classify_clusters": {"type": "integer", "minimum": 0, "maximum": 128},
     "phase_ceilings": {
       "type": "array",
-      "minItems": 3,
+      "minItems": 1,
       "maxItems": 3,
       "items": {"$ref": "#/$defs/phaseCeiling"}
     },
-    "max_total_runs": {"type": "integer", "minimum": 3},
+    "max_total_runs": {"type": "integer", "minimum": 1},
     "max_total_input_tokens": {"type": "integer", "minimum": 1},
     "max_total_output_tokens": {"type": "integer", "minimum": 1},
     "max_total_estimated_cost_microusd": {"type": "integer", "minimum": 0},

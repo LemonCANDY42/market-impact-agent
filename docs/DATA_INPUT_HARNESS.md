@@ -306,12 +306,13 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 ## Acceptance sequence
 
-PDI-01 v1 through v3 remain immutable. The current v4 registration
-`prospective-diagnostic-registration-834d054c064a5c3d3e89aed06ef17ea876e081c8a98395511c18f0dbd1e3789e`
-retains the required-trigger/optional-information boundary and adaptive paired replication, adds a
-fourth broad material-event checkpoint, binds the CPA-priced model profile, and aligns the policy,
-Earnings and NBS trigger cadence with their real Jobs. The CSRC, purchased Tushare news and issuer-
-event, and NBS original-release routes remain separate accepted source identities.
+PDI-01 v1 through v4 remain immutable. The current v5 registration
+`prospective-diagnostic-registration-cbd6330be9ba30422db941d413888ec708af3f5906084704c5df600bf616cdce`
+retains v4's required-trigger/optional-information boundary, four checkpoints, adaptive paired
+replication and CPA-priced model profile. Its only semantic change aligns the broad material-event
+trigger with the purchased news Jobs' real 300-second poll and 900-second maximum gap. Policy,
+Earnings and NBS cadence remain unchanged. The CSRC, purchased Tushare news and issuer-event, and NBS
+original-release routes remain separate accepted source identities.
 Route validation binds exact accepted upstream-source IDs as well as capability, Provider and
 semantic scope; a Tushare forecast/express source cannot masquerade as established news merely
 because both expose `event_revelation`.
@@ -321,13 +322,15 @@ lineage, and future post-registration receipts still have to reconcile at each c
 Those gaps limit coverage claims and later execution where relevant; they no longer all block a
 prospective process diagnostic. No model call begins until the structural Query Gate passes.
 
-The current v4 route plan is frozen in
-`examples/research/prospective-checkpoint-route-plan-v4.json`. First durably anchor the plan:
+The current v6 route plan is frozen in
+`examples/research/prospective-checkpoint-route-plan-v6.json`. It copies the accepted v5 bindings
+under the new registration and has no predecessor in that registration. V4 registration and v5
+route-plan history remain immutable. The new plan was durably admitted as follows:
 
 ```bash
 market-impact data checkpoint-route-admit \
-  --registration examples/research/prospective-diagnostic-registration-v4.json \
-  --route-plan examples/research/prospective-checkpoint-route-plan-v4.json \
+  --registration examples/research/prospective-diagnostic-registration-v5.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v6.json \
   --state-root .market-impact/data-inputs
 ```
 
@@ -344,8 +347,8 @@ Then run the non-mutating readiness audit:
 
 ```bash
 market-impact data checkpoint-readiness \
-  --registration examples/research/prospective-diagnostic-registration-v4.json \
-  --route-plan examples/research/prospective-checkpoint-route-plan-v4.json \
+  --registration examples/research/prospective-diagnostic-registration-v5.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v6.json \
   --state-root .market-impact/data-inputs
 ```
 
@@ -356,12 +359,33 @@ current report or adding a future versioned health-snapshot contract is required
 retroactively reusing live aggregates.
 
 Readiness also reopens the append-only Event Impact Triage Decision Store for the exact registration,
-checkpoint, route plan and admission epoch. Only a fully admitted direct-run v1, immutable legacy
-Work v2 or current authority-time-bound Work v3 Decision suppresses a candidate version; operator
-inspection, a Proposal alone, a failed Work plan or a Decision from another route epoch cannot mark
-it classified. The first real legacy Work v2 Decision removed its exact nine versions from readiness
-while leaving 26 later actual-receipt versions as new unclassified candidates. New Work admissions
+checkpoint, route plan and admission epoch. A fully admitted direct-run v1, immutable legacy Work v2
+or current authority-time-bound Work v3 Decision suppresses its candidate versions. A failed blind
+comparison suppresses versions only after the state authority records a content-bound terminal batch;
+that terminal record is not a semantic Decision and cannot grant Trigger Admission. Operator
+inspection, a Proposal alone, an unterminated failed Work plan or a Decision from another route epoch
+cannot mark a version handled. The first real legacy Work v2 Decision removed its exact nine versions
+from readiness while leaving 26 later actual-receipt versions as new unclassified candidates. New Work admissions
 use v3 and require `decided_at` to equal the fully reopened Work receipt's `finished_at`.
+
+After the v8 material-event failure was terminalized, its 29 versions stopped occupying the active
+head. The next audit exposed that v4's broad material-event 120/600-second cadence was tighter than
+the active 300/900-second purchased-news Jobs. V5 corrected this by versioning the registration rather
+than mutating v4 or waiving the gate. Route plan v6 admission then produced 4/4 operational
+checkpoints, seven operational material-event trigger routes and zero post-admission candidates. The
+zero was the expected clean epoch boundary: only later actual receipts could enter the next v9
+batch. Eleven such versions were later frozen and terminalized by the failed pristine v9 comparison;
+they were not converted into a semantic Decision. Later receipts remain unclassified and may be
+selected only by a new, versioned and independently accepted ingress design.
+
+The longer soak also found that four 120-second purchased-news Jobs can each become incomplete after
+a real post-admission misfire even though their latest outcome is healthy and lag is near zero. The
+one-shot supervisor already uses deadline ordering and four-way concurrency; the observed misses
+occurred when a prior batch plus the one-minute host relaunch delay exceeded the Jobs' 90-second
+misfire grace. This does not erase receipts or make the three still-operational material routes
+unhealthy, but it invalidates the earlier ten-opportunity soak as long-run proof. Fix that scheduling
+envelope through versioned Job replacements and a later route epoch; do not reset the Journal,
+forgive missed opportunities, or relax PIT timestamps.
 
 In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` and start prospective
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or
@@ -731,9 +755,38 @@ field paths, and license scope; licensed or raw bodies remain in the private sto
 may request additional information, but the current Run cannot consume mutable fetch output. The
 Harness must journal and freeze it, then start a fresh bounded Run over the exact Snapshot.
 
-This slice provides contracts and scope-aware Watch filtering. It does not yet install the Agent
-request tool, acquisition executor, shared due-opportunity fan-out, scheduler, callback, or fresh
-Run dispatcher; those remain PDI-40/PDI-41 acceptance work.
+### Agent-proposed Watch admission
+
+`AgentWatchAdmissionService` now exposes a filtered catalog of content-identified
+`WatchDelegateProfile` records. A profile uses a short name and description for model selection but
+the Harness owns its callback Agent profile, exact Skill hashes, read-only capabilities, parent and
+subject types, registered query template, Collection Policy, collection limits, callback limits and
+lineage/branch/global caps. The model-authored `AgentWatchRequest` contains only the offered profile,
+anchored subject, optional frozen members or registered information aspect, deterministic matcher,
+question, rationale and evidence references. Its closed schema rejects Provider, URL, credential,
+cadence, budget, callback configuration and execution fields.
+
+Admission is durable under the same SQLite WAL/FULL state root as Watch state. It injects the parent
+type and lineage, validates then-effective context for industry/ETF scopes, reopens the registered
+matcher and route, and records a content-identified admitted, reused or rejected result. Branch and
+global limits are committed under one immediate transaction. Equivalent active scopes use one
+Attention Watch rather than duplicate collection; every accepted parent remains a distinct callback
+subscriber, so sharing collection never silently transfers lineage. A cancelled or expired Watch is
+not reused.
+
+This is bounded mechanics, not PDI-40 acceptance. A caller-created parent projection remains
+self-declaration even when it is append-only and content-addressed, so the project removed the
+context-minting path. The concrete store currently rejects every candidate context; profile offers,
+admission, lookup, callbacks and restart activation stay fail-closed. The next workslice must bind one
+named parent Run/Decision authority and derive allowed evidence references, subjects/frozen members
+and matcher terms from its reopened durable artifact. Only then can the existing unrelated-scope and
+admission-before-Watch activation recovery tests become operational evidence. Shared due collection
+and the bounded acquisition executor remain later PDI-40 gates.
+
+The callback lookup is intentionally a read-only binding over a durable Wake, accepted Admission and
+the exact still-registered delegate profile. It does not claim or acknowledge the Wake, call a model,
+or dispatch a task. Shared due-opportunity fan-out, the bounded acquisition executor and installed
+scheduler remain PDI-40 work; idempotent Wake-to-fresh-Run dispatch remains PDI-41.
 
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.

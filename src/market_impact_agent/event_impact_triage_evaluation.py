@@ -92,8 +92,11 @@ class TriageGoldLabel:
                 raise ValueError("eligible gold labels must route to checkpoint selection")
         elif self.expected_route is TriageRoute.CHECKPOINT_CANDIDATE:
             raise ValueError("non-eligible gold labels cannot route to checkpoint selection")
-        if self.must_catch and self.checkpoint_eligibility is not CheckpointEligibility.ELIGIBLE:
-            raise ValueError("must_catch is reserved for clearly eligible labels")
+        if self.must_catch and self.expected_route not in {
+            TriageRoute.CHECKPOINT_CANDIDATE,
+            TriageRoute.EVENT_ASSESSMENT,
+        }:
+            raise ValueError("must_catch requires checkpoint or EventAssessment routing")
         if (
             self.expected_route is TriageRoute.EVENT_ASSESSMENT
             and not self.material_transmission_expected
@@ -821,8 +824,8 @@ def score_event_impact_triage_proposal(
             and eligibility is not CheckpointEligibility.ELIGIBLE
         ):
             eligible_false_negatives += 1
-            if label.must_catch:
-                must_catch_false_negatives += 1
+        if label.must_catch and route is not label.expected_route:
+            must_catch_false_negatives += 1
         if (
             label.checkpoint_eligibility is not CheckpointEligibility.ELIGIBLE
             and eligibility is CheckpointEligibility.ELIGIBLE

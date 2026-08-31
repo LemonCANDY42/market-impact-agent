@@ -117,9 +117,30 @@ The bootstrap implements:
   never-started classify member then made the only new Provider request. The graph completed all 38
   members at 41 physical attempts, 389,749 input / 200,654 output Tokens and 318,755 microusd, and
   admitted a Decision with two archive and 23 `needs_review` Attention Watch clusters. No eligible
-  checkpoint, Query Gate, Judgment or execution authority exists. Future batches use v7, where
-  `json-repair==0.63.4` is the direct parser and every strict or bounded-repair result carries parse
-  evidence; semantic or multi-edit repair remains rejected. The prospective repair also journals
+  checkpoint, Query Gate, Judgment or execution authority exists. V7 made
+  `json-repair==0.63.4` the direct parser, and every strict or bounded-repair result carries parse
+  evidence; semantic or multi-edit repair remains rejected. V8 kept direct checkpoints explicit but
+  made material-event eligibility Harness-derived. Its later pristine blind comparison completed but
+  rejected the multi-Skill treatment: baseline routed all five must-catch items, while treatment
+  missed all five, created 14 unsupported material routes and cost more. That immutable failure is
+  evidence against doing full exposure and adversarial analysis at ingress, not against the events.
+  A zero-Provider authority replay later terminalized all 29 versions and released the active head;
+  it did not create a Triage Decision or change the old Run/Usage records.
+  New material-event batches use v9: one coordinator call per bounded Work Unit returns only
+  archive/Watch/EventAssessment, one changed fact and either one transmission or one unresolved
+  observable. The Harness injects identity and defers semantic clustering, complete target mapping,
+  portfolio analysis and action selection to EventAssessment. Direct checkpoints
+  retain explicit eligibility classification, while the material-event stage-one model returns only
+  `archive`, `attention_watch`, or `event_assessment`; the Harness derives its provisional legacy
+  eligibility field and only a later deterministic Materiality Gate can grant Trigger Admission.
+  The first pristine v9 batch completed on 11 new post-admission versions. Both independent
+  same-contract arms caught the two sealed must-catch events, but they also sent five and four
+  unsupported items to EventAssessment; treatment exact-route accuracy was worse than baseline.
+  The Harness therefore terminalized the batch, released the active head and granted no Decision,
+  Query Gate, Judgment or execution authority. Its 18,900 microusd cost and failed gate remain
+  immutable evidence against the current overly broad `plausible transmission` wording, not
+  against broad discovery or follow-up Watches.
+  The prospective repair also journals
   each physical attempt with a
   correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized
   circuit/cooldown/operator-notice state; see
@@ -175,7 +196,9 @@ The bootstrap implements:
   automatically selected work by absolute deadline, samples the Harness clock at each actual claim,
   and runs a plan-bound maximum of four opportunities concurrently. Route-plan v2 adds an explicit
   predecessor, one atomic current head, immutable effective intervals, and a freeze-time authority
-  recheck. The host now runs supervisor v4 under the admitted v2 route epoch; the first accepted
+  recheck. The host runs supervisor v4. A later missed opportunity correctly left the prior v4 route
+  epoch degraded; the identical-binding v5 successor was admitted without resetting collection
+  state and restored all four checkpoints to operational external wait. The first accepted
   ten-opportunity window recorded zero misses and failures, with maximum all-Job claim latency of
   74.54 seconds and trigger-Job latency of 45.304 seconds. Longer multi-policy soak, retention and
   restore acceptance remain open;
@@ -191,8 +214,14 @@ The bootstrap implements:
   bounded fetch request or typed gap instead of exposing arbitrary network access. Watch TTL and
   byte/poll/wake budgets, a Journal-frozen baseline, atomic expiring due leases, durable
   due/backoff/cooldown/cancellation state, new-version detection, restart-safe duplicate suppression,
-  and an idempotent local wake-up outbox always bind a complete frozen Snapshot. The scheduler,
-  acquisition executor, Agent callback, and fresh-run dispatcher are not installed;
+  and an idempotent local wake-up outbox always bind a complete frozen Snapshot. A closed Agent Watch
+  request/admission contracts define parent-appropriate named delegate profiles,
+  branch/depth/global and collection/callback budgets, equivalent-scope reuse and per-parent callback
+  bindings without granting model or execution authority. The operational seam remains fail-closed:
+  a caller-created or self-hashed parent projection cannot authorize offers, admission, lookup,
+  callbacks or restart activation. One concrete parent Run/Decision owner must still derive that
+  projection before the layer can create a Watch. The
+  shared due-collection scheduler, acquisition executor, and fresh-run dispatcher are not installed;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic
@@ -521,7 +550,7 @@ uv run market-impact backtest phase2-run --registration PRIVATE_REGISTRATION.jso
   --data-snapshot-root .market-impact/tushare --output-dir PRIVATE_OUTPUT_DIRECTORY
 uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
 uv run market-impact data validate-prospective-diagnostic \
-  --registration examples/research/prospective-diagnostic-registration-v4.json
+  --registration examples/research/prospective-diagnostic-registration-v5.json
 uv run market-impact data accept-tushare-observation \
   --source-config examples/providers/tushare-observation-index-daily-v1.json \
   --parameters-json '{"ts_code":"000300.SH","start_date":"20260827","end_date":"20260827"}' \

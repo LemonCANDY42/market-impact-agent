@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -50,6 +50,11 @@ from market_impact_agent.event_impact_triage import (
 )
 from market_impact_agent.event_impact_triage_store import (
     EventImpactTriageDecisionStore,
+)
+from market_impact_agent.event_impact_triage_work_evaluation import (
+    EventImpactTriageWorkComparisonRegistration,
+    EventImpactTriageWorkComparisonReport,
+    EventImpactTriageWorkComparisonStore,
 )
 from market_impact_agent.observations import (
     AvailabilityBasis,
@@ -135,6 +140,36 @@ class RecordingWorkRunAuthority(CompletedTriageWorkRunAuthority):
         assert proposal.proposal_id == self.expected_proposal_id
         assert run_evidence == self.expected_evidence
         self.called = True
+
+
+@dataclass(frozen=True)
+class StubFailedComparison:
+    comparison_id: str
+    candidate_set_id: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "comparison_id": self.comparison_id,
+            "candidate_set_id": self.candidate_set_id,
+        }
+
+
+@dataclass(frozen=True)
+class StubFailedComparisonReport:
+    report_id: str
+    comparison_id: str
+    batch_gate_passed: bool
+    blockers: tuple[str, ...]
+    evaluated_at: datetime
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "report_id": self.report_id,
+            "comparison_id": self.comparison_id,
+            "batch_gate_passed": self.batch_gate_passed,
+            "blockers": list(self.blockers),
+            "evaluated_at": self.evaluated_at.isoformat().replace("+00:00", "Z"),
+        }
 
 
 class LegacySeedTriageDecisionStore(EventImpactTriageDecisionStore):
@@ -324,6 +359,51 @@ def _candidate_set(tmp_path: Path) -> EventImpactTriageCandidateSet:
         snapshot_store=store,
         admission_store=_authorize_readiness(tmp_path / "state", readiness),
         frozen_at=FROZEN_AT,
+    )
+
+
+def test_caller_consistent_failed_comparison_stubs_cannot_terminalize_versions(
+    tmp_path: Path,
+) -> None:
+    candidate_set = _candidate_set(tmp_path)
+    store = EventImpactTriageDecisionStore(tmp_path / "terminal-state")
+    comparison = StubFailedComparison(
+        comparison_id="event-impact-triage-work-comparison-" + "a" * 64,
+        candidate_set_id=candidate_set.candidate_set_id,
+    )
+    report = StubFailedComparisonReport(
+        report_id="event-impact-triage-work-comparison-report-" + "b" * 64,
+        comparison_id=comparison.comparison_id,
+        batch_gate_passed=False,
+        blockers=("treatment_missed_must_catch_eligible",),
+        evaluated_at=DECIDED_AT,
+    )
+
+    authority = EventImpactTriageWorkComparisonStore(tmp_path / "comparison.sqlite3")
+    with pytest.raises((TypeError, ValueError), match=r"durable|registered"):
+        store.terminalize_failed_work_comparison(
+            candidate_set=candidate_set,
+            comparison=cast(EventImpactTriageWorkComparisonRegistration, comparison),
+            report=cast(EventImpactTriageWorkComparisonReport, report),
+            label_set=cast(Any, object()),
+            work_manifest=cast(Any, object()),
+            baseline=cast(Any, object()),
+            treatment=cast(Any, object()),
+            baseline_authority=cast(Any, object()),
+            treatment_authority=cast(Any, object()),
+            comparison_authority=authority,
+            terminalized_at=DECIDED_AT + timedelta(seconds=1),
+        )
+
+    assert (
+        store.classified_version_ids(
+            registration_id=candidate_set.registration_id,
+            checkpoint_key=candidate_set.checkpoint_key,
+            route_plan_id=candidate_set.route_plan_id,
+            route_admission_id=candidate_set.route_admission_id,
+            at=DECIDED_AT + timedelta(seconds=1),
+        )
+        == ()
     )
 
 

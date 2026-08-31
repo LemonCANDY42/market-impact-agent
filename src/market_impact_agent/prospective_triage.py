@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -18,25 +19,40 @@ from market_impact_agent.event_impact_triage import (
     event_impact_triage_candidate_set_from_dict,
     freeze_event_impact_triage_candidate_set,
 )
+from market_impact_agent.event_impact_triage_evaluation import (
+    EventImpactTriageLabelSet,
+    TriageLabelExposure,
+)
 from market_impact_agent.event_impact_triage_runtime import (
     SnapshotTriageCandidateContentResolver,
     TriageComparisonArm,
 )
-from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
+from market_impact_agent.event_impact_triage_store import (
+    EventImpactTriageDecisionStore,
+    EventImpactTriageTerminalBatch,
+)
 from market_impact_agent.event_impact_triage_work import (
     EventImpactTriageWorkManifest,
     TriageWorkManifestPolicy,
     build_event_impact_triage_work_manifest,
     event_impact_triage_work_manifest_from_dict,
 )
+from market_impact_agent.event_impact_triage_work_evaluation import (
+    EventImpactTriageWorkComparisonStore,
+    TriageWorkArmOutcome,
+    evaluate_event_impact_triage_work_comparison,
+)
 from market_impact_agent.event_impact_triage_work_format_recovery import (
     EventImpactTriageWorkFormatRecoveryStore,
 )
 from market_impact_agent.event_impact_triage_work_runtime import (
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunner,
-    build_event_impact_triage_work_execution_plan_v7,
+    EventImpactTriageWorkRunResult,
+    build_event_impact_triage_work_execution_plan_v8,
+    build_event_impact_triage_work_execution_plan_v9,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -74,6 +90,9 @@ class _NoCallModelProvider:
     def model(self) -> str:
         return self._model
 
+    async def assert_model_available(self, *, timeout_seconds: float) -> None:
+        _ = timeout_seconds
+
     async def complete(
         self,
         *,
@@ -86,6 +105,81 @@ class _NoCallModelProvider:
     ) -> ModelTurn:
         _ = (messages, tools, temperature, top_p, max_output_tokens, timeout_seconds)
         raise AssertionError("format recovery cannot call a Model Provider")
+
+
+class _LazyAvailabilityModelProvider:
+    """Resolve and probe a Provider only when a Work member needs a model call."""
+
+    def __init__(
+        self,
+        *,
+        profile: ModelProviderProfile,
+        provider: ModelProvider | None,
+    ) -> None:
+        self._profile = profile
+        self._provider = provider
+        self._available = False
+
+    @property
+    def provider_id(self) -> str:
+        return self._profile.provider_id
+
+    @property
+    def model(self) -> str:
+        return self._profile.model
+
+    def _resolve(self) -> ModelProvider:
+        provider = self._provider
+        if provider is None:
+            provider = ModelProviderFactory.with_builtin_adapters().create(self._profile)
+            self._provider = provider
+        if provider.provider_id != self.provider_id or provider.model != self.model:
+            raise ValueError("prospective triage Provider differs from the frozen profile")
+        return provider
+
+    async def _assert_available(self, provider: ModelProvider) -> None:
+        if self._available:
+            return
+        await cast(_AvailabilityModelProvider, provider).assert_model_available(timeout_seconds=30)
+        self._available = True
+
+    async def prepare_for_model_call(self) -> None:
+        """Resolve and probe immediately before the Runner records a dispatch."""
+
+        await self._assert_available(self._resolve())
+
+    def __getattr__(self, name: str) -> object:
+        if name != "complete_with_observer":
+            raise AttributeError(name)
+        provider = self._resolve()
+        provider_complete = getattr(provider, name)
+
+        async def complete_with_observer(**kwargs: object) -> ModelTurn:
+            await self._assert_available(provider)
+            return cast(ModelTurn, await provider_complete(**kwargs))
+
+        return complete_with_observer
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        provider = self._resolve()
+        await self._assert_available(provider)
+        return await provider.complete(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +297,15 @@ class ProspectiveTriageActiveBatchStore:
                 CREATE TABLE IF NOT EXISTS prospective_triage_epoch_revisions (
                     route_epoch_key TEXT PRIMARY KEY,
                     revision INTEGER NOT NULL CHECK(revision >= 0)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS prospective_triage_terminalizations (
+                    batch_id TEXT PRIMARY KEY,
+                    terminal_id TEXT NOT NULL UNIQUE,
+                    terminalized_at TEXT NOT NULL
                 )
                 """
             )
@@ -347,6 +450,15 @@ class ProspectiveTriageActiveBatchStore:
             ).fetchone()
             if completed is not None:
                 raise ValueError("completed prospective Triage batch cannot become active")
+            terminalized = connection.execute(
+                """
+                SELECT terminal_id FROM prospective_triage_terminalizations
+                WHERE batch_id = ?
+                """,
+                (record.batch_id,),
+            ).fetchone()
+            if terminalized is not None:
+                raise ValueError("terminalized prospective Triage batch cannot become active")
             connection.execute(
                 """
                 INSERT OR IGNORE INTO prospective_triage_batches(
@@ -454,6 +566,114 @@ class ProspectiveTriageActiveBatchStore:
                     batch_id,
                     decision.decision_id,
                     decision.decided_at.isoformat().replace("+00:00", "Z"),
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO prospective_triage_epoch_revisions(route_epoch_key, revision)
+                VALUES (?, 1)
+                ON CONFLICT(route_epoch_key) DO UPDATE SET revision = revision + 1
+                """,
+                (epoch,),
+            )
+            connection.execute(
+                """
+                DELETE FROM prospective_triage_active_heads
+                WHERE route_epoch_key = ? AND batch_id = ?
+                """,
+                (epoch, batch_id),
+            )
+
+    def terminalize(
+        self,
+        *,
+        batch_id: str,
+        candidate_set: EventImpactTriageCandidateSet,
+        terminal: EventImpactTriageTerminalBatch,
+        state_root: Path,
+    ) -> None:
+        """Release one failed head only after its state-root terminal authority exists."""
+
+        with self._connect() as connection:
+            record_row = connection.execute(
+                """
+                SELECT route_epoch_key, artifact_hash FROM prospective_triage_batches
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).fetchone()
+        if record_row is None:
+            raise KeyError(f"unknown prospective Triage batch: {batch_id}")
+        record = _active_batch_record_from_dict(
+            self.artifacts.read_json(cast(str, record_row["artifact_hash"]))
+        )
+        authoritative = EventImpactTriageDecisionStore(state_root).terminal_batch(
+            candidate_set.candidate_set_id
+        )
+        if authoritative != terminal:
+            raise ValueError("prospective Triage terminal differs from state authority")
+        if (
+            canonical_hash(candidate_set.to_dict())
+            != record.protocol_artifact_hashes["candidate_set"]
+            or terminal.candidate_set_id != candidate_set.candidate_set_id
+            or terminal.registration_id != record.registration_id
+            or terminal.checkpoint_key != record.checkpoint_key
+            or terminal.route_plan_id != record.route_plan_id
+            or terminal.route_admission_id != record.route_admission_id
+        ):
+            raise ValueError("prospective Triage terminal does not bind the active batch")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT route_epoch_key, artifact_hash FROM prospective_triage_batches
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).fetchone()
+            if row is None or cast(str, row["artifact_hash"]) != cast(
+                str, record_row["artifact_hash"]
+            ):
+                raise ValueError("prospective Triage batch changed before terminalization")
+            existing = connection.execute(
+                """
+                SELECT terminal_id FROM prospective_triage_terminalizations
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).fetchone()
+            if existing is not None:
+                if cast(str, existing["terminal_id"]) != terminal.terminal_id:
+                    raise ValueError("prospective Triage terminalization is inconsistent")
+                return
+            completed = connection.execute(
+                """
+                SELECT decision_id FROM prospective_triage_completions WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).fetchone()
+            if completed is not None:
+                raise ValueError("completed prospective Triage batch cannot be terminalized")
+            epoch = cast(str, row["route_epoch_key"])
+            head = connection.execute(
+                """
+                SELECT batch_id FROM prospective_triage_active_heads
+                WHERE route_epoch_key = ?
+                """,
+                (epoch,),
+            ).fetchone()
+            if head is None or cast(str, head["batch_id"]) != batch_id:
+                raise ValueError("prospective Triage active head changed before terminalization")
+            connection.execute(
+                """
+                INSERT INTO prospective_triage_terminalizations(
+                    batch_id, terminal_id, terminalized_at
+                ) VALUES (?, ?, ?)
+                """,
+                (
+                    batch_id,
+                    terminal.terminal_id,
+                    terminal.terminalized_at.isoformat().replace("+00:00", "Z"),
                 ),
             )
             connection.execute(
@@ -686,7 +906,7 @@ def prepare_next_prospective_triage_work(
     evaluated_at: datetime,
     maximum_candidate_count: int = 32,
 ) -> PreparedProspectiveTriageWork:
-    """Freeze the next actual-receipt prefix and its v7 treatment Work plan."""
+    """Freeze the next actual-receipt prefix and its minimal material-ingress plan."""
 
     if evaluated_at.tzinfo is None or evaluated_at.utcoffset() is None:
         raise ValueError("prospective triage evaluated_at must be timezone-aware")
@@ -740,7 +960,7 @@ def prepare_next_prospective_triage_work(
         ),
     )
     profile = load_builtin_model_provider_profile(registration.model_profile_id)
-    plan = build_event_impact_triage_work_execution_plan_v7(
+    plan = build_event_impact_triage_work_execution_plan_v9(
         candidate_set=candidate_set,
         work_manifest=manifest,
         registration=registration,
@@ -975,13 +1195,18 @@ async def run_prepared_prospective_triage_work(
 ) -> dict[str, object]:
     """Run one frozen Work graph and persist a Decision only after full reopening."""
 
-    selected_provider = (
-        ModelProviderFactory.with_builtin_adapters().create(prepared.profile)
-        if provider is None
-        else provider
-    )
-    await cast(_AvailabilityModelProvider, selected_provider).assert_model_available(
-        timeout_seconds=30
+    if prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9:
+        raise ValueError("prospective triage v9 is comparison-governed; use the comparison run")
+    comparison_path = run_root / "comparison" / "registrations.sqlite3"
+    if comparison_path.exists() and EventImpactTriageWorkComparisonStore(
+        comparison_path
+    ).has_registration_for_candidate_set(prepared.candidate_set.candidate_set_id):
+        raise ValueError(
+            "prospective triage Candidate Set is comparison-bound; use the comparison run"
+        )
+    selected_provider = _LazyAvailabilityModelProvider(
+        profile=prepared.profile,
+        provider=provider,
     )
     runner = _build_prospective_triage_runner(
         prepared=prepared,
@@ -1047,4 +1272,286 @@ async def run_prepared_prospective_triage_work(
             state_root=state_root,
         )
     summary_artifact = ArtifactStore(run_root / "protocol-artifacts").put_json(summary)
+    return {**summary, "summary_artifact_hash": summary_artifact.content_hash}
+
+
+async def run_prepared_prospective_triage_comparison(
+    *,
+    prepared: PreparedProspectiveTriageWork,
+    registration: ProspectiveDiagnosticRegistration,
+    label_set: EventImpactTriageLabelSet,
+    state_root: Path,
+    run_root: Path,
+    skill_root: Path,
+    baseline_provider: ModelProvider | None = None,
+    treatment_provider: ModelProvider | None = None,
+) -> dict[str, object]:
+    """Run one pre-labelled blind, same-contract independent replication."""
+
+    if label_set.exposure is not TriageLabelExposure.PRISTINE_BLIND:
+        raise ValueError("prospective triage comparison requires pristine blind labels")
+    if label_set.candidate_set_id != prepared.candidate_set.candidate_set_id:
+        raise ValueError("prospective triage labels belong to another Candidate Set")
+    if prepared.plan.arm is not TriageComparisonArm.TREATMENT:
+        raise ValueError("prepared prospective triage plan is not the treatment arm")
+    plan_builder = (
+        build_event_impact_triage_work_execution_plan_v9
+        if prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9
+        else build_event_impact_triage_work_execution_plan_v8
+    )
+    baseline_plan = plan_builder(
+        candidate_set=prepared.candidate_set,
+        work_manifest=prepared.manifest,
+        registration=registration,
+        arm=TriageComparisonArm.BASELINE,
+        model_profile_alias=registration.model_profile_id,
+        model_profile=prepared.profile,
+        skills=SkillRegistry(skill_root),
+    )
+    protocol_store = ArtifactStore(run_root / "protocol-artifacts")
+    label_artifact = protocol_store.put_json(label_set.to_dict())
+    baseline_plan_artifact = protocol_store.put_json(baseline_plan.to_dict())
+    treatment_plan_artifact = protocol_store.put_json(prepared.plan.to_dict())
+    comparison_store = EventImpactTriageWorkComparisonStore(
+        run_root / "comparison" / "registrations.sqlite3"
+    )
+    comparison = comparison_store.register(
+        candidate_set=prepared.candidate_set,
+        label_set=label_set,
+        work_manifest=prepared.manifest,
+        baseline_plan=baseline_plan,
+        treatment_plan=prepared.plan,
+    )
+    comparison_artifact = protocol_store.put_json(comparison.to_dict())
+    selected_baseline_provider = _LazyAvailabilityModelProvider(
+        profile=prepared.profile,
+        provider=baseline_provider,
+    )
+    selected_treatment_provider = _LazyAvailabilityModelProvider(
+        profile=prepared.profile,
+        provider=treatment_provider,
+    )
+    baseline_prepared = replace(
+        prepared,
+        plan=baseline_plan,
+        protocol_artifact_hashes={
+            **prepared.protocol_artifact_hashes,
+            "execution_plan": baseline_plan_artifact.content_hash,
+        },
+    )
+    baseline_runner = _build_prospective_triage_runner(
+        prepared=baseline_prepared,
+        registration=registration,
+        state_root=state_root,
+        run_root=run_root,
+        skill_root=skill_root,
+        provider=selected_baseline_provider,
+    )
+    treatment_runner = _build_prospective_triage_runner(
+        prepared=prepared,
+        registration=registration,
+        state_root=state_root,
+        run_root=run_root,
+        skill_root=skill_root,
+        provider=selected_treatment_provider,
+    )
+    baseline_result, treatment_result = await asyncio.gather(
+        baseline_runner.run(), treatment_runner.run()
+    )
+
+    def arm_summary(result: object) -> dict[str, object]:
+        work_result = cast(EventImpactTriageWorkRunResult, result)
+        return {
+            "status": work_result.status.value,
+            "attempted_member_count": len(work_result.members),
+            "completed_member_count": sum(
+                item.status is RunStatus.COMPLETED for item in work_result.members
+            ),
+            "provider_attempts": sum(
+                item.metrics.provider_attempts for item in work_result.members
+            ),
+            "input_tokens": sum(item.metrics.input_tokens for item in work_result.members),
+            "output_tokens": sum(item.metrics.output_tokens for item in work_result.members),
+            "estimated_cost_microusd": sum(
+                item.metrics.estimated_cost_microusd for item in work_result.members
+            ),
+        }
+
+    summary: dict[str, object] = {
+        **prepared.summary(),
+        "label_set_id": label_set.label_set_id,
+        "label_exposure": label_set.exposure.value,
+        "comparison_id": comparison.comparison_id,
+        "baseline_plan_id": baseline_plan.plan_id,
+        "treatment_plan_id": prepared.plan.plan_id,
+        "protocol_artifact_hashes": {
+            **prepared.protocol_artifact_hashes,
+            "label_set": label_artifact.content_hash,
+            "baseline_plan": baseline_plan_artifact.content_hash,
+            "treatment_plan": treatment_plan_artifact.content_hash,
+            "comparison_registration": comparison_artifact.content_hash,
+        },
+        "baseline": arm_summary(baseline_result),
+        "treatment": arm_summary(treatment_result),
+        "comparison_report_id": None,
+        "decision_id": None,
+        "terminal_id": None,
+        "judgment_or_execution_authority": False,
+    }
+    if (
+        baseline_result.status is not RunStatus.COMPLETED
+        or treatment_result.status is not RunStatus.COMPLETED
+    ):
+        summary["status"] = "incomplete"
+        summary_artifact = protocol_store.put_json(summary)
+        return {**summary, "summary_artifact_hash": summary_artifact.content_hash}
+
+    def completed_arm(
+        *, runner: EventImpactTriageWorkRunner, result: object
+    ) -> tuple[TriageWorkArmOutcome, EventImpactTriageWorkDecisionAuthority]:
+        work_result = cast(EventImpactTriageWorkRunResult, result)
+        if (
+            work_result.partition is None
+            or work_result.proposal is None
+            or work_result.run_evidence is None
+        ):
+            raise ValueError("completed triage comparison arm lacks terminal artifacts")
+        authority = EventImpactTriageWorkDecisionAuthority(
+            runner=runner,
+            candidate_set=prepared.candidate_set,
+            work_manifest=prepared.manifest,
+            digests=work_result.digests,
+            partition=work_result.partition,
+            proposal=work_result.proposal,
+            run_evidence=work_result.run_evidence,
+        )
+        return (
+            TriageWorkArmOutcome(
+                plan=runner.plan,
+                work_manifest=prepared.manifest,
+                digests=work_result.digests,
+                partition=work_result.partition,
+                proposal=work_result.proposal,
+                run_evidence=work_result.run_evidence,
+            ),
+            authority,
+        )
+
+    baseline_outcome, _ = completed_arm(runner=baseline_runner, result=baseline_result)
+    treatment_outcome, treatment_authority = completed_arm(
+        runner=treatment_runner, result=treatment_result
+    )
+    report = comparison_store.reopen_report(
+        registration=comparison,
+        candidate_set=prepared.candidate_set,
+        label_set=label_set,
+        work_manifest=prepared.manifest,
+        baseline=baseline_outcome,
+        treatment=treatment_outcome,
+        baseline_authority=baseline_runner,
+        treatment_authority=treatment_runner,
+    )
+    if report is None:
+        report = evaluate_event_impact_triage_work_comparison(
+            registration=comparison,
+            candidate_set=prepared.candidate_set,
+            label_set=label_set,
+            work_manifest=prepared.manifest,
+            baseline=baseline_outcome,
+            treatment=treatment_outcome,
+            baseline_authority=baseline_runner,
+            treatment_authority=treatment_runner,
+            registration_authority=comparison_store,
+            evaluated_at=datetime.now(UTC),
+        )
+        comparison_store.record_report(
+            report=report,
+            registration=comparison,
+            candidate_set=prepared.candidate_set,
+            label_set=label_set,
+            work_manifest=prepared.manifest,
+            baseline=baseline_outcome,
+            treatment=treatment_outcome,
+            baseline_authority=baseline_runner,
+            treatment_authority=treatment_runner,
+        )
+    report_artifact = protocol_store.put_json(report.to_dict())
+    outcome_artifacts = {
+        "baseline_outcome": protocol_store.put_json(baseline_outcome.to_dict()).content_hash,
+        "treatment_outcome": protocol_store.put_json(treatment_outcome.to_dict()).content_hash,
+        "comparison_report": report_artifact.content_hash,
+    }
+    summary.update(
+        {
+            "status": "completed",
+            "comparison_report_id": report.report_id,
+            "batch_gate_passed": report.batch_gate_passed,
+            "promotion_eligible": report.promotion_eligible,
+            "comparison_blockers": list(report.blockers),
+            "baseline_score": report.baseline_score.to_dict(),
+            "treatment_score": report.treatment_score.to_dict(),
+            "protocol_artifact_hashes": {
+                **cast(dict[str, str], summary["protocol_artifact_hashes"]),
+                **outcome_artifacts,
+            },
+        }
+    )
+    if report.batch_gate_passed:
+        evidence = treatment_authority.decision_evidence()
+        decision = EventImpactTriageDecisionStore(state_root).admit_work(
+            candidate_set=prepared.candidate_set,
+            proposal=treatment_outcome.proposal,
+            run_evidence=evidence,
+            run_authority=treatment_authority,
+            decided_at=evidence.finished_at,
+        )
+        ProspectiveTriageActiveBatchStore(run_root).complete(
+            batch_id=prepared.active_batch_id,
+            candidate_set=prepared.candidate_set,
+            state_root=state_root,
+        )
+        summary.update(
+            {
+                "decision_id": decision.decision_id,
+                "decision_status": decision.status.value,
+                "event_assessment_cluster_count": len(decision.event_assessment_cluster_ids),
+                "attention_watch_cluster_count": len(decision.attention_watch_cluster_ids),
+                "archive_cluster_count": len(decision.archive_cluster_ids),
+            }
+        )
+    else:
+        terminal_store = EventImpactTriageDecisionStore(state_root)
+        terminal = terminal_store.reopen_failed_work_comparison_terminal(
+            candidate_set=prepared.candidate_set,
+            comparison=comparison,
+            report=report,
+        )
+        if terminal is None:
+            terminal = terminal_store.terminalize_failed_work_comparison(
+                candidate_set=prepared.candidate_set,
+                comparison=comparison,
+                report=report,
+                label_set=label_set,
+                work_manifest=prepared.manifest,
+                baseline=baseline_outcome,
+                treatment=treatment_outcome,
+                baseline_authority=baseline_runner,
+                treatment_authority=treatment_runner,
+                comparison_authority=comparison_store,
+                terminalized_at=datetime.now(UTC),
+            )
+        ProspectiveTriageActiveBatchStore(run_root).terminalize(
+            batch_id=prepared.active_batch_id,
+            candidate_set=prepared.candidate_set,
+            terminal=terminal,
+            state_root=state_root,
+        )
+        summary.update(
+            {
+                "terminal_id": terminal.terminal_id,
+                "active_head_released": True,
+                "terminal_version_count": len(terminal.candidate_version_ids),
+            }
+        )
+    summary_artifact = protocol_store.put_json(summary)
     return {**summary, "summary_artifact_hash": summary_artifact.content_hash}

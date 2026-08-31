@@ -233,12 +233,14 @@ def snapshot_for_monitoring_test(
     policy: ProspectiveCollectionPolicy,
     retrieved_at: datetime,
     headline: str = "Policy decision",
+    raw_record: bytes = b'{"headline":"Policy decision"}',
 ) -> DataSnapshot:
     return _snapshot(
         store,
         policy=policy,
         retrieved_at=retrieved_at,
         headline=headline,
+        raw_record=raw_record,
     )
 
 

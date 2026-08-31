@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/agent-watch-admission.schema.json",
+  "title": "Agent Watch Admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "admission_id", "request_id", "parent_ref", "parent_agent_type", "parent_authority_hash", "lineage_depth", "delegate_profile_id", "outcome", "admitted_at", "execution_capability"],
+  "properties": {
+    "schema_version": {"const": "market-impact.agent-watch-admission.v1"},
+    "admission_id": {"type": "string", "pattern": "^agent-watch-admission-[0-9a-f]{64}$"},
+    "request_id": {"type": "string", "pattern": "^agent-watch-request-[0-9a-f]{64}$"},
+    "parent_ref": {"$ref": "#/$defs/canonical_ref"},
+    "parent_agent_type": {"$ref": "#/$defs/canonical_ref"},
+    "parent_authority_hash": {"$ref": "#/$defs/sha256"},
+    "lineage_depth": {"type": "integer", "minimum": 1},
+    "delegate_profile_id": {"type": "string", "pattern": "^watch-delegate-profile-[0-9a-f]{64}$"},
+    "outcome": {"enum": ["admitted", "reused", "rejected"]},
+    "blocker": {"enum": ["profile_not_offered", "subject_kind_not_allowed", "effective_context_required", "effective_context_not_allowed", "matcher_not_registered", "evidence_outside_parent_view", "subject_outside_parent_view", "matcher_outside_parent_view", "branch_limit_exhausted", "active_watch_limit_exhausted"]},
+    "operational_scope_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "monitoring_scope_id": {"type": "string", "pattern": "^monitoring-scope-[0-9a-f]{64}$"},
+    "retrieval_plan_id": {"type": "string", "pattern": "^retrieval-plan-[0-9a-f]{64}$"},
+    "watch_id": {"type": "string", "pattern": "^attention-watch-[0-9a-f]{64}$"},
+    "callback_agent_type": {"$ref": "#/$defs/canonical_ref"},
+    "admitted_at": {"type": "string", "format": "date-time"},
+    "execution_capability": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "rejected"}}, "required": ["outcome"]},
+      "then": {
+        "required": ["blocker"],
+        "not": {"anyOf": [
+          {"required": ["operational_scope_key"]},
+          {"required": ["monitoring_scope_id"]},
+          {"required": ["retrieval_plan_id"]},
+          {"required": ["watch_id"]},
+          {"required": ["callback_agent_type"]}
+        ]}
+      },
+      "else": {
+        "required": ["operational_scope_key", "monitoring_scope_id", "retrieval_plan_id", "watch_id", "callback_agent_type"],
+        "not": {"required": ["blocker"]}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "canonical_ref": {"type": "string", "pattern": "^[a-z][a-z0-9._:-]{1,127}$"}
+  }
+}

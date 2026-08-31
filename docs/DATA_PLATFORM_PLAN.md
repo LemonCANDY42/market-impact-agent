@@ -1066,11 +1066,12 @@ Set, Evidence Pack, Query Gate pass, Judgment, paper admission or execution auth
 
 #### PDI-40 — Admit a bounded Agent-proposed Watch
 
-Add a closed Watch-request contract that lets an Agent name only an approved event/entity, semantic
-query template, trigger, TTL, and budget. Harness policy resolves the registered Collection Policy,
-sources, cadence, credentials, destination, and limits before creating an `AttentionWatchPolicy`.
-Tests reject arbitrary URLs, Provider IDs, destinations, execution capabilities, budget expansion,
-and unregistered event clusters.
+Add a closed Watch-request contract that lets an Agent select only one delegate profile already
+offered to its parent type and propose an anchored subject, registered matcher, question, rationale
+and evidence. Harness policy—not the model—resolves the query template, Collection Policy, sources,
+cadence, credentials, callback profile, TTL and collection/callback limits before creating an
+`AttentionWatchPolicy`. Tests reject arbitrary URLs, Provider IDs, destinations, execution
+capabilities, budget expansion and unregistered matchers or subject types.
 
 The authority-neutral foundation is now implemented: a content-identified `MonitoringScope` can
 name an event cluster, industry, issuer, instrument, ETF, frozen subject set, or registered
@@ -1083,9 +1084,19 @@ fetched result is usable only after the Harness records it and freezes a qualify
 never appended directly to the requesting Agent Run. Attention Watch v2 embeds the exact Scope and
 wakes only on matching versions, while v1 remains replayable.
 
-This foundation does not complete PDI-40. The closed Agent proposal/admission tool, shared
-collection-opportunity fan-out, acquisition executor and installed scheduler remain open. A model
-cannot choose a URL, Provider, credential, destination, or same-run mutable context.
+The closed proposal/admission contracts and inactive mechanics are implemented. `WatchDelegateProfile` provides the
+Skill-like name and description exposed to an allowed parent while content-binding the callback
+Agent profile, Skill hashes, read-only capabilities, legal subject kinds, route and all limits.
+`AgentWatchRequest` deliberately omits route, Provider, model/tool, budget and execution controls.
+The service does not currently accept any parent context: an append-only, self-hashed projection was
+still caller authority and its minting path was removed. A named concrete parent Run/Decision owner
+must reopen its durable artifact and derive the evidence, subject and matcher projection before the
+transactional admission, equivalent-scope sharing, activation recovery or callback mechanics may be
+enabled. This keeps PDI-40 fail-closed without adding a duplicate generic decision-view authority.
+
+PDI-40 remains open for shared collection-opportunity fan-out, the bounded acquisition executor and
+installed scheduler. PDI-41 separately owns idempotent Wake claim and fresh Agent Run creation. A
+model still cannot choose a URL, Provider, credential, destination, or same-run mutable context.
 
 **Blocked by:** PDI-17 and PDI-22.
 

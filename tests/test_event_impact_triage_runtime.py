@@ -35,6 +35,7 @@ from market_impact_agent.event_impact_triage_evaluation import (
     TriageLabelExposure,
     evaluate_event_impact_triage_comparison,
     event_impact_triage_label_set_from_dict,
+    score_event_impact_triage_proposal,
 )
 from market_impact_agent.event_impact_triage_runtime import (
     EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
@@ -902,6 +903,73 @@ def test_label_set_rejects_partial_candidate_coverage() -> None:
             ),
             sealed_at=datetime(2026, 8, 30, 6, 6, tzinfo=UTC),
         )
+
+
+def test_material_event_must_catch_measures_event_assessment_route() -> None:
+    candidate_set, _ = _candidate_set()
+    first, second = candidate_set.version_ids
+    labels = EventImpactTriageLabelSet.build(
+        candidate_set=candidate_set,
+        exposure=TriageLabelExposure.PRISTINE_BLIND,
+        labels=(
+            TriageGoldLabel(
+                version_id=first,
+                checkpoint_eligibility=CheckpointEligibility.NEEDS_REVIEW,
+                expected_route=TriageRoute.EVENT_ASSESSMENT,
+                must_catch=True,
+                material_transmission_expected=True,
+                rationale="The frozen event has a supported transmission path to a target.",
+            ),
+            TriageGoldLabel(
+                version_id=second,
+                checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                expected_route=TriageRoute.ARCHIVE,
+                must_catch=False,
+                material_transmission_expected=False,
+                rationale="The frozen event has no supported target path.",
+            ),
+        ),
+        sealed_at=datetime(2026, 8, 30, 6, 6, tzinfo=UTC),
+    )
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(
+            TriageClusterProposal.build(
+                candidate_version_ids=(first,),
+                checkpoint_eligibility=CheckpointEligibility.NEEDS_REVIEW,
+                recommended_route=TriageRoute.EVENT_ASSESSMENT,
+                event_archetypes=(EventArchetype.ISSUER_CORPORATE,),
+                event_stage=EventStage.FIRST_OBSERVED,
+                changed_facts=("A frozen issuer fact changed.",),
+                rule_reasons=("The evidence supports formal impact assessment.",),
+                evidence_version_ids=(first,),
+                uncertainty_notes=("Material magnitude remains for the gate.",),
+                countercases=("The effect may remain operationally immaterial.",),
+                transmission_channels=(TransmissionChannel.REVENUE_DEMAND,),
+                affected_entity_refs=("issuer-fixture",),
+                triage_confidence=0.8,
+            ),
+            TriageClusterProposal.build(
+                candidate_version_ids=(second,),
+                checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+                recommended_route=TriageRoute.ARCHIVE,
+                event_archetypes=(),
+                event_stage=EventStage.FIRST_OBSERVED,
+                changed_facts=(),
+                rule_reasons=("No registered target path is supported.",),
+                evidence_version_ids=(second,),
+                triage_confidence=0.8,
+            ),
+        ),
+    )
+
+    score = score_event_impact_triage_proposal(
+        labels=labels,
+        proposal=proposal,
+        total_estimated_cost_microusd=0,
+    )
+
+    assert score.must_catch_false_negatives == 0
 
 
 def test_comparison_store_rejects_constructor_bypassed_partial_labels(

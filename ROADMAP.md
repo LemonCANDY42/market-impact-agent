@@ -7,28 +7,35 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 The shortest accepted path to Agent-directed paper operation is:
 
-0. restore prospective route health after the 30 August audit found one serial worker spending up
-   to 291 seconds across thirteen due Jobs while two-minute news Jobs have a 90-second grace window.
-   The repository now has deadline-first bounded per-opportunity concurrency and a versioned
-   replacement-route lifecycle; next accept a fresh private supervisor plan and route epoch across
-   several real two-minute cycles without restarting or discarding append-only collector state. A
-   separate atomic Collection Job Replacement now retires exact misconfigured Jobs without editing
-   them or abandoning staged receipts;
-1. freeze every real post-admission trigger candidate, run formal Event Impact Triage inside the
-   Harness, and either select the first rule-eligible event, block on `needs_review`, or route a
-   checkpoint-ineligible but potentially material event to EventAssessment/Attention Watch;
-2. create one exact Trigger Admission: either the checkpoint-selected Triage cluster, or a canonical
+0. keep the admitted v5 registration/v6 route epoch and supervisor healthy without resetting its
+   append-only misses, receipts or replacement history. Collection health is supporting
+   infrastructure, not the current experiment blocker;
+1. preserve the closed Triage authority boundaries before consuming another actual-receipt version:
+   comparison-governed v9 is rejected by the ordinary run path before any Provider call, and
+   failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
+   and Usage. Agent Watch admission remains globally fail-closed until a named concrete parent
+   Run/Decision owner can derive its evidence, subject and matcher projection; a caller context or
+   self-hashed artifact is not authority;
+2. freeze one next-version material-ingress rule that incorporates v9's real counterexample: retain
+   broad discovery, archive routine context without a stated surprise, send plausible but unresolved
+   relevance with one named observable to Attention Watch, and require both a new causal fact and a
+   concrete evidence-bounded transmission variable for EventAssessment. Run it once on a new sealed
+   pristine batch; do not retune or rerun the exposed v8/v9 batches. A pass must produce a formal
+   Triage Decision and either select the first rule-eligible event or route one supported material
+   event onward; a failure is terminal and should trigger an input/task-definition review rather than
+   another local prompt dialect;
+3. create one exact Trigger Admission: either the checkpoint-selected Triage cluster, or a canonical
    EventAssessment projection whose cited target/path passes the deterministic Materiality Gate;
-3. for that admission, freeze the internally verifiable Snapshot Set, explicit optional gaps,
+4. for that admission, freeze the internally verifiable Snapshot Set, explicit optional gaps,
    Prospective Evidence Lineage, tools, and Query Gate;
-4. run two complete paired Judgment replicates, add a third complete pair only when either arm's
+5. run two complete paired Judgment replicates, add a third complete pair only when either arm's
    first two decisions disagree, and freeze one Decision Run Manifest;
-5. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
+6. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
    or the matching first two when the registered early-stop rule applies; otherwise archive without a
    Signal or Order; the control arm is comparison-only;
-6. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
+7. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
    the already accepted durable mock outbox;
-7. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
+8. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
    account-scoped reconciliation before any real broker-paper claim.
 
 The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
@@ -53,6 +60,52 @@ receipt may support process diagnostics and later `manual_each` paper work with 
 visible, without waiting for every old PIT gap to be repaired. Strategy-labeled paper/live promotion
 still requires registered multi-case calibration plus its mandate, tradability, approval,
 reconciliation and execution gates. See `docs/EVENT_IMPACT_TRIAGE.md`.
+
+### Current alignment audit — 2026-09-01
+
+The final objective remains unchanged: an Agent may form a Judgment, Signal and Order Intent, while
+the Harness alone owns evidence admission, policy, account truth, approval and execution state.
+Historical and prospective work still share engine-neutral contracts without letting incomplete
+historical PIT block actual-receipt process validation. Live remains fail-closed.
+
+The delivery risk is now schedule balance rather than architectural drift: ingress/runtime work has
+received more implementation and experiment cycles than the first complete prospective
+Judgment-to-paper path. V8 and v9 supplied useful negative evidence and removed the premature
+multi-Skill/deep-analysis ingress design, but another sequence of prompt-only Triage revisions would
+not advance the product. The next ingress comparison is therefore a single bounded go/no-go gate;
+after a pass, priority moves immediately to Trigger Admission, PDI-30/PDI-31, PDI-32, Decision
+Admission and the accepted `manual_each` mock outbox.
+
+At the audit cutoff, the private runtime had no active Triage head and one terminal v9 comparison.
+Readiness showed 100 unclassified actual-receipt candidates in each of the overlapping policy and
+material-event checkpoint views; this is not evidence of 200 distinct events. Earnings and NBS were
+still waiting for a post-admission trigger. Collection health showed 16 active and two replaced Jobs,
+4,096 rolling-24-hour attempts, 4,071 successes, 23 failures, zero current consecutive failures, and
+no active-Job lag above 88 seconds at observation time. Historical missed intervals remain explicit.
+No Trigger Admission, Snapshot Set, Query Gate, Judgment, Intent, paper admission, IBKR connection or
+live authority was created by this audit.
+
+A frozen-candidate review found four acceptance blockers not detected by the earlier green suite.
+The follow-up repair closes the Triage blockers without changing the semantic result of v8 or v9:
+the ordinary path
+rejects v9 before Provider availability or generation; Comparison Reports are append-only and failed
+terminalization must replay the durable Registration, Report, both Runs and exact Usage. Retry also
+reopens the first persisted Report or terminal identity, so crashes after either commit do not strand
+the active head; this local-only path neither constructs nor probes a Provider. Authority guards
+require the exact concrete Comparison Store and Work Runner types, and a terminalized batch cannot be
+reinstalled as a new active head. Caller-consistent stubs, authority subclasses, post-Report Usage
+changes and both crash windows are explicit regression cases. A self-issued Agent Watch parent
+projection remained circular, so that issuer was
+removed: offers, admission lookup, callbacks and restart activation now all fail closed until a
+concrete parent authority is integrated. These repairs authorize neither another real batch nor a
+Watch scheduler; the next versioned ingress rule and PDI-40 parent/scheduler acceptance remain
+separate gates.
+
+Provider resolution remains lazy for new Work only. Factory or availability failure before dispatch
+is recorded as a zero-attempt `not_started` preparation failure, leaves the Run nonterminal, returns
+once without an in-invocation retry, and can be probed again on a later invocation. It cannot create
+ambiguous transport evidence or a Usage record, while completed local recovery never touches the
+Provider.
 
 ## Phase 0 — Auditable skeleton
 
@@ -149,6 +202,13 @@ Stage 1 — freeze requirements:
     for new work. It retains the adaptive paired design, adds a fourth broad material-event
     checkpoint, binds the CPA-priced model profile, and aligns policy, Earnings and NBS trigger
     cadence with their real Collection Jobs. It grants no model or execution authority.
+  - [x] Supersede v4 for new prospective work with cadence-aligned v5 registration
+    `prospective-diagnostic-registration-cbd6330be9ba30422db941d413888ec708af3f5906084704c5df600bf616cdce`.
+    It changes only the broad material-event trigger contract from 120/600 seconds to the purchased
+    news Jobs' real 300/900-second poll/maximum-gap cadence. The v4 claim and route history remain
+    immutable. Route plan v6 was admitted at `2026-08-31T15:32:20.524388Z`; its first readiness
+    audit reported 4/4 operational checkpoints and zero post-admission candidates, so no old receipt
+    was backfilled and no model call was made.
 
 Stage 2 — accept source slices and measure coverage:
 
@@ -482,6 +542,40 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       than the library: strict JSON or exactly one punctuation insertion/deletion with identical
       strings, field identities, number text and literals. Every Run persists parse evidence;
       schema-guided coercion, multiple edits and semantic repair remain rejected.
+    - [x] Add the v8 material-event stage-one contract. It keeps v7 parsing but stops asking the
+      model to echo final checkpoint eligibility before EventAssessment exists. Material classify
+      now exposes only archive, Attention Watch and EventAssessment routes; the Harness derives the
+      provisional canonical eligibility field, while direct checkpoint mechanisms retain explicit
+      rule classification. Scripted acceptance covers both variants without changing v2-v7 replay.
+      A same-binding v5 route epoch replaced the degraded v4 head without resetting collection; its
+      first readiness report recorded 4/4 operational checkpoints awaiting post-admission events.
+    - [x] Reject the v8 multi-Skill ingress design on pristine blind evidence. The baseline used 27
+      model members and routed all 5/5 must-catch labels; treatment used 31 members, missed 5/5,
+      produced 14 unsupported material routes and consumed 257,800 input / 159,428 output Tokens
+      versus 106,755 / 113,878 for baseline. Neither arm granted a Decision, Query Gate, Judgment or
+      execution authority.
+    - [x] Add v9 as the smallest complete material-event ingress. One coordinator call per bounded
+      Work Unit returns a positional archive/Watch/EventAssessment route, one changed fact and either
+      one typed transmission or one unresolved observable. Exact deduplication, receipt identity,
+      budgets, JSON repair, replay and canonical Proposal expansion remain Harness-owned. Semantic
+      clustering, full issuer/industry/portfolio analysis, countercases and actions move downstream to
+      EventAssessment. A failed comparison now terminalizes append-only before releasing the active
+      head; its versions cannot be silently selected again and no synthetic semantic Decision is made.
+      Scripted acceptance proves one-call coverage, restart without Provider calls and downstream
+      artifact reopening. The real failed v8 batch has now been reopened with a no-call Provider,
+      reproduced its failed blockers, terminalized all 29 versions and released its active head. A
+      later pristine v9 batch froze 11 new post-admission versions with sealed operator labels and
+      completed one coordinator call per arm. Both arms caught both must-catch events, but baseline
+      produced five unsupported material routes and treatment produced four; exact route accuracy
+      was 6/11 and 4/11 respectively. The registered gate rejected and terminalized the batch,
+      released its active head, and granted no Decision or downstream authority. The two calls used
+      15,176 input / 13,220 output Tokens and 18,900 microusd. This is evidence that the phrase
+      "plausible transmission" is still too permissive for routine market context and unresolved
+      policy facts, not evidence against broad-event monitoring. Do not tune or rerun this exposed
+      batch; the next revision must distinguish a new causal fact and concrete evidence-bounded
+      transmission from generic risk-appetite/discount-rate possibilities, then face a new blind
+      batch. The separate frozen-cadence mismatch was corrected by the versioned v5 registration
+      and v6 route epoch rather than waived.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
@@ -538,6 +632,13 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     NBS and Earnings were waiting for later post-admission releases. The two Earnings successor Jobs
     recovered from Journal backoff without a service restart; earlier staged Provider receipts remain
     ineligible for the current route admission.
+  - [x] Replace the later degraded v4 route epoch with identical-binding v5 plan
+    `prospective-checkpoint-route-plan-83d418e2790ec7a716076557462dd651f648ebd7e9fcf0c2561b082128cbc862`
+    and admission
+    `prospective-checkpoint-route-admission-286eef7b1773573f68c7cb131d37a0e5c6858a59c40d2b0e661ec2954fa0098e`.
+    The v4 post-admission miss remains immutable. The first v5 report recorded 4/4 operational
+    checkpoints: policy and material-event high-cadence routes plus Earnings and NBS were all in
+    healthy external wait with no backdated candidate.
   - [ ] After PDI-29 produces an exact direct or material Trigger Admission, seal its trading-session barrier and
     freeze the actual Snapshot Set, Evidence Pack, read-only tools, Prospective Evidence Lineage, and
     Prospective Execution Plan. Pre-admission observations remain ineligible.
@@ -616,9 +717,24 @@ Stage 5 — automate bounded follow-up and open registered outcomes:
     Plans; cutoff-bound local-first Resolutions; and v2 Attention Watch matching that ignores
     unrelated broad-feed versions. Legacy v1 event Watches remain replayable. This does not install
     an Agent proposal tool, fetch executor, scheduler, callback, or Wake dispatcher.
-  - [ ] Add the closed Agent Watch-request/admission contract, shared collection-opportunity fan-out,
-    installed scheduler and bounded acquisition executor. Every remote fetch must enter the Journal
-    and freeze a Snapshot before a fresh Agent Run can use it.
+  - [x] Add the bounded Agent Watch-request/admission mechanics. Each parent Agent sees only named,
+    described delegate profiles allowed for its type and lineage depth. A request may propose an
+    explicitly typed child scope for a newly discovered issuer, industry, instrument, ETF, frozen
+    set or registered information aspect, but cannot select a Provider, URL, credential, cadence,
+    budget, callback model/tools or execution capability. Durable Harness admission reuses
+    `MonitoringScope.origin_refs`, caps branches/depth/duration/collection and callback cost/active
+    Watches, and binds only the profile's exact query template and Collection Policy. Equivalent
+    active scopes share one Watch while durable callback bindings preserve every accepted parent.
+  - [ ] Integrate one named concrete parent Run/Decision authority. It must reopen its own durable
+    artifact and derive every allowed evidence reference, subject/frozen member and matcher term;
+    neither a caller-created projection nor a self-hashed Artifact Store object may mint delegation
+    authority. Until that owner exists, profile offers, admission, lookup, callbacks and restart
+    activation remain fail-closed. The inactive admission mechanics retain regression coverage for
+    unrelated scopes and admission-before-Watch activation, but are not PDI-40 acceptance evidence.
+  - [ ] Install shared due-collection fan-out, the bounded acquisition executor and the scheduler.
+    Every remote fetch must enter the Journal and freeze a Snapshot before a fresh Agent Run can use
+    it; a child Watch cannot mutate its parent Judgment, widen the trading universe, or create an
+    Order Intent.
 - [ ] `PDI-41` Dispatch a claimed Wake idempotently into one fresh bounded Judgment Run.
 - [ ] `PDI-42` Open outcomes after the registered horizon and issue the next-research go/no-go.
 

@@ -1,0 +1,515 @@
+{
+  "schema_version": "market-impact.prospective-diagnostic-registration.v4",
+  "registered_at": "2026-08-31T15:30:30Z",
+  "checkpoints": [
+    {
+      "checkpoint_key": "next-a-share-policy-event",
+      "name": "Next first-eligible A-share policy or market-structure event",
+      "mechanism": "policy_regulation",
+      "selection_rule": "first_eligible_after_registration",
+      "eligibility_rule": "The first prospectively received CSRC, PBOC, SSE, SZSE, or established-publisher observation after registration that reports a capital-market policy or market-structure change; corroboration quality is recorded but is not a trigger prerequisite.",
+      "eligibility_source_classes": [
+        "official_capital_market_authority",
+        "established_news_publisher"
+      ],
+      "exclusion_rules": [
+        "Exclude routine administrative notices with no market-policy change.",
+        "Exclude items first discovered after the registered end-of-day decision cutoff.",
+        "Exclude events whose outcome was opened before paired judgments were sealed."
+      ],
+      "cutoff": {
+        "timezone": "Asia/Shanghai",
+        "session_boundary": "after_market_close",
+        "market_close_local": "15:00:00",
+        "decision_delay_seconds": 1800
+      },
+      "capability_slots": [
+        {
+          "capability": "event_revelation",
+          "applicability": "required",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "official_event",
+            "established_news"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 300,
+          "maximum_gap_seconds": 900,
+          "maximum_age_seconds": 21600
+        },
+        {
+          "capability": "prior_expectation",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "market_consensus_or_positioning_baseline"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 3600,
+          "maximum_gap_seconds": 86400,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "market_context",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "trading_calendar",
+            "market_index_price",
+            "etf_price"
+          ],
+          "minimum_data_sources": 3,
+          "minimum_observations": 3,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 172800,
+          "maximum_age_seconds": 172800
+        },
+        {
+          "capability": "exposure_candidates",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "tradable_instrument_master",
+            "effective_industry_membership",
+            "industry_to_tradable_mapping"
+          ],
+          "minimum_data_sources": 3,
+          "minimum_observations": 3,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2592000
+        },
+        {
+          "capability": "positioning",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "margin_financing"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 259200,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "macro_vintage",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "macro_release_calendar",
+            "official_macro_release_revision"
+          ],
+          "minimum_data_sources": 2,
+          "minimum_observations": 2,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2678400
+        }
+      ],
+      "target_venues": [
+        "XSHG",
+        "XSHE"
+      ],
+      "allowed_instrument_classes": [
+        "exchange_traded_fund"
+      ],
+      "candidate_horizon_sessions": [
+        1,
+        5,
+        20
+      ]
+    },
+    {
+      "checkpoint_key": "next-a-share-earnings-surprise",
+      "name": "Next first-eligible A-share earnings expectation delta",
+      "mechanism": "earnings_expectation_delta",
+      "selection_rule": "first_eligible_after_registration",
+      "eligibility_rule": "The first prospectively received A-share issuer earnings forecast, express report, or periodic report after registration; prior consensus and publisher corroboration are optional observed context rather than trigger prerequisites.",
+      "eligibility_source_classes": [
+        "listed_issuer_primary_disclosure",
+        "licensed_aggregator_event_feed"
+      ],
+      "exclusion_rules": [
+        "Exclude observations that do not establish an issuer and a forecast, express, or periodic-report event identity.",
+        "Retain a missing pre-event consensus as an explicit optional information gap; do not exclude the event for that absence.",
+        "Exclude events whose outcome was opened before paired judgments were sealed."
+      ],
+      "cutoff": {
+        "timezone": "Asia/Shanghai",
+        "session_boundary": "after_market_close",
+        "market_close_local": "15:00:00",
+        "decision_delay_seconds": 1800
+      },
+      "capability_slots": [
+        {
+          "capability": "event_revelation",
+          "applicability": "required",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "issuer_event",
+            "established_news"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 3600,
+          "maximum_gap_seconds": 10800,
+          "maximum_age_seconds": 21600
+        },
+        {
+          "capability": "prior_expectation",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "sell_side_consensus"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 3600,
+          "maximum_gap_seconds": 86400,
+          "maximum_age_seconds": 2592000
+        },
+        {
+          "capability": "market_context",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "trading_calendar",
+            "market_index_price",
+            "etf_price"
+          ],
+          "minimum_data_sources": 3,
+          "minimum_observations": 3,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 172800,
+          "maximum_age_seconds": 172800
+        },
+        {
+          "capability": "exposure_candidates",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "tradable_instrument_master",
+            "effective_industry_membership",
+            "industry_to_tradable_mapping"
+          ],
+          "minimum_data_sources": 3,
+          "minimum_observations": 3,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2592000
+        },
+        {
+          "capability": "positioning",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "margin_financing"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 259200,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "macro_vintage",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "macro_release_calendar",
+            "official_macro_release_revision"
+          ],
+          "minimum_data_sources": 2,
+          "minimum_observations": 2,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2678400
+        }
+      ],
+      "target_venues": [
+        "XSHG",
+        "XSHE"
+      ],
+      "allowed_instrument_classes": [
+        "equity",
+        "exchange_traded_fund"
+      ],
+      "candidate_horizon_sessions": [
+        1,
+        5,
+        20
+      ]
+    },
+    {
+      "checkpoint_key": "next-nbs-cpi-ppi-release",
+      "name": "Next first-eligible NBS CPI and PPI release",
+      "mechanism": "macro_cycle",
+      "selection_rule": "first_eligible_after_registration",
+      "eligibility_rule": "The first prospectively received National Bureau of Statistics CPI and PPI release after registration; expectation, revision, and publisher context remain optional observed inputs.",
+      "eligibility_source_classes": [
+        "national_bureau_of_statistics"
+      ],
+      "exclusion_rules": [
+        "Exclude regional releases and commentary without the national CPI and PPI values.",
+        "Exclude a revised current series when the original actual-receipt release is absent.",
+        "Exclude events whose outcome was opened before paired judgments were sealed."
+      ],
+      "cutoff": {
+        "timezone": "Asia/Shanghai",
+        "session_boundary": "after_market_close",
+        "market_close_local": "15:00:00",
+        "decision_delay_seconds": 1800
+      },
+      "capability_slots": [
+        {
+          "capability": "event_revelation",
+          "applicability": "required",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "official_macro_release",
+            "established_news"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 3600,
+          "maximum_gap_seconds": 90000,
+          "maximum_age_seconds": 172800
+        },
+        {
+          "capability": "prior_expectation",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "survey_or_market_consensus"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 3600,
+          "maximum_gap_seconds": 86400,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "market_context",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "trading_calendar",
+            "market_index_price",
+            "etf_price"
+          ],
+          "minimum_data_sources": 3,
+          "minimum_observations": 3,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 172800,
+          "maximum_age_seconds": 172800
+        },
+        {
+          "capability": "exposure_candidates",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "tradable_instrument_master",
+            "effective_industry_membership",
+            "industry_to_tradable_mapping"
+          ],
+          "minimum_data_sources": 3,
+          "minimum_observations": 3,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2592000
+        },
+        {
+          "capability": "positioning",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "margin_financing"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 259200,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "macro_vintage",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "macro_release_calendar",
+            "official_macro_release_revision"
+          ],
+          "minimum_data_sources": 2,
+          "minimum_observations": 2,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2678400
+        }
+      ],
+      "target_venues": [
+        "XSHG",
+        "XSHE"
+      ],
+      "allowed_instrument_classes": [
+        "exchange_traded_fund"
+      ],
+      "candidate_horizon_sessions": [
+        1,
+        5,
+        20
+      ]
+    },
+    {
+      "checkpoint_key": "next-material-a-share-event",
+      "name": "Next formally assessed material A-share event",
+      "mechanism": "material_event",
+      "selection_rule": "first_eligible_after_registration",
+      "eligibility_rule": "The first post-registration actual-receipt event cluster that formal Event Impact Triage routes to EventAssessment and whose canonical assessment passes the deterministic Materiality Gate for at least one registered A-share equity or exchange-traded-fund target; the rule is event-structure based and contains no named-case keyword allowlist.",
+      "eligibility_source_classes": [
+        "established_news_publisher",
+        "official_or_primary_source"
+      ],
+      "exclusion_rules": [
+        "Archive clusters with no evidence-linked transmission path to a registered target.",
+        "Route unresolved facts or target mappings to Attention Watch instead of inventing materiality.",
+        "Exclude events whose outcome was opened before paired judgments were sealed."
+      ],
+      "cutoff": {
+        "timezone": "Asia/Shanghai",
+        "session_boundary": "after_market_close",
+        "market_close_local": "15:00:00",
+        "decision_delay_seconds": 1800
+      },
+      "capability_slots": [
+        {
+          "capability": "event_revelation",
+          "applicability": "required",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "established_news"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 300,
+          "maximum_gap_seconds": 900,
+          "maximum_age_seconds": 21600
+        },
+        {
+          "capability": "prior_expectation",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "market_consensus_or_positioning_baseline"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 3600,
+          "maximum_gap_seconds": 86400,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "market_context",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "raw_market_price",
+            "asof_adjustment",
+            "trading_calendar",
+            "market_index_price",
+            "etf_price"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 172800,
+          "maximum_age_seconds": 172800
+        },
+        {
+          "capability": "exposure_candidates",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "tradable_instrument_master",
+            "effective_industry_membership",
+            "industry_to_tradable_mapping",
+            "tradability_state"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2592000
+        },
+        {
+          "capability": "positioning",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "margin_financing"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 259200,
+          "maximum_age_seconds": 604800
+        },
+        {
+          "capability": "macro_vintage",
+          "applicability": "optional",
+          "not_applicable_reason": null,
+          "required_route_kinds": [
+            "official_macro_release_revision"
+          ],
+          "minimum_data_sources": 1,
+          "minimum_observations": 1,
+          "poll_interval_seconds": 86400,
+          "maximum_gap_seconds": 604800,
+          "maximum_age_seconds": 2678400
+        }
+      ],
+      "target_venues": [
+        "XSHG",
+        "XSHE"
+      ],
+      "allowed_instrument_classes": [
+        "equity",
+        "exchange_traded_fund"
+      ],
+      "candidate_horizon_sessions": [
+        1,
+        5,
+        20,
+        60
+      ]
+    }
+  ],
+  "paired_arms": [
+    "structured_agent_core",
+    "structured_agent_plus_routed_methods"
+  ],
+  "replicates_per_arm": 3,
+  "minimum_replicates_per_arm": 2,
+  "replicate_schedule_rule": "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees",
+  "model_profile_id": "cliproxyapi-luna-xhigh-cpa-v1",
+  "aggregate_model_cost_limit_usd": "20.00",
+  "outcome_opening_rule": "do_not_open_until_all_paired_judgments_are_sealed",
+  "stop_conditions": [
+    "required_event_trigger_missing",
+    "snapshot_or_cutoff_identity_invalid",
+    "paired_input_set_divergence",
+    "model_budget_would_be_exceeded",
+    "outcome_opened_early"
+  ],
+  "go_conditions": [
+    "required_event_trigger_reconciled",
+    "optional_information_gaps_explicit",
+    "paired_inputs_identical",
+    "adaptive_two_or_three_replicates_per_arm_complete",
+    "usage_ledger_reconciled"
+  ],
+  "claim_scope": "process_diagnostic_only_no_alpha_or_execution_claim",
+  "registration_id": "prospective-diagnostic-registration-cbd6330be9ba30422db941d413888ec708af3f5906084704c5df600bf616cdce"
+}

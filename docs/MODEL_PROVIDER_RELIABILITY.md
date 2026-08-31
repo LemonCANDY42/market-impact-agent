@@ -80,14 +80,30 @@ against the original frozen unit/phase/aggregate ceilings, and grants no Judgmen
 authority. Equivalent authorization reopens the same Grant instead of issuing another.
 Provider reliability acceptance remains a prerequisite, not replacement authority by itself.
 
-A fully received response with locally malformed JSON is not an ambiguous Provider failure. Future
-v7 Work Plans parse through pinned `json-repair` and accept only strict JSON or one semantics-
+A fully received response with locally malformed JSON is not an ambiguous Provider failure. V7 and
+later Work Plans parse through pinned `json-repair` and accept only strict JSON or one semantics-
 preserving structural punctuation edit, with content-identified evidence. For an already terminal
 pre-v7 member, one explicit Format Recovery Grant may bind the immutable failed terminal, Journal,
 Usage and final response and create a separate zero-Provider recovery Run. It never resends the
 request, creates no new Usage, leaves the failed source Usage charged, and cannot repair semantic
 tokens or another recovery. This format path is distinct from Provider retry, circuit and Replacement
 Grant authority.
+
+Material-ingress v9 preserves the same dispatch, ambiguity, parser, Usage and restart evidence but
+has only one model phase: one coordinator request per bounded Work Unit. Partition and classify are
+deterministic Harness derivations, so they cannot create extra Provider ambiguity or receive separate
+budgets. A failed blind comparison is terminalized before its active head is released; restart cannot
+rerun the failed versions or reinterpret them as a semantic Decision. The terminalization authority
+does not trust a caller-reconstructed failure: it first reopens the append-only Comparison
+Registration and Report and replays both completed Run Journals and exact Usage sets. The ordinary
+run path rejects comparison-governed v9 before Provider availability or generation. If a process
+crashes after Report or terminal commit, retry reopens the first durable identity and finishes head
+release without constructing or probing a Provider; only a genuinely missing Work member can resolve
+and check a Provider immediately before a new dispatch. A factory or availability failure at that
+pre-dispatch boundary appends a `provider.preparation.failed` diagnostic with generation
+`not_started`, retry disposition `safe` and zero Provider attempts. It leaves the Run nonterminal and
+creates no Usage record, returns control once, and may be re-probed only by a later invocation; it is
+never converted into an ambiguous dispatch or silently retried in place.
 
 The real Grant was consumed for the ambiguous classify member above. Its replacement completed and
 the v4 graph advanced to 39 completed logical members. A later classify member then failed normally

@@ -872,6 +872,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(".market-impact/event-impact-triage/current"),
     )
     prospective_triage_parser.add_argument("--prepare-only", action="store_true")
+    prospective_triage_compare_parser = agent_subparsers.add_parser(
+        "prospective-triage-compare-run",
+        help="Run one frozen pristine-blind baseline/treatment triage comparison",
+    )
+    prospective_triage_compare_parser.add_argument("--registration", required=True, type=Path)
+    prospective_triage_compare_parser.add_argument("--route-plan", required=True, type=Path)
+    prospective_triage_compare_parser.add_argument("--checkpoint-key", required=True)
+    prospective_triage_compare_parser.add_argument("--label-set", required=True, type=Path)
+    prospective_triage_compare_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    prospective_triage_compare_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    prospective_triage_compare_parser.add_argument(
+        "--run-root",
+        type=Path,
+        default=Path(".market-impact/event-impact-triage/current"),
+    )
     prospective_triage_recovery_parser = agent_subparsers.add_parser(
         "prospective-triage-format-recover",
         help="Authorize one bounded zero-Provider JSON format recovery in the active batch",
@@ -4280,6 +4303,53 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         if args.prepare_only:
             return 0
+        return 0 if result["status"] == RunStatus.COMPLETED.value else 1
+    if args.command == "agent" and args.agent_command == "prospective-triage-compare-run":
+        try:
+            from market_impact_agent.event_impact_triage_evaluation import (
+                event_impact_triage_label_set_from_dict,
+            )
+            from market_impact_agent.prospective_triage import (
+                reopen_active_prospective_triage_work,
+                run_prepared_prospective_triage_comparison,
+            )
+
+            registration = load_prospective_diagnostic_registration(args.registration)
+            route_plan = load_prospective_checkpoint_route_plan(args.route_plan)
+            prepared = reopen_active_prospective_triage_work(
+                registration=registration,
+                route_plan=route_plan,
+                checkpoint_key=args.checkpoint_key,
+                state_root=args.state_root,
+                run_root=args.run_root,
+            )
+            label_set = event_impact_triage_label_set_from_dict(
+                json.loads(args.label_set.read_text())
+            )
+            result = asyncio.run(
+                run_prepared_prospective_triage_comparison(
+                    prepared=prepared,
+                    registration=registration,
+                    label_set=label_set,
+                    state_root=args.state_root,
+                    run_root=args.run_root,
+                    skill_root=args.skill_root,
+                )
+            )
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
     if args.command == "agent" and args.agent_command == "prospective-triage-format-recover":
         try:

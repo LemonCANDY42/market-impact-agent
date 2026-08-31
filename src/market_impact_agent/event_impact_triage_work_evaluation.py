@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.domain import require_aware
@@ -31,6 +32,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunAuthorityReceipt,
     EventImpactTriageWorkRunEvidence,
+    EventImpactTriageWorkRunner,
 )
 
 TRIAGE_WORK_COMPARISON_REGISTRATION_SCHEMA = (
@@ -75,6 +77,22 @@ class TriageWorkComparisonRegistrationAuthority(Protocol):
     def assert_authoritative_registration(
         self, registration: EventImpactTriageWorkComparisonRegistration
     ) -> datetime: ...
+
+
+class TriageWorkComparisonReportAuthority(Protocol):
+    def assert_authoritative_report(
+        self,
+        *,
+        report: EventImpactTriageWorkComparisonReport,
+        registration: EventImpactTriageWorkComparisonRegistration,
+        candidate_set: EventImpactTriageCandidateSet,
+        label_set: EventImpactTriageLabelSet,
+        work_manifest: EventImpactTriageWorkManifest,
+        baseline: TriageWorkArmOutcome,
+        treatment: TriageWorkArmOutcome,
+        baseline_authority: TriageWorkComparisonRunAuthority,
+        treatment_authority: TriageWorkComparisonRunAuthority,
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +240,8 @@ class EventImpactTriageWorkComparisonRegistration:
         manifest_hash = canonical_hash(work_manifest.to_dict())
         if label_set.candidate_set_id != candidate_set.candidate_set_id:
             raise ValueError("triage work comparison Label Set belongs to another Candidate Set")
+        if label_set.sealed_at < candidate_set.frozen_at:
+            raise ValueError("triage work comparison labels predate the frozen Candidate Set")
         if tuple(item.version_id for item in label_set.labels) != tuple(
             sorted(candidate_set.version_ids)
         ):
@@ -350,6 +370,24 @@ class EventImpactTriageWorkComparisonStore:
                 BEGIN
                     SELECT RAISE(ABORT, 'work comparison registrations are append-only');
                 END;
+                CREATE TABLE IF NOT EXISTS triage_work_comparison_reports (
+                    comparison_id TEXT PRIMARY KEY,
+                    report_id TEXT NOT NULL UNIQUE,
+                    evaluated_at TEXT NOT NULL,
+                    report_json TEXT NOT NULL,
+                    FOREIGN KEY(comparison_id)
+                        REFERENCES triage_work_comparison_registrations(comparison_id)
+                );
+                CREATE TRIGGER IF NOT EXISTS triage_work_comparison_reports_no_update
+                BEFORE UPDATE ON triage_work_comparison_reports
+                BEGIN
+                    SELECT RAISE(ABORT, 'work comparison reports are append-only');
+                END;
+                CREATE TRIGGER IF NOT EXISTS triage_work_comparison_reports_no_delete
+                BEFORE DELETE ON triage_work_comparison_reports
+                BEGIN
+                    SELECT RAISE(ABORT, 'work comparison reports are append-only');
+                END;
                 """
             )
 
@@ -440,6 +478,181 @@ class EventImpactTriageWorkComparisonStore:
         if registered_at != registration.registered_at:
             raise ValueError("triage work comparison Harness timestamp differs from registration")
         return registered_at
+
+    def has_registration_for_candidate_set(self, candidate_set_id: str) -> bool:
+        """Return whether a Candidate Set is durably bound to comparison-only admission."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT registration_json FROM triage_work_comparison_registrations"
+            ).fetchall()
+        for row in rows:
+            decoded = json.loads(str(row["registration_json"]))
+            if not isinstance(decoded, dict):
+                raise ValueError("stored triage work comparison registration is not an object")
+            payload = cast(dict[str, object], decoded)
+            if payload.get("candidate_set_id") == candidate_set_id:
+                return True
+        return False
+
+    def record_report(
+        self,
+        *,
+        report: EventImpactTriageWorkComparisonReport,
+        registration: EventImpactTriageWorkComparisonRegistration,
+        candidate_set: EventImpactTriageCandidateSet,
+        label_set: EventImpactTriageLabelSet,
+        work_manifest: EventImpactTriageWorkManifest,
+        baseline: TriageWorkArmOutcome,
+        treatment: TriageWorkArmOutcome,
+        baseline_authority: TriageWorkComparisonRunAuthority,
+        treatment_authority: TriageWorkComparisonRunAuthority,
+    ) -> EventImpactTriageWorkComparisonReport:
+        """Persist only a Report reproduced from the exact durable Runs and Usage."""
+
+        _require_concrete_work_runners(baseline_authority, treatment_authority)
+        assert_authoritative_event_impact_triage_work_comparison_report(
+            report=report,
+            registration=registration,
+            candidate_set=candidate_set,
+            label_set=label_set,
+            work_manifest=work_manifest,
+            baseline=baseline,
+            treatment=treatment,
+            baseline_authority=baseline_authority,
+            treatment_authority=treatment_authority,
+            registration_authority=self,
+        )
+        report_json = canonical_json_bytes(report.to_dict()).decode()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT report_id, evaluated_at, report_json
+                FROM triage_work_comparison_reports WHERE comparison_id = ?
+                """,
+                (registration.comparison_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    str(existing["report_id"]) != report.report_id
+                    or _datetime(str(existing["evaluated_at"])) != report.evaluated_at
+                    or str(existing["report_json"]) != report_json
+                ):
+                    raise ValueError("stored triage work comparison Report is inconsistent")
+                return report
+            connection.execute(
+                """
+                INSERT INTO triage_work_comparison_reports(
+                    comparison_id, report_id, evaluated_at, report_json
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    registration.comparison_id,
+                    report.report_id,
+                    _timestamp(report.evaluated_at),
+                    report_json,
+                ),
+            )
+        return report
+
+    def reopen_report(
+        self,
+        *,
+        registration: EventImpactTriageWorkComparisonRegistration,
+        candidate_set: EventImpactTriageCandidateSet,
+        label_set: EventImpactTriageLabelSet,
+        work_manifest: EventImpactTriageWorkManifest,
+        baseline: TriageWorkArmOutcome,
+        treatment: TriageWorkArmOutcome,
+        baseline_authority: TriageWorkComparisonRunAuthority,
+        treatment_authority: TriageWorkComparisonRunAuthority,
+    ) -> EventImpactTriageWorkComparisonReport | None:
+        """Reopen the exact stored Report after replaying registration, Runs, and Usage."""
+
+        _require_concrete_work_runners(baseline_authority, treatment_authority)
+        self.assert_authoritative_registration(registration)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT report_json FROM triage_work_comparison_reports
+                WHERE comparison_id = ?
+                """,
+                (registration.comparison_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        decoded = json.loads(str(row["report_json"]))
+        report = event_impact_triage_work_comparison_report_from_dict(decoded)
+        self.assert_authoritative_report(
+            report=report,
+            registration=registration,
+            candidate_set=candidate_set,
+            label_set=label_set,
+            work_manifest=work_manifest,
+            baseline=baseline,
+            treatment=treatment,
+            baseline_authority=baseline_authority,
+            treatment_authority=treatment_authority,
+        )
+        return report
+
+    def assert_authoritative_report(
+        self,
+        *,
+        report: EventImpactTriageWorkComparisonReport,
+        registration: EventImpactTriageWorkComparisonRegistration,
+        candidate_set: EventImpactTriageCandidateSet,
+        label_set: EventImpactTriageLabelSet,
+        work_manifest: EventImpactTriageWorkManifest,
+        baseline: TriageWorkArmOutcome,
+        treatment: TriageWorkArmOutcome,
+        baseline_authority: TriageWorkComparisonRunAuthority,
+        treatment_authority: TriageWorkComparisonRunAuthority,
+    ) -> None:
+        """Reopen the durable Report and replay both completed Run/Usage authorities."""
+
+        _require_concrete_work_runners(baseline_authority, treatment_authority)
+        self.assert_authoritative_registration(registration)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT report_id, evaluated_at, report_json
+                FROM triage_work_comparison_reports WHERE comparison_id = ?
+                """,
+                (registration.comparison_id,),
+            ).fetchone()
+        if row is None:
+            raise ValueError("triage work comparison Report is not durably recorded")
+        if (
+            str(row["report_id"]) != report.report_id
+            or _datetime(str(row["evaluated_at"])) != report.evaluated_at
+            or str(row["report_json"]) != canonical_json_bytes(report.to_dict()).decode()
+        ):
+            raise ValueError("triage work comparison Report differs from durable authority")
+        assert_authoritative_event_impact_triage_work_comparison_report(
+            report=report,
+            registration=registration,
+            candidate_set=candidate_set,
+            label_set=label_set,
+            work_manifest=work_manifest,
+            baseline=baseline,
+            treatment=treatment,
+            baseline_authority=baseline_authority,
+            treatment_authority=treatment_authority,
+            registration_authority=self,
+        )
+
+
+def _require_concrete_work_runners(
+    baseline_authority: TriageWorkComparisonRunAuthority,
+    treatment_authority: TriageWorkComparisonRunAuthority,
+) -> None:
+    if (
+        type(baseline_authority) is not EventImpactTriageWorkRunner
+        or type(treatment_authority) is not EventImpactTriageWorkRunner
+    ):
+        raise TypeError("durable comparison Reports require concrete Work Runner authorities")
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,6 +809,39 @@ class EventImpactTriageWorkComparisonReport:
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "report_id": self.report_id}
+
+
+def event_impact_triage_work_comparison_report_from_dict(
+    value: object,
+) -> EventImpactTriageWorkComparisonReport:
+    payload = _object(value, "triage work comparison Report")
+    report = EventImpactTriageWorkComparisonReport(
+        report_id=_string(payload, "report_id"),
+        comparison_id=_string(payload, "comparison_id"),
+        label_set_id=_string(payload, "label_set_id"),
+        label_exposure=TriageLabelExposure(_string(payload, "label_exposure")),
+        baseline_plan_id=_string(payload, "baseline_plan_id"),
+        treatment_plan_id=_string(payload, "treatment_plan_id"),
+        baseline_outcome_hash=_string(payload, "baseline_outcome_hash"),
+        treatment_outcome_hash=_string(payload, "treatment_outcome_hash"),
+        baseline_authority_receipt_hash=_string(payload, "baseline_authority_receipt_hash"),
+        treatment_authority_receipt_hash=_string(payload, "treatment_authority_receipt_hash"),
+        max_aggregate_estimated_cost_microusd=_integer(
+            payload, "max_aggregate_estimated_cost_microusd"
+        ),
+        baseline_score=_arm_score_from_dict(payload.get("baseline_score")),
+        treatment_score=_arm_score_from_dict(payload.get("treatment_score")),
+        batch_gate_passed=_boolean(payload, "batch_gate_passed"),
+        promotion_eligible=_boolean(payload, "promotion_eligible"),
+        blockers=_string_tuple(payload.get("blockers"), "blockers"),
+        evaluated_at=_datetime(_string(payload, "evaluated_at")),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        strategy_or_execution_authority=_boolean(payload, "strategy_or_execution_authority"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if report.to_dict() != payload:
+        raise ValueError("triage work comparison Report is not canonical")
+    return report
 
 
 def evaluate_event_impact_triage_work_comparison(
@@ -795,8 +1041,6 @@ def _validate_arm_score(score: TriageArmScore, arm: str) -> None:
     )
     if any(value < 0 or value > score.candidate_count for value in bounded_counts):
         raise ValueError(f"triage work {arm} score counts are outside candidate coverage")
-    if score.must_catch_false_negatives > score.eligible_false_negatives:
-        raise ValueError(f"triage work {arm} must-catch misses exceed eligible misses")
     if score.needs_review_correct > score.needs_review_label_count:
         raise ValueError(f"triage work {arm} needs-review score is contradictory")
     if score.total_estimated_cost_microusd < 0:
@@ -824,6 +1068,65 @@ def _work_run_evidence_dict(evidence: EventImpactTriageWorkRunEvidence) -> dict[
         ],
         "usage_ledger_hash": evidence.usage_ledger_hash,
     }
+
+
+def _arm_score_from_dict(value: object) -> TriageArmScore:
+    payload = _object(value, "triage work arm score")
+    score = TriageArmScore(
+        candidate_count=_integer(payload, "candidate_count"),
+        classified_count=_integer(payload, "classified_count"),
+        checkpoint_eligibility_correct=_integer(payload, "checkpoint_eligibility_correct"),
+        eligible_false_negatives=_integer(payload, "eligible_false_negatives"),
+        eligible_false_positives=_integer(payload, "eligible_false_positives"),
+        must_catch_false_negatives=_integer(payload, "must_catch_false_negatives"),
+        needs_review_correct=_integer(payload, "needs_review_correct"),
+        needs_review_label_count=_integer(payload, "needs_review_label_count"),
+        route_correct=_integer(payload, "route_correct"),
+        unsupported_material_routes=_integer(payload, "unsupported_material_routes"),
+        total_estimated_cost_microusd=_integer(payload, "estimated_cost_microusd"),
+    )
+    if score.to_dict() != payload:
+        raise ValueError("triage work arm score is not canonical")
+    return score
+
+
+def _object(value: object, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} must be an object with string keys")
+    raw = cast(dict[object, object], value)
+    if any(not isinstance(key, str) for key in raw):
+        raise TypeError(f"{label} must be an object with string keys")
+    return cast(dict[str, object], raw)
+
+
+def _string(payload: dict[str, object], name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise TypeError(f"{name} must be a non-empty trimmed string")
+    return value
+
+
+def _integer(payload: dict[str, object], name: str) -> int:
+    value = payload.get(name)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer")
+    return value
+
+
+def _boolean(payload: dict[str, object], name: str) -> bool:
+    value = payload.get(name)
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a boolean")
+    return value
+
+
+def _string_tuple(value: object, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise TypeError(f"{name} must be an array of strings")
+    raw = cast(list[object], value)
+    if any(not isinstance(item, str) for item in raw):
+        raise TypeError(f"{name} must be an array of strings")
+    return tuple(cast(list[str], raw))
 
 
 def _strict_utc(value: datetime, label: str) -> None:

@@ -4,6 +4,30 @@ This context names the evidence-to-execution concepts that the harness must keep
 distinct so that research, approval, and broker state cannot become competing
 authorities.
 
+## Architecture adoption discipline
+
+Use mature libraries and projects for capabilities they already implement well, including parsing,
+model adapters, engine integration, storage formats, and thin process supervision. Adopt their
+proven patterns only after mapping them to this project's actual acceptance need. The Harness keeps
+the distinctive PIT, evidence, budget, approval, risk, idempotency, reconciliation, and execution
+authority boundaries; an external framework must not introduce a second owner for those states.
+
+Prefer the smallest complete integration:
+
+- derive data from existing authoritative state instead of persisting a duplicate entity;
+- add a contract or abstraction only when it protects a named boundary or closes a concrete
+  acceptance gap;
+- reuse a mature component behind a Harness adapter when its lifecycle and authority are narrower
+  than the Harness;
+- borrow a design pattern rather than importing an overlapping state machine; and
+- preserve project-specific reasoning where generic framework defaults would weaken PIT, replay,
+  approval, account isolation, or fail-closed execution.
+
+The Watch delegation path is the reference example: a named Delegate Profile, one Agent proposal,
+and one Harness Admission are sufficient. Existing Monitoring Scope, Retrieval Plan, Attention Watch
+and Wake remain the durable authorities; no duplicate generic multi-Agent surface or callback state
+is added.
+
 ## Evidence and events
 
 **Evidence Item**:
@@ -273,7 +297,10 @@ the other declared information capabilities to be optional observed context whos
 visible to the Agent and evaluator. Schema v3 starts with two complete control/treatment pairs and
 requires a third complete pair only when either arm's first two decisions disagree; it never runs a
 single unpaired tie-breaker. Schema v4 retains that schedule, adds a broad material-event mechanism,
-and requires the registered CPA-priced model profile.
+and requires the registered CPA-priced model profile. The current registration revision v5 remains
+schema v4 and changes only the broad material-event cadence from the superseded 120/600-second promise
+to the purchased news Jobs' admitted 300/900-second physical cadence; its new route epoch begins at
+Harness admission and cannot inherit older receipts.
 _Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
 
 **Prospective Checkpoint Route Plan**:
@@ -394,6 +421,27 @@ Attention Watch, so corrections can name a bounded semantic violation without ex
 Schema v7 keeps the v6 prompt and semantic contract but parses model JSON through pinned
 `json-repair`; the Harness accepts only strict JSON or exactly one semantics-preserving structural
 punctuation insertion/deletion and persists content-identified parse evidence.
+Schema v8 preserves that parser boundary and removes a redundant model authority for the registered
+material-event mechanism. Its stage-one classify output cannot select a checkpoint candidate and
+does not echo `checkpoint_eligibility`; it chooses `archive`, `attention_watch`, or
+`event_assessment`, and the Harness derives the provisional canonical field. Direct checkpoint
+mechanisms retain their explicit checkpoint-relative classification. Only EventAssessment plus the
+deterministic Materiality Gate can admit a material event.
+Schema v9 replaces the material-event map/partition/classify graph for new batches. The Harness
+still freezes actual-receipt evidence, collapses exact duplicate payloads and partitions bounded Work
+Units, but one coordinator call now routes every atom positionally. The model returns only a route,
+one changed fact, one explicit typed transmission when routing to EventAssessment, or one unresolved
+observable when routing to Attention Watch. It does not echo IDs, classify final eligibility,
+semantically cluster events, map a complete universe, inspect a portfolio or propose an action.
+The Harness injects atom/version identity, creates one provisional cluster per exact-content atom and
+derives the legacy Proposal fields required by downstream EventAssessment. Consequently Provider
+calls scale with bounded Work Units rather than candidate clusters. V2-v8 remain immutable replay
+dialects.
+The first pristine v9 batch rejected its semantic rule: both same-contract arms retained both
+must-catch events but produced unsupported EventAssessment routes, so no Decision or downstream
+authority exists. V9 remains replayable infrastructure and negative design evidence. A successor
+must preserve broad discovery while requiring evidence-bounded transmission for EventAssessment,
+route unresolved expansion to Attention Watch, and face a new blind batch.
 The Harness injects authoritative atom, cluster and cited-evidence identities
 into the unchanged canonical Digest, Partition and Proposal artifacts. All schemas freeze the
 repeated map roles per Work Unit, one
@@ -431,8 +479,13 @@ IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, c
 Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
 stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
 authority. Both plans must use the same Work Plan schema revision; mixed revisions fail before
-registration, while equal-revision v3/v3, v4/v4, v5/v5, v6/v6 or v7/v7 comparisons retain the existing
-Registration and Report authority.
+registration, while equal-revision v3/v3, v4/v4, v5/v5, v6/v6, v7/v7, v8/v8 or v9/v9 comparisons
+retain the existing Registration and Report authority. A comparison that fails a semantic batch gate
+now creates an append-only terminal-batch artifact before releasing its active head. Terminal versions
+are excluded from later readiness selection without creating a semantic Decision; the failed Proposal,
+Run evidence and Usage remain immutable. The terminal authority directly binds the Candidate Set,
+Comparison Registration and Comparison Report content hashes, so restart does not rely on an earlier
+in-memory relationship check.
 _Avoid_: v1 comparison mutation, caller clock, revealed-label prompt, repaired failed arm
 
 **Event Impact Triage Work Comparison Report**:
@@ -556,6 +609,23 @@ triggers, and may enqueue one idempotent Agent wake-up bound to a newly frozen D
 Agent may propose a Watch; it cannot choose arbitrary network routes, keep itself resident, bypass
 budgets, mutate prior Judgments, notify arbitrary destinations, or submit an order from the Watch.
 _Avoid_: Long-running Agent, cron prompt, market-data stream, order trigger
+
+**Watch Delegate Profile**:
+A content-identified Harness registration whose short name and description tell one allowed parent
+Agent when a follow-up Watch role is useful. It fixes the callback Agent profile, exact Skill
+manifest hashes, read-only capabilities, legal parent/subject types, query template, Collection
+Policy, lifetime, branch/depth/global limits, and collection/callback budgets. It grants no execution
+capability and is never authored or widened by the requesting model.
+_Avoid_: Agent persona, arbitrary subagent config, model-selected tool belt, execution role
+
+**Agent Watch Request / Admission**:
+The Request is a content-identified model proposal containing only one offered delegate-profile ID,
+anchored subject, registered matcher, question, rationale and evidence references. The Admission is
+the durable Harness decision that injects parent lineage, enforces profile/branch/depth/global limits,
+binds the exact Monitoring Scope, Retrieval Plan and Attention Watch, and records rejection or safe
+reuse. Equivalent active scopes share collection work while each accepted parent keeps a separate
+callback binding. Neither artifact starts a model, widens a trading universe or creates an order.
+_Avoid_: Free-form fetch request, recursive delegation authority, callback dispatch, trade trigger
 
 **Monitoring Scope**:
 A content-identified, read-only subject and information-need boundary for an event cluster,

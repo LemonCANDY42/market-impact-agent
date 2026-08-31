@@ -239,6 +239,65 @@ raw-content hash, parsed-output hash, parser/policy identity and structural edit
 identified parse-evidence artifact. Multiple edits, quote/literal/number changes, schema-guided
 coercion and untrimmed wrappers still fail closed.
 
+The v8 Work Execution Plan keeps the v7 parser and immutable older dialects but removes one
+redundant material-event output. A material-event stage-one classifier cannot know final checkpoint
+eligibility before EventAssessment and the deterministic Materiality Gate, so it returns only
+`archive`, `attention_watch`, or `event_assessment`. The Harness injects the provisional canonical
+eligibility value for artifact compatibility. Direct policy, Earnings and macro checkpoints retain
+model-authored checkpoint-relative eligibility because their frozen trigger rule is decidable at
+classify time.
+
+The pristine v8 comparison rejected the remaining architecture. Baseline completed 27 logical
+members at 106,755 input / 113,878 output Tokens and routed all five consensus must-catch labels.
+Treatment completed 31 logical members at 257,800 input / 159,428 output Tokens, missed all five,
+and produced 14 unsupported material routes. Treatment had loaded news verification, equity exposure
+and adversarial-risk instructions before a frozen universe, exposure graph or portfolio existed; it
+over-aggregated evidence and routed every resulting cluster to Attention Watch. This is a structural
+counterexample to doing full downstream analysis at ingress. Baseline still had only 13/29 exact
+routes, so neither arm is accepted.
+
+V9 applies the narrower first-principles boundary:
+
+- Harness owns actual-receipt admission, exact-content deduplication, Work Unit bounds, stable order,
+  model profile, cost, replay and durable authority.
+- One coordinator call per Work Unit returns one positional item per atom: route, changed fact,
+  explicit typed transmission or unresolved observable. It does not echo IDs.
+- Archive requires no supported plausible material transmission. Attention Watch requires a named
+  future observable. EventAssessment requires a concrete changed fact and one explicit plausible
+  transmission. The model does not decide final materiality.
+- No model phase clusters events. Each exact-content atom is a provisional one-atom cluster; later
+  EventAssessment/Watch may link revisions and evolving event stages with additional evidence.
+- Harness derives the compatibility Digest, Partition and Proposal. `triage_confidence` is fixed to
+  zero because v9 does not ask for an uncalibrated probability. Complete target mapping, direction,
+  magnitude, portfolio effects, historical analogies, countercases and actions remain downstream.
+
+For the current 29-atom shape this reduces one arm from roughly 27-31 model members to three bounded
+Work Unit calls. Scripted acceptance covers mixed archive/Watch/EventAssessment output, positional
+coverage without model-visible IDs, deterministic downstream expansion, Usage reopening and restart
+with no additional Provider call. Real semantic acceptance still requires a new pristine batch.
+
+This boundary follows proven component patterns, not a claim that an LLM trading strategy is proven:
+[NautilusTrader](https://nautilustrader.io/docs/latest/concepts/) and
+[LEAN](https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/algorithm-engine)
+keep deterministic event/execution state around replaceable strategy logic;
+[Qlib](https://github.com/microsoft/qlib) separates research workflows from execution authority; and
+weak-supervision cascades such as [Snorkel](https://snorkelproject.org/get-started/) motivate a cheap
+high-recall entrance followed by richer downstream analysis. The Harness adopts those ownership and
+cascade ideas while retaining its own PIT, approval and execution gates.
+
+A failed comparison no longer permanently occupies the active head. The state authority first stores
+an append-only terminal batch bound by content hash to the Candidate Set, Comparison Registration,
+Comparison Report, blockers and versions;
+only then may the run authority release the head. Readiness excludes those versions from later
+selection, but Trigger Admission cannot see them as a Decision. This preserves the failure without
+manufacturing archive, eligibility or financial-impact claims.
+
+The rejected pristine v8 batch has completed that path. A no-call Provider replay reopened the old
+27/32 historical attempts and their Usage records, reproduced the failed gate, terminalized all 29
+candidate versions and released the active head. The attempt counts are historical Ledger evidence;
+the terminalization sent zero new generation requests. The next semantic evidence must come from a
+new v9 pristine batch.
+
 Every Provider call has a durable request-dispatched event first. A timeout or process interruption
 after dispatch without a completed response becomes `human_input_required`; restart never sends
 that request again. Completed units reopen without a Provider call. Run identity includes phase,
@@ -262,7 +321,7 @@ response and deterministic Harness correction. Terminal output, transcript and r
 match the last completed response and validation event exactly. Returned Provider usage is journaled
 before model/tool/secret validation; secret-bearing response bodies are never persisted. Each
 completed predecessor passes this full reopening gate before its output may enter a later phase.
-Scripted-provider acceptance covers the frozen v2 behavior, v3 positional behavior and v4/v5 typed
+Scripted-provider acceptance covers the frozen v2 behavior, v3 positional behavior, v4/v5 typed
 classify behavior over 121
 candidates, a cluster spanning the first and last Work
 Units, exact final coverage, both arms, restart without repeated calls, ambiguous dispatch,
@@ -455,16 +514,63 @@ Implemented contract evidence:
   checkpoint, EventAssessment, Query Gate, Judgment or execution authority exists. The completed
   Decision released the Active Batch head. This proves recovery/reopening mechanics, not semantic
   quality, alpha or a pristine blind promotion.
+  A post-run structural audit found that 14 of the 23 Watch clusters had no explicit transmission
+  channel and 10 had no affected entity reference. Their median `triage_confidence` was 0.92; this
+  means confidence in the conservative Watch route, not probability of market impact or profit. The
+  exposed batch is a development diagnostic only. It motivated v8's removal of premature
+  material-event eligibility echoing; it does not supply sealed labels or a promotion result.
+
+The first pristine v9 comparison is now immutable negative evidence. It froze 11 new actual-receipt
+versions under sealed labels and completed one same-contract coordinator call per arm. Both arms
+caught 2/2 must-catch events and produced strict JSON without repair. Baseline scored 6/11 exact
+routes with five unsupported EventAssessment routes; treatment scored 4/11 with four unsupported
+EventAssessment routes. The treatment was therefore both non-zero on the registered unsupported
+route gate and worse than baseline. Total authoritative usage was 15,176 input / 13,220 output
+Tokens and 18,900 microusd. The failed report terminalized all 11 versions and released the active
+head without creating a Decision.
+
+The failure localizes the remaining ingress problem: an LLM can invent a generic path from almost
+any market print or foreign-policy fact to risk appetite, discount rates or future policy. The fix
+must not narrow discovery. A valid next revision instead requires evidence of a new causal fact and
+a concrete, evidence-bounded transmission variable for EventAssessment; routine closes or scheduled
+statistics without a stated surprise belong in archive, while a plausible event missing one named
+observable belongs in Watch. Watch and downstream EventAssessment may propose additional anchored
+Monitoring Scopes for newly discovered issuers, industries, ETFs, frozen sets or information aspects,
+but those scopes need separate Harness admission, budget, PIT lineage and a fresh Run. They cannot
+silently widen the original decision or trading universe. The next revision must use a new pristine
+batch rather than relabeling or rerunning these 11 versions.
+
+That controlled expansion now has a concrete proposal/admission seam. A parent Agent sees only the
+named `WatchDelegateProfile` records permitted for its Agent type and lineage depth, similar to Skill
+selection by description. It may choose one profile and propose a subject, question,
+evidence and registered matcher; it cannot define the Provider, URL, cadence, budget, callback model,
+tools or execution. The Harness persists the decision, applies branch/depth/global caps, deduplicates
+equivalent active collection scopes, and preserves a callback subscription for each accepted parent.
+This keeps discovery open-ended enough to follow a newly supported transmission while preventing a
+speculative association from silently becoming a trade-universe or account action.
+
+The proposal/admission boundary is deliberately still fail-closed. A first implementation froze a
+caller-supplied parent projection, but append-only self-signing proves only immutability, not that the
+evidence, subjects or matcher terms came from a real parent Run. That minting path was removed. The
+current `AgentDelegationContextStore` cannot issue a context and rejects even a content-addressed
+caller artifact; profile offers, admission, lookup, callback and restart activation therefore remain
+closed. PDI-40 must next name one concrete parent Run/Decision owner whose durable artifact can derive
+the complete projection without a second generic decision-view state machine. Admission-before-Watch
+activation recovery has isolated mechanics tests, but cannot become operational acceptance until the
+parent authority is real.
 
 Still required for real acceptance:
 
-- optional portfolio-impact and historical-analogy specialist prompt/runtime bindings; the current
-  Position Snapshot is intentionally identity-only and cannot quantify exposure;
-- a complete labelled Work comparison: the original 121-version monolithic and v2 Work attempts
-  remain terminal negative evidence, while the later nine-version v4 treatment has no sealed labels
-  or baseline arm and therefore cannot establish classifier quality;
-- replay through both arms with complete per-unit Run Records and costs, followed by a later pristine
-  blind batch and an explicit cross-batch promotion disposition;
+- preserve the closed v9 authority boundary: the ordinary path rejects comparison-governed v9 before
+  any Provider call, and failed-batch terminalization may exclude actual-receipt versions only after
+  reopening the append-only Comparison Registration and Report plus both exact Run/Usage authorities.
+  Recovery after Report or terminal commit is local-only, uses the first durable identity and time,
+  does not construct or probe a Provider, and rejects authority subclasses or reinstallation of an
+  already terminalized batch;
+- portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
+  ingress roles, and the current Position Snapshot remains identity-only;
+- one new pristine batch for the next versioned ingress rule; v8 and v9 remain terminal negative
+  evidence and cannot be recycled as blind acceptance data;
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,
   unsupported transmission paths and resource use;
 - a real selected event passed through PDI-30 and Query Gate.

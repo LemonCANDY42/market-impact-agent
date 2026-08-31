@@ -37,7 +37,7 @@ class CheckpointReadinessStatus(StrEnum):
 
 
 class CompletedTriageClassificationAuthority(Protocol):
-    """Read-only boundary for versions already covered by formal Triage Decisions."""
+    """Read-only boundary for versions formally decided or terminally handled."""
 
     def classified_version_ids(
         self,

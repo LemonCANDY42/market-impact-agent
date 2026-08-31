@@ -96,6 +96,27 @@ def test_prospective_triage_cli_binds_one_receipt_ordered_batch() -> None:
     assert args.prepare_only is True
 
 
+def test_prospective_triage_comparison_cli_requires_frozen_labels() -> None:
+    args = build_parser().parse_args(
+        [
+            "agent",
+            "prospective-triage-compare-run",
+            "--registration",
+            "registration.json",
+            "--route-plan",
+            "route-plan.json",
+            "--checkpoint-key",
+            "next-material-a-share-event",
+            "--label-set",
+            "labels.json",
+        ]
+    )
+
+    assert args.agent_command == "prospective-triage-compare-run"
+    assert args.checkpoint_key == "next-material-a-share-event"
+    assert args.label_set == Path("labels.json")
+
+
 def test_prospective_triage_format_recovery_cli_requires_exact_source_run() -> None:
     args = build_parser().parse_args(
         [
