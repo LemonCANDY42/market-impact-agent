@@ -63,6 +63,7 @@ class FixtureTransport(JsonHttpTransport):
 class JsonServerHandler(BaseHTTPRequestHandler):
     hits: ClassVar[list[tuple[str, str | None]]] = []
     server_label = ""
+    response_status = 500
 
     def do_GET(self) -> None:
         type(self).hits.append((self.path, self.headers.get("Authorization")))
@@ -76,7 +77,7 @@ class JsonServerHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         type(self).hits.append((self.path, self.headers.get("Authorization")))
         body = json.dumps({"error": type(self).server_label}).encode()
-        self.send_response(500)
+        self.send_response(type(self).response_status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -88,11 +89,12 @@ class JsonServerHandler(BaseHTTPRequestHandler):
 
 @contextmanager
 def json_server(
-    label: str,
+    label: str, *, status: int = 500
 ) -> Generator[tuple[ThreadingHTTPServer, type[JsonServerHandler]]]:
     class Handler(JsonServerHandler):
         hits: ClassVar[list[tuple[str, str | None]]] = []
         server_label = label
+        response_status = status
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
@@ -224,6 +226,53 @@ def test_http_500_body_recognizes_tls_bad_record_mac_without_persisting_body() -
     assert captured.value.generation_state is ProviderGenerationState.UNKNOWN
     assert captured.value.retry_disposition is ProviderRetryDisposition.FORBIDDEN
     assert "SECRET-BODY" not in str(captured.value)
+
+
+def test_http_408_incomplete_upstream_stream_is_ambiguous_and_forbidden() -> None:
+    body = (
+        "stream error: stream disconnected before completion: "
+        "stream closed before response.completed"
+    )
+    with json_server(body, status=408) as (server, Handler):
+        origin = f"http://127.0.0.1:{server.server_port}"
+        with pytest.raises(CLIProxyProviderError) as captured:
+            PinnedUrllibJsonTransport(
+                allowed_origin=origin,
+                provider_label="CLIProxyAPI",
+            ).request_json(
+                method="POST",
+                url=f"{origin}/v1/chat/completions",
+                headers={"Authorization": "Bearer dedicated-local-key"},
+                payload={"model": "gpt-5.6-luna"},
+                timeout_seconds=2,
+            )
+
+    assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
+    assert captured.value.error_class == "http"
+    assert captured.value.diagnostic_code == "upstream_stream_incomplete"
+    assert captured.value.generation_state is ProviderGenerationState.UNKNOWN
+    assert captured.value.retry_disposition is ProviderRetryDisposition.FORBIDDEN
+
+
+def test_generic_http_408_generation_post_is_ambiguous_and_forbidden() -> None:
+    with json_server("request timeout", status=408) as (server, Handler):
+        origin = f"http://127.0.0.1:{server.server_port}"
+        with pytest.raises(CLIProxyProviderError) as captured:
+            PinnedUrllibJsonTransport(
+                allowed_origin=origin,
+                provider_label="CLIProxyAPI",
+            ).request_json(
+                method="POST",
+                url=f"{origin}/v1/chat/completions",
+                headers={"Authorization": "Bearer dedicated-local-key"},
+                payload={"model": "gpt-5.6-luna"},
+                timeout_seconds=2,
+            )
+
+    assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
+    assert captured.value.diagnostic_code == "http_408"
+    assert captured.value.generation_state is ProviderGenerationState.UNKNOWN
+    assert captured.value.retry_disposition is ProviderRetryDisposition.FORBIDDEN
 
 
 @pytest.mark.parametrize(

@@ -148,6 +148,39 @@ arrays and `triage_confidence` in `[0, 1]`. The model no longer returns
 canonical Proposal. V4 has distinct Plan, prompt, runtime and terminal artifact revisions. It does
 not relax parsing, coverage, budget or authority checks, and v2/v3 evidence remains immutable.
 
+The v5 Work Execution Plan removes the remaining unnecessary long-ID echo found by the second real
+v4 batch. Classify now returns strictly increasing `evidence_ordinals` into the frozen Cluster Seed
+instead of copying `evidence_version_ids`; the Harness resolves each ordinal to the exact supplied
+Observation Version before building the same canonical Proposal. Empty, duplicate, non-integer or
+out-of-range ordinals remain invalid. Corrections expose a bounded validation category such as
+`invalid_evidence_ordinal_coverage_or_order`, not evidence content. This simplifies the model seam
+without weakening citation ownership, frozen coverage or replay authority.
+
+The first same-Candidate-Set v5 infrastructure revalidation proved 22 real classify outputs could
+use ordinal citation, but the 23rd classify member selected EventAssessment with no transmission
+channel three times. V5 exposed only a generic correction and therefore stopped after 39 completed
+members and 42 Provider attempts, with no Proposal or Decision. Its 306,299 input / 164,488 output
+Token result is terminal infrastructure evidence, not semantic quality or alpha evidence.
+
+The v6 Work Execution Plan retains v5 identity binding and adds the five route conditions already
+enforced by `TriageClusterProposal`: eligible checkpoint routing and evidence, ineligible route
+exclusion, `needs_review` route/uncertainty, EventAssessment fact/archetype/transmission, and Attention
+Watch fact/question requirements. `rule_reasons` is explicitly non-empty. Corrections return bounded
+categories such as `event_assessment_requires_fact_archetype_and_transmission`; raw evidence stays
+out of the error category. These are model-visible descriptions of existing Harness invariants, not
+new policy authority or stricter output symmetry.
+
+The same-Candidate-Set v6 infrastructure revalidation completed all 47 logical members after one
+explicit replacement of a legacy-misclassified HTTP 408 Run. Its authoritative Ledger includes the
+old ambiguous dispatch and the replacement: 48 Usage records / physical attempts, 396,709 input and
+172,508 output Tokens. The admitted Decision classified all 39 versions into 30 clusters: 28 archive
+and two EventAssessment routes. The EventAssessment clusters were a reported tanker attack while
+transiting the Strait of Hormuz and a reported Shanghai Telecom network outage; both were ineligible
+for the frozen capital-market-policy checkpoint but retained explicit risk/cost or demand/attention
+transmission channels. No eligible checkpoint, Query Gate, Judgment or execution authority exists.
+Because v4, v5 and v6 reuse the same exposed Candidate Set, this is contract/runtime evidence only,
+not a pristine blind semantic promotion result.
+
 Every Provider call has a durable request-dispatched event first. A timeout or process interruption
 after dispatch without a completed response becomes `human_input_required`; restart never sends
 that request again. Completed units reopen without a Provider call. Run identity includes phase,
@@ -155,6 +188,9 @@ Work Unit or Cluster Seed, and role, so the treatment may repeat the same role a
 without weakening identity. Authority recomputes the expected graph and reopens every prompt,
 response, transcript, terminal artifact, metric and exact per-unit Usage record. One missing,
 ambiguous, over-budget or tampered unit blocks all downstream phases and produces no Proposal.
+An explicit replacement retains the original ambiguous Usage beside the new Run and consumes the
+same turn, input, output, cost, phase and aggregate ceilings rather than receiving a fresh budget.
+Its Journal start must not precede the Grant time.
 An exclusive crash-safe claim rooted beside the Run Journal gives exactly one process ownership of a
 Run while it may dispatch; a concurrent same-plan caller returns fail-closed without calling the
 Provider. Every correction turn binds its own dispatch prompt to the preceding invalid assistant
@@ -162,14 +198,16 @@ response and deterministic Harness correction. Terminal output, transcript and r
 match the last completed response and validation event exactly. Returned Provider usage is journaled
 before model/tool/secret validation; secret-bearing response bodies are never persisted. Each
 completed predecessor passes this full reopening gate before its output may enter a later phase.
-Scripted-provider acceptance covers both the frozen v2 behavior and v3 positional behavior over 121
+Scripted-provider acceptance covers the frozen v2 behavior, v3 positional behavior and v4/v5 typed
+classify behavior over 121
 candidates, a cluster spanning the first and last Work
 Units, exact final coverage, both arms, restart without repeated calls, ambiguous dispatch,
 Provider-reported budget excess, concurrent ownership, multi-turn correction, invalid Provider
 identity/tool/secret responses, cross-Manifest input and artifact/event/pointer/Usage tamper or
 predecessor corruption rejection. V3 also covers every specialist role, positional coordinator
 binding, the twelve-item substituted-atom-ID failure shape, typed correction/Usage evidence, every
-ordinal validation class, schema packaging and v3/v3 reporting. This is mechanics evidence only;
+ordinal validation class, Harness-bound v5 evidence citation, schema packaging and equal-revision
+reporting. This is mechanics evidence only;
 private real-run terminal evidence and semantic quality remain separate acceptance layers. A later
 actual-receipt v4 treatment completed all 13 expected members over nine Digests and eight Cluster
 Seeds, then fully reopened its Proposal and Usage Ledger; that is one real process result, not a
@@ -304,16 +342,35 @@ Implemented contract evidence:
   five archive, two EventAssessment and one Attention Watch cluster with no eligible checkpoint;
   the subsequent readiness audit excluded all nine and exposed 26 genuinely new candidates.
 - a second real v4 treatment froze 39 later actual-receipt versions into four work units, 39
-  Digests and 29 Cluster Seeds. The full graph contains 34 logical members: four map, one partition
-  and 29 classify. Twenty-nine completed, thirty were attempted across 31 physical Provider
-  attempts, one classify member was sealed `_AmbiguousRun` / `human_input_required`, and four
-  classify members never started; usage was 343,211 input and 151,024 output Tokens. The incident
+  Digests and 29 Cluster Seeds. The full treatment graph contains 46 logical members: sixteen map
+  role/work-unit members, one partition and 29 classify. Before operator resolution, 29 completed,
+  one classify member was sealed `_AmbiguousRun` / `human_input_required`, and sixteen logical
+  members had not started; thirty were attempted across 31 physical Provider attempts, consuming
+  343,211 input and 151,024 output Tokens. The incident
   path was an upstream TLS `bad record MAC`, followed by an unsafe second project generation POST
   and gateway `auth_unavailable`, not quota or HTTP 429 evidence. The batch therefore has no
   Proposal, authority receipt or Decision. It is negative runtime evidence, not a partial semantic
   result; restart cannot resend the ambiguous request, and the completed classifications cannot be
-  assembled by an operator outside Harness authority. Prospective failure/retry/circuit semantics
-  are owned by [MODEL_PROVIDER_RELIABILITY.md](MODEL_PROVIDER_RELIABILITY.md).
+  assembled by an operator outside Harness authority. The later explicit one-time Replacement Grant
+  preserved that Run and Usage, created one distinct replacement identity and reused every completed
+  member. The replacement succeeded and the graph advanced to 39 completed logical members, then a
+  different classify member failed after three structurally consistent responses each copied its
+  sole evidence Version ID with one missing or extra character. Six logical members never started.
+  The authoritative Ledger contains 41 Run Usage records, 44 physical attempts, 393,440 input and
+  205,023 output Tokens. No Proposal or Decision exists. That failure motivated v5 ordinal evidence
+  citation; it does not authorize replay of the terminal v4 member. Prospective
+  failure/retry/circuit semantics are owned by
+  [MODEL_PROVIDER_RELIABILITY.md](MODEL_PROVIDER_RELIABILITY.md).
+- the same-Candidate-Set v5 infrastructure revalidation proved 22 classify members could cite exact
+  evidence through Harness-resolved ordinals, then stopped on an undeclared EventAssessment
+  transmission requirement. V6 made the existing conditional route invariants model-visible. Its
+  full 47-member run was admitted as Decision
+  `event-impact-triage-decision-05598ca394786a82538c78794d82d65b9c130c4ec725da795aba95317c37a3dd`:
+  39 versions, 30 clusters, 28 archive, two EventAssessment, no eligible checkpoint. The exact
+  authoritative v6 Ledger contains 48 physical attempts, 396,709 input and 172,508 output Tokens;
+  the extra attempt is the immutable old HTTP 408 dispatch retained beside its one replacement.
+  This proves the replacement and v6 contract can complete and reopen, but not blind classifier
+  quality or alpha.
 
 Still required for real acceptance:
 
@@ -328,11 +385,11 @@ Still required for real acceptance:
   unsupported transmission paths and resource use;
 - a real selected event passed through PDI-30 and Query Gate.
 
-The unresolved second-batch interruption also leaves an explicit design choice outside current
-authority. A future operator-resolution or replacement-run contract would have to retain the old
-dispatch, grant a new run identity explicitly, forbid combining two possible responses, and remain
-non-executable. Until such a contract is separately accepted, the batch stays terminal and its
-versions stay unclassified.
+The second-batch v4 interruption is resolved only at the runtime-authority layer: its one permitted
+replacement is durably consumed, the original dispatch remains immutable, and no late response can
+be merged. The later v4 semantic-contract failure remains terminal. V5 and v6 Plans using the same
+frozen Candidate Set are explicitly labelled infrastructure revalidations; neither rewrites earlier
+evidence nor counts as a pristine blind semantic batch.
 
 None of this grants historical PIT, Judgment-run, Strategy Admission, paper/live execution, account,
 credential, mandate, approval, or broker authority.

@@ -603,6 +603,11 @@ def _http_diagnostic_code(status: int, body: str) -> str:
     normalized = " ".join(body.lower().split())
     if "bad record mac" in normalized or "decryption failed or bad record mac" in normalized:
         return "tls_bad_record_mac"
+    if (
+        "stream disconnected before completion" in normalized
+        or "stream closed before response.completed" in normalized
+    ):
+        return "upstream_stream_incomplete"
     if any(
         marker in normalized
         for marker in (
@@ -636,6 +641,10 @@ def _http_diagnostic_code(status: int, body: str) -> str:
 def _http_generation_state(
     method: str, status: int, diagnostic_code: str
 ) -> ProviderGenerationState:
+    if diagnostic_code == "upstream_stream_incomplete":
+        return ProviderGenerationState.UNKNOWN
+    if method.upper() == "POST" and status == 408:
+        return ProviderGenerationState.UNKNOWN
     if method.upper() != "POST" or status < 500:
         return ProviderGenerationState.NOT_STARTED
     if diagnostic_code in {"auth_unavailable", "authentication_failed", "quota_exhausted"}:

@@ -375,18 +375,53 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       equivalent stored v2 without rewriting it.
     - [x] Preserve the second unlabelled real v4 batch as negative runtime evidence instead of
       replaying one ambiguous request. The frozen 39-version actual-receipt Candidate Set and
-      four-unit Manifest produced 39 Digests and 29 Cluster Seeds. The full graph contains 34
-      members: four map, one partition, and 29 classify. Twenty-nine completed, thirty were
-      attempted, one classify member became `_AmbiguousRun` / `human_input_required`, and four
-      classify members never started; the attempts consumed 343,211 input and 151,024 output Tokens.
+      four-unit Manifest produced 39 Digests and 29 Cluster Seeds. The full graph contains 46
+      logical members: sixteen map role/work-unit members, one partition, and 29 classify.
+      Twenty-nine completed, thirty were attempted, one classify member became `_AmbiguousRun` /
+      `human_input_required`, and sixteen logical members had not started; the attempts consumed
+      343,211 input and 151,024 output Tokens.
       The Work graph produced no Proposal, authority receipt, Decision, Query Gate or execution
       authority. Diagnosis found an upstream TLS `bad record MAC`, followed by an unsafe second
       project generation POST and then gateway `auth_unavailable`; no quota, HTTP 429, or process
       restart evidence exists. The prospective adapter now records each physical attempt and
       generation state, forbids ambiguous POST retries, and supports durable circuit/cooldown/
       operator-notice state. Restart must still reopen the old terminal evidence without sending the
-      request again. Any later operator-resolution or replacement-run authority is a separate
-      explicit contract decision, not an implicit retry.
+      request again.
+    - [x] Add and consume one explicit append-only Replacement Grant for that ambiguous v4 member.
+      It binds the original terminal artifact, Journal and Usage, creates a distinct Run identity,
+      cannot combine a possible late response, cannot run before its Grant time, cannot replace the
+      replacement, and charges old plus new Usage to the same frozen ceilings. The replacement
+      completed and existing work was reused; the graph advanced to 39 completed logical members.
+      A different classify member then failed after three received responses each copied its sole
+      evidence Version ID with one missing or extra character, leaving six members unstarted. The
+      v4 Ledger contains 41 Run Usage records, 44 physical attempts, 393,440 input and 205,023
+      output Tokens. There is still no Proposal, Decision, Query Gate or execution authority.
+    - [x] Add the v5 evidence-ordinal classify contract. It retains v4 typed classify fields but
+      replaces model-echoed `evidence_version_ids` with strictly increasing ordinals into the exact
+      frozen Cluster Seed, then lets the Harness inject the authoritative IDs. Scripted acceptance
+      covers valid binding plus empty, duplicate, non-integer and out-of-range ordinals and a precise
+      correction category. The same-Candidate-Set v5 infrastructure revalidation completed 39
+      members and 22 real ordinal-based classify outputs, then stopped when the next classify member
+      chose EventAssessment with no transmission channel for all three responses. It consumed 42
+      Provider attempts, 306,299 input and 164,488 output Tokens; no Proposal or Decision exists.
+      V4/v5 evidence stays terminal and immutable; this is not a pristine blind semantic result.
+    - [x] Add the v6 conditional-route classify contract. It publishes the five route/evidence
+      conditions already enforced by the canonical Proposal, makes `rule_reasons` explicitly
+      non-empty, and returns bounded semantic correction categories without evidence content.
+      Scripted acceptance proves EventAssessment without a transmission channel receives
+      `event_assessment_requires_fact_archetype_and_transmission` and can correct under the same
+      frozen Run. This is necessary model-contract clarity, not a new eligibility rule or authority.
+      The same-Candidate-Set v6 infrastructure revalidation encountered one HTTP 408 after the
+      upstream stream had begun but before `response.completed`; the old terminal record had
+      incorrectly labelled it `not_started` / `terminal`. A narrowly compatible, explicit one-time
+      Replacement Grant preserved that old evidence, then reused the eleven completed members and
+      completed the full 47-member logical graph. The authoritative Ledger retains both old and
+      replacement Usage: 48 physical attempts, 396,709 input and 172,508 output Tokens. Decision
+      `event-impact-triage-decision-05598ca394786a82538c78794d82d65b9c130c4ec725da795aba95317c37a3dd`
+      classified all 39 versions into 30 clusters: 28 archive and two EventAssessment routes
+      (a Hormuz tanker attack and a Shanghai Telecom outage), with no eligible checkpoint. It grants
+      no Query Gate, Judgment or execution authority and is same-batch infrastructure evidence, not
+      a pristine blind classifier result.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
@@ -410,9 +445,9 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     `prospective-checkpoint-readiness-report-40114fdf675cb49a0fec1aef90d64e9e695f958fb36e55a0d67b4f25acb7a1cc`:
     the policy checkpoint has operational CSRC and two-minute Tushare/Sina trigger Jobs and observed
     five post-admission versions by 2026-08-30 00:29 UTC. A temporary operator-style inspection found
-    no obvious match, but the Harness did not classify them; they remain unclassified pending PDI-29.
-    No eligibility selection, Snapshot Set, Query Gate, or model call was created. Issuer and macro
-    trigger routes remain unconfigured.
+    no obvious match. Formal PDI-29 Work Decisions have since classified that nine-version batch and
+    the later 39-version batch; neither contained an eligible policy checkpoint. No Snapshot Set or
+    Query Gate was created. Issuer and macro trigger routes remain unconfigured.
   - [ ] After PDI-29 selects one post-admission candidate, seal its trading-session barrier and
     freeze the actual Snapshot Set, Evidence Pack, read-only tools, Prospective Evidence Lineage, and
     Prospective Execution Plan. Pre-admission observations remain ineligible.

@@ -42,10 +42,10 @@ them; absence of that adapter must not be reported as end-to-end alerting.
 
 ## 31 August 2026 incident diagnosis
 
-The immutable 39-version triage batch contains 34 logical graph members: four map members, one
-partition member, and 29 classify members. Twenty-nine completed, one classify member became
-ambiguous, and four classify members were never started. Thirty members were attempted across 31
-physical Provider attempts.
+The immutable 39-version triage batch contains 46 logical graph members: four work units times four
+map roles, one partition member, and 29 classify members. Twenty-nine completed, one classify member
+became ambiguous, and sixteen logical members were not started. Thirty members were attempted across
+31 physical Provider attempts.
 
 The failed logical member had this observed path:
 
@@ -72,8 +72,44 @@ with internal retries disabled is required before making that stronger claim.
 
 ## Replacement-run boundary
 
-No failed or ambiguous generation is silently resent. A future replacement-run contract must keep
-the original dispatch immutable, issue a distinct Run identity, prohibit combining a late original
-response with the replacement, bound the number of replacements, and retain no Judgment or
-execution authority. Provider reliability acceptance is a prerequisite, not replacement authority
-by itself.
+No failed or ambiguous generation is silently resent. The accepted Replacement Grant is a separate
+append-only Harness authority that reopens the exact old terminal artifact, Journal and Usage record,
+then permits one distinct replacement Run identity. It never combines a possible late old response,
+cannot run before its authorization time, cannot replace the replacement, counts both Usage records
+against the original frozen unit/phase/aggregate ceilings, and grants no Judgment or execution
+authority. Equivalent authorization reopens the same Grant instead of issuing another.
+Provider reliability acceptance remains a prerequisite, not replacement authority by itself.
+
+The real Grant was consumed for the ambiguous classify member above. Its replacement completed and
+the v4 graph advanced to 39 completed logical members. A later classify member then failed normally
+after three received responses violated the same output contract; it was not a network, quota,
+authentication or ambiguous-ACK incident. The complete v4 Ledger now contains 41 Run Usage records, 44
+physical attempts, 393,440 input and 205,023 output Tokens. Six logical members were not started and
+no Proposal or Decision exists. Diagnosis found that each response copied the sole frozen evidence
+Version ID with one missing or extra character. That is owned by the v5 ordinal-citation contract,
+not by Provider retry or circuit logic, and the terminal v4 member is not replayed.
+
+## V6 HTTP 408 evidence and compatibility boundary
+
+The same-candidate v6 revalidation later stopped after eleven completed logical members when the
+gateway returned HTTP 408 after about 190 seconds. Its exact gateway log says the upstream stream
+disconnected before completion after streaming had begun. The old adapter persisted
+`http_408 / not_started / terminal`; that historical record is immutable but its generation-state
+classification is wrong. Prospectively the adapter records this exact failure as
+`upstream_stream_incomplete / unknown / forbidden`, so it is never retried automatically.
+Any other HTTP 408 from a model-generation POST is also `unknown / forbidden` unless a future
+Provider proves pre-generation rejection through a separately accepted diagnostic; a read-only GET
+408 remains safely retryable.
+
+One narrowly compatible Replacement Grant may accept only the exact legacy terminal pair whose
+matching failed/rejected events contain HTTP 408, `error_class=http`, `http_408`, `not_started`,
+`terminal`, and identical request identity bound to one real preceding dispatch event. Other
+rejected, authentication, quota, pre-dispatch or failed Runs remain ineligible;
+the replacement cannot be replaced. The real grant was consumed once. The replacement completed,
+the Provider health state returned to healthy, and the full v6 graph completed 47 logical members.
+The authoritative Ledger retains both physical dispatches: 48 Usage records / attempts, 396,709
+input and 172,508 output Tokens. Mean per-record Usage was 8,264.77 input and 3,593.92 output Tokens;
+mean recorded latency was 71.65 seconds and maximum recorded latency was 310.73 seconds. Cost stayed
+unallocated at zero microusd because this local Provider profile has no price schedule; that is not
+a claim of zero economic cost. A durable `provider_recovered` notice exists, but no external notice
+delivery adapter is installed or claimed.

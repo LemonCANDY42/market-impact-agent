@@ -36,18 +36,26 @@ from market_impact_agent.event_impact_triage_work import (
     TriageWorkManifestPolicy,
     build_event_impact_triage_work_manifest,
 )
+from market_impact_agent.event_impact_triage_work_replacement import (
+    EventImpactTriageWorkReplacementStore,
+)
 from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
     TriageWorkRoleBinding,
     TriageWorkRunMember,
+    _output_contract_for_binding,
     build_event_impact_triage_work_execution_plan,
     build_event_impact_triage_work_execution_plan_v3,
     build_event_impact_triage_work_execution_plan_v4,
+    build_event_impact_triage_work_execution_plan_v5,
+    build_event_impact_triage_work_execution_plan_v6,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import load_builtin_model_provider_profile
@@ -134,8 +142,9 @@ class ScriptedWorkProvider(ModelProvider):
         phase = str(task["phase"])
         role = str(task["role"])
         prompt_template_id = str(task["prompt_template_id"])
-        positional = prompt_template_id.endswith(("-v3", "-v4"))
-        typed_classify = prompt_template_id.endswith("-v4")
+        positional = prompt_template_id.endswith(("-v3", "-v4", "-v5", "-v6"))
+        typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6"))
+        ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6"))
         phase_input = cast(dict[str, object], task["phase_input"])
         if phase == TriageWorkPhase.MAP.value and role != "coordinator":
             field = {
@@ -225,7 +234,11 @@ class ScriptedWorkProvider(ModelProvider):
             "event_stage": "first_observed",
             "changed_facts": [],
             "rule_reasons": ["No registered checkpoint event is supported."],
-            "evidence_version_ids": versions,
+            **(
+                {"evidence_ordinals": list(range(len(versions)))}
+                if ordinal_evidence
+                else {"evidence_version_ids": versions}
+            ),
             "uncertainty_notes": [],
             "countercases": [],
             "transmission_channels": [],
@@ -233,6 +246,47 @@ class ScriptedWorkProvider(ModelProvider):
             "watch_questions": [],
             "triage_confidence": 0.8,
         }
+
+
+class InvalidV5EvidenceOnceProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.invalid_emitted = False
+
+    def _output(self, task: dict[str, object]) -> dict[str, object]:
+        output = super()._output(task)
+        if (
+            task["phase"] == TriageWorkPhase.CLASSIFY.value
+            and str(task["prompt_template_id"]).endswith("-v5")
+            and not self.invalid_emitted
+        ):
+            output["evidence_ordinals"] = [999]
+            self.invalid_emitted = True
+        return output
+
+
+class InvalidV6RouteOnceProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.invalid_emitted = False
+
+    def _output(self, task: dict[str, object]) -> dict[str, object]:
+        output = super()._output(task)
+        if (
+            task["phase"] == TriageWorkPhase.CLASSIFY.value
+            and str(task["prompt_template_id"]).endswith("-v6")
+            and not self.invalid_emitted
+        ):
+            output.update(
+                {
+                    "recommended_route": "event_assessment",
+                    "event_archetypes": ["issuer_corporate"],
+                    "changed_facts": ["A frozen issuer fact changed."],
+                    "transmission_channels": [],
+                }
+            )
+            self.invalid_emitted = True
+        return output
 
 
 class SimulatedProcessCrash(BaseException):
@@ -330,6 +384,81 @@ class CrashAfterDispatchProvider(ScriptedWorkProvider):
         assert isinstance(messages, tuple)
         self.requests.append(cast(tuple[dict[str, object], ...], messages))
         raise SimulatedProcessCrash
+
+
+class InvalidThenCrashProvider(ScriptedWorkProvider):
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        if self.requests:
+            self.requests.append(messages)
+            raise SimulatedProcessCrash
+        turn = await super().complete(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        return replace(
+            turn,
+            assistant_message={"role": "assistant", "content": "{}"},
+            usage=ProviderUsage(input_tokens=120, output_tokens=30_000),
+            raw_response={"id": "invalid-before-crash", "content": "{}"},
+        )
+
+
+class RemainingBudgetProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.maximum_outputs: list[int] = []
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        self.maximum_outputs.append(max_output_tokens)
+        turn = await super().complete(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        return replace(
+            turn,
+            usage=ProviderUsage(input_tokens=120, output_tokens=max_output_tokens),
+        )
+
+
+class PreDispatchLegacy408Provider(ScriptedWorkProvider):
+    async def complete_with_observer(self, **kwargs: object) -> ModelTurn:
+        _ = kwargs
+        raise OpenAIChatProviderError(
+            "legacy pre-dispatch 408",
+            error_class="http",
+            diagnostic_code="http_408",
+            http_status=408,
+            generation_state=ProviderGenerationState.NOT_STARTED,
+            retry_disposition=ProviderRetryDisposition.TERMINAL,
+            request_id="mia-no-dispatch",
+            attempts=1,
+        )
 
 
 class CrashDuringValidationRunner(EventImpactTriageWorkRunner):
@@ -635,6 +764,7 @@ def _runtime(
     runner_class: type[EventImpactTriageWorkRunner] = EventImpactTriageWorkRunner,
     secret_values: tuple[str, ...] = (),
     dialect: str = "v2",
+    replacement_store: EventImpactTriageWorkReplacementStore | None = None,
 ):
     candidate_set, contents = _batch(count)
     manifest = build_event_impact_triage_work_manifest(
@@ -652,6 +782,8 @@ def _runtime(
         "v2": build_event_impact_triage_work_execution_plan,
         "v3": build_event_impact_triage_work_execution_plan_v3,
         "v4": build_event_impact_triage_work_execution_plan_v4,
+        "v5": build_event_impact_triage_work_execution_plan_v5,
+        "v6": build_event_impact_triage_work_execution_plan_v6,
     }[dialect]
     plan = builder(
         candidate_set=candidate_set,
@@ -674,6 +806,7 @@ def _runtime(
         artifact_store=ArtifactStore(tmp_path / "artifacts"),
         journal=RunJournal(tmp_path / "journal.sqlite"),
         usage_ledger=UsageLedger(tmp_path / "usage.sqlite"),
+        replacement_store=replacement_store,
         secret_values=secret_values,
         clock=lambda: NOW,
     )
@@ -744,6 +877,401 @@ def test_dispatched_ambiguous_unit_is_never_retried(tmp_path: Path) -> None:
         "model.request.dispatched",
         "model.request.ambiguous",
     ]
+
+
+def test_explicit_replacement_reuses_completed_work_and_preserves_ambiguous_run(
+    tmp_path: Path,
+) -> None:
+    crashing_provider = CrashAfterDispatchProvider()
+    replacement_store = EventImpactTriageWorkReplacementStore(
+        tmp_path / "replacement-authority.sqlite"
+    )
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=crashing_provider,
+        dialect="v4",
+        replacement_store=replacement_store,
+    )
+    with pytest.raises(SimulatedProcessCrash):
+        asyncio.run(runner.run())
+    blocked = asyncio.run(runner.run())
+    assert blocked.status is RunStatus.HUMAN_INPUT_REQUIRED
+    original = blocked.members[-1]
+    original_record = runner.journal.get_run(original.run_id)
+    original_events = runner.journal.events(original.run_id)
+    original_usage = tuple(runner.usage_ledger.records())
+
+    grant = replacement_store.authorize_once(
+        plan_id=plan.plan_id,
+        phase=original.phase.value,
+        unit_id=original.unit_id,
+        role=original.role.value,
+        original_run_id=original.run_id,
+        authorized_at=NOW + timedelta(minutes=1),
+        journal=runner.journal,
+        artifact_store=runner.artifact_store,
+        usage_ledger=runner.usage_ledger,
+    )
+    assert grant.original_run_id == original.run_id
+    assert grant.replacement_run_id != original.run_id
+    assert (
+        replacement_store.authorize_once(
+            plan_id=plan.plan_id,
+            phase=original.phase.value,
+            unit_id=original.unit_id,
+            role=original.role.value,
+            original_run_id=original.run_id,
+            authorized_at=NOW + timedelta(minutes=2),
+            journal=runner.journal,
+            artifact_store=runner.artifact_store,
+            usage_ledger=runner.usage_ledger,
+        )
+        == grant
+    )
+
+    healthy_provider = ScriptedWorkProvider()
+    recovered = EventImpactTriageWorkRunner(
+        plan=plan,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        registration=_registration(),
+        provider=healthy_provider,
+        content_resolver=runner.content_resolver,
+        skills=runner.skills,
+        artifact_store=runner.artifact_store,
+        journal=runner.journal,
+        usage_ledger=runner.usage_ledger,
+        replacement_store=replacement_store,
+        clock=lambda: NOW + timedelta(minutes=3),
+    )
+    result = asyncio.run(recovered.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.proposal is not None
+    assert result.run_evidence is not None
+    replacement = next(
+        member
+        for member in result.members
+        if member.phase is original.phase and member.unit_id == original.unit_id
+    )
+    assert replacement.run_id == grant.replacement_run_id
+    assert recovered.journal.get_run(original.run_id) == original_record
+    assert recovered.journal.events(original.run_id) == original_events
+    assert tuple(recovered.usage_ledger.records())[: len(original_usage)] == original_usage
+    assert len(healthy_provider.requests) == len(result.members)
+
+    request_count = len(healthy_provider.requests)
+    reopened = asyncio.run(recovered.run())
+    assert reopened == result
+    assert len(healthy_provider.requests) == request_count
+
+
+def test_explicit_replacement_accepts_legacy_misclassified_http_408(
+    tmp_path: Path,
+) -> None:
+    replacement_store = EventImpactTriageWorkReplacementStore(
+        tmp_path / "replacement-authority.sqlite"
+    )
+    transport = OneFailureTransport(
+        OpenAIChatProviderError(
+            "legacy gateway 408",
+            error_class="http",
+            diagnostic_code="http_408",
+            http_status=408,
+            generation_state=ProviderGenerationState.NOT_STARTED,
+            retry_disposition=ProviderRetryDisposition.TERMINAL,
+            attempts=1,
+        )
+    )
+    provider = CLIProxyLunaProvider(
+        api_key="dedicated-local-key",
+        config=CLIProxyLunaConfig(
+            origin="http://127.0.0.1:8317",
+            model="gpt-5.6-luna",
+            reasoning_effort="xhigh",
+            retry_backoff_seconds=0,
+        ),
+        transport=transport,
+        request_id_factory=lambda: "mia-legacy-http-408",
+    )
+    runner, _, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=cast(ScriptedWorkProvider, provider),
+        dialect="v6",
+        replacement_store=replacement_store,
+    )
+
+    blocked = asyncio.run(runner.run())
+    assert blocked.status is RunStatus.HUMAN_INPUT_REQUIRED
+    original = blocked.members[-1]
+    events = runner.journal.events(original.run_id)
+    assert events[-1].event_type == "model.request.rejected"
+    assert events[-1].payload["diagnostic_code"] == "http_408"
+    assert events[-1].payload["generation_state"] == "not_started"
+
+    grant = replacement_store.authorize_once(
+        plan_id=plan.plan_id,
+        phase=original.phase.value,
+        unit_id=original.unit_id,
+        role=original.role.value,
+        original_run_id=original.run_id,
+        authorized_at=NOW + timedelta(minutes=1),
+        journal=runner.journal,
+        artifact_store=runner.artifact_store,
+        usage_ledger=runner.usage_ledger,
+    )
+    assert grant.original_run_id == original.run_id
+    assert grant.replacement_run_id != original.run_id
+
+
+def test_replacement_consumes_original_turn_and_token_budgets(tmp_path: Path) -> None:
+    replacement_store = EventImpactTriageWorkReplacementStore(
+        tmp_path / "replacement-authority.sqlite"
+    )
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=InvalidThenCrashProvider(),
+        dialect="v6",
+        replacement_store=replacement_store,
+    )
+    with pytest.raises(SimulatedProcessCrash):
+        asyncio.run(runner.run())
+    blocked = asyncio.run(runner.run())
+    original = blocked.members[-1]
+    binding = plan.binding(original.phase, original.role)
+    assert original.metrics.turns == 1
+    assert original.metrics.output_tokens == 30_000
+    grant = replacement_store.authorize_once(
+        plan_id=plan.plan_id,
+        phase=original.phase.value,
+        unit_id=original.unit_id,
+        role=original.role.value,
+        original_run_id=original.run_id,
+        authorized_at=NOW + timedelta(minutes=1),
+        journal=runner.journal,
+        artifact_store=runner.artifact_store,
+        usage_ledger=runner.usage_ledger,
+    )
+
+    provider = RemainingBudgetProvider()
+    replacement_runner = EventImpactTriageWorkRunner(
+        plan=plan,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        registration=_registration(),
+        provider=provider,
+        content_resolver=runner.content_resolver,
+        skills=runner.skills,
+        artifact_store=runner.artifact_store,
+        journal=runner.journal,
+        usage_ledger=runner.usage_ledger,
+        replacement_store=replacement_store,
+        clock=lambda: NOW + timedelta(minutes=2),
+    )
+    result = asyncio.run(replacement_runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partition is not None
+    assert result.proposal is not None
+    assert result.run_evidence is not None
+    replacement = next(
+        member for member in result.members if member.run_id == grant.replacement_run_id
+    )
+    assert replacement.metrics.turns == 1
+    assert replacement.metrics.output_tokens == binding.max_output_tokens - 30_000
+    assert provider.maximum_outputs[0] == binding.max_output_tokens - 30_000
+    replacement_runner.assert_authoritative_completed_work_run(
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        digests=result.digests,
+        partition=result.partition,
+        proposal=result.proposal,
+        run_evidence=result.run_evidence,
+    )
+
+
+def test_replacement_cannot_start_before_grant_authority(tmp_path: Path) -> None:
+    replacement_store = EventImpactTriageWorkReplacementStore(
+        tmp_path / "replacement-authority.sqlite"
+    )
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=CrashAfterDispatchProvider(),
+        dialect="v6",
+        replacement_store=replacement_store,
+    )
+    with pytest.raises(SimulatedProcessCrash):
+        asyncio.run(runner.run())
+    original = asyncio.run(runner.run()).members[-1]
+    grant = replacement_store.authorize_once(
+        plan_id=plan.plan_id,
+        phase=original.phase.value,
+        unit_id=original.unit_id,
+        role=original.role.value,
+        original_run_id=original.run_id,
+        authorized_at=NOW + timedelta(minutes=5),
+        journal=runner.journal,
+        artifact_store=runner.artifact_store,
+        usage_ledger=runner.usage_ledger,
+    )
+    replacement_runner = EventImpactTriageWorkRunner(
+        plan=plan,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        registration=_registration(),
+        provider=ScriptedWorkProvider(),
+        content_resolver=runner.content_resolver,
+        skills=runner.skills,
+        artifact_store=runner.artifact_store,
+        journal=runner.journal,
+        usage_ledger=runner.usage_ledger,
+        replacement_store=replacement_store,
+        clock=lambda: NOW + timedelta(minutes=4),
+    )
+
+    with pytest.raises(ValueError, match="before its Grant authority"):
+        asyncio.run(replacement_runner.run())
+    with pytest.raises(KeyError):
+        replacement_runner.journal.get_run(grant.replacement_run_id)
+
+
+def test_legacy_http_408_replacement_requires_real_preceding_dispatch(
+    tmp_path: Path,
+) -> None:
+    replacement_store = EventImpactTriageWorkReplacementStore(
+        tmp_path / "replacement-authority.sqlite"
+    )
+    runner, _, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=PreDispatchLegacy408Provider(),
+        dialect="v6",
+        replacement_store=replacement_store,
+    )
+    blocked = asyncio.run(runner.run())
+    original = blocked.members[-1]
+    assert all(
+        event.event_type != "model.request.dispatched"
+        for event in runner.journal.events(original.run_id)
+    )
+
+    with pytest.raises(ValueError, match="unresolved ambiguous model dispatch"):
+        replacement_store.authorize_once(
+            plan_id=plan.plan_id,
+            phase=original.phase.value,
+            unit_id=original.unit_id,
+            role=original.role.value,
+            original_run_id=original.run_id,
+            authorized_at=NOW + timedelta(minutes=1),
+            journal=runner.journal,
+            artifact_store=runner.artifact_store,
+            usage_ledger=runner.usage_ledger,
+        )
+
+
+def test_ambiguous_replacement_cannot_be_replaced_again(tmp_path: Path) -> None:
+    replacement_store = EventImpactTriageWorkReplacementStore(
+        tmp_path / "replacement-authority.sqlite"
+    )
+    first_provider = CrashAfterDispatchProvider()
+    runner, _, candidate_set, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=first_provider,
+        dialect="v4",
+        replacement_store=replacement_store,
+    )
+    with pytest.raises(SimulatedProcessCrash):
+        asyncio.run(runner.run())
+    original = asyncio.run(runner.run()).members[-1]
+    grant = replacement_store.authorize_once(
+        plan_id=plan.plan_id,
+        phase=original.phase.value,
+        unit_id=original.unit_id,
+        role=original.role.value,
+        original_run_id=original.run_id,
+        authorized_at=NOW + timedelta(minutes=1),
+        journal=runner.journal,
+        artifact_store=runner.artifact_store,
+        usage_ledger=runner.usage_ledger,
+    )
+
+    second_provider = CrashAfterDispatchProvider()
+    replacement_runner = EventImpactTriageWorkRunner(
+        plan=plan,
+        candidate_set=candidate_set,
+        work_manifest=manifest,
+        registration=_registration(),
+        provider=second_provider,
+        content_resolver=runner.content_resolver,
+        skills=runner.skills,
+        artifact_store=runner.artifact_store,
+        journal=runner.journal,
+        usage_ledger=runner.usage_ledger,
+        replacement_store=replacement_store,
+        clock=lambda: NOW + timedelta(minutes=2),
+    )
+    with pytest.raises(SimulatedProcessCrash):
+        asyncio.run(replacement_runner.run())
+    blocked = asyncio.run(replacement_runner.run())
+    assert blocked.status is RunStatus.HUMAN_INPUT_REQUIRED
+    assert blocked.members[-1].run_id == grant.replacement_run_id
+
+    with pytest.raises(ValueError, match="cannot itself be replaced"):
+        replacement_store.authorize_once(
+            plan_id=plan.plan_id,
+            phase=original.phase.value,
+            unit_id=original.unit_id,
+            role=original.role.value,
+            original_run_id=grant.replacement_run_id,
+            authorized_at=NOW + timedelta(minutes=3),
+            journal=runner.journal,
+            artifact_store=runner.artifact_store,
+            usage_ledger=runner.usage_ledger,
+        )
+
+
+def test_sealed_legacy_v4_output_contracts_remain_replayable(tmp_path: Path) -> None:
+    runner, _, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=2,
+        dialect="v4",
+    )
+    _ = runner
+    legacy_hashes = {
+        (TriageWorkPhase.MAP, TriageAgentRole.FACT_VERIFIER): (
+            "fb5ad688740da362518a69165945e832819606f387f619a5cdac8da776ee6f28"
+        ),
+        (TriageWorkPhase.MAP, TriageAgentRole.TRANSMISSION_MAPPER): (
+            "6b4697494acf7f37d5d7be647292e503031468ac68f43e418b7c2cd9793f824d"
+        ),
+        (TriageWorkPhase.MAP, TriageAgentRole.COUNTERCASE_REVIEWER): (
+            "3ac3c57784cb451744a5289d9befb8db7f2269b08b25aac55deee2205b340e69"
+        ),
+        (TriageWorkPhase.MAP, TriageAgentRole.COORDINATOR): (
+            "1c0aad606d692db1f1957db5a354c8c01bb2e6c47c4cc8a5451ea648edc2544b"
+        ),
+        (TriageWorkPhase.PARTITION, TriageAgentRole.COORDINATOR): (
+            "d9dfbac685e4e1448620dbe6b9f26f498a313898f1e22e9d4f2c26bb6dca6989"
+        ),
+        (TriageWorkPhase.CLASSIFY, TriageAgentRole.COORDINATOR): (
+            "7197459407b8bf1e3f5653fb22668888c298a0ab1327cf45309e5ff6d1b013c0"
+        ),
+    }
+    for key, output_contract_hash in legacy_hashes.items():
+        legacy = replace(plan.binding(*key), output_contract_hash=output_contract_hash)
+        assert canonical_hash(_output_contract_for_binding(legacy)) == output_contract_hash
 
 
 def test_provider_failure_journals_each_physical_post_with_sanitized_fields(
@@ -1534,6 +2062,199 @@ def test_v4_classify_parser_rejects_declared_contract_bound_violations(
 
     with pytest.raises((TypeError, ValueError), match=message):
         runner._parse_cluster_proposal(output, result.partition.clusters[0])
+
+
+def test_v5_classify_contract_uses_harness_bound_evidence_ordinals(
+    tmp_path: Path,
+) -> None:
+    runner, provider, candidate_set, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=3,
+        dialect="v5",
+    )
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5
+    assert result.proposal is not None
+    assert {
+        version_id
+        for cluster in result.proposal.clusters
+        for version_id in cluster.evidence_version_ids
+    } <= set(candidate_set.version_ids)
+    classify_tasks = [
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    ]
+    assert classify_tasks
+    for task in classify_tasks:
+        contract = cast(dict[str, object], task["required_output"])
+        assert contract["contract_version"] == "v5"
+        assert contract["candidate_version_ids_injected_by_harness"] is True
+        required = cast(list[str], contract["required_fields"])
+        assert "evidence_ordinals" in required
+        assert "evidence_version_ids" not in required
+        fields = cast(dict[str, dict[str, object]], contract["field_schemas"])
+        assert fields["evidence_ordinals"] == {
+            "type": "array",
+            "min_items": 1,
+            "unique_items": True,
+            "order": "strictly increasing",
+            "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": "phase_input.partition_cluster.candidate_version_ids length minus one",
+            },
+        }
+    assert event_impact_triage_work_execution_plan_from_dict(plan.to_dict()) == plan
+
+
+@pytest.mark.parametrize(
+    ("ordinals", "message"),
+    [
+        ([], "at least one evidence ordinal"),
+        ([0, 0], "strictly increasing"),
+        ([999], "outside the frozen event cluster"),
+        ([True], "non-boolean integers"),
+    ],
+)
+def test_v5_classify_parser_rejects_invalid_evidence_ordinals(
+    tmp_path: Path, ordinals: list[object], message: str
+) -> None:
+    runner, provider, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        dialect="v5",
+    )
+    result = asyncio.run(runner.run())
+    assert result.partition is not None
+    task = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    )
+    output = provider._output(task)
+    output["evidence_ordinals"] = ordinals
+
+    with pytest.raises((TypeError, ValueError), match=message):
+        runner._parse_cluster_proposal(output, result.partition.clusters[0])
+
+
+def test_v5_invalid_evidence_ordinal_gets_actionable_correction(tmp_path: Path) -> None:
+    provider = InvalidV5EvidenceOnceProvider()
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=provider,
+        dialect="v5",
+    )
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    classify_member = next(
+        item for item in result.members if item.phase is TriageWorkPhase.CLASSIFY
+    )
+    assert classify_member.metrics.turns == 2
+    correction = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if "output_contract_version" in str(request[-1]["content"])
+    )
+    assert correction["output_contract_version"] == "v5"
+    assert correction["validation_error"] == "invalid_evidence_ordinal_coverage_or_order"
+    assert "strictly increasing evidence_ordinals" in correction["instruction"]
+
+
+def test_v6_classify_contract_declares_route_invariants(tmp_path: Path) -> None:
+    runner, provider, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=3,
+        dialect="v6",
+    )
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6
+    task = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if json.loads(str(request[-1]["content"]))["phase"] == TriageWorkPhase.CLASSIFY.value
+    )
+    contract = cast(dict[str, object], task["required_output"])
+    assert contract["contract_version"] == "v6"
+    assert contract["candidate_version_ids_injected_by_harness"] is True
+    fields = cast(dict[str, dict[str, object]], contract["field_schemas"])
+    assert fields["rule_reasons"]["min_items"] == 1
+    requirements = cast(list[dict[str, object]], contract["conditional_requirements"])
+    assert requirements == [
+        {
+            "if": {"checkpoint_eligibility": {"const": "eligible"}},
+            "then": {
+                "recommended_route": {"const": "checkpoint_candidate"},
+                "changed_facts": {"min_items": 1},
+                "event_archetypes": {"min_items": 1},
+            },
+        },
+        {
+            "if": {"checkpoint_eligibility": {"const": "ineligible"}},
+            "then": {"recommended_route": {"not_const": "checkpoint_candidate"}},
+        },
+        {
+            "if": {"checkpoint_eligibility": {"const": "needs_review"}},
+            "then": {
+                "recommended_route": {"enum": ["event_assessment", "attention_watch"]},
+                "uncertainty_notes": {"min_items": 1},
+            },
+        },
+        {
+            "if": {"recommended_route": {"const": "event_assessment"}},
+            "then": {
+                "changed_facts": {"min_items": 1},
+                "event_archetypes": {"min_items": 1},
+                "transmission_channels": {"min_items": 1},
+            },
+        },
+        {
+            "if": {"recommended_route": {"const": "attention_watch"}},
+            "then": {
+                "changed_facts": {"min_items": 1},
+                "watch_questions": {"min_items": 1},
+            },
+        },
+    ]
+
+
+def test_v6_route_violation_gets_actionable_correction(tmp_path: Path) -> None:
+    provider = InvalidV6RouteOnceProvider()
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.BASELINE,
+        count=2,
+        provider=provider,
+        dialect="v6",
+    )
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    classify_member = next(
+        item for item in result.members if item.phase is TriageWorkPhase.CLASSIFY
+    )
+    assert classify_member.metrics.turns == 2
+    correction = next(
+        json.loads(str(request[-1]["content"]))
+        for request in provider.requests
+        if "output_contract_version" in str(request[-1]["content"])
+    )
+    assert correction["output_contract_version"] == "v6"
+    assert correction["validation_error"] == (
+        "event_assessment_requires_fact_archetype_and_transmission"
+    )
+    assert "conditional route requirements" in correction["instruction"]
 
 
 def test_v2_plan_prompt_and_output_contract_bytes_remain_frozen(tmp_path: Path) -> None:

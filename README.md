@@ -90,12 +90,25 @@ The bootstrap implements:
   nine-version real v4 treatment completed all 13 members and produced a native Work Decision: no
   eligible policy checkpoint, five archive clusters, two EventAssessment routes and one Attention
   Watch route. That Decision classified each version once and granted no Query Gate, Judgment or
-  execution authority. A subsequent 39-version real v4 treatment completed 29 of 34 logical graph
-  members: 30 were attempted, one classify member sealed a post-dispatch Provider interruption as
-  `human_input_required`, and four classify members never started. Diagnosis traced the interruption
+  execution authority. A subsequent 39-version real v4 treatment has 46 logical graph members. It
+  first completed 29: 30 were attempted, one classify member sealed a post-dispatch Provider
+  interruption as `human_input_required`, and sixteen logical members had not started. Diagnosis
+  traced the interruption
   to an upstream TLS `bad record MAC`, an unsafe second project-level generation POST, and then local
-  gateway `auth_unavailable`; it was not quota or rate-limit evidence. The batch produced no Proposal
-  or Decision and remains immutable negative runtime evidence. The prospective repair now journals
+  gateway `auth_unavailable`; it was not quota or rate-limit evidence. One explicit append-only
+  Replacement Grant later preserved the ambiguous Run, issued a distinct replacement identity and
+  reused completed work. The graph reached 39 completed logical members before another classify
+  member failed after three responses miscopied its sole long evidence ID; six members were not
+  started, and the batch still produced no Proposal or Decision. The v5 dialect therefore accepts
+  short evidence ordinals and lets the Harness inject exact IDs. Its same-batch run proved ordinal
+  citation but later failed because the model was not told that EventAssessment requires a
+  transmission channel. V6 publishes that and the other existing route/evidence conditions with
+  precise correction categories. The v6 same-batch revalidation then completed all 47 logical
+  members and admitted one immutable Decision over 39 versions / 30 clusters: 28 archive and two
+  EventAssessment routes, with no eligible policy checkpoint, Query Gate, Judgment or execution
+  authority. Its authoritative Ledger retains the superseded ambiguous dispatch, so it contains 48
+  physical attempts and 396,709 input / 172,508 output Tokens. Same-batch v5/v6 work is
+  infrastructure revalidation, not blind semantic evidence. The prospective repair now journals
   each physical attempt with a correlation ID and generation state, forbids ambiguous POST retries,
   and can persist sanitized circuit/cooldown/operator-notice state; see
   [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed Position Snapshot/historical-context

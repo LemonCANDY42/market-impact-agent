@@ -330,14 +330,30 @@ dialect byte for byte. Schema v3 changes the map/partition model-facing dialect:
 atoms by exact array position and partition outputs use validated zero-based global atom ordinals.
 Schema v4 retains those positional bindings and adds full classify field types, enums and numeric
 bounds while the Harness injects Cluster Seed candidate identities rather than asking the model to
-echo them. The Harness injects authoritative atom and cluster identities into the unchanged
-canonical Digest, Partition and Proposal artifacts. All schemas freeze the repeated map roles per
-Work Unit, one
+echo them. Schema v5 also replaces model-echoed Observation Version evidence IDs with strictly
+increasing ordinals into the frozen Cluster Seed; the Harness resolves those ordinals to exact
+evidence identities. Schema v6 retains that concise identity seam and declares the existing
+eligibility/route conditional requirements, including the evidence needed for EventAssessment and
+Attention Watch, so corrections can name a bounded semantic violation without exposing content.
+The Harness injects authoritative atom, cluster and cited-evidence identities
+into the unchanged canonical Digest, Partition and Proposal artifacts. All schemas freeze the
+repeated map roles per Work Unit, one
 partition coordinator, bounded classify fan-out, exact Skill/prompt/output contracts and per-unit,
 per-phase and aggregate request/token/cost ceilings. Run identity is phase plus Work Unit or Cluster
 Seed plus role. Labels, tools, PIT, Judgment and execution remain absent, and an ambiguous dispatched
 request is never retried automatically.
 _Avoid_: Scheduler, dynamic role discovery, label-bearing plan, best-effort partial proposal
+
+**Event Impact Triage Work Replacement Grant**:
+An append-only Harness authority for exactly one new Run identity after one prior model dispatch is
+terminally ambiguous. It binds the old Plan/member identity, terminal artifact, Journal hash, Usage
+record hash and authorization time. The old dispatch and Usage remain immutable and count toward
+the authoritative receipt and the same frozen per-unit/phase/aggregate budgets; the replacement
+cannot start before `authorized_at`, cannot itself be replaced, and no possible late old response
+may be combined with it. A legacy misclassified failure is eligible only when its exact failed and
+terminal events bind one real preceding dispatch. The Grant carries no label, Judgment, Signal or
+execution authority.
+_Avoid_: Hidden retry, overwritten dispatch, response merge, replacement chain
 
 **Event Impact Triage Work Comparison Registration**:
 A content-identified, append-only Harness-clock binding created after a complete Label Set is sealed
@@ -346,8 +362,8 @@ IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, c
 Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
 stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
 authority. Both plans must use the same Work Plan schema revision; mixed revisions fail before
-registration, while equal-revision v3/v3 or v4/v4 comparisons retain the existing Registration and
-Report authority.
+registration, while equal-revision v3/v3, v4/v4, v5/v5 or v6/v6 comparisons retain the existing
+Registration and Report authority.
 _Avoid_: v1 comparison mutation, caller clock, revealed-label prompt, repaired failed arm
 
 **Event Impact Triage Work Comparison Report**:

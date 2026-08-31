@@ -46,6 +46,10 @@ from market_impact_agent.event_impact_triage_work import (
     triage_candidate_digest_from_dict,
     triage_cluster_partition_from_dict,
 )
+from market_impact_agent.event_impact_triage_work_replacement import (
+    EventImpactTriageWorkReplacementGrant,
+    EventImpactTriageWorkReplacementStore,
+)
 from market_impact_agent.model_provider import (
     ModelProviderProfile,
     load_builtin_model_provider_profile,
@@ -73,6 +77,12 @@ EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3 = (
 EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4 = (
     "market-impact.event-impact-triage-work-execution-plan.v4"
 )
+EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5 = (
+    "market-impact.event-impact-triage-work-execution-plan.v5"
+)
+EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6 = (
+    "market-impact.event-impact-triage-work-execution-plan.v6"
+)
 EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA = EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2 = (
     "market-impact.event-impact-triage-work-run-artifact.v2"
@@ -83,10 +93,18 @@ EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V3 = (
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V4 = (
     "market-impact.event-impact-triage-work-run-artifact.v4"
 )
+EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V5 = (
+    "market-impact.event-impact-triage-work-run-artifact.v5"
+)
+EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V6 = (
+    "market-impact.event-impact-triage-work-run-artifact.v6"
+)
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA = EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2
 TRIAGE_WORK_RUNTIME_REF_V2 = "event-impact-triage-work-runtime-v2"
 TRIAGE_WORK_RUNTIME_REF_V3 = "event-impact-triage-work-runtime-v3"
 TRIAGE_WORK_RUNTIME_REF_V4 = "event-impact-triage-work-runtime-v4"
+TRIAGE_WORK_RUNTIME_REF_V5 = "event-impact-triage-work-runtime-v5"
+TRIAGE_WORK_RUNTIME_REF_V6 = "event-impact-triage-work-runtime-v6"
 TRIAGE_WORK_RUNTIME_REF = TRIAGE_WORK_RUNTIME_REF_V2
 TRIAGE_WORK_TOOL_SURFACE_HASH = canonical_hash([])
 
@@ -170,10 +188,7 @@ class TriageWorkRoleBinding:
         expected_template = f"triage-work-{self.phase.value}-{self.role.value}-json-{dialect}"
         if self.prompt_template_id != expected_template:
             raise ValueError("triage work prompt template is not Harness-owned")
-        if self.output_contract_hash != canonical_hash(
-            _output_contract(self.phase, self.role, dialect=dialect)
-        ):
-            raise ValueError("triage work output contract hash is invalid")
+        _output_contract_for_binding(self)
         if len(set(self.requested_skills)) != len(self.requested_skills):
             raise ValueError("triage work requested Skills must be unique")
         if len(self.resolved_skill_names) != len(self.skill_manifest_hashes):
@@ -270,6 +285,8 @@ class EventImpactTriageWorkExecutionPlan:
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2,
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V3,
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5,
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6,
         }:
             raise ValueError("unsupported Event Impact Triage Work Execution Plan schema")
         dialect = _plan_dialect(self.schema_version)
@@ -509,6 +526,54 @@ def build_event_impact_triage_work_execution_plan_v4(
         model_profile=model_profile,
         skills=skills,
         schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4,
+    )
+
+
+def build_event_impact_triage_work_execution_plan_v5(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    work_manifest: EventImpactTriageWorkManifest,
+    registration: ProspectiveDiagnosticRegistration,
+    arm: TriageComparisonArm,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+) -> EventImpactTriageWorkExecutionPlan:
+    """Build typed classify with Harness-bound evidence ordinals."""
+
+    return _build_event_impact_triage_work_execution_plan(
+        candidate_set=candidate_set,
+        work_manifest=work_manifest,
+        registration=registration,
+        arm=arm,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5,
+    )
+
+
+def build_event_impact_triage_work_execution_plan_v6(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    work_manifest: EventImpactTriageWorkManifest,
+    registration: ProspectiveDiagnosticRegistration,
+    arm: TriageComparisonArm,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+) -> EventImpactTriageWorkExecutionPlan:
+    """Build typed classify with explicit Harness route invariants."""
+
+    return _build_event_impact_triage_work_execution_plan(
+        candidate_set=candidate_set,
+        work_manifest=work_manifest,
+        registration=registration,
+        arm=arm,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6,
     )
 
 
@@ -910,6 +975,7 @@ class EventImpactTriageWorkRunner:
         artifact_store: ArtifactStore,
         journal: RunJournal,
         usage_ledger: UsageLedger,
+        replacement_store: EventImpactTriageWorkReplacementStore | None = None,
         provider_health_store: ProviderHealthStore | None = None,
         secret_values: tuple[str, ...] = (),
         clock: Callable[[], datetime] | None = None,
@@ -924,6 +990,7 @@ class EventImpactTriageWorkRunner:
         self.artifact_store = artifact_store
         self.journal = journal
         self.usage_ledger = usage_ledger
+        self.replacement_store = replacement_store
         self.provider_health_store = provider_health_store
         self.secret_values = tuple(item for item in secret_values if item)
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -1073,7 +1140,7 @@ class EventImpactTriageWorkRunner:
         if run_evidence.usage_ledger_hash != usage_ledger_hash:
             raise ValueError("triage work evidence differs from the authoritative Usage Ledger")
         usage = {item.run_id: item for item in usage_records}
-        if set(usage) != {item.run_id for item in run_evidence.members}:
+        if set(usage) != self._expected_usage_run_ids(run_evidence.members):
             raise ValueError("triage work Usage Ledger must contain exactly every completed unit")
         reopened_outputs: dict[tuple[TriageWorkPhase, str, TriageAgentRole], object] = {}
         phase_metrics = {phase: _MutableMetrics() for phase in TriageWorkPhase}
@@ -1139,8 +1206,17 @@ class EventImpactTriageWorkRunner:
                 or metrics != member.metrics
             ):
                 raise ValueError("triage work member metrics differ from Run Journal")
-            _assert_binding_budget(binding, metrics)
-            phase_metrics[member.phase].add_metrics(metrics)
+            prior_metrics = self._replacement_prior_metrics(member.run_id, binding, member.unit_id)
+            combined_metrics = _MutableMetrics()
+            if prior_metrics is not None:
+                combined_metrics.add_metrics(prior_metrics)
+                grant = self._replacement_grant(member.run_id, binding, member.unit_id)
+                assert grant is not None
+                if record.created_at < grant.authorized_at:
+                    raise ValueError("replacement Run started before its Grant authority")
+            combined_metrics.add_metrics(metrics)
+            _assert_binding_budget(binding, combined_metrics.freeze())
+            phase_metrics[member.phase].add_metrics(combined_metrics.freeze())
             usage_record = usage[member.run_id]
             if (
                 usage_record.experiment_id != self.plan.plan_id
@@ -1223,7 +1299,7 @@ class EventImpactTriageWorkRunner:
         )
         run_records = tuple(self.journal.get_run(item.run_id) for item in run_evidence.members)
         usage_ledger_hash, usage_records = self._authoritative_usage_snapshot()
-        expected_run_ids = {item.run_id for item in run_evidence.members}
+        expected_run_ids = self._expected_usage_run_ids(run_evidence.members)
         if (
             usage_ledger_hash != run_evidence.usage_ledger_hash
             or {item.run_id for item in usage_records} != expected_run_ids
@@ -1251,11 +1327,11 @@ class EventImpactTriageWorkRunner:
             raise ValueError("triage work authority receipt requires completed Usage records")
         receipt = EventImpactTriageWorkRunAuthorityReceipt(
             plan_id=self.plan.plan_id,
-            started_at=min(item.created_at for item in run_records),
+            started_at=min(self.journal.get_run(run_id).created_at for run_id in expected_run_ids),
             finished_at=max(item.updated_at for item in run_records),
             completed_run_count=len(run_records),
             total_estimated_cost_microusd=sum(
-                item.metrics.estimated_cost_microusd for item in completed_usage
+                item.metrics.estimated_cost_microusd for item in usage_records
             ),
         )
         final_ledger_hash, final_usage_records = self._authoritative_usage_snapshot()
@@ -1340,7 +1416,7 @@ class EventImpactTriageWorkRunner:
         unit_id: str,
         phase_input: dict[str, object],
     ) -> TriageWorkRunMember:
-        run_id = _run_id(self.plan.plan_id, binding.phase, unit_id, binding.role)
+        run_id = self._member_run_id(binding, unit_id)
         claim = self.journal.try_claim_run(run_id)
         if claim is None:
             return self._unclaimed_member(binding, unit_id, run_id, phase_input)
@@ -1349,6 +1425,7 @@ class EventImpactTriageWorkRunner:
                 binding=binding,
                 unit_id=unit_id,
                 phase_input=phase_input,
+                run_id=run_id,
             )
         finally:
             claim.release()
@@ -1359,8 +1436,8 @@ class EventImpactTriageWorkRunner:
         binding: TriageWorkRoleBinding,
         unit_id: str,
         phase_input: dict[str, object],
+        run_id: str,
     ) -> TriageWorkRunMember:
-        run_id = _run_id(self.plan.plan_id, binding.phase, unit_id, binding.role)
         messages = self._messages(binding, phase_input)
         request_tokens = self._counter.count_request(messages, ())
         if request_tokens > binding.max_request_utf8_tokens:
@@ -1369,24 +1446,36 @@ class EventImpactTriageWorkRunner:
                 unit_id=unit_id,
                 run_id=run_id,
                 execution_binding_hash=self._execution_binding_hash(
-                    binding, unit_id, canonical_hash(messages)
+                    binding, unit_id, canonical_hash(messages), run_id=run_id
                 ),
                 status=RunStatus.BUDGET_EXHAUSTED,
                 error=_BudgetExceeded("triage work request exceeds frozen serialized ceiling"),
                 metrics=RunMetrics(0, 0, 0, 0, 0, 0.0, 0, 0),
             )
         prompt = self.artifact_store.put_json(messages)
-        execution_binding_hash = self._execution_binding_hash(binding, unit_id, prompt.content_hash)
+        execution_binding_hash = self._execution_binding_hash(
+            binding, unit_id, prompt.content_hash, run_id=run_id
+        )
         metrics = _MutableMetrics()
+        budget_metrics = _MutableMetrics()
+        prior_metrics = self._replacement_prior_metrics(run_id, binding, unit_id)
+        grant = self._replacement_grant(run_id, binding, unit_id)
+        if prior_metrics is not None:
+            budget_metrics.add_metrics(prior_metrics)
         active_messages: tuple[dict[str, object], ...] = messages
-        first_turn_number = 1
+        first_turn_number = budget_metrics.turns + 1
+        run_started_at = self._now()
+        if grant is not None and run_started_at < grant.authorized_at:
+            raise ValueError("replacement Run cannot start before its Grant authority")
         try:
             record = self.journal.get_run(run_id)
         except KeyError:
             record = self.journal.start_run(
-                run_id=run_id, config_hash=execution_binding_hash, created_at=self._now()
+                run_id=run_id, config_hash=execution_binding_hash, created_at=run_started_at
             )
         else:
+            if grant is not None and record.created_at < grant.authorized_at:
+                raise ValueError("replacement Run started before its Grant authority")
             if record.config_hash != execution_binding_hash:
                 raise ValueError("existing triage work run has another execution binding")
             if record.status.terminal:
@@ -1433,6 +1522,8 @@ class EventImpactTriageWorkRunner:
                 return recovered
             active_messages, recovered_metrics, first_turn_number = recovered
             metrics.add_metrics(recovered_metrics)
+            budget_metrics.add_metrics(recovered_metrics)
+            first_turn_number += 0 if prior_metrics is None else prior_metrics.turns
         if self.provider_health_store is not None:
             admission = self.provider_health_store.admission(
                 self.provider.provider_id, now=self._now()
@@ -1466,14 +1557,14 @@ class EventImpactTriageWorkRunner:
                 estimated_input = self._counter.count_request(active_messages, ())
                 if estimated_input > binding.max_request_utf8_tokens:
                     raise _BudgetExceeded("triage work correction request exceeds frozen ceiling")
-                if metrics.input_tokens + estimated_input > binding.max_input_tokens:
+                if budget_metrics.input_tokens + estimated_input > binding.max_input_tokens:
                     raise _BudgetExceeded("triage work unit lacks input-token budget")
-                remaining_output = binding.max_output_tokens - metrics.output_tokens
+                remaining_output = binding.max_output_tokens - budget_metrics.output_tokens
                 if remaining_output < 1:
                     raise _BudgetExceeded("triage work unit exhausted output-token budget")
                 affordable = self.plan.model_provider_profile.pricing.affordable_output_tokens(
                     remaining_microusd=(
-                        binding.max_estimated_cost_microusd - metrics.estimated_cost_microusd
+                        binding.max_estimated_cost_microusd - budget_metrics.estimated_cost_microusd
                     ),
                     estimated_input_tokens=estimated_input,
                 )
@@ -1814,7 +1905,8 @@ class EventImpactTriageWorkRunner:
                         },
                     )
                     metrics.add(turn, self.plan.model_provider_profile)
-                    _assert_binding_budget(binding, metrics.freeze())
+                    budget_metrics.add(turn, self.plan.model_provider_profile)
+                    _assert_binding_budget(binding, budget_metrics.freeze())
                     raise ValueError("triage work Provider output contains a configured secret")
                 assistant = self.artifact_store.put_json(turn.assistant_message)
                 raw = self.artifact_store.put_json(turn.raw_response)
@@ -1838,7 +1930,8 @@ class EventImpactTriageWorkRunner:
                     },
                 )
                 metrics.add(turn, self.plan.model_provider_profile)
-                _assert_binding_budget(binding, metrics.freeze())
+                budget_metrics.add(turn, self.plan.model_provider_profile)
+                _assert_binding_budget(binding, budget_metrics.freeze())
                 self._validate_turn(turn)
                 if self.provider_health_store is not None:
                     self.provider_health_store.record_success(
@@ -2087,7 +2180,7 @@ class EventImpactTriageWorkRunner:
     ) -> TriageWorkRunMember:
         messages = self._messages(binding, phase_input)
         execution_binding_hash = self._execution_binding_hash(
-            binding, unit_id, canonical_hash(messages)
+            binding, unit_id, canonical_hash(messages), run_id=run_id
         )
         terminal = self.artifact_store.put_json(
             {
@@ -2156,9 +2249,7 @@ class EventImpactTriageWorkRunner:
                         "phase": binding.phase.value,
                         "role": binding.role.value,
                         "phase_input": phase_input,
-                        "required_output": _output_contract(
-                            binding.phase, binding.role, dialect=dialect
-                        ),
+                        "required_output": _output_contract_for_binding(binding),
                     }
                 ).decode(),
             }
@@ -2190,7 +2281,7 @@ class EventImpactTriageWorkRunner:
                 atom_input = {"atom_id": atom.atom_id, **atom_input}
             atoms.append(atom_input)
         model_upstream = list(upstream)
-        if dialect in {"v3", "v4"}:
+        if dialect in {"v3", "v4", "v5", "v6"}:
             model_upstream = [
                 {
                     **finding,
@@ -2219,7 +2310,7 @@ class EventImpactTriageWorkRunner:
         }
 
     def _partition_input(self, digests: tuple[TriageCandidateDigest, ...]) -> dict[str, object]:
-        if _plan_dialect(self.plan.schema_version) in {"v3", "v4"}:
+        if _plan_dialect(self.plan.schema_version) in {"v3", "v4", "v5", "v6"}:
             return {
                 "manifest_id": self.work_manifest.manifest_id,
                 "digests": [
@@ -2336,7 +2427,7 @@ class EventImpactTriageWorkRunner:
             if set(finding) != required:
                 raise ValueError("triage map specialist atom fields are invalid")
             values = _string_tuple(finding.get(expected_fields), expected_fields)
-            if dialect in {"v3", "v4"}:
+            if dialect in {"v3", "v4", "v5", "v6"}:
                 _validate_v3_text_array(values, expected_fields)
             accepted_findings.append({"atom_id": atom_id, expected_fields: list(values)})
         if dialect == "v2":
@@ -2455,7 +2546,9 @@ class EventImpactTriageWorkRunner:
                     ),
                 )
             )
-        if dialect in {"v3", "v4"} and seen_ordinals != set(range(len(self.work_manifest.atoms))):
+        if dialect in {"v3", "v4", "v5", "v6"} and seen_ordinals != set(
+            range(len(self.work_manifest.atoms))
+        ):
             raise ValueError(
                 "triage partition atom ordinals must cover every Work Atom exactly once"
             )
@@ -2482,7 +2575,6 @@ class EventImpactTriageWorkRunner:
             "event_stage",
             "changed_facts",
             "rule_reasons",
-            "evidence_version_ids",
             "uncertainty_notes",
             "countercases",
             "transmission_channels",
@@ -2490,22 +2582,32 @@ class EventImpactTriageWorkRunner:
             "watch_questions",
             "triage_confidence",
         }
-        if dialect != "v4":
+        expected.add("evidence_ordinals" if dialect in {"v5", "v6"} else "evidence_version_ids")
+        if dialect not in {"v4", "v5", "v6"}:
             expected.add("candidate_version_ids")
         if set(payload) != expected:
             raise ValueError("triage classify output fields are invalid")
-        if dialect == "v4":
+        if dialect in {"v4", "v5", "v6"}:
             versions = cluster.candidate_version_ids
         else:
             versions = _string_tuple(payload.get("candidate_version_ids"), "candidate_version_ids")
             if set(versions) != set(cluster.candidate_version_ids):
                 raise ValueError("triage classify output differs from its exact cluster seed")
-        if dialect == "v4":
+        if dialect in {"v4", "v5", "v6"}:
             event_archetypes = _unique_string_tuple(
                 payload.get("event_archetypes"), "event_archetypes"
             )
-            evidence_version_ids = _unique_string_tuple(
-                payload.get("evidence_version_ids"), "evidence_version_ids"
+            evidence_version_ids = (
+                tuple(
+                    versions[ordinal]
+                    for ordinal in _strict_evidence_ordinals(
+                        payload.get("evidence_ordinals"), candidate_count=len(versions)
+                    )
+                )
+                if dialect in {"v5", "v6"}
+                else _unique_string_tuple(
+                    payload.get("evidence_version_ids"), "evidence_version_ids"
+                )
             )
             transmission_channels = _unique_string_tuple(
                 payload.get("transmission_channels"), "transmission_channels"
@@ -2715,7 +2817,7 @@ class EventImpactTriageWorkRunner:
         unit_id: str,
         phase_input: dict[str, object],
     ) -> object:
-        expected_run_id = _run_id(self.plan.plan_id, binding.phase, unit_id, binding.role)
+        expected_run_id = self._member_run_id(binding, unit_id)
         if (
             member.run_id != expected_run_id
             or member.phase is not binding.phase
@@ -2743,7 +2845,9 @@ class EventImpactTriageWorkRunner:
         initial_prompt_hash = canonical_hash(initial_messages)
         if self.artifact_store.read_json(initial_prompt_hash) != list(initial_messages):
             raise ValueError("triage work initial prompt artifact is invalid")
-        expected_binding_hash = self._execution_binding_hash(binding, unit_id, initial_prompt_hash)
+        expected_binding_hash = self._execution_binding_hash(
+            binding, unit_id, initial_prompt_hash, run_id=expected_run_id
+        )
         if (
             terminal.get("run_id") != expected_run_id
             or terminal.get("prompt_hash") != initial_prompt_hash
@@ -2946,25 +3050,136 @@ class EventImpactTriageWorkRunner:
         return payload
 
     def _execution_binding_hash(
-        self, binding: TriageWorkRoleBinding, unit_id: str, prompt_hash: str
+        self,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+        prompt_hash: str,
+        *,
+        run_id: str,
     ) -> str:
-        return canonical_hash(
-            {
-                "runtime_ref": _runtime_ref(self.plan.schema_version),
-                "plan_id": self.plan.plan_id,
-                "phase": binding.phase.value,
-                "unit_id": unit_id,
-                "role_binding": binding.to_dict(),
-                "runtime_config_hash": (
-                    self.plan.model_provider_profile.runtime_config().config_hash
-                ),
-                "prompt_hash": prompt_hash,
-                "candidate_set_id": self.candidate_set.candidate_set_id,
-                "work_manifest_id": self.work_manifest.manifest_id,
-                "tool_surface_hash": TRIAGE_WORK_TOOL_SURFACE_HASH,
-                "token_counter_id": self._counter.counter_id,
-            }
+        identity: dict[str, object] = {
+            "runtime_ref": _runtime_ref(self.plan.schema_version),
+            "plan_id": self.plan.plan_id,
+            "phase": binding.phase.value,
+            "unit_id": unit_id,
+            "role_binding": binding.to_dict(),
+            "runtime_config_hash": (self.plan.model_provider_profile.runtime_config().config_hash),
+            "prompt_hash": prompt_hash,
+            "candidate_set_id": self.candidate_set.candidate_set_id,
+            "work_manifest_id": self.work_manifest.manifest_id,
+            "tool_surface_hash": TRIAGE_WORK_TOOL_SURFACE_HASH,
+            "token_counter_id": self._counter.counter_id,
+        }
+        grant = self._replacement_grant(run_id, binding, unit_id)
+        if grant is not None:
+            identity["replacement_grant_id"] = grant.grant_id
+        return canonical_hash(identity)
+
+    def _member_run_id(self, binding: TriageWorkRoleBinding, unit_id: str) -> str:
+        original_run_id = _run_id(self.plan.plan_id, binding.phase, unit_id, binding.role)
+        if self.replacement_store is None:
+            return original_run_id
+        try:
+            record = self.journal.get_run(original_run_id)
+        except KeyError:
+            return original_run_id
+        if record.status is not RunStatus.HUMAN_INPUT_REQUIRED:
+            return original_run_id
+        grant = self.replacement_store.for_original(original_run_id)
+        if grant is None:
+            return original_run_id
+        self._assert_replacement_binding(grant, binding, unit_id)
+        self.replacement_store.assert_authoritative(
+            grant,
+            journal=self.journal,
+            artifact_store=self.artifact_store,
+            usage_ledger=self.usage_ledger,
         )
+        return grant.replacement_run_id
+
+    def _replacement_grant(
+        self,
+        run_id: str,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+    ) -> EventImpactTriageWorkReplacementGrant | None:
+        if self.replacement_store is None:
+            return None
+        grant = self.replacement_store.for_replacement(run_id)
+        if grant is None:
+            return None
+        self._assert_replacement_binding(grant, binding, unit_id)
+        self.replacement_store.assert_authoritative(
+            grant,
+            journal=self.journal,
+            artifact_store=self.artifact_store,
+            usage_ledger=self.usage_ledger,
+        )
+        return grant
+
+    def _assert_replacement_binding(
+        self,
+        grant: EventImpactTriageWorkReplacementGrant,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+    ) -> None:
+        if (
+            grant.plan_id != self.plan.plan_id
+            or grant.phase != binding.phase.value
+            or grant.unit_id != unit_id
+            or grant.role != binding.role.value
+            or grant.original_run_id
+            != _run_id(self.plan.plan_id, binding.phase, unit_id, binding.role)
+        ):
+            raise ValueError("replacement grant belongs to another triage work member")
+
+    def _replacement_prior_metrics(
+        self,
+        run_id: str,
+        binding: TriageWorkRoleBinding,
+        unit_id: str,
+    ) -> RunMetrics | None:
+        grant = self._replacement_grant(run_id, binding, unit_id)
+        if grant is None:
+            return None
+        usage_matches = tuple(
+            item.record
+            for item in self.usage_ledger.records()
+            if item.record.run_id == grant.original_run_id
+        )
+        if len(usage_matches) != 1:
+            raise ValueError("replacement requires exactly one original Usage Record")
+        usage = usage_matches[0]
+        events = self.journal.events(grant.original_run_id)
+        metrics = _metrics_from_events(events, self.plan.model_provider_profile)
+        original = self.journal.get_run(grant.original_run_id)
+        if original.terminal_artifact_id is None:
+            raise ValueError("replacement original Run has no terminal artifact")
+        terminal = _object(
+            self.artifact_store.read_json(original.terminal_artifact_id),
+            "replacement original terminal artifact",
+        )
+        if (
+            terminal.get("metrics") != metrics.to_dict()
+            or usage.experiment_id != self.plan.plan_id
+            or usage.arm_id != self.plan.arm.value
+            or usage.status is not RunStatus.HUMAN_INPUT_REQUIRED
+            or usage.provider_profile_id != self.plan.model_provider_profile.profile_id
+            or usage.provider_profile_hash != self.plan.model_provider_profile.profile_hash
+            or usage.metrics != metrics
+        ):
+            raise ValueError("replacement original Usage differs from its Run evidence")
+        _assert_binding_budget(binding, metrics)
+        return metrics
+
+    def _expected_usage_run_ids(self, members: tuple[TriageWorkRunMember, ...]) -> set[str]:
+        expected = {item.run_id for item in members}
+        for member in members:
+            binding = self.plan.binding(member.phase, member.role)
+            grant = self._replacement_grant(member.run_id, binding, member.unit_id)
+            if grant is not None:
+                expected.add(grant.original_run_id)
+        return expected
 
     def _append_usage(self, member: TriageWorkRunMember) -> None:
         if member.status is RunStatus.HUMAN_INPUT_REQUIRED:
@@ -3051,11 +3266,9 @@ class EventImpactTriageWorkRunner:
     def _completed_digests_from_journal(self) -> tuple[TriageCandidateDigest, ...]:
         result: list[TriageCandidateDigest] = []
         for unit in self.work_manifest.work_units:
-            run_id = _run_id(
-                self.plan.plan_id,
-                TriageWorkPhase.MAP,
+            run_id = self._member_run_id(
+                self.plan.binding(TriageWorkPhase.MAP, TriageAgentRole.COORDINATOR),
                 unit.work_unit_id,
-                TriageAgentRole.COORDINATOR,
             )
             record = self.journal.get_run(run_id)
             if record.status is not RunStatus.COMPLETED or record.terminal_artifact_id is None:
@@ -3068,11 +3281,9 @@ class EventImpactTriageWorkRunner:
         return tuple(result)
 
     def _current_partition_clusters(self) -> tuple[TriageClusterSeed, ...]:
-        run_id = _run_id(
-            self.plan.plan_id,
-            TriageWorkPhase.PARTITION,
+        run_id = self._member_run_id(
+            self.plan.partition_binding,
             self.work_manifest.manifest_id,
-            TriageAgentRole.COORDINATOR,
         )
         try:
             record = self.journal.get_run(run_id)
@@ -3389,6 +3600,12 @@ def _metrics_from_events(
         metrics.result_bytes += _integer(event.payload, "result_bytes")
         metrics.latency_ms += _number(event.payload, "latency_ms")
         metrics.estimated_cost_microusd += profile.pricing.estimate_microusd(turn_usage)
+    _, trailing = _partition_model_turn_events(events)
+    terminal_failures = tuple(
+        event for event in trailing if event.event_type == "model.request.failed"
+    )
+    if terminal_failures:
+        metrics.latency_ms += _number(terminal_failures[-1].payload, "elapsed_latency_ms")
     metrics.provider_attempts = _physical_provider_attempt_count(events)
     return metrics.freeze()
 
@@ -3415,20 +3632,29 @@ def _run_id(plan_id: str, phase: TriageWorkPhase, unit_id: str, role: TriageAgen
 
 def _correction_message(binding: TriageWorkRoleBinding, error: Exception) -> dict[str, object]:
     dialect = _binding_dialect(binding.prompt_template_id)
-    if dialect in {"v3", "v4"}:
+    if dialect in {"v3", "v4", "v5", "v6"}:
+        instruction = (
+            "Correct the prior answer; return only the closed JSON object. "
+            "Use valid evidence_ordinals and satisfy all conditional route requirements."
+            if dialect == "v6" and binding.phase is TriageWorkPhase.CLASSIFY
+            else (
+                "Correct the prior answer; return only the closed JSON object. "
+                "Use only strictly increasing evidence_ordinals from the frozen event cluster."
+            )
+            if dialect == "v5" and binding.phase is TriageWorkPhase.CLASSIFY
+            else (
+                "Correct the prior answer; return only the closed JSON object. "
+                "Preserve every required positional array length and order."
+            )
+        )
         return {
             "role": MessageRole.USER.value,
             "content": canonical_json_bytes(
                 {
-                    "instruction": (
-                        "Correct the prior answer; return only the closed JSON object. "
-                        "Preserve every required positional array length and order."
-                    ),
+                    "instruction": instruction,
                     "output_contract_version": dialect,
                     "validation_error": _v3_validation_error(error),
-                    "required_output": _output_contract(
-                        binding.phase, binding.role, dialect=dialect
-                    ),
+                    "required_output": _output_contract_for_binding(binding),
                 }
             ).decode(),
         }
@@ -3438,7 +3664,7 @@ def _correction_message(binding: TriageWorkRoleBinding, error: Exception) -> dic
             {
                 "instruction": "Correct the prior answer; return only the closed JSON object.",
                 "validation_error": f"{type(error).__name__}: {error}",
-                "required_output": _output_contract(binding.phase, binding.role),
+                "required_output": _output_contract_for_binding(binding),
             }
         ).decode(),
     }
@@ -3447,15 +3673,16 @@ def _correction_message(binding: TriageWorkRoleBinding, error: Exception) -> dic
 def _output_contract(
     phase: TriageWorkPhase, role: TriageAgentRole, *, dialect: str = "v2"
 ) -> dict[str, object]:
-    if dialect not in {"v2", "v3", "v4"}:
+    if dialect not in {"v2", "v3", "v4", "v5", "v6"}:
         raise ValueError("unsupported triage work output contract revision")
-    if dialect == "v4":
+    if dialect in {"v4", "v5", "v6"}:
         if phase is not TriageWorkPhase.CLASSIFY:
             positional = _output_contract(phase, role, dialect="v3")
-            return {**positional, "contract_version": "v4"}
+            return {**positional, "contract_version": dialect}
         narrative = _v3_text_array_contract(forbid_control=False)
-        return {
-            "contract_version": "v4",
+        evidence_field = "evidence_ordinals" if dialect in {"v5", "v6"} else "evidence_version_ids"
+        contract: dict[str, object] = {
+            "contract_version": dialect,
             "type": "object",
             "required_fields": [
                 "checkpoint_eligibility",
@@ -3464,7 +3691,7 @@ def _output_contract(
                 "event_stage",
                 "changed_facts",
                 "rule_reasons",
-                "evidence_version_ids",
+                evidence_field,
                 "uncertainty_notes",
                 "countercases",
                 "transmission_channels",
@@ -3495,15 +3722,32 @@ def _output_contract(
                 },
                 "changed_facts": narrative,
                 "rule_reasons": narrative,
-                "evidence_version_ids": {
-                    "type": "array",
-                    "min_items": 1,
-                    "unique_items": True,
-                    "items": {
-                        "type": "string",
-                        "pattern": "^prospective-observation-version-[0-9a-f]{64}$",
-                    },
-                },
+                evidence_field: (
+                    {
+                        "type": "array",
+                        "min_items": 1,
+                        "unique_items": True,
+                        "order": "strictly increasing",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": (
+                                "phase_input.partition_cluster.candidate_version_ids "
+                                "length minus one"
+                            ),
+                        },
+                    }
+                    if dialect in {"v5", "v6"}
+                    else {
+                        "type": "array",
+                        "min_items": 1,
+                        "unique_items": True,
+                        "items": {
+                            "type": "string",
+                            "pattern": "^prospective-observation-version-[0-9a-f]{64}$",
+                        },
+                    }
+                ),
                 "uncertainty_notes": narrative,
                 "countercases": narrative,
                 "transmission_channels": {
@@ -3525,6 +3769,46 @@ def _output_contract(
             "additional_properties": False,
             "candidate_version_ids_injected_by_harness": True,
         }
+        if dialect == "v6":
+            fields = _object(contract["field_schemas"], "v6 classify field schemas")
+            fields["rule_reasons"] = {**narrative, "min_items": 1}
+            contract["conditional_requirements"] = [
+                {
+                    "if": {"checkpoint_eligibility": {"const": "eligible"}},
+                    "then": {
+                        "recommended_route": {"const": "checkpoint_candidate"},
+                        "changed_facts": {"min_items": 1},
+                        "event_archetypes": {"min_items": 1},
+                    },
+                },
+                {
+                    "if": {"checkpoint_eligibility": {"const": "ineligible"}},
+                    "then": {"recommended_route": {"not_const": "checkpoint_candidate"}},
+                },
+                {
+                    "if": {"checkpoint_eligibility": {"const": "needs_review"}},
+                    "then": {
+                        "recommended_route": {"enum": ["event_assessment", "attention_watch"]},
+                        "uncertainty_notes": {"min_items": 1},
+                    },
+                },
+                {
+                    "if": {"recommended_route": {"const": "event_assessment"}},
+                    "then": {
+                        "changed_facts": {"min_items": 1},
+                        "event_archetypes": {"min_items": 1},
+                        "transmission_channels": {"min_items": 1},
+                    },
+                },
+                {
+                    "if": {"recommended_route": {"const": "attention_watch"}},
+                    "then": {
+                        "changed_facts": {"min_items": 1},
+                        "watch_questions": {"min_items": 1},
+                    },
+                },
+            ]
+        return contract
     if dialect == "v3":
         text_array = _v3_text_array_contract()
         if phase is TriageWorkPhase.MAP and role is not TriageAgentRole.COORDINATOR:
@@ -3697,6 +3981,51 @@ def _output_contract(
     }
 
 
+def _output_contract_for_binding(binding: TriageWorkRoleBinding) -> dict[str, object]:
+    dialect = _binding_dialect(binding.prompt_template_id)
+    current = _output_contract(binding.phase, binding.role, dialect=dialect)
+    if binding.output_contract_hash == canonical_hash(current):
+        return current
+    legacy = _legacy_positional_output_contract(binding.phase, binding.role, dialect=dialect)
+    if binding.output_contract_hash == canonical_hash(legacy):
+        return legacy
+    raise ValueError("triage work output contract hash is invalid")
+
+
+def _legacy_positional_output_contract(
+    phase: TriageWorkPhase, role: TriageAgentRole, *, dialect: str
+) -> dict[str, object]:
+    contract = _output_contract(phase, role, dialect=dialect)
+    if dialect not in {"v3", "v4"} or phase is TriageWorkPhase.CLASSIFY:
+        return contract
+    copied = cast(dict[str, object], json.loads(canonical_json_bytes(contract)))
+    field_schemas = _object(copied.get("field_schemas"), "legacy triage output field schemas")
+    if phase is TriageWorkPhase.MAP and role is not TriageAgentRole.COORDINATOR:
+        copied["required_fields"] = [
+            "manifest_id",
+            "work_unit_id",
+            "role",
+            "atom_findings",
+        ]
+        copied["field_schemas"] = {
+            "manifest_id": {"type": "string"},
+            "work_unit_id": {"type": "string"},
+            "role": {"const": role.value},
+            **field_schemas,
+        }
+        return copied
+    if phase is TriageWorkPhase.MAP:
+        copied["required_fields"] = ["manifest_id", "work_unit_id", "digests"]
+        copied["field_schemas"] = {
+            "manifest_id": {"type": "string"},
+            "work_unit_id": {"type": "string"},
+            **field_schemas,
+        }
+        return copied
+    copied["required_fields"] = ["manifest_id", "clusters"]
+    return copied
+
+
 def _v3_text_array_contract(*, forbid_control: bool = True) -> dict[str, object]:
     item_contract: dict[str, object] = {
         "type": "string",
@@ -3743,8 +4072,42 @@ def _strict_atom_ordinals(value: object, *, atom_count: int) -> tuple[int, ...]:
     return tuple(ordinals)
 
 
+def _strict_evidence_ordinals(value: object, *, candidate_count: int) -> tuple[int, ...]:
+    raw = _array(value, "evidence_ordinals")
+    ordinals: list[int] = []
+    for item in raw:
+        if isinstance(item, bool) or not isinstance(item, int):
+            raise TypeError("evidence ordinals must be non-boolean integers")
+        if item < 0 or item >= candidate_count:
+            raise ValueError("evidence ordinal is outside the frozen event cluster")
+        ordinals.append(item)
+    if not ordinals:
+        raise ValueError("triage classification requires at least one evidence ordinal")
+    if any(left >= right for left, right in pairwise(ordinals)):
+        raise ValueError("evidence ordinals must be strictly increasing")
+    return tuple(ordinals)
+
+
 def _v3_validation_error(error: Exception) -> str:
     message = str(error).lower()
+    if "evidence ordinal" in message:
+        return "invalid_evidence_ordinal_coverage_or_order"
+    if "eventassessment routing requires" in message:
+        return "event_assessment_requires_fact_archetype_and_transmission"
+    if "attention watch routing requires" in message:
+        return "attention_watch_requires_fact_and_watch_question"
+    if "eligible triage clusters must route" in message:
+        return "eligible_requires_checkpoint_candidate_route"
+    if "eligible triage clusters require changed facts" in message:
+        return "eligible_requires_changed_fact_and_archetype"
+    if "ineligible triage clusters cannot route" in message:
+        return "ineligible_cannot_use_checkpoint_candidate_route"
+    if "needs_review triage clusters require assessment or watch" in message:
+        return "needs_review_requires_assessment_or_watch_route"
+    if "needs_review triage clusters require uncertainty" in message:
+        return "needs_review_requires_uncertainty_note"
+    if "triage clusters require a checkpoint-rule reason" in message:
+        return "checkpoint_rule_reason_required"
     if "reserved" in message or "control vocabulary" in message:
         return "forbidden_control_vocabulary"
     if "not a valid triageclustermergestate" in message:
@@ -3773,6 +4136,10 @@ def _binding_dialect(prompt_template_id: str) -> str:
         return "v3"
     if prompt_template_id.endswith("-json-v4"):
         return "v4"
+    if prompt_template_id.endswith("-json-v5"):
+        return "v5"
+    if prompt_template_id.endswith("-json-v6"):
+        return "v6"
     raise ValueError("unsupported triage work role binding revision")
 
 
@@ -3783,6 +4150,10 @@ def _plan_dialect(schema_version: str) -> str:
         return "v3"
     if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V4:
         return "v4"
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V5:
+        return "v5"
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V6:
+        return "v6"
     raise ValueError("unsupported Event Impact Triage Work Execution Plan schema")
 
 
@@ -3791,6 +4162,8 @@ def _runtime_ref(schema_version: str) -> str:
         "v2": TRIAGE_WORK_RUNTIME_REF_V2,
         "v3": TRIAGE_WORK_RUNTIME_REF_V3,
         "v4": TRIAGE_WORK_RUNTIME_REF_V4,
+        "v5": TRIAGE_WORK_RUNTIME_REF_V5,
+        "v6": TRIAGE_WORK_RUNTIME_REF_V6,
     }[_plan_dialect(schema_version)]
 
 
@@ -3799,6 +4172,8 @@ def _run_artifact_schema(schema_version: str) -> str:
         "v2": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2,
         "v3": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V3,
         "v4": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V4,
+        "v5": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V5,
+        "v6": EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V6,
     }[_plan_dialect(schema_version)]
 
 
