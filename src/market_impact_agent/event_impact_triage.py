@@ -14,10 +14,16 @@ from market_impact_agent.prospective_checkpoint_readiness import (
     ProspectiveCheckpointAdmissionStore,
     ProspectiveCheckpointReadinessReport,
 )
-from market_impact_agent.prospective_data import prospective_observation_version_id
+from market_impact_agent.prospective_data import (
+    ProspectiveDataJournal,
+    ProspectiveObservationVersionRef,
+    prospective_observation_version_id,
+)
 from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 
 EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA = "market-impact.event-impact-triage-candidate-set.v1"
+EVENT_IMPACT_TRIAGE_BATCH_SELECTION_SCHEMA = "market-impact.event-impact-triage-batch-selection.v1"
+MAX_EVENT_IMPACT_TRIAGE_BATCH_CANDIDATES = 128
 EVENT_IMPACT_TRIAGE_PROPOSAL_SCHEMA = "market-impact.event-impact-triage-proposal.v1"
 EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V1 = "market-impact.event-impact-triage-decision.v1"
 EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V2 = "market-impact.event-impact-triage-decision.v2"
@@ -51,6 +57,143 @@ class TriageAgentRole(StrEnum):
     PORTFOLIO_IMPACT = "portfolio_impact"
     HISTORICAL_ANALOGY = "historical_analogy"
     COUNTERCASE_REVIEWER = "countercase_reviewer"
+
+
+@dataclass(frozen=True, slots=True)
+class EventImpactTriageBatchSelection:
+    selection_id: str
+    readiness_report_id: str
+    checkpoint_key: str
+    selected_at: datetime
+    maximum_candidate_count: int
+    candidates: tuple[ProspectiveObservationVersionRef, ...]
+    selected_version_ids: tuple[str, ...]
+    historical_pit_claim: bool = False
+    judgment_model_calls_authorized: bool = False
+    execution_capability: bool = False
+    schema_version: str = EVENT_IMPACT_TRIAGE_BATCH_SELECTION_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != EVENT_IMPACT_TRIAGE_BATCH_SELECTION_SCHEMA:
+            raise ValueError("unsupported Event Impact Triage Batch Selection schema")
+        _prefixed_hash(
+            self.readiness_report_id,
+            "prospective-checkpoint-readiness-report-",
+            "triage Batch Selection readiness report",
+        )
+        _trimmed(self.checkpoint_key, "triage Batch Selection checkpoint_key")
+        _strict_utc(self.selected_at, "triage Batch Selection selected_at")
+        if not 1 <= self.maximum_candidate_count <= MAX_EVENT_IMPACT_TRIAGE_BATCH_CANDIDATES:
+            raise ValueError("triage Batch Selection maximum must be between one and 128")
+        if not self.candidates:
+            raise ValueError("triage Batch Selection requires candidates")
+        ordered = tuple((item.first_available_at, item.version_id) for item in self.candidates)
+        if ordered != tuple(sorted(ordered)) or len(
+            {item.version_id for item in self.candidates}
+        ) != len(self.candidates):
+            raise ValueError(
+                "triage Batch Selection candidates must use unique stable receipt order"
+            )
+        expected_selected = tuple(
+            item.version_id for item in self.candidates[: self.maximum_candidate_count]
+        )
+        if self.selected_version_ids != expected_selected:
+            raise ValueError(
+                "triage Batch Selection must choose the earliest receipt-ordered prefix"
+            )
+        if any(item.first_available_at > self.selected_at for item in self.candidates):
+            raise ValueError("triage Batch Selection cannot contain a future candidate")
+        if (
+            self.historical_pit_claim
+            or self.judgment_model_calls_authorized
+            or self.execution_capability
+        ):
+            raise ValueError("triage Batch Selection cannot grant PIT, model, or execution")
+        if self.selection_id != self.expected_selection_id:
+            raise ValueError("Event Impact Triage Batch Selection ID does not match content")
+
+    @property
+    def expected_selection_id(self) -> str:
+        return f"event-impact-triage-batch-selection-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "readiness_report_id": self.readiness_report_id,
+            "checkpoint_key": self.checkpoint_key,
+            "selected_at": _timestamp(self.selected_at),
+            "maximum_candidate_count": self.maximum_candidate_count,
+            "candidates": [item.to_dict() for item in self.candidates],
+            "selected_version_ids": list(self.selected_version_ids),
+            "historical_pit_claim": self.historical_pit_claim,
+            "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "selection_id": self.selection_id}
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        readiness_report: ProspectiveCheckpointReadinessReport,
+        checkpoint_key: str,
+        journal: ProspectiveDataJournal,
+        selected_at: datetime,
+        maximum_candidate_count: int = MAX_EVENT_IMPACT_TRIAGE_BATCH_CANDIDATES,
+    ) -> EventImpactTriageBatchSelection:
+        _strict_utc(selected_at, "triage Batch Selection selected_at")
+        if selected_at < readiness_report.evaluated_at:
+            raise ValueError("triage Batch Selection cannot predate readiness")
+        checkpoint = next(
+            (
+                item
+                for item in readiness_report.checkpoints
+                if item.checkpoint_key == checkpoint_key
+            ),
+            None,
+        )
+        if checkpoint is None:
+            raise KeyError(f"checkpoint is outside the readiness report: {checkpoint_key}")
+        if (
+            checkpoint.status
+            is not CheckpointReadinessStatus.UNCLASSIFIED_TRIGGER_CANDIDATE_OBSERVED
+        ):
+            raise ValueError("triage Batch Selection requires unclassified candidates")
+        candidates = journal.observation_version_refs_by_ids(
+            checkpoint.trigger_candidate_version_ids
+        )
+        if any(
+            item.first_available_at < readiness_report.admitted_at
+            or item.first_available_at > readiness_report.evaluated_at
+            for item in candidates
+        ):
+            raise ValueError("triage Batch Selection candidates fall outside readiness")
+        selected_version_ids = tuple(
+            item.version_id for item in candidates[:maximum_candidate_count]
+        )
+        core = {
+            "schema_version": EVENT_IMPACT_TRIAGE_BATCH_SELECTION_SCHEMA,
+            "readiness_report_id": readiness_report.report_id,
+            "checkpoint_key": checkpoint_key,
+            "selected_at": _timestamp(selected_at),
+            "maximum_candidate_count": maximum_candidate_count,
+            "candidates": [item.to_dict() for item in candidates],
+            "selected_version_ids": list(selected_version_ids),
+            "historical_pit_claim": False,
+            "judgment_model_calls_authorized": False,
+            "execution_capability": False,
+        }
+        return cls(
+            selection_id=f"event-impact-triage-batch-selection-{canonical_hash(core)}",
+            readiness_report_id=readiness_report.report_id,
+            checkpoint_key=checkpoint_key,
+            selected_at=selected_at,
+            maximum_candidate_count=maximum_candidate_count,
+            candidates=candidates,
+            selected_version_ids=selected_version_ids,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +346,67 @@ class EventImpactTriageCandidateSet:
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "candidate_set_id": self.candidate_set_id}
+
+
+def event_impact_triage_batch_selection_from_dict(
+    value: object,
+) -> EventImpactTriageBatchSelection:
+    payload = _object(value, "Event Impact Triage Batch Selection")
+    expected = {
+        "schema_version",
+        "selection_id",
+        "readiness_report_id",
+        "checkpoint_key",
+        "selected_at",
+        "maximum_candidate_count",
+        "candidates",
+        "selected_version_ids",
+        "historical_pit_claim",
+        "judgment_model_calls_authorized",
+        "execution_capability",
+    }
+    if set(payload) != expected:
+        raise ValueError("Event Impact Triage Batch Selection fields are invalid")
+    candidates: list[ProspectiveObservationVersionRef] = []
+    candidate_fields = {
+        "version_id",
+        "first_available_at",
+        "provider_id",
+        "provider_version",
+        "upstream_source",
+    }
+    for raw in _array(payload.get("candidates"), "triage Batch Selection candidates"):
+        item = _object(raw, "triage Batch Selection candidate")
+        if set(item) != candidate_fields:
+            raise ValueError("triage Batch Selection candidate fields are invalid")
+        candidates.append(
+            ProspectiveObservationVersionRef(
+                version_id=_string(item, "version_id"),
+                first_available_at=_datetime(_string(item, "first_available_at")),
+                provider_id=_string(item, "provider_id"),
+                provider_version=_string(item, "provider_version"),
+                upstream_source=_string(item, "upstream_source"),
+            )
+        )
+    result = EventImpactTriageBatchSelection(
+        selection_id=_string(payload, "selection_id"),
+        readiness_report_id=_string(payload, "readiness_report_id"),
+        checkpoint_key=_string(payload, "checkpoint_key"),
+        selected_at=_datetime(_string(payload, "selected_at")),
+        maximum_candidate_count=_integer(payload, "maximum_candidate_count"),
+        candidates=tuple(candidates),
+        selected_version_ids=_string_tuple(
+            payload.get("selected_version_ids"),
+            "triage Batch Selection selected_version_ids",
+        ),
+        historical_pit_claim=_boolean(payload, "historical_pit_claim"),
+        judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("Event Impact Triage Batch Selection is not canonical")
+    return result
 
 
 def event_impact_triage_candidate_set_from_dict(
@@ -1036,8 +1240,10 @@ def freeze_event_impact_triage_candidate_set(
     snapshot_store: LocalDataSnapshotStore,
     admission_store: ProspectiveCheckpointAdmissionStore,
     frozen_at: datetime,
+    batch_selection: EventImpactTriageBatchSelection | None = None,
+    selection_journal: ProspectiveDataJournal | None = None,
 ) -> EventImpactTriageCandidateSet:
-    """Freeze all readiness candidates for one checkpoint without semantic classification."""
+    """Freeze all candidates or one authoritative receipt-ordered batch."""
 
     _strict_utc(frozen_at, "triage freeze frozen_at")
     if frozen_at < readiness_report.evaluated_at:
@@ -1071,10 +1277,35 @@ def freeze_event_impact_triage_candidate_set(
     by_version = {prospective_observation_version_id(item): item for item in snapshot.observations}
     if len(by_version) != len(snapshot.observations):
         raise ValueError("triage Snapshot cannot repeat one content version across receipts")
-    expected_versions = set(checkpoint.trigger_candidate_version_ids)
+    if batch_selection is None:
+        if selection_journal is not None:
+            raise ValueError("triage selection Journal requires a Batch Selection")
+        expected_versions = set(checkpoint.trigger_candidate_version_ids)
+    else:
+        if selection_journal is None:
+            raise ValueError("triage Batch Selection requires its authoritative Journal")
+        if (
+            batch_selection.readiness_report_id != readiness_report.report_id
+            or batch_selection.checkpoint_key != checkpoint_key
+            or batch_selection.selected_at > frozen_at
+            or {item.version_id for item in batch_selection.candidates}
+            != set(checkpoint.trigger_candidate_version_ids)
+            or selection_journal.observation_version_refs_by_ids(
+                checkpoint.trigger_candidate_version_ids
+            )
+            != batch_selection.candidates
+        ):
+            raise ValueError("triage Batch Selection does not match authoritative readiness")
+        if (
+            snapshot.query.source_policy_id != batch_selection.selection_id
+            or snapshot.query.parameters.get("selection_id") != batch_selection.selection_id
+            or snapshot.query.parameters.get("readiness_report_id") != readiness_report.report_id
+        ):
+            raise ValueError("triage Snapshot does not bind its Batch Selection")
+        expected_versions = set(batch_selection.selected_version_ids)
     if set(by_version) != expected_versions:
         raise ValueError(
-            "triage Snapshot must contain every and only the readiness candidate version"
+            "triage Snapshot must contain every and only the selected candidate version"
         )
     refs: list[TriageObservationRef] = []
     for version_id, observation in by_version.items():

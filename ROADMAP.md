@@ -31,6 +31,12 @@ The shortest accepted path to Agent-directed paper operation is:
 7. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
    account-scoped reconciliation before any real broker-paper claim.
 
+The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
+incremental: read-only reconciled account/position context, then deterministic portfolio/sizing
+admission, then cancel/replace lifecycle and operational controls, and only then IBKR paper. A broad
+Authorized Decision View reuses frozen tools plus Monitoring Scope/Retrieval Resolution; it is not
+an unrestricted fetch or broker surface.
+
 Strict historical PIT recovery, optional information-quality improvements, and the five-run physical
 energy study remain parallel research lanes. They may improve evidence or claims, but they do not
 globally block prospective Judgment under actual-receipt inputs. Only trigger, target/universe,
@@ -282,11 +288,15 @@ Stage 3 — operate continuous collection:
 Stage 4 — prove bounded Judgment inputs before automatic dispatch:
 
 - [ ] `PDI-29` Accept formal Event Impact Triage between Readiness and checkpoint selection.
-  - [x] Add content-identified Candidate Set, Agent Proposal and Harness Decision contracts. Freeze
-    every readiness candidate version through one persisted actual-receipt Data Snapshot; require an
-    exact cited partition; distinguish checkpoint eligibility from impact routing; block a later
-    eligible cluster behind an earlier `needs_review`; and bind authoritative coordinator/specialist
-    Run Records plus the Usage Ledger without granting Judgment or execution authority.
+  - [x] Add content-identified Batch Selection, Candidate Set, Agent Proposal and Harness Decision
+    contracts. Bind the complete unclassified population, freeze its earliest bounded receipt-order
+    prefix through one cross-source actual-receipt Data Snapshot, and reserve one durable active
+    Work graph per route/checkpoint epoch. Restart, concurrency and a changed requested batch size
+    reopen the same Plan/Journal/Usage state; only an authoritative Decision releases the head.
+    Require an exact cited partition; distinguish checkpoint eligibility from impact routing; block
+    a later eligible cluster behind an earlier `needs_review`; and bind authoritative
+    coordinator/specialist Run Records plus the Usage Ledger without granting Judgment or execution
+    authority.
   - [x] `PDI-29A` Add the triage-specific Model Provider runtime and content-identified pre-model
     execution plan. Freeze either a coordinator-only baseline or a bounded fact, transmission and
     countercase treatment plus coordinator, exact Skills, no-tool/no-MCP surface, prompts, child
@@ -451,6 +461,15 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       (a Hormuz tanker attack and a Shanghai Telecom outage), with no eligible checkpoint. It grants
       no Query Gate, Judgment or execution authority and is same-batch infrastructure evidence, not
       a pristine blind classifier result.
+    - [x] Run the first bounded current-route batch through the durable ingress. It selected the
+      earliest 32 of 293 unclassified actual-receipt versions, froze one cross-source Snapshot and
+      three Work Units, produced 32 Digests and 25 Cluster Seeds, and completed 36 of 37 attempted
+      logical members. The last classify member exhausted three fully received malformed closed-JSON
+      responses. The 40 physical attempts consumed 385,712 input / 197,568 output Tokens and
+      314,244 microusd CPA-equivalent cost. No Proposal or Decision exists. The adopted Active Batch
+      head remains blocking and a concurrent request for 128 candidates reopened the same Plan with
+      no new model calls, proving restart/overlap prevention while preserving this failure as
+      negative evidence.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate
@@ -878,6 +897,17 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   runtime authority and reopens its source Run Journal/artifact store before copying the immutable
   evidence into paper state; no such authority may be supplied by the order caller. This is
   mock-only `manual_each` contract acceptance; no real checkpoint has exercised it.
+- [ ] Add the account decision loop before an external paper claim.
+  - [ ] Freeze a complete, credential-free Account State Snapshot and full Position Snapshot with
+    cash, quantities, side, concentration, open orders, recent fills, completeness and gaps; expose
+    only their read-only projections through the Authorized Decision View.
+  - [ ] Add Portfolio Decision and deterministic Order Sizing Decision between Signal and Order
+    Intent. Agent confidence cannot affect size; exposure-increasing actions require complete fresh
+    account state, raw Price Basis, tradability, lot rules, mandate and open-order conflict checks.
+  - [ ] Exercise abstain/observe/hold/open/increase/reduce/close/rotate against the durable mock, then
+    add idempotent cancel and replace-as-cancel-plus-new-intent with unknown-state recovery.
+  - [ ] Add durable approval/notification controls and a tested kill switch before any autonomous
+    mode. Deposits, withdrawals, credentials and account administration remain out of scope.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
   engine and official IB adapter; create a direct IBKR Provider only if that path cannot
   pass lifecycle and reconciliation acceptance.

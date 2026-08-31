@@ -842,6 +842,36 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/agent-runs"),
     )
+    prospective_triage_parser = agent_subparsers.add_parser(
+        "prospective-triage-run",
+        help="Freeze and run the next receipt-ordered formal Event Impact Triage batch",
+    )
+    prospective_triage_parser.add_argument("--registration", required=True, type=Path)
+    prospective_triage_parser.add_argument("--route-plan", required=True, type=Path)
+    prospective_triage_parser.add_argument("--checkpoint-key", required=True)
+    prospective_triage_parser.add_argument("--evaluated-at", type=_aware_timestamp)
+    prospective_triage_parser.add_argument(
+        "--maximum-candidates",
+        type=int,
+        default=32,
+        help="Receipt-ordered batch size; hard maximum 128",
+    )
+    prospective_triage_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    prospective_triage_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    prospective_triage_parser.add_argument(
+        "--run-root",
+        type=Path,
+        default=Path(".market-impact/event-impact-triage/current"),
+    )
+    prospective_triage_parser.add_argument("--prepare-only", action="store_true")
     agent_ensemble_parser = agent_subparsers.add_parser(
         "study-run-ensemble",
         help="Run five independent frozen Agent replicates and aggregate three-of-five",
@@ -4176,6 +4206,57 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "agent" and args.agent_command == "prospective-triage-run":
+        try:
+            from market_impact_agent.prospective_triage import (
+                prepare_or_reopen_prospective_triage_work,
+                run_prepared_prospective_triage_work,
+            )
+
+            registration = load_prospective_diagnostic_registration(args.registration)
+            route_plan = load_prospective_checkpoint_route_plan(args.route_plan)
+            prepared = prepare_or_reopen_prospective_triage_work(
+                registration=registration,
+                route_plan=route_plan,
+                checkpoint_key=args.checkpoint_key,
+                state_root=args.state_root,
+                run_root=args.run_root,
+                skill_root=args.skill_root,
+                evaluated_at=(
+                    datetime.now(UTC) if args.evaluated_at is None else args.evaluated_at
+                ),
+                maximum_candidate_count=args.maximum_candidates,
+            )
+            result = (
+                prepared.summary()
+                if args.prepare_only
+                else asyncio.run(
+                    run_prepared_prospective_triage_work(
+                        prepared=prepared,
+                        registration=registration,
+                        state_root=args.state_root,
+                        run_root=args.run_root,
+                        skill_root=args.skill_root,
+                    )
+                )
+            )
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        if args.prepare_only:
+            return 0
+        return 0 if result["status"] == RunStatus.COMPLETED.value else 1
     if args.command == "agent" and args.agent_command == "run":
         try:
             result = asyncio.run(

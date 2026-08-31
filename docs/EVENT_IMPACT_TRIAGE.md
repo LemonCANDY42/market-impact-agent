@@ -19,7 +19,8 @@ never a claim that the event has zero market, industry, issuer, or portfolio imp
 
 ```text
 actual-receipt Observation Versions
-  -> freeze every unclassified version in receipt order
+  -> freeze the earliest bounded unclassified receipt-order prefix
+     (the Batch Selection also binds the complete unclassified set)
   -> factual and checkpoint-rule classification (portfolio-independent)
   -> Event Impact Triage Proposal from a bounded Agent run
   -> Harness validates full coverage, citations, run authority, cost and receipt order
@@ -34,6 +35,24 @@ actual-receipt Observation Versions
        -> material_event: canonical EventAssessment projection + passing Materiality Gate
   -> only the exact Trigger Admission may continue to PDI-30 and Query Gate
 ```
+
+The bounded prefix is a capacity boundary, not a relevance filter. Sources continue to append while
+Triage runs, so freezing every outstanding candidate can exceed the Work Manifest's accepted
+128-version ceiling and permanently prevent formal classification. Batch Selection instead binds
+the full unclassified population and deterministically selects only its earliest prefix. A later
+batch cannot overtake an earlier unresolved version, and no model chooses which candidates enter
+the batch. The selected versions are then reopened from the append-only Journal in actual receipt
+order and frozen into one cross-source Data Snapshot before any model call.
+
+The Harness then installs one durable Active Batch head for the exact registration, checkpoint,
+route plan and route-admission epoch. Re-running `agent prospective-triage-run`, changing its
+requested batch size, or racing another caller reopens the same Snapshot, Candidate Set, Manifest,
+Execution Plan, Run Journal, Usage Ledger and Provider-health state. It cannot create an overlapping
+Plan while that head exists. Only the concrete append-only Decision Store reopening the exact
+Candidate Set Decision releases the head. That transaction also advances the route-epoch revision;
+a stale preparation that lost the original race cannot install after the winning Decision. A failed
+or ambiguous member remains attached to the original Plan and retains its original replacement and
+cost authority.
 
 Checkpoint eligibility must remain independent of current holdings. Otherwise the same fact could
 change classification merely because the portfolio changed. Holdings enter the next impact and
@@ -407,6 +426,14 @@ Implemented contract evidence:
   the extra attempt is the immutable old HTTP 408 dispatch retained beside its one replacement.
   This proves the replacement and v6 contract can complete and reopen, but not blind classifier
   quality or alpha.
+- the first batch claimed through the new bounded current-route ingress froze the earliest 32 of
+  293 unclassified actual-receipt versions into three Work Units. It produced all 32 Digests and a
+  25-cluster Partition, then stopped after 36 completed logical members when one classify member
+  exhausted three fully received responses that were not valid closed JSON. The Ledger contains 40
+  physical attempts, 385,712 input and 197,568 output Tokens at 314,244 microusd CPA-equivalent
+  cost. No Proposal or Decision exists. Its durable Active Batch head remains installed, so restart
+  or a larger requested batch cannot reissue overlapping work or split the cost ledger. This is
+  real negative output-format evidence; it does not authorize an automatic retry or release.
 
 Still required for real acceptance:
 

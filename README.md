@@ -65,10 +65,11 @@ The bootstrap implements:
   reason or abstain with optional information missing. A content-identified route plan now binds
   accepted Collection Jobs before any new trigger, and a read-only readiness report distinguishes
   expected waiting from missing trigger infrastructure without starting a model. The formal
-  [Event Impact Triage](docs/EVENT_IMPACT_TRIAGE.md) contract freezes every unclassified candidate,
-  requires a cited complete Agent partition, separates checkpoint eligibility from broader market
-  or held-position impact routing, and leaves first-eligible selection to the Harness after
-  authoritative coordinator/specialist Run and Usage Ledger verification. A fixture-accepted,
+  [Event Impact Triage](docs/EVENT_IMPACT_TRIAGE.md) contract binds the complete unclassified set,
+  freezes its earliest bounded receipt-order prefix into one cross-source Snapshot, requires a cited
+  complete Agent partition, separates checkpoint eligibility from broader market or held-position
+  impact routing, and leaves first-eligible selection to the Harness after authoritative
+  coordinator/specialist Run and Usage Ledger verification. A fixture-accepted,
   no-tool Model Provider runtime now freezes coordinator-only and bounded-specialist comparison
   arms, budgets, restart behavior and pre-reveal evaluation mechanics. The first sealed real
   121-version comparison attempt stopped fail-closed on timeout/budget capacity before producing a
@@ -108,9 +109,14 @@ The bootstrap implements:
   EventAssessment routes, with no eligible policy checkpoint, Query Gate, Judgment or execution
   authority. Its authoritative Ledger retains the superseded ambiguous dispatch, so it contains 48
   physical attempts and 396,709 input / 172,508 output Tokens. Same-batch v5/v6 work is
-  infrastructure revalidation, not blind semantic evidence. The prospective repair now journals
-  each physical attempt with a correlation ID and generation state, forbids ambiguous POST retries,
-  and can persist sanitized circuit/cooldown/operator-notice state; see
+  infrastructure revalidation, not blind semantic evidence. The first 32-version current-route
+  bounded batch later produced all Digests and a 25-cluster Partition but stopped on one classify
+  member after three fully received malformed closed-JSON responses; its 40 physical attempts used
+  385,712 input / 197,568 output Tokens and 314,244 microusd CPA-equivalent cost. The durable Active
+  Batch head remains installed, so restart cannot create overlapping work or a split Usage Ledger;
+  no Proposal or Decision exists. The prospective repair now journals each physical attempt with a
+  correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized
+  circuit/cooldown/operator-notice state; see
   [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed minimum Position Snapshot
   and evidence-lane-preserving Historical Analogy Pack payloads now bind a durable prospective
   EventAssessment projection, deterministic Materiality Gate and exact Trigger Admission. Snapshot
@@ -442,6 +448,9 @@ and cannot be overridden by a semantic approval agent.
 
 See [GOAL.md](GOAL.md), [ARCHITECTURE.md](ARCHITECTURE.md), and
 [ROADMAP.md](ROADMAP.md) for the accepted product boundary and delivery gates.
+The credential-free account view, portfolio-action/sizing boundary, trading-operation inventory and
+paper/live acceptance order are specified in
+[docs/ACCOUNT_DECISION_LOOP.md](docs/ACCOUNT_DECISION_LOOP.md).
 
 ## Local development
 

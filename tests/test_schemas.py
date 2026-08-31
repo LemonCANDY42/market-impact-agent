@@ -39,6 +39,7 @@ class Validator(Protocol):
         "prospective-checkpoint-route-plan.schema.json",
         "prospective-checkpoint-readiness-report.schema.json",
         "event-impact-triage-candidate-set.schema.json",
+        "event-impact-triage-batch-selection.schema.json",
         "event-impact-triage-work-manifest.schema.json",
         "event-impact-triage-work-execution-plan.schema.json",
         "event-impact-triage-work-comparison-registration.schema.json",

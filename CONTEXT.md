@@ -298,11 +298,31 @@ unclassified candidate. It does not perform semantic eligibility selection, calc
 trading-session barrier, freeze a Snapshot Set, or authorize a model call.
 _Avoid_: Query Gate pass, Event Envelope, trigger decision, execution readiness
 
+**Event Impact Triage Batch Selection**:
+A content-identified selection of the earliest bounded receipt-order prefix from the complete set
+of still-unclassified post-admission Observation Versions reported for one registered checkpoint.
+It binds the exact Readiness Report, evaluation time, full candidate list, selected prefix and hard
+maximum before content freezing. It exists because a continually growing source stream can exceed
+one accepted Work Manifest without making older candidates disappear. It performs no semantic
+classification and grants no model, PIT, Judgment, or execution authority.
+_Avoid_: Relevance shortlist, sampled news, latest-only window, eligibility result
+
+**Prospective Triage Active Batch**:
+A durable Harness reservation for one exact Batch Selection, Candidate Set, Snapshot, Work Manifest,
+Execution Plan and Model Provider Profile within one registration/checkpoint/route-admission epoch.
+Only one active head may exist for that epoch. Restart and concurrent callers must reopen its exact
+Plan, Run Journal, Usage Ledger and Provider-health state regardless of a new requested batch size;
+the head is released only after the concrete append-only Decision Store reopens the exact Candidate
+Set Decision. Completion atomically advances the epoch revision, so a different preparation that
+lost a race cannot install after the winner completes. A failed or ambiguous graph therefore
+remains blocking until its own explicit recovery authority resolves it.
+_Avoid_: Best-effort lock, caller retry, latest-plan lookup, per-process cost accounting
+
 **Event Impact Triage Candidate Set**:
-A content-identified freeze of every still-unclassified post-admission Observation Version for one
-registered checkpoint through one persisted prospective Data Snapshot and Readiness Report. It
-preserves receipt order and exact content identities but performs no semantic classification and
-grants no model, PIT, Judgment, or execution authority.
+A content-identified freeze of one exact Event Impact Triage Batch Selection through one persisted
+cross-source prospective Data Snapshot and Readiness Report. It preserves actual receipt order and
+exact content identities; a later batch cannot pass an earlier unresolved candidate. It performs no
+semantic classification and grants no model, PIT, Judgment, or execution authority.
 _Avoid_: Selected Event, news shortlist, eligibility result
 
 **Event Impact Triage Proposal**:
@@ -547,12 +567,26 @@ Resolution input: existing Collection Usage Records account for acquisition, the
 the result, and only a fresh Run may use that frozen Snapshot reference.
 _Avoid_: Live search result, mutable context append, successful HTTP response
 
+**Authorized Decision View**:
+A content-identified set of read-only Snapshot, account-projection, historical-method and bounded
+retrieval capabilities exposed to one Agent run. It may cover every registered source and tool
+allowed for the task, but contains no arbitrary network route, broker session, credential, mutable
+account ledger or execution capability. Newly acquired information is journaled and frozen for a
+fresh Run rather than appended to the active context.
+_Avoid_: Global view, unrestricted fetch, broker tool belt
+
 **Position Snapshot**:
 A cutoff-bound, content-identified view of held instruments, sides, quantities, environment and
 reconciled account-state provenance exposed without broker credentials. It may prioritize an Event
 Assessment or risk response but cannot change event facts, checkpoint eligibility, a Trading
 Mandate, approval, or execution state.
 _Avoid_: Broker session, mutable portfolio object, order authority
+
+**Account State Snapshot**:
+A content-identified, cutoff-bound, credential-free Harness normalization of Provider-reported cash,
+positions, open orders, recent fills, completeness and explicit reconciliation gaps for one opaque
+account reference and environment. It is account evidence, not permission to trade.
+_Avoid_: Broker session, account credential, mutable account ledger
 
 **Historical Analogy Pack**:
 A content-identified set of structurally comparable past Event Assessments whose exact evidence lane
@@ -872,6 +906,20 @@ _Avoid_: Judgment Run, Agent opinion, prediction
 A time-bounded, evidence-linked expression of directional interest in a
 security. It is not an instruction to trade.
 _Avoid_: Trade, recommendation
+
+**Portfolio Decision**:
+A content-identified Harness admission of one Agent portfolio-action proposal against exact Signal,
+Position/Account State Snapshots and conflicting open-order state. It may abstain, observe, hold,
+open, increase, reduce, close, rotate, cancel or replace, but does not choose an executable quantity
+or grant submission authority.
+_Avoid_: Order, target weight, account mutation
+
+**Order Sizing Decision**:
+An immutable deterministic Harness result that binds one admitted Portfolio Decision, unadjusted
+Price Basis, lot/tick/tradability rules, Trading Mandate, complete Account State Snapshot and a
+versioned sizing policy. It either rejects the action or supplies the only quantity permitted in the
+resulting Agent-originated Order Intent.
+_Avoid_: Agent confidence, suggested size, portfolio optimizer opinion
 
 **Order Intent**:
 An idempotently identified request to evaluate a specific order against policy

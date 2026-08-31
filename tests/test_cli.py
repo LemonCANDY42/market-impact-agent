@@ -73,6 +73,29 @@ def test_method_skill_ablation_cli_requires_the_registered_horizon() -> None:
     assert args.eligible_horizon_sessions == 102
 
 
+def test_prospective_triage_cli_binds_one_receipt_ordered_batch() -> None:
+    args = build_parser().parse_args(
+        [
+            "agent",
+            "prospective-triage-run",
+            "--registration",
+            "registration.json",
+            "--route-plan",
+            "route-plan.json",
+            "--checkpoint-key",
+            "next-material-a-share-event",
+            "--maximum-candidates",
+            "24",
+            "--prepare-only",
+        ]
+    )
+
+    assert args.agent_command == "prospective-triage-run"
+    assert args.checkpoint_key == "next-material-a-share-event"
+    assert args.maximum_candidates == 24
+    assert args.prepare_only is True
+
+
 def test_feed_capture_cli_generates_cutoff_from_frozen_source_receipts() -> None:
     args = build_parser().parse_args(
         [

@@ -753,6 +753,194 @@ class ProspectiveDataJournal:
             for row in rows
         )
 
+    def observation_version_refs_by_ids(
+        self,
+        version_ids: tuple[str, ...],
+    ) -> tuple[ProspectiveObservationVersionRef, ...]:
+        """Resolve exact Journal versions in stable actual-receipt order."""
+
+        if not version_ids or len(set(version_ids)) != len(version_ids):
+            raise ValueError("prospective version selection must be non-empty and unique")
+        placeholders = ",".join("?" for _ in version_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT version_id, first_available_at, provider_id, provider_version,
+                       upstream_source
+                FROM prospective_observation_versions
+                WHERE version_id IN ({placeholders})
+                ORDER BY first_available_at, version_id
+                """,
+                version_ids,
+            ).fetchall()
+        if {cast(str, row["version_id"]) for row in rows} != set(version_ids):
+            raise KeyError("prospective version selection contains an unknown Journal version")
+        return tuple(
+            ProspectiveObservationVersionRef(
+                version_id=cast(str, row["version_id"]),
+                first_available_at=_datetime(
+                    cast(str, row["first_available_at"]), "first_available_at"
+                ),
+                provider_id=cast(str, row["provider_id"]),
+                provider_version=cast(str, row["provider_version"]),
+                upstream_source=cast(str, row["upstream_source"]),
+            )
+            for row in rows
+        )
+
+    def freeze_version_selection_snapshot(
+        self,
+        *,
+        selection_id: str,
+        readiness_report_id: str,
+        version_ids: tuple[str, ...],
+        as_of: datetime,
+        frozen_at: datetime,
+    ) -> DataSnapshot:
+        """Freeze exact Journal versions across accepted collection policies.
+
+        This is a selection Snapshot for formal triage. It performs no network acquisition and
+        cannot introduce a version that was not already stored with actual-receipt authority.
+        """
+
+        for value, label in (
+            (selection_id, "prospective version selection_id"),
+            (readiness_report_id, "prospective version readiness_report_id"),
+        ):
+            if not value or value != value.strip():
+                raise ValueError(f"{label} must be non-empty trimmed text")
+        _strict_utc(as_of, "prospective version selection as_of")
+        _strict_utc(frozen_at, "prospective version selection frozen_at")
+        if frozen_at < as_of:
+            raise ValueError("prospective version selection cannot freeze before its cutoff")
+        refs = self.observation_version_refs_by_ids(version_ids)
+        if version_ids != tuple(item.version_id for item in refs):
+            raise ValueError("prospective version selection must use stable actual-receipt order")
+        if any(item.first_available_at > as_of for item in refs):
+            raise ValueError("prospective version selection contains a post-cutoff version")
+        requested_as_of = as_of
+        effective_cutoff = max(item.first_available_at for item in refs)
+
+        placeholders = ",".join("?" for _ in version_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT version_id, first_snapshot_id, observation_json
+                FROM prospective_observation_versions
+                WHERE version_id IN ({placeholders})
+                """,
+                version_ids,
+            ).fetchall()
+        by_id = {
+            cast(str, row["version_id"]): (
+                cast(str, row["first_snapshot_id"]),
+                _observation_from_json(cast(str, row["observation_json"])),
+            )
+            for row in rows
+        }
+        observations = tuple(by_id[version_id][1] for version_id in version_ids)
+
+        binding_by_key: dict[str, DataSourceBinding] = {}
+        observations_by_key: dict[str, list[SourceObservation]] = defaultdict(list)
+        for version_id, observation in zip(version_ids, observations, strict=True):
+            first_snapshot = self.store.get(by_id[version_id][0])
+            binding = next(
+                (
+                    item
+                    for item in first_snapshot.query.sources
+                    if item.provider_id == observation.provider_id
+                    and item.provider_version == observation.provider_version
+                    and item.upstream_source == observation.upstream_source
+                ),
+                None,
+            )
+            if binding is None:
+                raise ValueError("Journal version lacks its original source binding")
+            existing = binding_by_key.get(binding.source_key)
+            if existing is not None and existing != binding:
+                raise ValueError("one triage source key has conflicting accepted bindings")
+            binding_by_key[binding.source_key] = binding
+            observations_by_key[binding.source_key].append(observation)
+
+        sources = tuple(binding_by_key[key] for key in sorted(binding_by_key))
+        earliest = min(item.first_available_at for item in refs)
+        window_start = (
+            earliest if earliest < effective_cutoff else earliest - timedelta(microseconds=1)
+        )
+        query = DataQuery.build(
+            capability=ObservationCapability.EVENT_REVELATION,
+            pit_lane=DataPITLane.PROSPECTIVE,
+            as_of=effective_cutoff,
+            window_start=window_start,
+            source_policy_id=selection_id,
+            parameters={
+                "selection_id": selection_id,
+                "readiness_report_id": readiness_report_id,
+                "version_count": len(version_ids),
+                "requested_as_of": _timestamp(requested_as_of),
+            },
+            sources=sources,
+            minimum_data_sources=len(sources),
+        )
+        attempts: list[DataProviderAttempt] = []
+        for source in sources:
+            selected = observations_by_key[source.source_key]
+            selected_ids = tuple(
+                version_id
+                for version_id, observation in zip(version_ids, observations, strict=True)
+                if observation.provider_id == source.provider_id
+                and observation.provider_version == source.provider_version
+                and observation.upstream_source == source.upstream_source
+            )
+            selection_payload = {
+                "schema_version": "market-impact.prospective-version-selection.v1",
+                "selection_id": selection_id,
+                "readiness_report_id": readiness_report_id,
+                "source": source.to_dict(),
+                "version_ids": list(selected_ids),
+                "requested_as_of": _timestamp(requested_as_of),
+                "effective_cutoff_at": _timestamp(effective_cutoff),
+                "frozen_at": _timestamp(frozen_at),
+            }
+            attempts.append(
+                DataProviderAttempt(
+                    provider_id=source.provider_id,
+                    provider_version=source.provider_version,
+                    upstream_source=source.upstream_source,
+                    required=source.required,
+                    status=DataFetchStatus.DATA,
+                    retrieved_at=max(item.times.retrieved_at for item in selected),
+                    raw_response_hash=self.store.put_raw(canonical_json_bytes(selection_payload)),
+                    received_count=len(selected),
+                    accepted_count=len(selected),
+                    rejected_missing_availability=0,
+                    rejected_after_cutoff=0,
+                    rejected_missing_authority=0,
+                    rejected_authority_after_cutoff=0,
+                    rejected_lane_mismatch=0,
+                    error_kind=None,
+                )
+            )
+        attempt_tuple = tuple(attempts)
+        core = {
+            "schema_version": DATA_SNAPSHOT_SCHEMA,
+            "query": query.to_dict(),
+            "attempts": [item.to_dict() for item in attempt_tuple],
+            "observations": [item.to_dict() for item in observations],
+            "coverage_complete": True,
+            "completed_at": _timestamp(max(item.retrieved_at for item in attempt_tuple)),
+        }
+        snapshot = DataSnapshot(
+            snapshot_id=f"data-snapshot-{canonical_hash(core)}",
+            query=query,
+            attempts=attempt_tuple,
+            observations=observations,
+            coverage_complete=True,
+            completed_at=max(item.retrieved_at for item in attempt_tuple),
+        )
+        self.store.put(snapshot)
+        return snapshot
+
     def freeze_snapshot(
         self,
         *,

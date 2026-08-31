@@ -75,7 +75,9 @@ def _snapshot(
     raw_record: bytes = b"<item>policy decision</item>",
     normalized_headline: str = "Policy decision",
     occurrence_basis: OccurrenceBasis = OccurrenceBasis.SOURCE_REPORTED,
+    source: DataSourceBinding | None = None,
 ) -> DataSnapshot:
+    selected_source = _source() if source is None else source
     raw_response_hash = store.put_raw(b"<rss>policy decision</rss>")
     raw_content_hash = store.put_raw(raw_record)
     times = ObservationTimes(
@@ -92,9 +94,9 @@ def _snapshot(
     )
     observation = SourceObservation.build(
         capability=ObservationCapability.EVENT_REVELATION,
-        provider_id=_source().provider_id,
-        provider_version=_source().provider_version,
-        upstream_source=_source().upstream_source,
+        provider_id=selected_source.provider_id,
+        provider_version=selected_source.provider_version,
+        upstream_source=selected_source.upstream_source,
         upstream_record_id="release-1",
         source_ref="https://official.example/releases/1",
         lineage_id="release-1",
@@ -119,9 +121,9 @@ def _snapshot(
         minimum_data_sources=1,
     )
     attempt = DataProviderAttempt(
-        provider_id=_source().provider_id,
-        provider_version=_source().provider_version,
-        upstream_source=_source().upstream_source,
+        provider_id=selected_source.provider_id,
+        provider_version=selected_source.provider_version,
+        upstream_source=selected_source.upstream_source,
         required=True,
         status=DataFetchStatus.DATA,
         retrieved_at=retrieved_at,
@@ -364,6 +366,90 @@ def test_freeze_builds_standard_snapshot_and_authorized_agent_tool(tmp_path: Pat
     )
     assert snapshot.snapshot_id in result.model_content
     assert "Policy decision" in result.model_content
+
+
+def test_freeze_version_selection_snapshot_spans_policies_in_receipt_order(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    first_policy = _policy()
+    second_source = DataSourceBinding(
+        provider_id="second-feed",
+        provider_version="2.0.0",
+        upstream_source="market-news",
+        manifest_hash=canonical_hash({"provider": "second-feed"}),
+        source_config_hash=canonical_hash({"source": "market-news"}),
+        required=True,
+    )
+    second_policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        sources=(second_source,),
+        window_start=PUBLISHED - timedelta(hours=1),
+        parameters={"max_items": 20},
+        poll_interval_seconds=60,
+        maximum_gap_seconds=90,
+    )
+    journal.record_snapshot(
+        _snapshot(store, policy=first_policy, retrieved_at=FIRST_RECEIPT),
+        policy=first_policy,
+    )
+    journal.record_snapshot(
+        _snapshot(
+            store,
+            policy=second_policy,
+            retrieved_at=SECOND_RECEIPT,
+            raw_record=b"<item>market event</item>",
+            normalized_headline="Market event",
+            source=second_source,
+        ),
+        policy=second_policy,
+    )
+    all_refs = tuple(
+        sorted(
+            (
+                *journal.observation_version_refs(
+                    policy_id=first_policy.policy_id,
+                    capability=ObservationCapability.EVENT_REVELATION,
+                    not_before=FIRST_RECEIPT,
+                    not_after=SECOND_RECEIPT,
+                ),
+                *journal.observation_version_refs(
+                    policy_id=second_policy.policy_id,
+                    capability=ObservationCapability.EVENT_REVELATION,
+                    not_before=FIRST_RECEIPT,
+                    not_after=SECOND_RECEIPT,
+                ),
+            ),
+            key=lambda item: (item.first_available_at, item.version_id),
+        )
+    )
+    version_ids = tuple(item.version_id for item in all_refs)
+
+    snapshot = journal.freeze_version_selection_snapshot(
+        selection_id="event-impact-triage-batch-selection-" + "1" * 64,
+        readiness_report_id="prospective-checkpoint-readiness-report-" + "2" * 64,
+        version_ids=version_ids,
+        as_of=SECOND_RECEIPT + timedelta(seconds=1),
+        frozen_at=SECOND_RECEIPT + timedelta(seconds=2),
+    )
+
+    assert snapshot.coverage_complete is True
+    assert len(snapshot.query.sources) == 2
+    assert len(snapshot.attempts) == 2
+    assert tuple(item.times.available_at for item in snapshot.observations) == (
+        FIRST_RECEIPT,
+        SECOND_RECEIPT,
+    )
+    assert store.get(snapshot.snapshot_id) == snapshot
+    with pytest.raises(ValueError, match="stable actual-receipt order"):
+        journal.freeze_version_selection_snapshot(
+            selection_id="event-impact-triage-batch-selection-" + "3" * 64,
+            readiness_report_id="prospective-checkpoint-readiness-report-" + "2" * 64,
+            version_ids=tuple(reversed(version_ids)),
+            as_of=SECOND_RECEIPT + timedelta(seconds=1),
+            frozen_at=SECOND_RECEIPT + timedelta(seconds=2),
+        )
 
 
 def test_freeze_fails_closed_when_poll_cadence_has_a_gap(tmp_path: Path) -> None:

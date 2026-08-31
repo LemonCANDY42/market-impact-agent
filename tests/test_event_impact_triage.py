@@ -29,6 +29,7 @@ from market_impact_agent.event_impact_triage import (
     CheckpointEligibility,
     CompletedTriageRunAuthority,
     CompletedTriageWorkRunAuthority,
+    EventImpactTriageBatchSelection,
     EventImpactTriageCandidateSet,
     EventImpactTriageDecision,
     EventImpactTriageProposal,
@@ -42,6 +43,7 @@ from market_impact_agent.event_impact_triage import (
     TriageWorkDecisionEvidence,
     admit_event_impact_triage,
     admit_event_impact_triage_work,
+    event_impact_triage_batch_selection_from_dict,
     event_impact_triage_candidate_set_from_dict,
     event_impact_triage_decision_from_dict,
     freeze_event_impact_triage_candidate_set,
@@ -63,7 +65,11 @@ from market_impact_agent.prospective_checkpoint_readiness import (
     ProspectiveCheckpointRouteAdmission,
     ProspectiveCheckpointRoutePlan,
 )
-from market_impact_agent.prospective_data import prospective_observation_version_id
+from market_impact_agent.prospective_data import (
+    ProspectiveDataJournal,
+    ProspectiveObservationVersionRef,
+    prospective_observation_version_id,
+)
 from market_impact_agent.research import (
     EventArchetype,
     EventStage,
@@ -74,6 +80,19 @@ ADMITTED_AT = datetime(2026, 8, 30, 0, 0, tzinfo=UTC)
 FROZEN_AT = ADMITTED_AT + timedelta(minutes=40)
 DECIDED_AT = ADMITTED_AT + timedelta(minutes=41)
 HASH = "1" * 64
+
+
+@dataclass(frozen=True)
+class StubSelectionJournal:
+    refs: tuple[ProspectiveObservationVersionRef, ...]
+
+    def observation_version_refs_by_ids(
+        self,
+        version_ids: tuple[str, ...],
+    ) -> tuple[ProspectiveObservationVersionRef, ...]:
+        if set(version_ids) != {item.version_id for item in self.refs}:
+            raise KeyError("unexpected selection")
+        return self.refs
 
 
 @dataclass
@@ -305,6 +324,84 @@ def _candidate_set(tmp_path: Path) -> EventImpactTriageCandidateSet:
         snapshot_store=store,
         admission_store=_authorize_readiness(tmp_path / "state", readiness),
         frozen_at=FROZEN_AT,
+    )
+
+
+def test_receipt_ordered_batch_selection_freezes_prefix_only(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    full_snapshot = _snapshot(store)
+    readiness = _readiness(full_snapshot)
+    refs = tuple(
+        ProspectiveObservationVersionRef(
+            version_id=prospective_observation_version_id(item),
+            first_available_at=cast(datetime, item.times.available_at),
+            provider_id=item.provider_id,
+            provider_version=item.provider_version,
+            upstream_source=item.upstream_source,
+        )
+        for item in full_snapshot.observations
+    )
+    stub = StubSelectionJournal(refs)
+    journal = cast(ProspectiveDataJournal, stub)
+    selection = EventImpactTriageBatchSelection.build(
+        readiness_report=readiness,
+        checkpoint_key="next-a-share-policy-event",
+        journal=journal,
+        selected_at=readiness.evaluated_at,
+        maximum_candidate_count=2,
+    )
+    selected_observations = full_snapshot.observations[:2]
+    query = DataQuery.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=selected_observations[-1].times.retrieved_at,
+        window_start=ADMITTED_AT,
+        source_policy_id=selection.selection_id,
+        parameters={
+            "selection_id": selection.selection_id,
+            "readiness_report_id": readiness.report_id,
+        },
+        sources=full_snapshot.query.sources[:2],
+        minimum_data_sources=2,
+    )
+    attempts = full_snapshot.attempts[:2]
+    core = {
+        "schema_version": "market-impact.data-snapshot.v2",
+        "query": query.to_dict(),
+        "attempts": [item.to_dict() for item in attempts],
+        "observations": [item.to_dict() for item in selected_observations],
+        "coverage_complete": True,
+        "completed_at": attempts[-1].retrieved_at.isoformat().replace("+00:00", "Z"),
+    }
+    selected_snapshot = DataSnapshot(
+        snapshot_id=f"data-snapshot-{canonical_hash(core)}",
+        query=query,
+        attempts=attempts,
+        observations=selected_observations,
+        coverage_complete=True,
+        completed_at=attempts[-1].retrieved_at,
+    )
+    store.put(selected_snapshot)
+
+    candidate_set = freeze_event_impact_triage_candidate_set(
+        readiness_report=readiness,
+        checkpoint_key="next-a-share-policy-event",
+        snapshot=selected_snapshot,
+        snapshot_store=store,
+        admission_store=_authorize_readiness(tmp_path / "state", readiness),
+        frozen_at=FROZEN_AT,
+        batch_selection=selection,
+        selection_journal=journal,
+    )
+
+    assert candidate_set.version_ids == selection.selected_version_ids
+    assert len(candidate_set.observations) == 2
+    assert event_impact_triage_batch_selection_from_dict(selection.to_dict()) == selection
+    assert (
+        validate_agent_contract(
+            selection.to_dict(), "event-impact-triage-batch-selection.schema.json"
+        )
+        == ()
     )
 
 
