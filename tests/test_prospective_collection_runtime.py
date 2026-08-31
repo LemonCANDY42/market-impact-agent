@@ -374,6 +374,129 @@ def _unexpected_collector(
     raise AssertionError("collector must not be called")
 
 
+def test_job_replacement_is_atomic_audited_and_stops_the_predecessor(
+    tmp_path: Path,
+) -> None:
+    _store, runtime, policy, predecessor = _runtime(tmp_path)
+    successor = _job(starts_at=START + timedelta(minutes=5))
+    runtime.register(
+        successor,
+        collection_policy=policy,
+        source_acceptance_report=_accepted_report(),
+        source_config=SOURCE_CONFIG,
+        registered_at=START,
+    )
+
+    replacement = runtime.replace_job(
+        predecessor.job_id,
+        successor.job_id,
+        replaced_at=START + timedelta(minutes=1),
+        reason="provider_datetime_format_corrected",
+    )
+    repeated = runtime.replace_job(
+        predecessor.job_id,
+        successor.job_id,
+        replaced_at=START + timedelta(minutes=1),
+        reason="provider_datetime_format_corrected",
+    )
+
+    assert repeated == replacement
+    assert replacement.predecessor_job_id == predecessor.job_id
+    assert replacement.successor_job_id == successor.job_id
+    assert runtime.health(predecessor.job_id, now=START + timedelta(minutes=1)).status == "replaced"
+    assert runtime.health(successor.job_id, now=START + timedelta(minutes=1)).status == "active"
+    assert runtime.due_job_ids(now=START + timedelta(minutes=5)) == (successor.job_id,)
+    assert (
+        runtime.run_due(
+            predecessor.job_id,
+            now=START + timedelta(minutes=5),
+            collector=_unexpected_collector,
+        ).outcome
+        == "not_active"
+    )
+
+
+def test_job_replacement_without_a_timestamp_reopens_the_committed_transition(
+    tmp_path: Path,
+) -> None:
+    clock_values = iter(
+        (
+            START + timedelta(minutes=1),
+            START + timedelta(minutes=2),
+        )
+    )
+    _store, runtime, policy, predecessor = _runtime(tmp_path, clock=lambda: next(clock_values))
+    successor = _job(starts_at=START + timedelta(minutes=5))
+    runtime.register(
+        successor,
+        collection_policy=policy,
+        source_acceptance_report=_accepted_report(),
+        source_config=SOURCE_CONFIG,
+        registered_at=START,
+    )
+
+    replacement = runtime.replace_job(
+        predecessor.job_id,
+        successor.job_id,
+        reason="provider_datetime_format_corrected",
+    )
+    repeated = runtime.replace_job(
+        predecessor.job_id,
+        successor.job_id,
+        reason="provider_datetime_format_corrected",
+    )
+
+    assert repeated == replacement
+    assert repeated.replaced_at == START + timedelta(minutes=1)
+
+
+def test_job_replacement_rejects_mismatched_source_authority(tmp_path: Path) -> None:
+    _store, runtime, _policy, predecessor = _runtime(tmp_path)
+    other_config = {**SOURCE_CONFIG, "source_config_id": "other-source"}
+    other_source = DataSourceBinding(
+        provider_id="fixture-market",
+        provider_version="1",
+        upstream_source="fixture-index-daily",
+        manifest_hash=MANIFEST_HASH,
+        source_config_hash=canonical_hash(other_config),
+        required=True,
+    )
+    other_policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        sources=(other_source,),
+        window_start=WINDOW_START,
+        parameters={"ts_code": "000905.SH"},
+        poll_interval_seconds=60,
+        maximum_gap_seconds=180,
+    )
+    other_report = _accepted_report(source=other_source)
+    successor = ProspectiveCollectionJob.build(
+        adapter_kind=ProspectiveCollectionAdapterKind.TUSHARE_OBSERVATION,
+        collection_policy=other_policy,
+        source_acceptance_report=other_report,
+        source_config=other_config,
+        starts_at=START + timedelta(minutes=5),
+        misfire_grace_seconds=30,
+        maximum_jitter_seconds=0,
+        provider_timeout_seconds=5.0,
+    )
+    runtime.register(
+        successor,
+        collection_policy=other_policy,
+        source_acceptance_report=other_report,
+        source_config=other_config,
+        registered_at=START,
+    )
+
+    with pytest.raises(ValueError, match="same accepted source route"):
+        runtime.replace_job(
+            predecessor.job_id,
+            successor.job_id,
+            replaced_at=START + timedelta(minutes=1),
+            reason="invalid_cross_source_replacement",
+        )
+
+
 def _timeout_collector(
     _policy: ProspectiveCollectionPolicy,
     _source_config: dict[str, object],
@@ -979,6 +1102,46 @@ def test_staged_snapshot_resumes_the_same_opportunity_after_journal_failure(
     assert calls == 1
     assert tuple(item.outcome for item in runtime.opportunities(job.job_id)) == ("success",)
     assert runtime.health(job.job_id, now=START + timedelta(seconds=60)).missed_opportunities == 0
+
+
+def test_job_replacement_cannot_abandon_a_staged_actual_receipt(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    runtime = ProspectiveCollectionRuntime(
+        store,
+        journal=_FailOnceJournal(store),
+        lease_timeout_seconds=30,
+    )
+    policy = _policy()
+    predecessor = _job()
+    successor = _job(starts_at=START + timedelta(minutes=5))
+    for job in (predecessor, successor):
+        runtime.register(
+            job,
+            collection_policy=policy,
+            source_acceptance_report=_accepted_report(),
+            source_config=SOURCE_CONFIG,
+            registered_at=START,
+        )
+    assert (
+        runtime.run_due(
+            predecessor.job_id,
+            now=START,
+            collector=lambda bound_policy, _source_config, _scheduled_for: _snapshot(
+                store,
+                policy=bound_policy,
+                retrieved_at=START,
+            ),
+        ).outcome
+        == "storage_failure"
+    )
+
+    with pytest.raises(ValueError, match="unsettled actual receipt"):
+        runtime.replace_job(
+            predecessor.job_id,
+            successor.job_id,
+            replaced_at=START + timedelta(minutes=1),
+            reason="must_not_abandon_staged_receipt",
+        )
 
 
 def _register_event_job(runtime: ProspectiveCollectionRuntime) -> ProspectiveCollectionJob:

@@ -306,25 +306,28 @@ aggregates. Their identifiers may reference one another, but their authority doe
 
 ## Acceptance sequence
 
-PDI-01 v1 and v2 remain immutable. The current v3 registration
-`prospective-diagnostic-registration-7217f22392ac715e80550ccb75a23faff9b23aadd94db6c13e494033c5c273b0`
-freezes the same three first-eligible EOD mechanisms and required-trigger/optional-information
-boundary while adding adaptive paired replication. The current Tushare Observation Provider has
-twenty-two unique route-level seven-gate acceptances, and the CSRC official-event route remains
-accepted.
+PDI-01 v1 through v3 remain immutable. The current v4 registration
+`prospective-diagnostic-registration-834d054c064a5c3d3e89aed06ef17ea876e081c8a98395511c18f0dbd1e3789e`
+retains the required-trigger/optional-information boundary and adaptive paired replication, adds a
+fourth broad material-event checkpoint, binds the CPA-priced model profile, and aligns the policy,
+Earnings and NBS trigger cadence with their real Jobs. The CSRC, purchased Tushare news and issuer-
+event, and NBS original-release routes remain separate accepted source identities.
+Route validation binds exact accepted upstream-source IDs as well as capability, Provider and
+semantic scope; a Tushare forecast/express source cannot masquerade as established news merely
+because both expose `event_revelation`.
 These are route contracts, not complete checkpoint sets: direct publisher coverage, complete market
 semantics, tradability fields, taxonomy effective intervals, official macro release/revision
 lineage, and future post-registration receipts still have to reconcile at each checkpoint barrier.
 Those gaps limit coverage claims and later execution where relevant; they no longer all block a
 prospective process diagnostic. No model call begins until the structural Query Gate passes.
 
-The current v3 route plan is frozen in
-`examples/research/prospective-checkpoint-route-plan-v1.json`. First durably anchor the plan:
+The current v4 route plan is frozen in
+`examples/research/prospective-checkpoint-route-plan-v4.json`. First durably anchor the plan:
 
 ```bash
 market-impact data checkpoint-route-admit \
-  --registration examples/research/prospective-diagnostic-registration-v3.json \
-  --route-plan examples/research/prospective-checkpoint-route-plan-v1.json \
+  --registration examples/research/prospective-diagnostic-registration-v4.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v4.json \
   --state-root .market-impact/data-inputs
 ```
 
@@ -341,8 +344,8 @@ Then run the non-mutating readiness audit:
 
 ```bash
 market-impact data checkpoint-readiness \
-  --registration examples/research/prospective-diagnostic-registration-v3.json \
-  --route-plan examples/research/prospective-checkpoint-route-plan-v1.json \
+  --registration examples/research/prospective-diagnostic-registration-v4.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v4.json \
   --state-root .market-impact/data-inputs
 ```
 
@@ -487,6 +490,11 @@ timezone; they do not read the host clock to mutate a query. The current purchas
 with a 20-minute overlap for 10jqka, Eastmoney, and Jinrongjie; and 15-minute polling with a 2-hour
 overlap for `major_news`. Tushare documents pull queries, not a WebSocket/push subscription, so the
 system describes this honestly as rolling polling plus event Wake.
+The rolling `datetime_format` is part of Policy identity. Resolution round-trips the rendered
+Provider parameters so a date-only `%Y%m%d` request also has a matching effective UTC window; the
+reader remains compatible with already-staged pre-fix Snapshots whose request dates and raw window
+still reconcile. Tushare `forecast_vip`, `express_vip`, raw `daily`, and `adj_factor` use the
+documented date-only form rather than timestamp text.
 Concurrent invocations share
 an expiring lease; restart resumes staged data, and every due opportunity remains inspectable via
 `collection-health`. Automatically selected due Jobs are ordered by the earliest absolute deadline
@@ -517,6 +525,24 @@ are collection operations evidence, not the Agent model Usage Ledger or a billin
 Usage Record v2 adds the explicit cost fields. The reader preserves both original v1 records and the
 short pre-v2 transition form without rewriting their content identities, so a collector upgrade does
 not invalidate or strand the append-only runtime history.
+
+When a registered Job's immutable request/schedule configuration is wrong, register the corrected
+successor first and use the audited replacement transition instead of editing SQLite or restarting
+the supervisor:
+
+```bash
+market-impact data collection-replace \
+  --predecessor-job-id prospective-collection-job-OLD \
+  --successor-job-id prospective-collection-job-NEW \
+  --reason provider_datetime_format_corrected
+```
+
+The Harness requires both Jobs to bind the same accepted source route and refuses replacement while
+the predecessor owns a lease or has an unsettled staged actual receipt. Prior failures, usage and
+Snapshot artifacts remain append-only; only the predecessor's due status becomes `replaced`. When
+`--replaced-at` is omitted, a retry of the same predecessor/successor/reason reopens the already
+committed transition and returns its original Harness timestamp. An explicitly supplied conflicting
+timestamp remains a conflict rather than silently changing identity.
 
 The content-identified tracer report accepts exactly one CSRC event Job and one Tushare market Job
 only when both latest opportunities end in complete prospective actual-receipt Snapshots, their

@@ -17,6 +17,7 @@ from market_impact_agent.prospective_collection_runtime import ProspectiveCollec
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
@@ -111,7 +112,8 @@ class ProspectiveCheckpointRoutePlan:
             "checkpoint route plan registration_id",
         )
         keys = tuple(
-            (item.checkpoint_key, item.capability.value, item.route_kind) for item in self.bindings
+            (item.checkpoint_key, item.capability.value, item.route_kind, item.job_id)
+            for item in self.bindings
         )
         if keys != tuple(sorted(set(keys))):
             raise ValueError("checkpoint route plan bindings must be sorted and unique")
@@ -158,6 +160,7 @@ class ProspectiveCheckpointRoutePlan:
                     item.checkpoint_key,
                     item.capability.value,
                     item.route_kind,
+                    item.job_id,
                 ),
             )
         )
@@ -765,40 +768,84 @@ class ProspectiveCheckpointReadinessReport:
 class _RouteSourceContract:
     capability: ObservationCapability
     provider_id: str
-    upstream_source: str
-    semantic_scope: str
+    upstream_sources: tuple[str, ...]
+    semantic_scopes: tuple[str, ...]
 
 
 _ROUTE_SOURCE_CONTRACTS = {
     "established_news": _RouteSourceContract(
         capability=ObservationCapability.EVENT_REVELATION,
         provider_id="tushare-observation",
-        upstream_source="tushare-news",
-        semantic_scope="aggregated_source_observation_actual_receipt_only",
+        upstream_sources=(
+            "tushare-major-news",
+            "tushare-news",
+            "tushare-news-10jqka",
+            "tushare-news-cls",
+            "tushare-news-eastmoney",
+            "tushare-news-fenghuang",
+            "tushare-news-jinrongjie",
+            "tushare-news-wallstreetcn",
+            "tushare-news-yicai",
+            "tushare-news-yuncaijing",
+        ),
+        semantic_scopes=(
+            "aggregated_multi_publisher_observation_actual_receipt_only",
+            "aggregated_source_observation_actual_receipt_only",
+        ),
     ),
     "official_event": _RouteSourceContract(
         capability=ObservationCapability.EVENT_REVELATION,
         provider_id="csrc-official-news",
-        upstream_source="csrc-official-news",
-        semantic_scope="official_capital_market_policy_publication",
+        upstream_sources=("csrc-official-news",),
+        semantic_scopes=("official_capital_market_policy_publication",),
+    ),
+    "issuer_event": _RouteSourceContract(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="tushare-observation",
+        upstream_sources=("tushare-express-vip", "tushare-forecast-vip"),
+        semantic_scopes=("aggregated_source_observation_actual_receipt_only",),
+    ),
+    "official_macro_release": _RouteSourceContract(
+        capability=ObservationCapability.EVENT_REVELATION,
+        provider_id="nbs-macro-release",
+        upstream_sources=("nbs-official-cpi-ppi",),
+        semantic_scopes=("official_nbs_cpi_ppi_original_release_actual_receipt_only",),
     ),
     "market_index_price": _RouteSourceContract(
         capability=ObservationCapability.MARKET_CONTEXT,
         provider_id="tushare-observation",
-        upstream_source="tushare-index-daily",
-        semantic_scope="aggregated_source_observation_actual_receipt_only",
+        upstream_sources=("tushare-index-daily",),
+        semantic_scopes=("aggregated_source_observation_actual_receipt_only",),
+    ),
+    "raw_market_price": _RouteSourceContract(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        provider_id="tushare-observation",
+        upstream_sources=("tushare-daily", "tushare-fund-daily"),
+        semantic_scopes=("aggregated_source_observation_actual_receipt_only",),
+    ),
+    "asof_adjustment": _RouteSourceContract(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        provider_id="tushare-observation",
+        upstream_sources=("tushare-adj-factor",),
+        semantic_scopes=("aggregated_source_observation_actual_receipt_only",),
     ),
     "industry_to_tradable_mapping": _RouteSourceContract(
         capability=ObservationCapability.EXPOSURE_CANDIDATES,
         provider_id="tushare-observation",
-        upstream_source="tushare-etf-sh-cons",
-        semantic_scope="aggregated_exchange_pcf_actual_receipt_only",
+        upstream_sources=("tushare-etf-sh-cons", "tushare-etf-sz-cons"),
+        semantic_scopes=("aggregated_exchange_pcf_actual_receipt_only",),
+    ),
+    "tradability_state": _RouteSourceContract(
+        capability=ObservationCapability.EXPOSURE_CANDIDATES,
+        provider_id="tushare-observation",
+        upstream_sources=("tushare-stk-limit", "tushare-suspend-d"),
+        semantic_scopes=("aggregated_source_observation_actual_receipt_only",),
     ),
     "macro_release_calendar": _RouteSourceContract(
         capability=ObservationCapability.MACRO_VINTAGE,
         provider_id="tushare-observation",
-        upstream_source="tushare-cn-schedule",
-        semantic_scope="schedule_observation_only_not_original_release_or_revision",
+        upstream_sources=("tushare-cn-schedule",),
+        semantic_scopes=("schedule_observation_only_not_original_release_or_revision",),
     ),
 }
 
@@ -830,8 +877,8 @@ def _validate_route_plan_structure(
         if contract is None or (
             contract.capability is not binding.capability
             or contract.provider_id != declaration.provider_id
-            or contract.upstream_source != declaration.upstream_source
-            or contract.semantic_scope != declaration.semantic_scope
+            or declaration.upstream_source not in contract.upstream_sources
+            or declaration.semantic_scope not in contract.semantic_scopes
         ):
             raise ValueError(
                 "checkpoint route kind does not match accepted source semantics and identity"
@@ -859,8 +906,9 @@ def evaluate_prospective_checkpoint_readiness(
     if registration.schema_version not in {
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     }:
-        raise ValueError("checkpoint readiness requires a v2 or v3 prospective registration")
+        raise ValueError("checkpoint readiness requires a v2, v3, or v4 registration")
     if route_plan.registration_id != registration.registration_id:
         raise ValueError("checkpoint route plan belongs to a different registration")
     admission = admission_store.admission(route_plan.plan_id)
@@ -877,7 +925,7 @@ def evaluate_prospective_checkpoint_readiness(
     )
 
     validated: dict[
-        tuple[str, ObservationCapability, str],
+        tuple[str, ObservationCapability, str, str],
         _ValidatedRoute,
     ] = {}
     for binding in route_plan.bindings:
@@ -901,8 +949,8 @@ def evaluate_prospective_checkpoint_readiness(
         if contract is None or (
             contract.capability is not binding.capability
             or contract.provider_id != declaration.provider_id
-            or contract.upstream_source != declaration.upstream_source
-            or contract.semantic_scope != declaration.semantic_scope
+            or declaration.upstream_source not in contract.upstream_sources
+            or declaration.semantic_scope not in contract.semantic_scopes
         ):
             raise ValueError(
                 "checkpoint route kind does not match accepted source semantics and identity"
@@ -950,14 +998,14 @@ def evaluate_prospective_checkpoint_readiness(
         if latest_post_admission is not None and health.last_outcome == "storage_failure":
             health_gaps.append("current_storage_failure")
         gaps = tuple(sorted(set(health_gaps)))
-        validated[(binding.checkpoint_key, binding.capability, binding.route_kind)] = (
-            _ValidatedRoute(
-                job_id=binding.job_id,
-                policy_id=policy.policy_id,
-                source_config_hash=declaration.source_config_hash,
-                operational=not gaps,
-                health_gaps=gaps,
-            )
+        validated[
+            (binding.checkpoint_key, binding.capability, binding.route_kind, binding.job_id)
+        ] = _ValidatedRoute(
+            job_id=binding.job_id,
+            policy_id=policy.policy_id,
+            source_config_hash=declaration.source_config_hash,
+            operational=not gaps,
+            health_gaps=gaps,
         )
 
     checkpoint_results: list[ProspectiveCheckpointReadiness] = []

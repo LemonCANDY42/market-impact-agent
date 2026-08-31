@@ -205,6 +205,40 @@ def test_rolling_policy_resolves_each_due_time_without_mutating_its_identity() -
     )
 
 
+def test_rolling_policy_can_freeze_a_provider_date_format() -> None:
+    rolling = ProspectiveRollingWindow(
+        lookback_seconds=7 * 24 * 60 * 60,
+        timezone="Asia/Shanghai",
+        datetime_format="%Y%m%d",
+    )
+    policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        sources=(_source(),),
+        window_start=PUBLISHED - timedelta(hours=1),
+        parameters={"api_name": "forecast_vip"},
+        poll_interval_seconds=3600,
+        maximum_gap_seconds=10800,
+        rolling_window=rolling,
+    )
+
+    window_start, parameters = policy.resolve_query(FIRST_RECEIPT)
+
+    assert window_start == datetime(2026, 8, 20, 16, 0, tzinfo=UTC)
+    assert parameters == {
+        "api_name": "forecast_vip",
+        "start_date": "20260821",
+        "end_date": "20260828",
+    }
+    assert policy.matches_snapshot_query(
+        window_start=window_start,
+        parameters=parameters,
+    )
+    assert policy.matches_snapshot_query(
+        window_start=FIRST_RECEIPT - timedelta(days=7),
+        parameters=parameters,
+    )
+
+
 def test_journal_deduplicates_versions_but_retains_every_actual_receipt(
     tmp_path: Path,
 ) -> None:

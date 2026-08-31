@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-materiality-gate-result.schema.json",
+  "title": "Market Impact Prospective Materiality Gate Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result_id",
+    "registration_id",
+    "checkpoint_key",
+    "assessment_id",
+    "registered_target_venues",
+    "registered_instrument_classes",
+    "registered_horizon_sessions",
+    "disposition",
+    "admitted_target_ids",
+    "held_target_ids",
+    "blocking_gaps",
+    "nonblocking_information_gaps",
+    "evaluated_at",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.prospective-materiality-gate-result.v1"
+    },
+    "result_id": {
+      "type": "string",
+      "pattern": "^prospective-materiality-gate-[0-9a-f]{64}$"
+    },
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "assessment_id": {
+      "type": "string",
+      "pattern": "^prospective-event-assessment-[0-9a-f]{64}$"
+    },
+    "registered_target_venues": {"$ref": "#/$defs/unique_strings"},
+    "registered_instrument_classes": {"$ref": "#/$defs/unique_strings"},
+    "registered_horizon_sessions": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "disposition": {"enum": ["admit", "watch", "archive"]},
+    "admitted_target_ids": {"$ref": "#/$defs/unique_strings"},
+    "held_target_ids": {"$ref": "#/$defs/unique_strings"},
+    "blocking_gaps": {"$ref": "#/$defs/unique_strings"},
+    "nonblocking_information_gaps": {"$ref": "#/$defs/unique_strings"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "unique_strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

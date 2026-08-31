@@ -380,8 +380,18 @@ class NbsMacroReleaseProvider(DataProvider):
             provider_id=NBS_MACRO_RELEASE_PROVIDER_ID,
             provider_version=NBS_MACRO_RELEASE_PROVIDER_VERSION,
             transport=ProviderTransport.HTTP,
-            declared_capabilities=frozenset({ObservationCapability.MACRO_VINTAGE}),
-            verified_capabilities=frozenset({ObservationCapability.MACRO_VINTAGE}),
+            declared_capabilities=frozenset(
+                {
+                    ObservationCapability.EVENT_REVELATION,
+                    ObservationCapability.MACRO_VINTAGE,
+                }
+            ),
+            verified_capabilities=frozenset(
+                {
+                    ObservationCapability.EVENT_REVELATION,
+                    ObservationCapability.MACRO_VINTAGE,
+                }
+            ),
             upstream_sources=tuple(item.source_id for item in source_configs),
             auth_required=False,
             provides_source_updated_at=False,
@@ -595,7 +605,10 @@ class NbsMacroReleaseProvider(DataProvider):
                 status=DataFetchStatus.NOT_CONFIGURED,
                 error_kind="source_config_missing",
             )
-        if query.capability is not ObservationCapability.MACRO_VINTAGE:
+        if query.capability not in {
+            ObservationCapability.EVENT_REVELATION,
+            ObservationCapability.MACRO_VINTAGE,
+        }:
             return self._failed_response(
                 source=source,
                 retrieved_at=capture.retrieved_at,
@@ -1143,7 +1156,7 @@ def _observations_from_capture(
         article_path = urlsplit(entry.url).path
         content_id = article_path.rsplit("/", 1)[-1].removesuffix(".html")
         observation = SourceObservation.build(
-            capability=ObservationCapability.MACRO_VINTAGE,
+            capability=query.capability,
             provider_id=NBS_MACRO_RELEASE_PROVIDER_ID,
             provider_version=NBS_MACRO_RELEASE_PROVIDER_VERSION,
             upstream_source=config.source_id,

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-event-assessment.schema.json",
+  "title": "Market Impact Prospective Event Assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_id",
+    "triage_decision_id",
+    "cluster_id",
+    "event_assessment_artifact_hash",
+    "paths",
+    "counterevidence",
+    "invalidation_conditions",
+    "assessed_at",
+    "position_snapshot",
+    "historical_analogy_pack",
+    "historical_pit_claim",
+    "signal_or_execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-event-assessment.v1"},
+    "assessment_id": {
+      "type": "string",
+      "pattern": "^prospective-event-assessment-[0-9a-f]{64}$"
+    },
+    "triage_decision_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-decision-[0-9a-f]{64}$"
+    },
+    "cluster_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"
+    },
+    "event_assessment_artifact_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/path"}
+    },
+    "counterevidence": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "invalidation_conditions": {"$ref": "#/$defs/nonempty_unique_strings"},
+    "assessed_at": {"type": "string", "format": "date-time"},
+    "position_snapshot": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "$ref": "https://schemas.market-impact-agent.local/prospective-position-snapshot.schema.json"
+        }
+      ]
+    },
+    "historical_analogy_pack": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "$ref": "https://schemas.market-impact-agent.local/prospective-historical-analogy-pack.schema.json"
+        }
+      ]
+    },
+    "historical_pit_claim": {"const": false},
+    "signal_or_execution_capability": {"const": false}
+  },
+  "$defs": {
+    "nonempty_unique_strings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "nonempty_strings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "venue",
+        "instrument_class",
+        "channels",
+        "causal_steps",
+        "evidence_version_ids",
+        "horizon_sessions"
+      ],
+      "properties": {
+        "target_id": {"type": "string", "minLength": 1},
+        "venue": {"type": "string", "minLength": 1},
+        "instrument_class": {"type": "string", "minLength": 1},
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "revenue_demand",
+              "capacity_cost_inventory",
+              "claims_capital_allocation",
+              "policy_access",
+              "funding_discount_fx",
+              "risk_uncertainty_insurance",
+              "expectations_attention",
+              "positioning_liquidity_mechanics"
+            ]
+          }
+        },
+        "causal_steps": {"$ref": "#/$defs/nonempty_strings"},
+        "evidence_version_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+          }
+        },
+        "horizon_sessions": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

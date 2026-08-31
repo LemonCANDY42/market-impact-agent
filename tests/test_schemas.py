@@ -47,6 +47,11 @@ class Validator(Protocol):
         "event-impact-triage-cluster-partition.schema.json",
         "event-impact-triage-proposal.schema.json",
         "event-impact-triage-decision.schema.json",
+        "prospective-position-snapshot.schema.json",
+        "prospective-historical-analogy-pack.schema.json",
+        "prospective-event-assessment.schema.json",
+        "prospective-materiality-gate-result.schema.json",
+        "prospective-trigger-admission.schema.json",
         "prospective-checkpoint-snapshot-set.schema.json",
         "prospective-query-gate-result.schema.json",
         "prospective-execution-plan.schema.json",
@@ -133,7 +138,11 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/providers/csrc-official-news-v1.json",
         "examples/providers/nbs-macro-release-cpi-ppi-v1.json",
         "examples/providers/tushare-observation-cn-schedule-v1.json",
+        "examples/providers/tushare-observation-adj-factor-v1.json",
+        "examples/providers/tushare-observation-daily-v1.json",
         "examples/providers/tushare-observation-etf-basic-v1.json",
+        "examples/providers/tushare-observation-express-vip-v1.json",
+        "examples/providers/tushare-observation-forecast-vip-v1.json",
         "examples/providers/tushare-observation-fund-daily-v1.json",
         "examples/providers/tushare-observation-index-classify-v1.json",
         "examples/providers/tushare-observation-index-daily-v1.json",
@@ -143,6 +152,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/providers/tushare-observation-report-rc-v1.json",
         "examples/providers/tushare-observation-stk-limit-v1.json",
         "examples/providers/tushare-observation-stock-basic-v1.json",
+        "examples/providers/tushare-observation-suspend-d-v1.json",
         "examples/providers/tushare-observation-trade-cal-v1.json",
         "examples/research/research-method-catalog-v1.json",
         "examples/providers/minimax-m3-research-v1.json",
@@ -170,7 +180,9 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/regime-modeled-pit-agent-validation-v1.json",
         "examples/research/prospective-diagnostic-registration-v1.json",
         "examples/research/prospective-diagnostic-registration-v3.json",
+        "examples/research/prospective-diagnostic-registration-v4.json",
         "examples/research/prospective-checkpoint-route-plan-v1.json",
+        "examples/research/prospective-checkpoint-route-plan-v4.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -233,10 +245,16 @@ def test_examples_conform_to_schema(example_path: str) -> None:
         (
             "prospective-diagnostic-registration-v1.json",
             "prospective-diagnostic-registration-v3.json",
+            "prospective-diagnostic-registration-v4.json",
         )
     ):
         schema_name = "prospective-diagnostic-registration.schema.json"
-    elif example_path.endswith("prospective-checkpoint-route-plan-v1.json"):
+    elif example_path.endswith(
+        (
+            "prospective-checkpoint-route-plan-v1.json",
+            "prospective-checkpoint-route-plan-v4.json",
+        )
+    ):
         schema_name = "prospective-checkpoint-route-plan.schema.json"
     elif example_path.endswith("federal-reserve-press-feed-v1.json"):
         schema_name = "syndication-feed-source.schema.json"

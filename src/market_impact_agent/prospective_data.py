@@ -74,11 +74,23 @@ class ProspectiveRollingWindow:
         timezone = ZoneInfo(self.timezone)
         end = scheduled_for.astimezone(timezone)
         start = end - timedelta(seconds=self.lookback_seconds)
+        start_value = start.strftime(self.datetime_format)
+        end_value = end.strftime(self.datetime_format)
+        represented_start = datetime.strptime(start_value, self.datetime_format).replace(
+            tzinfo=timezone
+        )
+        represented_end = datetime.strptime(end_value, self.datetime_format).replace(
+            tzinfo=timezone
+        )
+        if represented_end - represented_start != timedelta(seconds=self.lookback_seconds):
+            raise ValueError(
+                "rolling collection datetime_format cannot preserve the configured lookback"
+            )
         return (
-            start.astimezone(UTC),
+            represented_start.astimezone(UTC),
             {
-                self.start_parameter: start.strftime(self.datetime_format),
-                self.end_parameter: end.strftime(self.datetime_format),
+                self.start_parameter: start_value,
+                self.end_parameter: end_value,
             },
         )
 
@@ -199,10 +211,16 @@ class ProspectiveCollectionPolicy:
         base_parameters = dict(parameters)
         base_parameters.pop(rolling.start_parameter, None)
         base_parameters.pop(rolling.end_parameter, None)
+        lookback = timedelta(seconds=rolling.lookback_seconds)
+        legacy_window_matches = (
+            window_start.astimezone(timezone).strftime(rolling.datetime_format) == start_value
+            and (window_start + lookback).astimezone(timezone).strftime(rolling.datetime_format)
+            == end_value
+        )
         return (
             base_parameters == self.parameters
-            and end - start == timedelta(seconds=rolling.lookback_seconds)
-            and window_start == start.astimezone(UTC)
+            and end - start == lookback
+            and (window_start == start.astimezone(UTC) or legacy_window_matches)
         )
 
     def to_dict(self) -> dict[str, object]:

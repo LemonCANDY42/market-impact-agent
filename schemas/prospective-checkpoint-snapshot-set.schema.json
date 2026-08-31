@@ -23,7 +23,8 @@
         "market-impact.prospective-checkpoint-snapshot-set.v1",
         "market-impact.prospective-checkpoint-snapshot-set.v2",
         "market-impact.prospective-checkpoint-snapshot-set.v3",
-        "market-impact.prospective-checkpoint-snapshot-set.v4"
+        "market-impact.prospective-checkpoint-snapshot-set.v4",
+        "market-impact.prospective-checkpoint-snapshot-set.v5"
       ]
     },
     "snapshot_set_id": {
@@ -50,6 +51,10 @@
       "items": {"$ref": "#/$defs/snapshot_id"}
     },
     "complete": {"type": "boolean"},
+    "trigger_admission_id": {
+      "type": "string",
+      "pattern": "^prospective-trigger-admission-[0-9a-f]{64}$"
+    },
     "capability_gaps": {
       "type": "array",
       "uniqueItems": true,
@@ -291,6 +296,38 @@
                     "required": ["observation_ids"]
                   }
                 },
+                "tool_manifest": {
+                  "oneOf": [
+                    {"type": "null"},
+                    {
+                      "allOf": [
+                        {"$ref": "#/$defs/tool_manifest"},
+                        {"properties": {"version": {"const": "2"}}}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-checkpoint-snapshot-set.v5"
+          }
+        }
+      },
+      "then": {
+        "required": ["capability_gaps", "trigger_admission_id"],
+        "properties": {
+          "capability_bindings": {
+            "items": {
+              "properties": {
+                "routes": {"items": {"required": ["observation_ids"]}},
                 "tool_manifest": {
                   "oneOf": [
                     {"type": "null"},

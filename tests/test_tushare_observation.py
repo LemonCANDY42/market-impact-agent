@@ -48,6 +48,17 @@ DOCUMENTATION_IDS = {
     "cn_schedule": 461,
     "report_rc": 292,
 }
+DOCUMENTATION_URLS = {
+    **{
+        api_name: f"https://tushare.pro/document/2?doc_id={doc_id}"
+        for api_name, doc_id in DOCUMENTATION_IDS.items()
+    },
+    "adj_factor": "https://tushare.pro/document/2?doc_id=28",
+    "daily": "https://tushare.pro/document/1?doc_id=27",
+    "express_vip": "https://tushare.pro/document/2?doc_id=46",
+    "forecast_vip": "https://tushare.pro/document/2?doc_id=45",
+    "suspend_d": "https://tushare.pro/document/2?doc_id=214",
+}
 
 
 class FakeTransport:
@@ -684,11 +695,7 @@ def test_checked_in_source_configs_are_canonical_schema_valid_and_secret_free() 
     configs = tuple(load_tushare_observation_source(path) for path in paths)
     assert len(configs) >= len(_route_specs())
     assert {spec[0] for spec in _route_specs()} <= {item.api_name for item in configs}
-    assert all(
-        item.documentation_url
-        == f"https://tushare.pro/document/2?doc_id={DOCUMENTATION_IDS[item.api_name]}"
-        for item in configs
-    )
+    assert all(item.documentation_url == DOCUMENTATION_URLS[item.api_name] for item in configs)
     assert len({item.source_id for item in configs}) == len(configs)
     assert all("token" not in path.read_text(encoding="utf-8").casefold() for path in paths)
 

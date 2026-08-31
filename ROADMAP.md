@@ -11,20 +11,24 @@ The shortest accepted path to Agent-directed paper operation is:
    to 291 seconds across thirteen due Jobs while two-minute news Jobs have a 90-second grace window.
    The repository now has deadline-first bounded per-opportunity concurrency and a versioned
    replacement-route lifecycle; next accept a fresh private supervisor plan and route epoch across
-   several real two-minute cycles without restarting or discarding append-only collector state;
+   several real two-minute cycles without restarting or discarding append-only collector state. A
+   separate atomic Collection Job Replacement now retires exact misconfigured Jobs without editing
+   them or abandoning staged receipts;
 1. freeze every real post-admission trigger candidate, run formal Event Impact Triage inside the
    Harness, and either select the first rule-eligible event, block on `needs_review`, or route a
    checkpoint-ineligible but potentially material event to EventAssessment/Attention Watch;
-2. for the selected event, freeze the internally verifiable Snapshot Set, explicit optional gaps,
+2. create one exact Trigger Admission: either the checkpoint-selected Triage cluster, or a canonical
+   EventAssessment projection whose cited target/path passes the deterministic Materiality Gate;
+3. for that admission, freeze the internally verifiable Snapshot Set, explicit optional gaps,
    Prospective Evidence Lineage, tools, and Query Gate;
-3. run two complete paired Judgment replicates, add a third complete pair only when either arm's
+4. run two complete paired Judgment replicates, add a third complete pair only when either arm's
    first two decisions disagree, and freeze one Decision Run Manifest;
-4. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
+5. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
    or the matching first two when the registered early-stop rule applies; otherwise archive without a
    Signal or Order; the control arm is comparison-only;
-5. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
+6. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
    the already accepted durable mock outbox;
-6. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
+7. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
    account-scoped reconciliation before any real broker-paper claim.
 
 Strict historical PIT recovery, optional information-quality improvements, and the five-run physical
@@ -134,6 +138,11 @@ Stage 1 — freeze requirements:
     V3 preserves the same requirements, arms, ceiling, hidden outcomes, and claim boundary, but runs
     two complete pairs first and requires the third complete pair only when either arm disagrees.
     The paired design is never reduced to a one-arm tie-breaker.
+  - [x] Freeze v4 registration
+    `prospective-diagnostic-registration-834d054c064a5c3d3e89aed06ef17ea876e081c8a98395511c18f0dbd1e3789e`
+    for new work. It retains the adaptive paired design, adds a fourth broad material-event
+    checkpoint, binds the CPA-priced model profile, and aligns policy, Earnings and NBS trigger
+    cadence with their real Collection Jobs. It grants no model or execution authority.
 
 Stage 2 — accept source slices and measure coverage:
 
@@ -145,10 +154,16 @@ Stage 2 — accept source slices and measure coverage:
   - [ ] Accept the direct publisher coverage required by each registered checkpoint; aggregator
     receipt cannot substitute for publisher authority. Under v2 this is a coverage/corroboration
     target after one valid trigger, not a global model-dispatch blocker.
+  - [x] Accept real Tushare `forecast_vip` and `express_vip` issuer-event routes under the purchased
+    private entitlement. Their corrected date-only rolling Jobs have staged six and two actual-
+    receipt observations respectively; Journal recovery and the first post-v4-admission trigger
+    remain separate runtime evidence gates. Aggregator receipt is not issuer-primary authority.
 - [ ] `PDI-11` Accept the registered A-share market/index/ETF context route.
   - [x] Accept route-level Tushare `index_daily`, `fund_daily`, and `trade_cal` captures and replay.
   - [x] Bind the three price/calendar record kinds into a content-identified checkpoint market-
     universe view without converting index or adjusted research prices into executable prices.
+  - [x] Accept route-level raw Tushare `daily` and as-of `adj_factor` capture/replay without treating
+    adjusted research prices as executable prices. Continuous checkpoint binding remains open.
   - [ ] Prove registered breadth/volatility/liquidity, sequence completeness, and corporate-action
     semantics at the future checkpoint barrier. Missing values remain research-quality gaps rather
     than suppressing the whole Judgment Run.
@@ -162,6 +177,8 @@ Stage 2 — accept source slices and measure coverage:
   - [ ] Add decision-time suspension/status evidence; listing lifecycle plus a daily bar is research-
     eligible but cannot prove the instrument is presently tradable. This is soft for Judgment and
     hard before admitting an actual paper/live Order Intent.
+    Two bounded `suspend_d` probes ended in TLS EOF; this is a transport gap, not evidence of missing
+    entitlement, empty status, or tradability.
 - [ ] `PDI-13` Accept an effective-dated industry taxonomy, membership, and exposure route.
   - [x] Accept route-level SW2021 `index_classify` and `index_member_all` captures and replay.
   - [x] Implement an exact-code, source-identity-preserving join from current-as-received taxonomy,
@@ -181,6 +198,9 @@ Stage 2 — accept source slices and measure coverage:
   - [x] Implement and accept the direct NBS CPI/PPI original-release route after fail-closed review
     corrections, with exact CPI+PPI scope, actual-receipt Journal storage, and deterministic
     article/XLSX bundle replay.
+  - [x] Register the same accepted NBS Provider as a continuous `event_revelation` trigger Job. Its
+    first real run accepted two observations and completed successfully; only receipts after the
+    current v4 route admission can become candidates.
   - [ ] Establish and accept an official correction/revision relationship; same-document content
     versions cannot assert revision lineage by themselves.
 - [ ] `PDI-16` Accept the registered prior-expectation route.
@@ -252,6 +272,10 @@ Stage 3 — operate continuous collection:
     and explicit unallocated flat-subscription cost. Valid empty windows are healthy `no_data`, not
     source failures; Providers whose request count cannot be proved retain null rather than an
     estimate.
+  - [x] Add an append-only Collection Job Replacement transition. It requires the same accepted
+    source route, an active registered successor, no lease and no unsettled staged receipt, then
+    atomically marks the predecessor `replaced`. The two timestamp-formatted Earnings Jobs were
+    replaced by date-formatted successors without restarting the supervisor or deleting failures.
   - [ ] Complete PDI-17 observed checkpoint Snapshot sets, bind the v3 registration to them and the
     accepted supervisor receipt, then run the registered multi-policy soak and fault matrix.
 
@@ -280,6 +304,11 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
   - [ ] `PDI-29C` Freeze typed, secret-free Position Snapshot and evidence-lane-preserving Historical
     Analogy Pack payload contracts before enabling those optional specialists. IDs alone are not
     accepted model context and these optional inputs do not block portfolio-independent triage.
+    - [x] Implement and persist content-identified payloads. The current Position Snapshot is the
+      minimum target/venue/class/as-of intersection contract; it does not yet encode side, size,
+      concentration, account or reconciliation state.
+    - [ ] Bind the optional portfolio-impact and historical-analogy specialist prompts/runtime only
+      after their exact payload identities are frozen in the execution plan.
   - [ ] `PDI-29D` Seal labels before model execution, then replay the currently unclassified
     post-admission versions through both arms and a later pristine blind batch. Pass the registered
     evaluation of classification, `needs_review`, impact route, unsupported transmission paths,
@@ -433,6 +462,23 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       the failed v1 attempts remain negative evidence and cannot satisfy the v2 authority.
       Reports bind both Plan IDs, Outcome hashes and receipt hashes; downstream acceptance requires
       full Harness replay and byte equality, not schema validity or caller-rehashed content alone.
+  - [x] `PDI-29F` Add the formal impact-to-decision bridge. One durable Prospective Trigger Admission
+    accepts either an exact checkpoint-eligible Triage selection or, only for the registered
+    material-event mechanism, an exact Triage-routed canonical EventAssessment projection plus
+    passing deterministic Materiality Gate. Admission requires the exact diagnostic registration:
+    policy/earnings/macro checkpoints cannot borrow the material path. Material candidates retain
+    Triage's ready-time order across every completed Decision in the admitted route epoch, and a
+    later passing cluster must bind every earlier non-admitted Materiality result. An earlier
+    unresolved review or direct eligible cluster remains blocking even when batches are separate.
+    The durable store reopens that authoritative epoch history, requires a completed EventAssessment
+    authority, persists the full selection context and admits at most one trigger per registered
+    checkpoint. Snapshot Set and Query Gate require that durable Trigger Admission authority.
+    Absence of optional Position/Analogy inputs degrades rather than blocks. This is
+    contract/mechanical acceptance, not a real material-event Judgment or alpha result.
+  - [ ] `PDI-29G` Bind the prospective EventAssessment model adapter/run journal as the concrete
+    completed-assessment authority, then run the current material-event candidates in ready-time
+    order. Until this exists, the material path remains fail-closed even when a caller can construct
+    schema-valid assessment content.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan
@@ -447,8 +493,21 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     five post-admission versions by 2026-08-30 00:29 UTC. A temporary operator-style inspection found
     no obvious match. Formal PDI-29 Work Decisions have since classified that nine-version batch and
     the later 39-version batch; neither contained an eligible policy checkpoint. No Snapshot Set or
-    Query Gate was created. Issuer and macro trigger routes remain unconfigured.
-  - [ ] After PDI-29 selects one post-admission candidate, seal its trading-session barrier and
+    Query Gate was created. Issuer and macro trigger routes were unconfigured in that historical
+    route epoch.
+  - [x] Freeze and admit current v4 route plan
+    `prospective-checkpoint-route-plan-91b8048b12c3720a16ee4a2ec4e163f150423807f546c357fd8f9eea488aa50c`
+    as admission
+    `prospective-checkpoint-route-admission-e40547675d3bd653dbc270394ce16987e92ec5942bb5a98ae75a5abdb3d95cd0`.
+    The first readiness report had three operational checkpoints. By the content-identified
+    2026-08-31 05:50 UTC report
+    `prospective-checkpoint-readiness-report-fc00e2566a792368b97230c43d1cd46f67cbf4c40a842a80ff8f660689fe3d6f`,
+    all four trigger routes were operational: policy had 210 and material-event had 119
+    post-admission Observation Versions awaiting formal Triage; neither is yet a Trigger Admission.
+    NBS and Earnings were waiting for later post-admission releases. The two Earnings successor Jobs
+    recovered from Journal backoff without a service restart; earlier staged Provider receipts remain
+    ineligible for the current route admission.
+  - [ ] After PDI-29 produces an exact direct or material Trigger Admission, seal its trading-session barrier and
     freeze the actual Snapshot Set, Evidence Pack, read-only tools, Prospective Evidence Lineage, and
     Prospective Execution Plan. Pre-admission observations remain ineligible.
 - [ ] `PDI-31` Pass Query Gate preflight for two or three registered checkpoints.
@@ -461,6 +520,9 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     runtime tools. Rebuild supplied projections from the Harness-owned frozen Snapshot Store so a
     recomputed caller hash cannot promote fabricated input; bind the full evaluation material for
     paper-boundary re-evaluation and restart recovery.
+  - [x] Add Snapshot Set v5 and Query Gate v5 Trigger Admission reconciliation. Multi-source rows
+    under one semantic route retain distinct Job/source/Snapshot identities, and material-event
+    targets must be a subset of the passing Materiality Gate.
   - [ ] Freeze and pass the gate for the first real post-route-plan checkpoint, then add one or two
     independently triggered registered checkpoints. Waiting for an external event is tracked
     separately from missing trigger-route infrastructure.

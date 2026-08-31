@@ -21,6 +21,9 @@ PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2 = (
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3 = (
     "market-impact.prospective-diagnostic-registration.v3"
 )
+PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4 = (
+    "market-impact.prospective-diagnostic-registration.v4"
+)
 # Backward-compatible default; v2 must be selected explicitly.
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1
 _SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
@@ -28,6 +31,7 @@ _SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     }
 )
 
@@ -47,6 +51,7 @@ class DiagnosticMechanism(StrEnum):
     POLICY_REGULATION = "policy_regulation"
     EARNINGS_EXPECTATION_DELTA = "earnings_expectation_delta"
     MACRO_CYCLE = "macro_cycle"
+    MATERIAL_EVENT = "material_event"
 
 
 class CapabilityApplicability(StrEnum):
@@ -237,18 +242,26 @@ class ProspectiveDiagnosticRegistration:
         if self.schema_version in {
             PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
             PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
         }:
             for checkpoint in self.checkpoints:
                 if (
                     checkpoint.slot(ObservationCapability.EVENT_REVELATION).applicability
                     is not CapabilityApplicability.REQUIRED
                 ):
-                    raise ValueError("prospective diagnostic v2 event_revelation must be required")
+                    raise ValueError(
+                        "prospective diagnostic v2-v4 event_revelation must be required"
+                    )
         require_aware(self.registered_at, "prospective diagnostic registered_at")
         if self.registered_at.utcoffset() != UTC.utcoffset(self.registered_at):
             raise ValueError("prospective diagnostic registered_at must use UTC")
-        if not 2 <= len(self.checkpoints) <= 3:
-            raise ValueError("prospective diagnostic requires two or three checkpoints")
+        maximum_checkpoints = (
+            4 if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4 else 3
+        )
+        if not 2 <= len(self.checkpoints) <= maximum_checkpoints:
+            raise ValueError(
+                f"prospective diagnostic requires between two and {maximum_checkpoints} checkpoints"
+            )
         keys = tuple(item.checkpoint_key for item in self.checkpoints)
         if len(keys) != len(set(keys)):
             raise ValueError("prospective diagnostic checkpoint keys must be unique")
@@ -264,20 +277,28 @@ class ProspectiveDiagnosticRegistration:
             raise ValueError(
                 "prospective diagnostic requires exactly three replicates per arm as the maximum"
             )
-        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3:
+        if self.schema_version in {
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        }:
             if self.minimum_replicates_per_arm != 2:
                 raise ValueError(
-                    "prospective diagnostic v3 requires two initial replicates per arm"
+                    "prospective diagnostic v3-v4 requires two initial replicates per arm"
                 )
             if self.replicate_schedule_rule != (
                 "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
             ):
-                raise ValueError("prospective diagnostic v3 replicate schedule is invalid")
+                raise ValueError("prospective diagnostic v3-v4 replicate schedule is invalid")
         elif (
             self.minimum_replicates_per_arm is not None or self.replicate_schedule_rule is not None
         ):
-            raise ValueError("adaptive replicate fields require prospective diagnostic v3")
+            raise ValueError("adaptive replicate fields require prospective diagnostic v3-v4")
         _identifier(self.model_profile_id, "prospective diagnostic model_profile_id")
+        if (
+            self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+            and not self.model_profile_id.endswith("-cpa-v1")
+        ):
+            raise ValueError("prospective diagnostic v4 requires the CPA-priced Model Profile")
         try:
             cost = Decimal(self.aggregate_model_cost_limit_usd)
         except InvalidOperation as error:
@@ -320,7 +341,10 @@ class ProspectiveDiagnosticRegistration:
             "go_conditions": list(self.go_conditions),
             "claim_scope": self.claim_scope,
         }
-        if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3:
+        if self.schema_version in {
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        }:
             payload["minimum_replicates_per_arm"] = self.minimum_replicates_per_arm
             payload["replicate_schedule_rule"] = self.replicate_schedule_rule
         return payload
@@ -359,7 +383,10 @@ class ProspectiveDiagnosticRegistration:
             "go_conditions": list(go_conditions),
             "claim_scope": claim_scope,
         }
-        if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3:
+        if schema_version in {
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        }:
             core["minimum_replicates_per_arm"] = minimum_replicates_per_arm
             core["replicate_schedule_rule"] = replicate_schedule_rule
         return cls(
@@ -393,7 +420,11 @@ def prospective_diagnostic_registration_from_dict(
     schema_version = _string(payload, "schema_version")
     adaptive_fields: set[str] = (
         {"minimum_replicates_per_arm", "replicate_schedule_rule"}
-        if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3
+        if schema_version
+        in {
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+            PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        }
         else set()
     )
     _exact_keys(

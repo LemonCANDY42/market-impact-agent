@@ -25,6 +25,7 @@ from market_impact_agent.domain import (
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     ProspectiveDiagnosticRegistration,
 )
 from market_impact_agent.prospective_execution import ProspectiveExecutionPlan
@@ -333,7 +334,10 @@ def build_decision_run_manifest(
         raise ValueError("Query Gate binds a different Agent execution plan")
     if execution_plan.registration_id != registration.registration_id:
         raise ValueError("Agent execution plan belongs to a different registration")
-    adaptive = registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3
+    adaptive = registration.schema_version in {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    }
     if adaptive:
         if len(paired_runs) not in {4, 6}:
             raise ValueError("adaptive Decision runs require two or three complete paired runs")

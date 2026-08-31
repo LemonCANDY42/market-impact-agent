@@ -202,6 +202,140 @@ def test_route_plan_is_content_identified_canonical_and_schema_valid(tmp_path: P
         load_prospective_checkpoint_route_plan(path)
 
 
+def test_route_plan_allows_multiple_jobs_for_one_semantic_news_route() -> None:
+    registration = _registration()
+    plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=registration.registration_id,
+        bindings=(
+            ProspectiveCheckpointRouteBinding(
+                checkpoint_key="next-a-share-policy-event",
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="established_news",
+                job_id="prospective-collection-job-" + "1" * 64,
+            ),
+            ProspectiveCheckpointRouteBinding(
+                checkpoint_key="next-a-share-policy-event",
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="established_news",
+                job_id="prospective-collection-job-" + "2" * 64,
+            ),
+        ),
+    )
+
+    assert tuple(item.job_id for item in plan.bindings) == (
+        "prospective-collection-job-" + "1" * 64,
+        "prospective-collection-job-" + "2" * 64,
+    )
+
+
+def test_readiness_keeps_each_job_bound_to_a_shared_news_semantic(
+    tmp_path: Path,
+) -> None:
+    registration = _registration()
+    job_ids = (
+        "prospective-collection-job-" + "1" * 64,
+        "prospective-collection-job-" + "2" * 64,
+    )
+    policy_ids = (
+        "prospective-collection-policy-" + "3" * 64,
+        "prospective-collection-policy-" + "4" * 64,
+    )
+    report_ids = (
+        "source-route-acceptance-report-" + "5" * 64,
+        "source-route-acceptance-report-" + "6" * 64,
+    )
+    sources = ("tushare-news", "tushare-news-cls")
+    candidates = (
+        ProspectiveObservationVersionRef(
+            version_id="prospective-observation-version-" + "7" * 64,
+            first_available_at=ADMITTED_AT + timedelta(seconds=10),
+            provider_id="tushare-observation",
+            provider_version="1",
+            upstream_source=sources[0],
+        ),
+        ProspectiveObservationVersionRef(
+            version_id="prospective-observation-version-" + "8" * 64,
+            first_available_at=ADMITTED_AT + timedelta(seconds=20),
+            provider_id="tushare-observation",
+            provider_version="1",
+            upstream_source=sources[1],
+        ),
+    )
+
+    class Journal:
+        def policy(self, policy_id: str) -> _FakePolicy:
+            index = policy_ids.index(policy_id)
+            return _FakePolicy(policy_id=policy_ids[index])
+
+        def observation_version_refs(self, *, policy_id: str, **_: object) -> tuple[Any, ...]:
+            return (candidates[policy_ids.index(policy_id)],)
+
+    class Runtime:
+        journal = Journal()
+
+        def job(self, job_id: str) -> _FakeJob:
+            index = job_ids.index(job_id)
+            return _FakeJob(
+                collection_policy_id=policy_ids[index],
+                source_acceptance_report_id=report_ids[index],
+            )
+
+        def source_acceptance_report(self, job_id: str) -> _FakeReport:
+            index = job_ids.index(job_id)
+            return _FakeReport(
+                report_id=report_ids[index],
+                declaration=_FakeDeclaration(
+                    capability=ObservationCapability.EVENT_REVELATION,
+                    source_config_hash=str(index + 1) * 64,
+                    provider_id="tushare-observation",
+                    upstream_source=sources[index],
+                    semantic_scope="aggregated_source_observation_actual_receipt_only",
+                ),
+            )
+
+        def health(self, job_id: str, *, now: datetime) -> _FakeHealth:
+            assert job_id in job_ids and now >= ADMITTED_AT
+            return _FakeHealth()
+
+        def opportunities(self, job_id: str) -> tuple[_FakeOpportunity, ...]:
+            assert job_id in job_ids
+            return ()
+
+    plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=registration.registration_id,
+        bindings=tuple(
+            ProspectiveCheckpointRouteBinding(
+                checkpoint_key="next-a-share-policy-event",
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="established_news",
+                job_id=job_id,
+            )
+            for job_id in job_ids
+        ),
+    )
+    runtime = cast(ProspectiveCollectionRuntime, Runtime())
+    admissions = ProspectiveCheckpointAdmissionStore(
+        tmp_path / "state",
+        clock=lambda: ADMITTED_AT,
+    )
+    admissions.admit(route_plan=plan, registration=registration, runtime=runtime)
+    report = evaluate_prospective_checkpoint_readiness(
+        registration=registration,
+        route_plan=plan,
+        admission_store=admissions,
+        runtime=runtime,
+        evaluated_at=ADMITTED_AT + timedelta(minutes=1),
+    )
+    checkpoint = next(
+        item for item in report.checkpoints if item.checkpoint_key == "next-a-share-policy-event"
+    )
+
+    assert checkpoint.operational_trigger_route_job_ids == job_ids
+    assert checkpoint.trigger_candidate_version_ids == tuple(
+        sorted(item.version_id for item in candidates)
+    )
+
+
 def test_route_plan_rejects_missing_or_legacy_admission_timing_protocol(
     tmp_path: Path,
 ) -> None:
@@ -811,6 +945,34 @@ def test_csrc_route_cannot_be_relabeled_as_another_event_semantic(
             route_plan=plan,
             registration=_registration(),
             runtime=_runtime(),
+        )
+
+
+def test_forecast_source_cannot_masquerade_as_established_news(tmp_path: Path) -> None:
+    registration = _registration()
+    plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=registration.registration_id,
+        bindings=(
+            ProspectiveCheckpointRouteBinding(
+                checkpoint_key="next-a-share-policy-event",
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="established_news",
+                job_id=JOB_ID,
+            ),
+        ),
+    )
+    admissions = ProspectiveCheckpointAdmissionStore(tmp_path / "state", clock=lambda: ADMITTED_AT)
+    with pytest.raises(ValueError, match="accepted source semantics"):
+        admissions.admit(
+            route_plan=plan,
+            registration=registration,
+            runtime=_runtime(
+                declaration=_FakeDeclaration(
+                    provider_id="tushare-observation",
+                    upstream_source="tushare-forecast-vip",
+                    semantic_scope="aggregated_source_observation_actual_receipt_only",
+                )
+            ),
         )
 
 

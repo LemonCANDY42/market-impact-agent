@@ -13,6 +13,7 @@ from market_impact_agent.event_impact_triage import (
     EventImpactTriageDecision,
     EventImpactTriageProposal,
     LegacyTriageWorkDecisionEvidence,
+    TriageClusterProposal,
     TriageRunEvidence,
     TriageWorkDecisionEvidence,
     admit_event_impact_triage,
@@ -318,6 +319,116 @@ class EventImpactTriageDecisionStore:
                 raise ValueError("triage Decision index differs from its stored artifacts")
             versions.update(candidate_set.version_ids)
         return tuple(sorted(versions))
+
+    def get_context(
+        self,
+        candidate_set_id: str,
+    ) -> tuple[
+        EventImpactTriageCandidateSet,
+        EventImpactTriageProposal,
+        EventImpactTriageDecision,
+    ]:
+        """Reopen one exact authoritative Triage Decision and its inputs."""
+
+        row = self._row_for_candidate_set(candidate_set_id)
+        if row is None:
+            raise KeyError(f"unknown event impact Triage Candidate Set: {candidate_set_id}")
+        return self._reopen(row)
+
+    def route_epoch_contexts(
+        self,
+        *,
+        registration_id: str,
+        checkpoint_key: str,
+        route_plan_id: str,
+        route_admission_id: str,
+        at: datetime,
+    ) -> tuple[
+        tuple[
+            EventImpactTriageCandidateSet,
+            EventImpactTriageProposal,
+            EventImpactTriageDecision,
+            TriageClusterProposal,
+        ],
+        ...,
+    ]:
+        """Reopen and ready-time order every cluster in one admitted route epoch."""
+
+        _strict_utc(at, "triage route epoch query at")
+        with self._connect() as connection:
+            rows = tuple(
+                connection.execute(
+                    """
+                    SELECT * FROM event_impact_triage_decisions
+                    WHERE registration_id = ? AND checkpoint_key = ?
+                      AND route_plan_id = ? AND route_admission_id = ?
+                      AND decided_at <= ?
+                    ORDER BY decided_at, decision_id
+                    """,
+                    (
+                        registration_id,
+                        checkpoint_key,
+                        route_plan_id,
+                        route_admission_id,
+                        _timestamp(at),
+                    ),
+                ).fetchall()
+            )
+        contexts: list[
+            tuple[
+                datetime,
+                str,
+                str,
+                EventImpactTriageCandidateSet,
+                EventImpactTriageProposal,
+                EventImpactTriageDecision,
+                TriageClusterProposal,
+            ]
+        ] = []
+        for row in rows:
+            candidate_set, proposal, decision = self._reopen(row)
+            if (
+                candidate_set.registration_id != registration_id
+                or candidate_set.checkpoint_key != checkpoint_key
+                or candidate_set.route_plan_id != route_plan_id
+                or candidate_set.route_admission_id != route_admission_id
+                or decision.decided_at > at
+            ):
+                raise ValueError("triage Decision index differs from its stored artifacts")
+            availability = {
+                item.version_id: item.first_available_at for item in candidate_set.observations
+            }
+            for cluster in proposal.clusters:
+                ready_at = max(
+                    availability[version_id]
+                    for version_id in (
+                        *cluster.candidate_version_ids,
+                        *cluster.evidence_version_ids,
+                    )
+                )
+                contexts.append(
+                    (
+                        ready_at,
+                        decision.decision_id,
+                        cluster.cluster_id,
+                        candidate_set,
+                        proposal,
+                        decision,
+                        cluster,
+                    )
+                )
+        return tuple(
+            (candidate_set, proposal, decision, cluster)
+            for (
+                _,
+                _,
+                _,
+                candidate_set,
+                proposal,
+                decision,
+                cluster,
+            ) in sorted(contexts, key=lambda item: item[:3])
+        )
 
     def _row_for_candidate_set(self, candidate_set_id: str) -> sqlite3.Row | None:
         with self._connect() as connection:

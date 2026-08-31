@@ -60,7 +60,7 @@ The bootstrap implements:
   Checkpoint Market Universe View can deterministically join one frozen checkpoint's market,
   instrument, taxonomy, membership, and ETF-mapping inputs—including exact daily exchange-PCF
   constituent links—with versioned SSE/SZSE lot/tick rules while keeping suspension,
-  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps explicit; the v3 prospective
+  corporate-action, taxonomy-interval, PCF-weight, and rebalance gaps explicit; the v4 prospective
   registration and Query Gate block missing trigger/structural inputs while allowing the Agent to
   reason or abstain with optional information missing. A content-identified route plan now binds
   accepted Collection Jobs before any new trigger, and a read-only readiness report distinguishes
@@ -111,9 +111,24 @@ The bootstrap implements:
   infrastructure revalidation, not blind semantic evidence. The prospective repair now journals
   each physical attempt with a correlation ID and generation state, forbids ambiguous POST retries,
   and can persist sanitized circuit/cooldown/operator-notice state; see
-  [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed Position Snapshot/historical-context
-  payloads, completed real comparison arms and passing blind semantic results remain open acceptance
-  work. Order-time
+  [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed minimum Position Snapshot
+  and evidence-lane-preserving Historical Analogy Pack payloads now bind a durable prospective
+  EventAssessment projection, deterministic Materiality Gate and exact Trigger Admission. Snapshot
+  Set v5 and Query Gate v5 accept either the direct checkpoint selection or that formal material-
+  event path; no external operator can substitute a headline. Trigger Admission also binds the exact
+  registered checkpoint mechanism: policy/earnings/macro selections cannot borrow the material-event
+  path, while the material-event checkpoint must use Triage-routed EventAssessment clusters and prove
+  that every earlier routed cluster across all completed Decisions in the same route epoch failed
+  Materiality before a later one can enter. Durable admission reopens the authoritative Triage
+  history and requires a completed EventAssessment authority; an earlier unresolved review or direct
+  eligible candidate cannot be forgotten when Triage work is split across batches. Snapshot Set and
+  Query Gate reopen the durable Trigger Admission. The real EventAssessment model
+  authority, optional portfolio/history specialist binding, completed real comparison arms and passing
+  blind semantic results remain open acceptance work. At 2026-08-31 05:50 UTC, all four admitted v4
+  checkpoints had operational trigger routes: policy had 210 and material-event had 119
+  post-admission versions awaiting formal Triage, while NBS and Earnings were waiting for a later
+  post-admission release. The two Earnings successor Jobs recovered from Journal backoff without a
+  service restart; their earlier staged Provider receipts do not count as current triggers. Order-time
   tradability and risk remain
   independently fail-closed; the
   framework also has a prospective RSS/Atom Provider that freezes a secret-free source
@@ -123,12 +138,15 @@ The bootstrap implements:
   reusable seven-gate Source Route Acceptance Report that binds captured rights evidence, exact raw
   JSON records, publication time, actual receipt, append-only revisions, and deterministic replay;
   the accepted route is private-research only and grants neither historical PIT nor execution;
-- a prospective `tushare-observation` Provider with twenty-three separately content-identified
+- a prospective `tushare-observation` Provider with twenty-eight separately content-identified
   routes for news, index/ETF/calendar context, instrument/industry/ETF-PCF exposure, margin
   positioning, macro schedule, and analyst forecasts; the accepted routes have passed real private
   capture, stored-bundle replay, and the seven route gates without exposing the purchased token or
   licensed rows. The purchased news entitlement now has seven active short-news source Jobs and one
-  `major_news` Job at 2-, 5-, or 15-minute cadence. Two documented short-news sources remain
+  `major_news` Job at 2-, 5-, or 15-minute cadence. Accepted `forecast_vip`, `express_vip`, raw
+  `daily`, and `adj_factor` routes use date-only rolling request semantics; `suspend_d` remains
+  unaccepted after bounded transport failures. Two documented short-news sources remain valid-empty
+  rather than falsely accepted as non-empty routes;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
@@ -149,6 +167,10 @@ The bootstrap implements:
   ten-opportunity window recorded zero misses and failures, with maximum all-Job claim latency of
   74.54 seconds and trigger-Job latency of 45.304 seconds. Longer multi-policy soak, retention and
   restore acceptance remain open;
+  immutable Collection Jobs can also be superseded through a separate append-only transition that
+  requires the same accepted source route and refuses active or unsettled staged receipts. The two
+  misformatted Earnings Jobs were retired in favor of date-only successors while retaining their
+  failures and without restarting the supervisor;
   the append-only collector state is not reset or discarded;
 - a minimal Harness-owned Attention Watch runtime with immutable v1 event scope plus a v2
   [Monitoring Scope](docs/DATA_INPUT_HARNESS.md#scoped-local-first-retrieval) for an event cluster,
@@ -484,7 +506,7 @@ uv run market-impact backtest phase2-run --registration PRIVATE_REGISTRATION.jso
   --data-snapshot-root .market-impact/tushare --output-dir PRIVATE_OUTPUT_DIRECTORY
 uv run market-impact backtest phase2-gate --evidence PRIVATE_EVIDENCE.json
 uv run market-impact data validate-prospective-diagnostic \
-  --registration examples/research/prospective-diagnostic-registration-v3.json
+  --registration examples/research/prospective-diagnostic-registration-v4.json
 uv run market-impact data accept-tushare-observation \
   --source-config examples/providers/tushare-observation-index-daily-v1.json \
   --parameters-json '{"ts_code":"000300.SH","start_date":"20260827","end_date":"20260827"}' \
@@ -500,9 +522,9 @@ uv run pytest
 ```
 
 The immutable v1 prospective registration remains as the original all-slots-required diagnostic,
-and v2 preserves the first partial-observation contract. V3 is current for new checkpoints: it
-retains the v2 information boundary but runs two complete pairs before conditionally requiring a
-third. Validating it does not itself authorize a model call or paper order.
+v2 preserves the first partial-observation contract, and v3 introduced adaptive paired execution.
+V4 is current for new work: it retains that schedule, adds a broad material-event checkpoint and
+requires CPA pricing. Validating it does not itself authorize a model call or paper order.
 
 Token-backed Tushare capture reads `TUSHARE_TOKEN` only from the process environment. Historical
 bundles remain under ignored `.market-impact/tushare/`; prospective observations, Journals, route

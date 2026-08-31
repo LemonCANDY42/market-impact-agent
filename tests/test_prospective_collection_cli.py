@@ -29,6 +29,10 @@ def test_collection_cli_freezes_registration_and_one_shot_worker_arguments() -> 
             ".market-impact/data-inputs/source-acceptance/example.json",
             "--parameters-json",
             '{"end_date":"20270828","start_date":"20260828","ts_code":"000300.SH"}',
+            "--rolling-lookback-seconds",
+            "604800",
+            "--rolling-datetime-format",
+            "%Y%m%d",
             "--window-start",
             "2026-08-28T14:00:00Z",
             "--starts-at",
@@ -51,6 +55,20 @@ def test_collection_cli_freezes_registration_and_one_shot_worker_arguments() -> 
             "2026-08-28T14:05:00Z",
             "--maximum-state-bytes",
             "10000000000",
+        ]
+    )
+    replace = build_parser().parse_args(
+        [
+            "data",
+            "collection-replace",
+            "--predecessor-job-id",
+            "prospective-collection-job-" + "a" * 64,
+            "--successor-job-id",
+            "prospective-collection-job-" + "b" * 64,
+            "--reason",
+            "provider_datetime_format_corrected",
+            "--replaced-at",
+            "2026-08-28T14:04:00Z",
         ]
     )
     tracer = build_parser().parse_args(
@@ -108,10 +126,13 @@ def test_collection_cli_freezes_registration_and_one_shot_worker_arguments() -> 
     assert register.adapter_kind == "tushare_observation"
     assert register.poll_interval_seconds == 86400
     assert register.maximum_jitter_seconds == 0
+    assert register.rolling_datetime_format == "%Y%m%d"
     assert run.data_command == "collection-run-due"
     assert run.now == datetime(2026, 8, 28, 14, 5, tzinfo=UTC)
     assert run.maximum_state_bytes == 10_000_000_000
     assert run.maximum_concurrent_opportunities == 4
+    assert replace.data_command == "collection-replace"
+    assert replace.replaced_at == datetime(2026, 8, 28, 14, 4, tzinfo=UTC)
     assert tracer.data_command == "collection-qualify-tracer"
     assert len(tracer.job_id) == 2
     assert service.data_command == "collection-service-run"

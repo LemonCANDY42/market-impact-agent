@@ -86,6 +86,7 @@ from market_impact_agent.prospective_checkpoint_sets import (
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     ProspectiveDiagnosticRegistration,
     load_prospective_diagnostic_registration,
@@ -106,6 +107,7 @@ from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStat
 NOW = datetime(2026, 8, 30, 8, tzinfo=UTC)
 REGISTRATION_PATH = Path("examples/research/prospective-diagnostic-registration-v3.json")
 MODEL_PROFILE_PATH = Path("examples/providers/cliproxyapi-luna-xhigh-v1.json")
+CPA_MODEL_PROFILE_PATH = Path("examples/providers/cliproxyapi-luna-xhigh-cpa-v1.json")
 MINIMAX_PROFILE_PATH = Path("examples/providers/minimax-m3-research-v1.json")
 
 
@@ -202,11 +204,36 @@ def _adaptive_registration() -> ProspectiveDiagnosticRegistration:
     )
 
 
+def _adaptive_v4_registration() -> ProspectiveDiagnosticRegistration:
+    registration = _registration()
+    return ProspectiveDiagnosticRegistration.build(
+        registered_at=registration.registered_at,
+        checkpoints=registration.checkpoints,
+        paired_arms=registration.paired_arms,
+        replicates_per_arm=registration.replicates_per_arm,
+        model_profile_id="cliproxyapi-luna-xhigh-cpa-v1",
+        aggregate_model_cost_limit_usd=registration.aggregate_model_cost_limit_usd,
+        outcome_opening_rule=registration.outcome_opening_rule,
+        stop_conditions=registration.stop_conditions,
+        go_conditions=registration.go_conditions,
+        claim_scope=registration.claim_scope,
+        minimum_replicates_per_arm=2,
+        replicate_schedule_rule=(
+            "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
+        ),
+        schema_version=PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    )
+
+
 def _execution_plan(
     registration: ProspectiveDiagnosticRegistration | None = None,
 ) -> ProspectiveExecutionPlan:
     registration = _registration() if registration is None else registration
-    profile = load_model_provider_profile(MODEL_PROFILE_PATH)
+    profile = load_model_provider_profile(
+        CPA_MODEL_PROFILE_PATH
+        if registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+        else MODEL_PROFILE_PATH
+    )
     return ProspectiveExecutionPlan.build(
         registration=registration,
         model_profile_alias=registration.model_profile_id,
@@ -938,6 +965,32 @@ def test_adaptive_pair_stops_after_two_only_when_both_arms_agree() -> None:
             paired_runs=_paired_runs(runs, registration=registration),
             created_at=NOW - timedelta(minutes=6),
         )
+
+
+def test_v4_uses_the_same_adaptive_two_then_optional_third_pair_schedule() -> None:
+    registration = _adaptive_v4_registration()
+    pack = _pack()
+    plan = _execution_plan(registration)
+    gate = _gate(pack, plan, registration)
+    runs = _runs(pack)
+    control = registration.paired_arms[0]
+    runs[control] = (
+        _result(control, 1, "510500.XSHG", CandidateDirection.DOWN, pack=pack),
+        _result(control, 2, "510500.XSHG", CandidateDirection.DOWN, pack=pack),
+        _result(control, 3, "510300.XSHG", CandidateDirection.UP, pack=pack),
+    )
+
+    manifest = build_decision_run_manifest(
+        registration=registration,
+        query_gate=gate,
+        evidence_pack=pack,
+        execution_plan=plan,
+        paired_runs=_paired_runs(runs, registration=registration, replicates=2),
+        created_at=NOW - timedelta(minutes=6),
+    )
+
+    assert manifest.replicates_executed_per_arm == 2
+    assert manifest.replicate_stop_reason == "first_two_agree_in_both_arms"
 
 
 def test_adaptive_pair_requires_third_pair_after_either_arm_disagrees() -> None:

@@ -20,12 +20,21 @@ from market_impact_agent.prospective_checkpoint_sets import (
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
 from market_impact_agent.prospective_execution import ProspectiveExecutionPlan
+from market_impact_agent.prospective_trigger_admission import (
+    ProspectiveTriggerAdmission,
+    TriggerAdmissionAuthority,
+    TriggerAdmissionKind,
+)
 
-PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA = "market-impact.prospective-query-gate-result.v4"
+PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V4 = "market-impact.prospective-query-gate-result.v4"
+PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V5 = "market-impact.prospective-query-gate-result.v5"
+# Backward-compatible constructor default; v5 is selected by v4 registrations.
+PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA = PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V4
 PROCESS_DIAGNOSTIC_CLAIM_SCOPE = "process_diagnostic_only_no_alpha_or_execution_claim"
 
 
@@ -52,10 +61,14 @@ class ProspectiveQueryGateResult:
     historical_pit_claim: bool = False
     strategy_promotion_claim: bool = False
     execution_capability: bool = False
+    trigger_admission_id: str | None = None
     schema_version: str = PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA:
+        if self.schema_version not in {
+            PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V4,
+            PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V5,
+        }:
             raise ValueError("unsupported prospective Query Gate result schema")
         _strict_utc(self.barrier_at, "Query Gate barrier_at")
         _strict_utc(self.evaluated_at, "Query Gate evaluated_at")
@@ -107,6 +120,16 @@ class ProspectiveQueryGateResult:
             raise ValueError("Query Gate cannot grant an alpha or execution claim")
         if self.historical_pit_claim or self.strategy_promotion_claim or self.execution_capability:
             raise ValueError("Query Gate cannot grant historical, strategy, or execution authority")
+        if self.schema_version == PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V5:
+            if self.trigger_admission_id is None:
+                raise ValueError("v5 Query Gate requires a Trigger Admission")
+            _prefixed_hash(
+                self.trigger_admission_id,
+                "prospective-trigger-admission-",
+                "Query Gate Trigger Admission ID",
+            )
+        elif self.trigger_admission_id is not None:
+            raise ValueError("legacy Query Gate cannot carry a Trigger Admission")
         if self.result_id != self.expected_result_id:
             raise ValueError("prospective Query Gate result_id does not match content")
 
@@ -129,7 +152,7 @@ class ProspectiveQueryGateResult:
         return f"prospective-query-gate-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "registration_id": self.registration_id,
             "checkpoint_key": self.checkpoint_key,
@@ -152,6 +175,9 @@ class ProspectiveQueryGateResult:
             "strategy_promotion_claim": self.strategy_promotion_claim,
             "execution_capability": self.execution_capability,
         }
+        if self.schema_version == PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V5:
+            payload["trigger_admission_id"] = self.trigger_admission_id
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "result_id": self.result_id}
@@ -168,15 +194,37 @@ def evaluate_prospective_query_gate(
     model_profile_id: str,
     model_cost_limit_usd: Decimal,
     evaluated_at: datetime,
+    trigger_admission: ProspectiveTriggerAdmission | None = None,
+    trigger_admission_authority: TriggerAdmissionAuthority | None = None,
 ) -> ProspectiveQueryGateResult:
     if registration.schema_version not in {
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     }:
-        raise ValueError("partial-information Query Gate requires a v2 or v3 registration")
+        raise ValueError("partial-information Query Gate requires a v2, v3, or v4 registration")
     checkpoint = registration.checkpoint(snapshot_set.checkpoint_key)
     if snapshot_set.registration_id != registration.registration_id:
         raise ValueError("Query Gate Snapshot Set belongs to a different registration")
+    trigger_bound = registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+    if trigger_bound:
+        if trigger_admission is None:
+            raise ValueError("v4 Query Gate requires a Trigger Admission")
+        if trigger_admission_authority is None:
+            raise ValueError("v4 Query Gate requires Trigger Admission authority")
+        trigger_admission_authority.assert_authoritative(trigger_admission)
+        if (
+            snapshot_set.trigger_admission_id != trigger_admission.admission_id
+            or trigger_admission.registration_id != registration.registration_id
+            or trigger_admission.checkpoint_key != snapshot_set.checkpoint_key
+        ):
+            raise ValueError("Query Gate Trigger Admission does not match its Snapshot Set")
+        if trigger_admission.kind is TriggerAdmissionKind.MATERIAL_EVENT and not set(
+            evidence_pack.allowed_targets
+        ) <= set(trigger_admission.admitted_target_ids):
+            raise ValueError("Query Gate Evidence Pack contains a target outside Materiality Gate")
+    elif trigger_admission is not None or trigger_admission_authority is not None:
+        raise ValueError("legacy Query Gate cannot bind Trigger Admission authority")
     if evidence_pack.as_of != snapshot_set.barrier_at:
         raise ValueError("Query Gate Evidence Pack must use the checkpoint barrier")
     if model_profile_id != registration.model_profile_id:
@@ -248,14 +296,20 @@ def evaluate_prospective_query_gate(
         build_query_gate_evaluation_material(
             registration=registration,
             snapshot_set=snapshot_set,
+            trigger_admission=trigger_admission,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
         )
     )
     blocking_gaps = tuple(sorted(set(blocking)))
     nonblocking_gaps = tuple(sorted(set(nonblocking)))
+    gate_schema = (
+        PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V5
+        if trigger_bound
+        else PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V4
+    )
     core = {
-        "schema_version": PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA,
+        "schema_version": gate_schema,
         "registration_id": registration.registration_id,
         "checkpoint_key": checkpoint.checkpoint_key,
         "checkpoint_snapshot_set_id": snapshot_set.snapshot_set_id,
@@ -281,6 +335,9 @@ def evaluate_prospective_query_gate(
         "strategy_promotion_claim": False,
         "execution_capability": False,
     }
+    if gate_schema == PROSPECTIVE_QUERY_GATE_RESULT_SCHEMA_V5:
+        assert trigger_admission is not None
+        core["trigger_admission_id"] = trigger_admission.admission_id
     return ProspectiveQueryGateResult(
         result_id=f"prospective-query-gate-{canonical_hash(core)}",
         registration_id=registration.registration_id,
@@ -303,6 +360,10 @@ def evaluate_prospective_query_gate(
             and bool(authorized_decision_input_ids)
             and not blocking_gaps
         ),
+        trigger_admission_id=(
+            None if trigger_admission is None else trigger_admission.admission_id
+        ),
+        schema_version=gate_schema,
     )
 
 
@@ -312,6 +373,7 @@ def build_query_gate_evaluation_material(
     snapshot_set: ProspectiveCheckpointSnapshotSet,
     decision_inputs: tuple[Mapping[str, object], ...],
     snapshot_store: LocalDataSnapshotStore,
+    trigger_admission: ProspectiveTriggerAdmission | None = None,
 ) -> dict[str, object]:
     canonical_inputs = tuple(
         sorted(
@@ -322,13 +384,20 @@ def build_query_gate_evaluation_material(
     snapshots = tuple(
         snapshot_store.get(snapshot_id) for snapshot_id in snapshot_set.authorized_snapshot_ids
     )
-    return {
-        "schema_version": "market-impact.prospective-query-gate-evaluation-material.v1",
+    payload: dict[str, object] = {
+        "schema_version": (
+            "market-impact.prospective-query-gate-evaluation-material.v2"
+            if trigger_admission is not None
+            else "market-impact.prospective-query-gate-evaluation-material.v1"
+        ),
         "registration": registration.to_dict(),
         "checkpoint_snapshot_set": snapshot_set.to_dict(),
         "decision_inputs": list(canonical_inputs),
         "snapshots": [item.to_dict() for item in snapshots],
     }
+    if trigger_admission is not None:
+        payload["trigger_admission"] = trigger_admission.to_dict()
+    return payload
 
 
 def _validate_evidence_lineage(

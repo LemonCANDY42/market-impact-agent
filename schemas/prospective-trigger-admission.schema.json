@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-trigger-admission.schema.json",
+  "title": "Market Impact Prospective Trigger Admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "admission_id",
+    "kind",
+    "registration_id",
+    "checkpoint_key",
+    "candidate_set_id",
+    "proposal_id",
+    "triage_decision_id",
+    "cluster_id",
+    "observation_version_ids",
+    "event_assessment_id",
+    "materiality_gate_result_id",
+    "preceding_materiality_gate_result_ids",
+    "admitted_target_ids",
+    "held_target_ids",
+    "admitted_at",
+    "historical_pit_claim",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-trigger-admission.v1"},
+    "admission_id": {
+      "type": "string",
+      "pattern": "^prospective-trigger-admission-[0-9a-f]{64}$"
+    },
+    "kind": {"enum": ["checkpoint_eligible", "material_event"]},
+    "registration_id": {
+      "type": "string",
+      "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+    },
+    "checkpoint_key": {"type": "string", "minLength": 1},
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "proposal_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-proposal-[0-9a-f]{64}$"
+    },
+    "triage_decision_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-decision-[0-9a-f]{64}$"
+    },
+    "cluster_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"
+    },
+    "observation_version_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^prospective-observation-version-[0-9a-f]{64}$"
+      }
+    },
+    "event_assessment_id": {
+      "type": ["string", "null"],
+      "pattern": "^prospective-event-assessment-[0-9a-f]{64}$"
+    },
+    "materiality_gate_result_id": {
+      "type": ["string", "null"],
+      "pattern": "^prospective-materiality-gate-[0-9a-f]{64}$"
+    },
+    "preceding_materiality_gate_result_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^prospective-materiality-gate-[0-9a-f]{64}$"
+      }
+    },
+    "admitted_target_ids": {"$ref": "#/$defs/unique_strings"},
+    "held_target_ids": {"$ref": "#/$defs/unique_strings"},
+    "admitted_at": {"type": "string", "format": "date-time"},
+    "historical_pit_claim": {"const": false},
+    "judgment_model_calls_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "material_event"}}},
+      "then": {
+        "properties": {
+          "event_assessment_id": {"type": "string"},
+          "materiality_gate_result_id": {"type": "string"},
+          "admitted_target_ids": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "event_assessment_id": {"const": null},
+          "materiality_gate_result_id": {"const": null},
+          "preceding_materiality_gate_result_ids": {"maxItems": 0},
+          "admitted_target_ids": {"maxItems": 0},
+          "held_target_ids": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "unique_strings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

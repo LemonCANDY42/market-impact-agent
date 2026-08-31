@@ -20,13 +20,19 @@ from market_impact_agent.observations import ObservationCapability
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
+    prospective_observation_version_id,
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
+)
+from market_impact_agent.prospective_trigger_admission import (
+    ProspectiveTriggerAdmission,
+    TriggerAdmissionAuthority,
 )
 from market_impact_agent.source_acceptance import SourceRouteAcceptanceReport
 
@@ -39,7 +45,10 @@ PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3 = (
 PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4 = (
     "market-impact.prospective-checkpoint-snapshot-set.v4"
 )
-# v4 binds each accepted route to the exact observations selected from its Snapshot.
+PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5 = (
+    "market-impact.prospective-checkpoint-snapshot-set.v5"
+)
+# Backward-compatible constructor default; v5 is selected by v4 registrations.
 PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4
 
 _TOOL_NAMES = {
@@ -200,9 +209,18 @@ class CheckpointCapabilityBinding:
     tool_manifest: CheckpointToolManifest | None
 
     def __post_init__(self) -> None:
-        route_kinds = tuple(item.route_kind for item in self.routes)
-        if len(route_kinds) != len(set(route_kinds)):
-            raise ValueError("checkpoint capability route kinds must be unique")
+        route_ids = tuple(
+            (
+                item.route_kind,
+                item.snapshot_id,
+                item.provider_id,
+                item.provider_version,
+                item.upstream_source,
+            )
+            for item in self.routes
+        )
+        if len(route_ids) != len(set(route_ids)):
+            raise ValueError("checkpoint capability routes must be unique")
         if self.applicability is CapabilityApplicability.NOT_APPLICABLE:
             if self.not_applicable_reason is None:
                 raise ValueError("not_applicable checkpoint binding requires a reason")
@@ -247,6 +265,7 @@ class ProspectiveCheckpointSnapshotSet:
     authorized_snapshot_ids: tuple[str, ...]
     complete: bool
     capability_gaps: tuple[str, ...] = ()
+    trigger_admission_id: str | None = None
     historical_pit_claim: bool = False
     execution_capability: bool = False
     schema_version: str = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA
@@ -256,6 +275,7 @@ class ProspectiveCheckpointSnapshotSet:
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V2,
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4,
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5,
         }:
             raise ValueError("unsupported prospective checkpoint Snapshot Set schema")
         _prefixed(
@@ -322,6 +342,16 @@ class ProspectiveCheckpointSnapshotSet:
                 )
         elif self.complete != (expected_complete and not self.capability_gaps):
             raise ValueError("checkpoint set complete flag does not match registered coverage")
+        if self.schema_version == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5:
+            if self.trigger_admission_id is None:
+                raise ValueError("v5 checkpoint set requires a Trigger Admission")
+            _prefixed(
+                self.trigger_admission_id,
+                "prospective-trigger-admission-",
+                "checkpoint set trigger_admission_id",
+            )
+        elif self.trigger_admission_id is not None:
+            raise ValueError("legacy checkpoint set cannot carry a Trigger Admission")
         if self.historical_pit_claim or self.execution_capability:
             raise ValueError("checkpoint set cannot grant historical PIT or execution authority")
         if self.snapshot_set_id != self.expected_snapshot_set_id:
@@ -353,8 +383,11 @@ class ProspectiveCheckpointSnapshotSet:
         if self.schema_version in {
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
             PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4,
+            PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5,
         }:
             payload["capability_gaps"] = list(self.capability_gaps)
+        if self.schema_version == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5:
+            payload["trigger_admission_id"] = self.trigger_admission_id
         return payload
 
     def to_dict(self) -> dict[str, object]:
@@ -439,6 +472,11 @@ def prospective_checkpoint_snapshot_set_from_dict(
         authorized_snapshot_ids=_payload_string_tuple(payload, "authorized_snapshot_ids"),
         complete=_payload_bool(payload, "complete"),
         capability_gaps=_payload_string_tuple(payload, "capability_gaps"),
+        trigger_admission_id=(
+            _payload_string(payload, "trigger_admission_id")
+            if payload.get("trigger_admission_id") is not None
+            else None
+        ),
         historical_pit_claim=_payload_bool(payload, "historical_pit_claim"),
         execution_capability=_payload_bool(payload, "execution_capability"),
         schema_version=_payload_string(payload, "schema_version"),
@@ -490,6 +528,8 @@ def reconcile_prospective_checkpoint_snapshot_set(
     acceptance_reports: Mapping[str, SourceRouteAcceptanceReport],
     reconciled_at: datetime,
     allow_partial: bool = False,
+    trigger_admission: ProspectiveTriggerAdmission | None = None,
+    trigger_admission_authority: TriggerAdmissionAuthority | None = None,
 ) -> ProspectiveCheckpointSnapshotSet:
     _strict_utc(barrier_at, "checkpoint reconciliation barrier_at")
     _strict_utc(reconciled_at, "checkpoint reconciliation reconciled_at")
@@ -500,15 +540,42 @@ def reconcile_prospective_checkpoint_snapshot_set(
     if allow_partial and registration.schema_version not in {
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     }:
-        raise ValueError("partial checkpoint reconciliation requires a v2 or v3 registration")
+        raise ValueError("partial checkpoint reconciliation requires a v2, v3, or v4 registration")
     checkpoint = registration.checkpoint(checkpoint_key)
-    selection_keys = tuple((item.capability, item.route_kind) for item in selections)
+    trigger_bound = registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+    if trigger_bound:
+        if trigger_admission is None:
+            raise ValueError("v4 checkpoint reconciliation requires a Trigger Admission")
+        if trigger_admission_authority is None:
+            raise ValueError("v4 checkpoint reconciliation requires Trigger Admission authority")
+        trigger_admission_authority.assert_authoritative(trigger_admission)
+        if (
+            trigger_admission.registration_id != registration.registration_id
+            or trigger_admission.checkpoint_key != checkpoint_key
+        ):
+            raise ValueError("checkpoint Trigger Admission belongs to another checkpoint")
+        if trigger_admission.admitted_at > barrier_at:
+            raise ValueError("checkpoint barrier predates its Trigger Admission")
+    elif trigger_admission is not None or trigger_admission_authority is not None:
+        raise ValueError("legacy checkpoint reconciliation cannot bind Trigger Admission authority")
+    selection_keys = tuple(
+        (
+            item.capability,
+            item.route_kind,
+            item.snapshot_id,
+            item.collection_policy_id,
+            item.source_acceptance_report_id,
+        )
+        for item in selections
+    )
     if len(selection_keys) != len(set(selection_keys)):
         raise ValueError("checkpoint route selections must be unique")
 
     bindings: list[CheckpointCapabilityBinding] = []
     capability_gaps: list[str] = []
+    reconciled_trigger_versions: set[str] = set()
     for capability in sorted(REQUIRED_DIAGNOSTIC_CAPABILITIES, key=lambda item: item.value):
         slot = checkpoint.slot(capability)
         selected = tuple(item for item in selections if item.capability is capability)
@@ -625,6 +692,16 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 and item.provider_version == declaration.provider_version
                 and item.upstream_source == declaration.upstream_source
             )
+            if capability is ObservationCapability.EVENT_REVELATION and trigger_admission:
+                admitted_versions = set(trigger_admission.observation_version_ids)
+                matching_observations = tuple(
+                    item
+                    for item in matching_observations
+                    if prospective_observation_version_id(item) in admitted_versions
+                )
+                reconciled_trigger_versions.update(
+                    prospective_observation_version_id(item) for item in matching_observations
+                )
             if not matching_observations and not allow_partial:
                 raise ValueError("each selected route requires an observation at the barrier")
             if not matching_observations:
@@ -701,7 +778,18 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 capability=capability,
                 applicability=slot.applicability,
                 not_applicable_reason=None,
-                routes=tuple(sorted(reconciled_routes, key=lambda item: item.route_kind)),
+                routes=tuple(
+                    sorted(
+                        reconciled_routes,
+                        key=lambda item: (
+                            item.route_kind,
+                            item.snapshot_id,
+                            item.provider_id,
+                            item.provider_version,
+                            item.upstream_source,
+                        ),
+                    )
+                ),
                 tool_manifest=CheckpointToolManifest(
                     name=_TOOL_NAMES[capability],
                     version="2",
@@ -714,9 +802,17 @@ def reconcile_prospective_checkpoint_snapshot_set(
     authorized_snapshot_ids = tuple(
         sorted({route.snapshot_id for binding in bindings for route in binding.routes})
     )
+    if trigger_admission is not None and reconciled_trigger_versions != set(
+        trigger_admission.observation_version_ids
+    ):
+        raise ValueError("checkpoint Snapshot Set does not contain the exact Trigger Admission")
     sorted_capability_gaps = tuple(sorted(set(capability_gaps)))
     complete = not sorted_capability_gaps
-    snapshot_set_schema = PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4
+    snapshot_set_schema = (
+        PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5
+        if trigger_bound
+        else PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4
+    )
     core: dict[str, object] = {
         "schema_version": snapshot_set_schema,
         "registration_id": registration.registration_id,
@@ -732,8 +828,12 @@ def reconcile_prospective_checkpoint_snapshot_set(
     if snapshot_set_schema in {
         PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V3,
         PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V4,
+        PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5,
     }:
         core["capability_gaps"] = list(sorted_capability_gaps)
+    if snapshot_set_schema == PROSPECTIVE_CHECKPOINT_SNAPSHOT_SET_SCHEMA_V5:
+        assert trigger_admission is not None
+        core["trigger_admission_id"] = trigger_admission.admission_id
     return ProspectiveCheckpointSnapshotSet(
         snapshot_set_id=(f"prospective-checkpoint-snapshot-set-{canonical_hash(core)}"),
         registration_id=registration.registration_id,
@@ -744,6 +844,9 @@ def reconcile_prospective_checkpoint_snapshot_set(
         authorized_snapshot_ids=authorized_snapshot_ids,
         complete=complete,
         capability_gaps=sorted_capability_gaps,
+        trigger_admission_id=(
+            None if trigger_admission is None else trigger_admission.admission_id
+        ),
         schema_version=snapshot_set_schema,
     )
 

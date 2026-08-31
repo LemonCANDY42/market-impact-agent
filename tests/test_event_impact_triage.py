@@ -589,6 +589,13 @@ def test_work_decision_keeps_native_authority_and_store_reopens_v2(
         route_admission_id=candidate_set.route_admission_id,
         at=DECIDED_AT,
     ) == tuple(sorted(candidate_set.version_ids))
+    assert store.route_epoch_contexts(
+        registration_id=candidate_set.registration_id,
+        checkpoint_key=candidate_set.checkpoint_key,
+        route_plan_id=candidate_set.route_plan_id,
+        route_admission_id=candidate_set.route_admission_id,
+        at=DECIDED_AT,
+    ) == ((candidate_set, proposal, decision, proposal.clusters[0]),)
 
     legacy_store = LegacySeedTriageDecisionStore(tmp_path / "legacy-work-state")
     assert legacy_store.persist_legacy(candidate_set, proposal, legacy) == legacy

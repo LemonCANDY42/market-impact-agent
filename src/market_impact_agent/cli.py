@@ -374,6 +374,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("cpi", "ppi"),
         default=[],
     )
+    nbs_accept_parser.add_argument(
+        "--capability",
+        choices=(
+            ObservationCapability.EVENT_REVELATION.value,
+            ObservationCapability.MACRO_VINTAGE.value,
+        ),
+        default=ObservationCapability.MACRO_VINTAGE.value,
+        help="Project the same official release as a macro input or checkpoint trigger",
+    )
     nbs_accept_parser.add_argument("--poll-interval-seconds", type=int, default=3600)
     nbs_accept_parser.add_argument("--maximum-gap-seconds", type=int, default=90000)
     nbs_accept_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
@@ -455,6 +464,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--rolling-window-timezone",
         default="Asia/Shanghai",
     )
+    collection_register_parser.add_argument(
+        "--rolling-datetime-format",
+        default="%Y-%m-%d %H:%M:%S",
+        help="Freeze the Provider's start_date/end_date format for a rolling window",
+    )
     collection_register_parser.add_argument("--window-start", required=True, type=_aware_timestamp)
     collection_register_parser.add_argument("--starts-at", required=True, type=_aware_timestamp)
     collection_register_parser.add_argument("--poll-interval-seconds", required=True, type=int)
@@ -463,6 +477,19 @@ def build_parser() -> argparse.ArgumentParser:
     collection_register_parser.add_argument("--maximum-jitter-seconds", type=int, default=0)
     collection_register_parser.add_argument("--provider-timeout-seconds", type=float, default=30.0)
     collection_register_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    collection_replace_parser = data_subparsers.add_parser(
+        "collection-replace",
+        help="Atomically retire one exact collection Job in favor of a registered successor",
+    )
+    collection_replace_parser.add_argument("--predecessor-job-id", required=True)
+    collection_replace_parser.add_argument("--successor-job-id", required=True)
+    collection_replace_parser.add_argument("--reason", required=True)
+    collection_replace_parser.add_argument("--replaced-at", type=_aware_timestamp)
+    collection_replace_parser.add_argument(
         "--state-root",
         type=Path,
         default=Path(".market-impact/data-inputs"),
@@ -1680,7 +1707,13 @@ def accept_nbs_macro_release_source(
     provider_timeout_seconds: float,
     http_client: NbsMacroReleaseHTTPClient | None = None,
     clock: Callable[[], datetime] | None = None,
+    capability: ObservationCapability = ObservationCapability.MACRO_VINTAGE,
 ) -> dict[str, object]:
+    if capability not in {
+        ObservationCapability.EVENT_REVELATION,
+        ObservationCapability.MACRO_VINTAGE,
+    }:
+        raise ValueError("NBS release acceptance supports macro vintage or event revelation")
     config = load_nbs_macro_release_source(source_config_path)
     if indicators and indicators != config.indicators:
         raise ValueError(
@@ -1724,7 +1757,7 @@ def accept_nbs_macro_release_source(
         required=True,
     )
     policy = ProspectiveCollectionPolicy.build(
-        capability=ObservationCapability.MACRO_VINTAGE,
+        capability=capability,
         sources=(source,),
         window_start=window_start.astimezone(UTC),
         parameters=parameters,
@@ -1732,7 +1765,7 @@ def accept_nbs_macro_release_source(
         maximum_gap_seconds=maximum_gap_seconds,
     )
     query = DataQuery.build(
-        capability=ObservationCapability.MACRO_VINTAGE,
+        capability=capability,
         pit_lane=DataPITLane.PROSPECTIVE,
         as_of=capture_cutoff,
         window_start=policy.window_start,
@@ -1778,7 +1811,7 @@ def accept_nbs_macro_release_source(
         provider_manifest_hash=manifest_hash,
         source_config_hash=config.artifact_hash,
         upstream_source=config.source_id,
-        capability=ObservationCapability.MACRO_VINTAGE,
+        capability=capability,
         rights_basis_url=config.rights_basis_url,
         rights_reviewed_at=config.rights_reviewed_at,
         permitted_use="private_research",
@@ -2026,9 +2059,15 @@ def register_prospective_collection_job(
     registered_at: datetime | None = None,
     rolling_lookback_seconds: int | None = None,
     rolling_window_timezone: str = "Asia/Shanghai",
+    rolling_datetime_format: str = "%Y-%m-%d %H:%M:%S",
 ) -> dict[str, object]:
+    report = load_source_route_acceptance_report(acceptance_report_path)
     source_config, provider_manifest, capability, source_id, source_config_hash = (
-        _prospective_collection_source_binding(adapter_kind, source_config_path)
+        _prospective_collection_source_binding(
+            adapter_kind,
+            source_config_path,
+            accepted_capability=report.declaration.capability,
+        )
     )
     source = DataSourceBinding(
         provider_id=provider_manifest.provider_id,
@@ -2051,10 +2090,10 @@ def register_prospective_collection_job(
             else ProspectiveRollingWindow(
                 lookback_seconds=rolling_lookback_seconds,
                 timezone=rolling_window_timezone,
+                datetime_format=rolling_datetime_format,
             )
         ),
     )
-    report = load_source_route_acceptance_report(acceptance_report_path)
     job = ProspectiveCollectionJob.build(
         adapter_kind=adapter_kind,
         collection_policy=policy,
@@ -2082,6 +2121,34 @@ def register_prospective_collection_job(
         "job": job.to_dict(),
         "collection_policy": policy.to_dict(),
         "health": runtime.health(job.job_id, now=registration_time).to_dict(),
+        "historical_pit_claim": False,
+        "evidence_promoted": False,
+        "execution_capability": False,
+    }
+
+
+def replace_prospective_collection_job(
+    *,
+    predecessor_job_id: str,
+    successor_job_id: str,
+    reason: str,
+    state_root: Path,
+    replaced_at: datetime | None = None,
+) -> dict[str, object]:
+    store = LocalDataSnapshotStore(state_root)
+    runtime = ProspectiveCollectionRuntime(store)
+    replacement = runtime.replace_job(
+        predecessor_job_id,
+        successor_job_id,
+        replaced_at=(None if replaced_at is None else replaced_at.astimezone(UTC)),
+        reason=reason,
+    )
+    replacement_time = replacement.replaced_at
+    return {
+        "replaced": True,
+        "replacement": replacement.to_dict(),
+        "predecessor_health": runtime.health(predecessor_job_id, now=replacement_time).to_dict(),
+        "successor_health": runtime.health(successor_job_id, now=replacement_time).to_dict(),
         "historical_pit_claim": False,
         "evidence_promoted": False,
         "execution_capability": False,
@@ -2261,6 +2328,8 @@ def qualify_prospective_collection_tracer_jobs(
 def _prospective_collection_source_binding(
     adapter_kind: ProspectiveCollectionAdapterKind,
     source_config_path: Path,
+    *,
+    accepted_capability: ObservationCapability,
 ) -> tuple[
     dict[str, object],
     ObservationProviderManifest,
@@ -2269,6 +2338,8 @@ def _prospective_collection_source_binding(
     str,
 ]:
     if adapter_kind is ProspectiveCollectionAdapterKind.CSRC_NEWS:
+        if accepted_capability is not ObservationCapability.EVENT_REVELATION:
+            raise ValueError("CSRC collection requires an event revelation acceptance")
         config = load_csrc_news_source(source_config_path)
         provider = CsrcNewsProvider((config,))
         return (
@@ -2279,17 +2350,24 @@ def _prospective_collection_source_binding(
             config.artifact_hash,
         )
     if adapter_kind is ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE:
+        if accepted_capability not in {
+            ObservationCapability.EVENT_REVELATION,
+            ObservationCapability.MACRO_VINTAGE,
+        }:
+            raise ValueError("NBS collection requires a macro or event acceptance")
         config = load_nbs_macro_release_source(source_config_path)
         provider = NbsMacroReleaseProvider((config,))
         return (
             config.to_dict(),
             provider.manifest,
-            ObservationCapability.MACRO_VINTAGE,
+            accepted_capability,
             config.source_id,
             config.artifact_hash,
         )
     if adapter_kind is ProspectiveCollectionAdapterKind.TUSHARE_OBSERVATION:
         config = load_tushare_observation_source(source_config_path)
+        if accepted_capability is not config.capability:
+            raise ValueError("Tushare collection acceptance capability does not match config")
         provider = TushareObservationProvider("manifest-construction-only", (config,))
         return (
             config.to_dict(),
@@ -3177,6 +3255,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 maximum_gap_seconds=args.maximum_gap_seconds,
                 state_root=args.state_root,
                 provider_timeout_seconds=args.provider_timeout_seconds,
+                capability=ObservationCapability(args.capability),
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
@@ -3279,10 +3358,28 @@ def main(argv: Sequence[str] | None = None) -> int:
                 state_root=args.state_root,
                 rolling_lookback_seconds=args.rolling_lookback_seconds,
                 rolling_window_timezone=args.rolling_window_timezone,
+                rolling_datetime_format=args.rolling_datetime_format,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
                 json.dumps({"registered": False, "error": f"{type(exc).__name__}: {exc}"}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "data" and args.data_command == "collection-replace":
+        try:
+            result = replace_prospective_collection_job(
+                predecessor_job_id=args.predecessor_job_id,
+                successor_job_id=args.successor_job_id,
+                reason=args.reason,
+                state_root=args.state_root,
+                replaced_at=args.replaced_at,
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(
+                json.dumps({"replaced": False, "error": f"{type(exc).__name__}: {exc}"}),
                 file=sys.stderr,
             )
             return 1

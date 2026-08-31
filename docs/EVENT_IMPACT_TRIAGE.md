@@ -29,7 +29,10 @@ actual-receipt Observation Versions
            -> EventAssessment when a plausible transmission path exists
            -> Attention Watch when a material fact is unresolved
            -> archive when the registered rule is not met and no further route is justified
-  -> only the selected checkpoint candidate may continue to PDI-30 and Query Gate
+  -> Trigger Admission
+       -> checkpoint_eligible: exact selected Triage Decision cluster
+       -> material_event: canonical EventAssessment projection + passing Materiality Gate
+  -> only the exact Trigger Admission may continue to PDI-30 and Query Gate
 ```
 
 Checkpoint eligibility must remain independent of current holdings. Otherwise the same fact could
@@ -40,8 +43,9 @@ priority layer, where they should receive higher urgency than searching for new 
 
 The impact layer may use only content-bound inputs available at its cutoff:
 
-- a Position Snapshot containing instrument, side, quantity, account/environment pseudonym,
-  observed-at time, and Provider/reconciliation identity without broker credentials;
+- the currently implemented minimum Position Snapshot containing only target, venue, instrument
+  class and `as_of`, sufficient to detect a held-target intersection but not portfolio size, side,
+  concentration or account state;
 - prospective event facts and revisions from the Candidate Set;
 - market, universe, tradability, expectation, macro and positioning Decision Inputs when present;
 - a Historical Analogy Pack whose cases retain `strict`, `modeled_pit`, or `outcome_opened_review`
@@ -52,6 +56,32 @@ The impact layer may use only content-bound inputs available at its cutoff:
 Position-aware analysis may change attention priority, invalidation conditions, risk-reduction
 recommendations, or the need for a Watch. It cannot change source facts, historical authority,
 checkpoint eligibility, Trading Mandate, approval, or execution state.
+
+## Formal impact-to-decision bridge
+
+Triage and decision-input freezing now meet through one Harness-owned `Prospective Trigger
+Admission`; there is no operator/Codex shortcut. A policy, earnings, or macro checkpoint-rule
+selection uses the `checkpoint_eligible` kind. A financially material event uses `material_event`
+only when the frozen checkpoint itself is the registered material-event mechanism and Triage routed
+the cluster to `EventAssessment`; a completed-assessment authority must then produce the canonical
+engine-neutral projection, and the registration-bound deterministic Materiality Gate must admit at
+least one cited target/path/horizon combination. Material candidates preserve ready-time order
+across all completed Triage Decisions in the same admitted route epoch: a later passing cluster must
+bind every earlier routed cluster's non-admitted result. The durable authority also blocks an earlier
+unresolved review or direct eligible candidate from another batch. A non-material checkpoint cannot
+reuse this route, and a material-event checkpoint cannot use the direct-selection shortcut.
+
+The prospective EventAssessment artifact is a binding/projection, not a second causal authority. It
+retains the canonical EventAssessment artifact hash, exact Triage Decision/cluster, cited
+Observation Versions, transmission paths, counterevidence, invalidation conditions, and optional
+Position Snapshot/Historical Analogy Pack. Missing optional context is recorded as degradation.
+The Materiality Gate verifies scope and evidence reconciliation; it does not infer alpha or declare
+tradability. Snapshot Set v5 and Query Gate v5 both require the exact Trigger Admission, and a
+material-event Query Gate rejects target inputs outside the admitted Materiality result.
+The durable Trigger Admission reopens the authoritative Triage Candidate Set/Proposal/Decision, the
+ready-time-ordered history for the entire route epoch and the completed EventAssessment authority.
+Snapshot Set and Query Gate must in turn reopen that durable admission; self-consistent caller-created
+IDs are insufficient.
 
 ## Model adapters and bounded specialist Agents
 
@@ -305,8 +335,9 @@ contracts feed two separate authority lanes:
 
 - **Historical/backtest:** strict PIT admits only content and authority known by cutoff. Late-found
   history belongs to Modeled-PIT or outcome-opened review and is excluded from strategy promotion.
-- **Prospective/paper/live:** actual receipt -> triage -> Snapshot/Query Gate -> Judgment -> Decision
-  Admission. Missing optional information stays visible and does not globally block experiments.
+- **Prospective/paper/live:** actual receipt -> triage -> Trigger Admission -> Snapshot/Query Gate ->
+  Judgment -> Decision Admission. Missing optional information stays visible and does not globally
+  block experiments.
 
 Prospective process diagnostics and `manual_each` mock paper can advance without repairing all old
 PIT gaps. Strategy-labeled paper/live promotion still requires registered multi-case calibration,
@@ -322,9 +353,14 @@ Implemented contract evidence:
 - exact partition of every candidate version into cited event clusters;
 - checkpoint-relative `eligible`, `ineligible`, and `needs_review` outputs with separate impact
   routes and an explicit prohibition on zero-impact claims;
-- first-eligible ordering that blocks on an earlier unresolved candidate;
+- first-eligible route-epoch ordering across completed Decisions that blocks on an earlier unresolved
+  candidate;
 - authoritative coordinator/specialist run-bundle and Usage Ledger binding before a Harness
   Decision;
+- typed Position Snapshot and evidence-lane-preserving Historical Analogy Pack contracts plus
+  durable prospective EventAssessment/Materiality/Trigger Admission storage and replay;
+- Snapshot Set/Query Gate identity binding for either an exact checkpoint-eligible selection or a
+  formally material EventAssessment path, without granting Judgment or execution authority;
 - content identities and JSON Schemas for Candidate Set, Proposal, Decision, Execution Plan,
   Specialist Artifact, Label Set, Comparison Registration and Comparison Report;
 - a no-tool Model Provider runtime for the coordinator-only baseline and bounded three-specialist
@@ -374,8 +410,8 @@ Implemented contract evidence:
 
 Still required for real acceptance:
 
-- typed, secret-free Position Snapshot and evidence-lane-preserving Historical Analogy Pack payload
-  bindings before their optional specialists can be enabled;
+- optional portfolio-impact and historical-analogy specialist prompt/runtime bindings; the current
+  Position Snapshot is intentionally identity-only and cannot quantify exposure;
 - a complete labelled Work comparison: the original 121-version monolithic and v2 Work attempts
   remain terminal negative evidence, while the later nine-version v4 treatment has no sealed labels
   or baseline arm and therefore cannot establish classifier quality;

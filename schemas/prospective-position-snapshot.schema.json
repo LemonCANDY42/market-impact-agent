@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/prospective-position-snapshot.schema.json",
+  "title": "Market Impact Prospective Position Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "as_of", "holdings"],
+  "properties": {
+    "schema_version": {"const": "market-impact.prospective-position-snapshot.v1"},
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^prospective-position-snapshot-[0-9a-f]{64}$"
+    },
+    "as_of": {"type": "string", "format": "date-time"},
+    "holdings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target_id", "venue", "instrument_class"],
+        "properties": {
+          "target_id": {"type": "string", "minLength": 1},
+          "venue": {"type": "string", "minLength": 1},
+          "instrument_class": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

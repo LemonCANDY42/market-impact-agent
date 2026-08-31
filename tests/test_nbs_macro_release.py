@@ -10,7 +10,10 @@ from typing import cast
 import pytest
 
 from market_impact_agent.agent_contracts import canonical_hash
-from market_impact_agent.cli import accept_nbs_macro_release_source
+from market_impact_agent.cli import (
+    accept_nbs_macro_release_source,
+    register_prospective_collection_job,
+)
 from market_impact_agent.data_inputs import (
     DataFetchStatus,
     DataInputHarness,
@@ -267,6 +270,109 @@ def test_nbs_provider_captures_original_releases_and_replays_identically(
     replayed = asyncio.run(replay_harness.execute(query, mode=DataQueryMode.FETCH_IF_MISSING))
 
     assert replayed == snapshot
+
+
+def test_nbs_release_can_be_projected_as_an_actual_receipt_event_trigger(
+    tmp_path: Path,
+) -> None:
+    config = load_nbs_macro_release_source(CONFIG_PATH)
+    provider = NbsMacroReleaseProvider(
+        (config,),
+        http_client=FakeHTTPClient(_responses()),
+        clock=lambda: RETRIEVED,
+    )
+    macro_query, source = _query(provider)
+    event_query = DataQuery.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=macro_query.as_of,
+        window_start=macro_query.window_start,
+        source_policy_id="nbs-event-trigger-fixture",
+        parameters=macro_query.parameters,
+        sources=(source,),
+        minimum_data_sources=1,
+    )
+    capture = asyncio.run(
+        provider.collect(window_start=WINDOW_START, parameters=event_query.parameters)
+    )[0]
+    store = LocalDataSnapshotStore(tmp_path / "event-trigger")
+    harness = DataInputHarness(store)
+    harness.register(provider.replay((capture,)))
+
+    snapshot = asyncio.run(harness.execute(event_query, mode=DataQueryMode.FETCH_IF_MISSING))
+
+    assert ObservationCapability.EVENT_REVELATION in provider.manifest.verified_capabilities
+    assert snapshot.coverage_complete is True
+    assert {item.capability for item in snapshot.observations} == {
+        ObservationCapability.EVENT_REVELATION
+    }
+    assert {item.normalized_payload["indicator"] for item in snapshot.observations} == {
+        "cpi",
+        "ppi",
+    }
+
+
+def test_nbs_acceptance_can_freeze_an_event_trigger_route(tmp_path: Path) -> None:
+    result = accept_nbs_macro_release_source(
+        source_config_path=CONFIG_PATH,
+        window_start=WINDOW_START,
+        indicators=("cpi", "ppi"),
+        poll_interval_seconds=3600,
+        maximum_gap_seconds=90000,
+        state_root=tmp_path / "event-acceptance",
+        provider_timeout_seconds=5.0,
+        http_client=FakeHTTPClient(_responses()),
+        clock=lambda: RETRIEVED,
+        capability=ObservationCapability.EVENT_REVELATION,
+    )
+    report = load_source_route_acceptance_report(
+        Path(cast(str, result["source_route_acceptance_report_path"]))
+    )
+    snapshot = LocalDataSnapshotStore(tmp_path / "event-acceptance").get(
+        cast(str, result["data_snapshot_id"])
+    )
+
+    assert report.declaration.capability is ObservationCapability.EVENT_REVELATION
+    assert {item.capability for item in snapshot.observations} == {
+        ObservationCapability.EVENT_REVELATION
+    }
+
+
+def test_nbs_event_acceptance_can_register_a_continuous_trigger_job(
+    tmp_path: Path,
+) -> None:
+    state_root = tmp_path / "event-runtime"
+    acceptance = accept_nbs_macro_release_source(
+        source_config_path=CONFIG_PATH,
+        window_start=WINDOW_START,
+        indicators=("cpi", "ppi"),
+        poll_interval_seconds=3600,
+        maximum_gap_seconds=90000,
+        state_root=state_root,
+        provider_timeout_seconds=5.0,
+        http_client=FakeHTTPClient(_responses()),
+        clock=lambda: RETRIEVED,
+        capability=ObservationCapability.EVENT_REVELATION,
+    )
+
+    result = register_prospective_collection_job(
+        adapter_kind=ProspectiveCollectionAdapterKind.NBS_MACRO_RELEASE,
+        source_config_path=CONFIG_PATH,
+        acceptance_report_path=Path(cast(str, acceptance["source_route_acceptance_report_path"])),
+        parameters={"indicators": ["cpi", "ppi"]},
+        window_start=WINDOW_START,
+        starts_at=RETRIEVED + timedelta(hours=1),
+        poll_interval_seconds=3600,
+        maximum_gap_seconds=90000,
+        misfire_grace_seconds=600,
+        maximum_jitter_seconds=60,
+        provider_timeout_seconds=5.0,
+        state_root=state_root,
+        registered_at=RETRIEVED,
+    )
+
+    policy = cast(dict[str, object], result["collection_policy"])
+    assert policy["capability"] == ObservationCapability.EVENT_REVELATION.value
 
 
 def test_nbs_provider_returns_completed_no_data_with_the_feed_payload() -> None:

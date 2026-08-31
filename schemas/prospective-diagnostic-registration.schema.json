@@ -23,7 +23,8 @@
       "enum": [
         "market-impact.prospective-diagnostic-registration.v1",
         "market-impact.prospective-diagnostic-registration.v2",
-        "market-impact.prospective-diagnostic-registration.v3"
+        "market-impact.prospective-diagnostic-registration.v3",
+        "market-impact.prospective-diagnostic-registration.v4"
       ]
     },
     "registration_id": {
@@ -34,7 +35,7 @@
     "checkpoints": {
       "type": "array",
       "minItems": 2,
-      "maxItems": 3,
+      "maxItems": 4,
       "items": {"$ref": "#/$defs/checkpoint"}
     },
     "paired_arms": {
@@ -58,6 +59,20 @@
     "claim_scope": {"const": "process_diagnostic_only_no_alpha_or_execution_claim"}
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "enum": [
+              "market-impact.prospective-diagnostic-registration.v1",
+              "market-impact.prospective-diagnostic-registration.v2",
+              "market-impact.prospective-diagnostic-registration.v3"
+            ]
+          }
+        }
+      },
+      "then": {"properties": {"checkpoints": {"maxItems": 3}}}
+    },
     {
       "if": {
         "properties": {
@@ -142,6 +157,36 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.prospective-diagnostic-registration.v4"
+          }
+        }
+      },
+      "then": {
+        "required": ["minimum_replicates_per_arm", "replicate_schedule_rule"],
+        "properties": {
+          "model_profile_id": {"pattern": "-cpa-v1$"},
+          "checkpoints": {
+            "items": {
+              "properties": {
+                "capability_slots": {
+                  "contains": {
+                    "properties": {
+                      "capability": {"const": "event_revelation"},
+                      "applicability": {"const": "required"}
+                    },
+                    "required": ["capability", "applicability"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -172,7 +217,12 @@
         "checkpoint_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
         "name": {"type": "string", "minLength": 1},
         "mechanism": {
-          "enum": ["policy_regulation", "earnings_expectation_delta", "macro_cycle"]
+          "enum": [
+            "policy_regulation",
+            "earnings_expectation_delta",
+            "macro_cycle",
+            "material_event"
+          ]
         },
         "selection_rule": {"const": "first_eligible_after_registration"},
         "eligibility_rule": {"type": "string", "minLength": 1},

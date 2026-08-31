@@ -30,6 +30,9 @@ from market_impact_agent.tushare_observation import (
 )
 
 PROSPECTIVE_COLLECTION_JOB_SCHEMA = "market-impact.prospective-collection-job.v1"
+PROSPECTIVE_COLLECTION_JOB_REPLACEMENT_SCHEMA = (
+    "market-impact.prospective-collection-job-replacement.v1"
+)
 PROSPECTIVE_COLLECTION_USAGE_RECORD_SCHEMA_V1 = (
     "market-impact.prospective-collection-usage-record.v1"
 )
@@ -169,6 +172,75 @@ class ProspectiveCollectionJob:
             misfire_grace_seconds=misfire_grace_seconds,
             maximum_jitter_seconds=maximum_jitter_seconds,
             provider_timeout_seconds=provider_timeout_seconds,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveCollectionJobReplacement:
+    replacement_id: str
+    predecessor_job_id: str
+    successor_job_id: str
+    replaced_at: datetime
+    reason: str
+    execution_capability: bool = False
+    schema_version: str = PROSPECTIVE_COLLECTION_JOB_REPLACEMENT_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != PROSPECTIVE_COLLECTION_JOB_REPLACEMENT_SCHEMA:
+            raise ValueError("unsupported prospective collection Job Replacement schema")
+        _trimmed(self.predecessor_job_id, "predecessor Job ID")
+        _trimmed(self.successor_job_id, "successor Job ID")
+        if self.predecessor_job_id == self.successor_job_id:
+            raise ValueError("prospective collection Job cannot replace itself")
+        _strict_utc(self.replaced_at, "prospective collection Job replaced_at")
+        _trimmed(self.reason, "prospective collection Job replacement reason")
+        if len(self.reason) > 256:
+            raise ValueError("prospective collection Job replacement reason is too long")
+        if self.execution_capability:
+            raise ValueError("prospective collection Job Replacement cannot grant execution")
+        if self.replacement_id != self.expected_replacement_id:
+            raise ValueError("prospective collection Job Replacement ID does not match content")
+
+    @property
+    def expected_replacement_id(self) -> str:
+        return f"prospective-collection-job-replacement-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "predecessor_job_id": self.predecessor_job_id,
+            "successor_job_id": self.successor_job_id,
+            "replaced_at": _timestamp(self.replaced_at),
+            "reason": self.reason,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "replacement_id": self.replacement_id}
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        predecessor_job_id: str,
+        successor_job_id: str,
+        replaced_at: datetime,
+        reason: str,
+    ) -> ProspectiveCollectionJobReplacement:
+        core = {
+            "schema_version": PROSPECTIVE_COLLECTION_JOB_REPLACEMENT_SCHEMA,
+            "predecessor_job_id": predecessor_job_id,
+            "successor_job_id": successor_job_id,
+            "replaced_at": _timestamp(replaced_at),
+            "reason": reason,
+            "execution_capability": False,
+        }
+        return cls(
+            replacement_id=(f"prospective-collection-job-replacement-{canonical_hash(core)}"),
+            predecessor_job_id=predecessor_job_id,
+            successor_job_id=successor_job_id,
+            replaced_at=replaced_at,
+            reason=reason,
         )
 
 
@@ -459,6 +531,16 @@ class ProspectiveCollectionRuntime:
                 );
                 CREATE INDEX IF NOT EXISTS prospective_collection_jobs_due
                     ON prospective_collection_jobs(status, next_due_at, job_id);
+                CREATE TABLE IF NOT EXISTS prospective_collection_job_replacements (
+                    replacement_id TEXT PRIMARY KEY,
+                    predecessor_job_id TEXT NOT NULL UNIQUE
+                        REFERENCES prospective_collection_jobs(job_id),
+                    successor_job_id TEXT NOT NULL UNIQUE
+                        REFERENCES prospective_collection_jobs(job_id),
+                    replaced_at TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    artifact_hash TEXT NOT NULL UNIQUE
+                );
                 CREATE TABLE IF NOT EXISTS prospective_collection_opportunities (
                     opportunity_id TEXT PRIMARY KEY,
                     job_id TEXT NOT NULL REFERENCES prospective_collection_jobs(job_id),
@@ -540,6 +622,134 @@ class ProspectiveCollectionRuntime:
                     _timestamp(job.starts_at),
                 ),
             )
+
+    def replace_job(
+        self,
+        predecessor_job_id: str,
+        successor_job_id: str,
+        *,
+        replaced_at: datetime | None = None,
+        reason: str,
+    ) -> ProspectiveCollectionJobReplacement:
+        """Atomically retire one exact Job in favor of one registered successor."""
+
+        caller_supplied_time = replaced_at is not None
+        replacement_time = self._clock() if replaced_at is None else replaced_at
+        replacement = ProspectiveCollectionJobReplacement.build(
+            predecessor_job_id=predecessor_job_id,
+            successor_job_id=successor_job_id,
+            replaced_at=replacement_time,
+            reason=reason,
+        )
+        predecessor = self.job(predecessor_job_id)
+        successor = self.job(successor_job_id)
+        if (
+            predecessor.adapter_kind is not successor.adapter_kind
+            or predecessor.source_acceptance_report_id != successor.source_acceptance_report_id
+            or predecessor.source_acceptance_report_hash != successor.source_acceptance_report_hash
+            or predecessor.source_config_hash != successor.source_config_hash
+        ):
+            raise ValueError(
+                "prospective collection replacement requires the same accepted source route"
+            )
+        artifact = self.store.artifacts.put_json(replacement.to_dict())
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT artifact_hash FROM prospective_collection_job_replacements
+                WHERE predecessor_job_id = ?
+                """,
+                (predecessor_job_id,),
+            ).fetchone()
+            if existing is not None:
+                existing_replacement = prospective_collection_job_replacement_from_dict(
+                    self.store.artifacts.read_json(cast(str, existing["artifact_hash"]))
+                )
+                same_logical_transition = (
+                    existing_replacement.predecessor_job_id == predecessor_job_id
+                    and existing_replacement.successor_job_id == successor_job_id
+                    and existing_replacement.reason == reason
+                )
+                if not same_logical_transition or (
+                    caller_supplied_time and existing_replacement != replacement
+                ):
+                    raise ValueError("prospective collection predecessor was already replaced")
+                return existing_replacement
+            predecessor_row = connection.execute(
+                "SELECT * FROM prospective_collection_jobs WHERE job_id = ?",
+                (predecessor_job_id,),
+            ).fetchone()
+            successor_row = connection.execute(
+                "SELECT * FROM prospective_collection_jobs WHERE job_id = ?",
+                (successor_job_id,),
+            ).fetchone()
+            if predecessor_row is None or successor_row is None:
+                raise KeyError("prospective collection replacement Job is not registered")
+            if cast(str, predecessor_row["status"]) != "active":
+                raise ValueError("prospective collection predecessor is not active")
+            if cast(str, successor_row["status"]) != "active":
+                raise ValueError("prospective collection successor is not active")
+            if cast(str | None, predecessor_row["lease_token"]) is not None:
+                raise ValueError("prospective collection predecessor is currently in progress")
+            terminal_outcomes = tuple(sorted(_TERMINAL_OUTCOMES))
+            unsettled = connection.execute(
+                """
+                SELECT 1 FROM prospective_collection_opportunities
+                WHERE job_id = ? AND outcome NOT IN (?, ?, ?, ?, ?, ?) LIMIT 1
+                """,
+                (predecessor_job_id, *terminal_outcomes),
+            ).fetchone()
+            if unsettled is not None:
+                raise ValueError(
+                    "prospective collection replacement cannot abandon an unsettled actual receipt"
+                )
+            predecessor_registered_at = _datetime(
+                cast(str, predecessor_row["registered_at"]), "predecessor registered_at"
+            )
+            successor_registered_at = _datetime(
+                cast(str, successor_row["registered_at"]), "successor registered_at"
+            )
+            if replacement_time < max(predecessor_registered_at, successor_registered_at):
+                raise ValueError("prospective collection replacement predates Job registration")
+            if (
+                connection.execute(
+                    """
+                SELECT 1 FROM prospective_collection_job_replacements
+                WHERE successor_job_id = ?
+                """,
+                    (successor_job_id,),
+                ).fetchone()
+                is not None
+            ):
+                raise ValueError("prospective collection successor already replaces another Job")
+            connection.execute(
+                """
+                INSERT INTO prospective_collection_job_replacements(
+                    replacement_id, predecessor_job_id, successor_job_id,
+                    replaced_at, reason, artifact_hash
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    replacement.replacement_id,
+                    predecessor_job_id,
+                    successor_job_id,
+                    _timestamp(replacement_time),
+                    reason,
+                    artifact.content_hash,
+                ),
+            )
+            updated = connection.execute(
+                """
+                UPDATE prospective_collection_jobs
+                SET status = 'replaced', updated_at = ?, backoff_until = NULL
+                WHERE job_id = ? AND status = 'active' AND lease_token IS NULL
+                """,
+                (_timestamp(replacement_time), predecessor_job_id),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("prospective collection replacement lost its atomic gate")
+        return replacement
 
     def job(self, job_id: str) -> ProspectiveCollectionJob:
         with self._connect() as connection:
@@ -1607,6 +1817,40 @@ def prospective_collection_job_from_dict(value: object) -> ProspectiveCollection
     if job.to_dict() != payload:
         raise ValueError("prospective collection job is not canonical")
     return job
+
+
+def prospective_collection_job_replacement_from_dict(
+    value: object,
+) -> ProspectiveCollectionJobReplacement:
+    if not isinstance(value, dict):
+        raise ValueError("prospective collection Job Replacement must be an object")
+    raw = cast(dict[object, object], value)
+    if not all(isinstance(key, str) for key in raw):
+        raise ValueError("prospective collection Job Replacement must be an object")
+    payload = cast(dict[str, object], raw)
+    expected = {
+        "schema_version",
+        "replacement_id",
+        "predecessor_job_id",
+        "successor_job_id",
+        "replaced_at",
+        "reason",
+        "execution_capability",
+    }
+    if set(payload) != expected:
+        raise ValueError("prospective collection Job Replacement fields are not closed")
+    replacement = ProspectiveCollectionJobReplacement(
+        schema_version=_string(payload, "schema_version"),
+        replacement_id=_string(payload, "replacement_id"),
+        predecessor_job_id=_string(payload, "predecessor_job_id"),
+        successor_job_id=_string(payload, "successor_job_id"),
+        replaced_at=_datetime(_string(payload, "replaced_at"), "replaced_at"),
+        reason=_string(payload, "reason"),
+        execution_capability=_boolean(payload, "execution_capability"),
+    )
+    if replacement.to_dict() != payload:
+        raise ValueError("prospective collection Job Replacement is not canonical")
+    return replacement
 
 
 def collection_usage_record_from_dict(value: object) -> CollectionUsageRecord:

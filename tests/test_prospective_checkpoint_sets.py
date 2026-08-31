@@ -49,9 +49,11 @@ from market_impact_agent.prospective_checkpoint_sets import (
 from market_impact_agent.prospective_data import (
     ProspectiveCollectionPolicy,
     ProspectiveDataJournal,
+    prospective_observation_version_id,
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     DiagnosticCapabilitySlot,
@@ -65,6 +67,11 @@ from market_impact_agent.prospective_execution import (
     ProspectiveExecutionPlan,
 )
 from market_impact_agent.prospective_query_gate import evaluate_prospective_query_gate
+from market_impact_agent.prospective_trigger_admission import (
+    PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA,
+    ProspectiveTriggerAdmission,
+    TriggerAdmissionKind,
+)
 from market_impact_agent.research import EvidenceTier
 from market_impact_agent.source_acceptance import (
     SourceAcceptanceGate,
@@ -250,6 +257,82 @@ def _v2_partial_registration() -> ProspectiveDiagnosticRegistration:
     )
 
 
+def _v4_partial_registration() -> ProspectiveDiagnosticRegistration:
+    v2 = _v2_partial_registration()
+    return ProspectiveDiagnosticRegistration.build(
+        registered_at=v2.registered_at,
+        checkpoints=v2.checkpoints,
+        paired_arms=v2.paired_arms,
+        replicates_per_arm=v2.replicates_per_arm,
+        model_profile_id="cliproxyapi-luna-xhigh-cpa-v1",
+        aggregate_model_cost_limit_usd=v2.aggregate_model_cost_limit_usd,
+        outcome_opening_rule=v2.outcome_opening_rule,
+        stop_conditions=v2.stop_conditions,
+        go_conditions=v2.go_conditions,
+        claim_scope=v2.claim_scope,
+        minimum_replicates_per_arm=2,
+        replicate_schedule_rule=(
+            "run_two_paired_replicates_then_third_pair_if_either_arm_disagrees"
+        ),
+        schema_version=PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    )
+
+
+def _trigger_admission(
+    registration: ProspectiveDiagnosticRegistration,
+    frozen: DataSnapshot,
+) -> ProspectiveTriggerAdmission:
+    versions = tuple(
+        sorted(prospective_observation_version_id(item) for item in frozen.observations)
+    )
+    core = {
+        "schema_version": PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA,
+        "kind": TriggerAdmissionKind.CHECKPOINT_ELIGIBLE.value,
+        "registration_id": registration.registration_id,
+        "checkpoint_key": "policy-event-v2",
+        "candidate_set_id": "event-impact-triage-candidate-set-" + "1" * 64,
+        "proposal_id": "event-impact-triage-proposal-" + "2" * 64,
+        "triage_decision_id": "event-impact-triage-decision-" + "3" * 64,
+        "cluster_id": "event-impact-triage-cluster-" + "4" * 64,
+        "observation_version_ids": list(versions),
+        "event_assessment_id": None,
+        "materiality_gate_result_id": None,
+        "preceding_materiality_gate_result_ids": [],
+        "admitted_target_ids": [],
+        "held_target_ids": [],
+        "admitted_at": RECEIVED.isoformat().replace("+00:00", "Z"),
+        "historical_pit_claim": False,
+        "judgment_model_calls_authorized": False,
+        "execution_capability": False,
+    }
+    return ProspectiveTriggerAdmission(
+        admission_id=f"prospective-trigger-admission-{canonical_hash(core)}",
+        kind=TriggerAdmissionKind.CHECKPOINT_ELIGIBLE,
+        registration_id=registration.registration_id,
+        checkpoint_key="policy-event-v2",
+        candidate_set_id=cast(str, core["candidate_set_id"]),
+        proposal_id=cast(str, core["proposal_id"]),
+        triage_decision_id=cast(str, core["triage_decision_id"]),
+        cluster_id=cast(str, core["cluster_id"]),
+        observation_version_ids=versions,
+        event_assessment_id=None,
+        materiality_gate_result_id=None,
+        preceding_materiality_gate_result_ids=(),
+        admitted_target_ids=(),
+        held_target_ids=(),
+        admitted_at=RECEIVED,
+    )
+
+
+class _TriggerAuthority:
+    def __init__(self, admission: ProspectiveTriggerAdmission) -> None:
+        self.admission = admission
+
+    def assert_authoritative(self, admission: ProspectiveTriggerAdmission) -> None:
+        if admission != self.admission:
+            raise ValueError("Trigger Admission differs from durable authority")
+
+
 def _evidence_pack() -> EvidencePack:
     return EvidencePack.build(
         event_id="policy-event-v2",
@@ -331,9 +414,16 @@ def _execution_binding() -> AgentExecutionBinding:
     )
 
 
-def _execution_plan() -> ProspectiveExecutionPlan:
-    registration = _v2_partial_registration()
-    profile = load_model_provider_profile(Path("examples/providers/cliproxyapi-luna-xhigh-v1.json"))
+def _execution_plan(
+    registration: ProspectiveDiagnosticRegistration | None = None,
+) -> ProspectiveExecutionPlan:
+    selected_registration = _v2_partial_registration() if registration is None else registration
+    profile_path = (
+        "examples/providers/cliproxyapi-luna-xhigh-cpa-v1.json"
+        if selected_registration.model_profile_id.endswith("-cpa-v1")
+        else "examples/providers/cliproxyapi-luna-xhigh-v1.json"
+    )
+    profile = load_model_provider_profile(Path(profile_path))
     control = _execution_binding()
     treatment = AgentExecutionBinding(
         runtime_ref=control.runtime_ref,
@@ -347,12 +437,16 @@ def _execution_plan() -> ProspectiveExecutionPlan:
         compactor_id=control.compactor_id,
     )
     return ProspectiveExecutionPlan.build(
-        registration=registration,
-        model_profile_alias=registration.model_profile_id,
+        registration=selected_registration,
+        model_profile_alias=selected_registration.model_profile_id,
         model_profile=profile,
         arm_bindings=(
-            PairedArmExecutionBinding(arm=registration.paired_arms[0], execution_binding=control),
-            PairedArmExecutionBinding(arm=registration.paired_arms[1], execution_binding=treatment),
+            PairedArmExecutionBinding(
+                arm=selected_registration.paired_arms[0], execution_binding=control
+            ),
+            PairedArmExecutionBinding(
+                arm=selected_registration.paired_arms[1], execution_binding=treatment
+            ),
         ),
     )
 
@@ -1405,6 +1499,149 @@ def test_partial_v2_snapshot_set_keeps_optional_gaps_without_blocking_model_run(
         )
         == ()
     )
+
+
+def test_v4_query_gate_requires_the_exact_trigger_admission(
+    tmp_path: Path,
+) -> None:
+    store, journal, policy, frozen, report = _fixture(tmp_path)
+    registration = _v4_partial_registration()
+    trigger_admission = _trigger_admission(registration, frozen)
+    trigger_authority = _TriggerAuthority(trigger_admission)
+    with pytest.raises(ValueError, match="Trigger Admission authority"):
+        reconcile_prospective_checkpoint_snapshot_set(
+            registration=registration,
+            checkpoint_key="policy-event-v2",
+            barrier_at=BARRIER,
+            selections=(),
+            store=store,
+            journal=journal,
+            policies={policy.policy_id: policy},
+            acceptance_reports={report.report_id: report},
+            reconciled_at=BARRIER + timedelta(minutes=1),
+            allow_partial=True,
+            trigger_admission=trigger_admission,
+        )
+    snapshot_set = reconcile_prospective_checkpoint_snapshot_set(
+        registration=registration,
+        checkpoint_key="policy-event-v2",
+        barrier_at=BARRIER,
+        selections=(
+            CheckpointRouteSelection(
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="official_event",
+                snapshot_id=frozen.snapshot_id,
+                collection_policy_id=policy.policy_id,
+                source_acceptance_report_id=report.report_id,
+            ),
+        ),
+        store=store,
+        journal=journal,
+        policies={policy.policy_id: policy},
+        acceptance_reports={report.report_id: report},
+        reconciled_at=BARRIER + timedelta(minutes=1),
+        allow_partial=True,
+        trigger_admission=trigger_admission,
+        trigger_admission_authority=trigger_authority,
+    )
+    evidence_pack, decision_input = _lineaged_evidence_pack(snapshot_set, frozen)
+
+    gate = evaluate_prospective_query_gate(
+        registration=registration,
+        snapshot_set=snapshot_set,
+        trigger_admission=trigger_admission,
+        trigger_admission_authority=trigger_authority,
+        evidence_pack=evidence_pack,
+        decision_inputs=(decision_input,),
+        snapshot_store=store,
+        execution_plan=_execution_plan(registration),
+        model_profile_id=registration.model_profile_id,
+        model_cost_limit_usd=Decimal("5.00"),
+        evaluated_at=BARRIER + timedelta(minutes=2),
+    )
+
+    assert snapshot_set.trigger_admission_id == trigger_admission.admission_id
+    assert gate.trigger_admission_id == trigger_admission.admission_id
+    assert gate.model_profile_id == "cliproxyapi-luna-xhigh-cpa-v1"
+    assert gate.model_run_eligible is True
+
+    unrelated = _trigger_admission(registration, frozen)
+    unrelated_core = unrelated.core_dict()
+    unrelated_core["cluster_id"] = "event-impact-triage-cluster-" + "9" * 64
+    unrelated = replace(
+        unrelated,
+        admission_id=f"prospective-trigger-admission-{canonical_hash(unrelated_core)}",
+        cluster_id=cast(str, unrelated_core["cluster_id"]),
+    )
+    with pytest.raises(ValueError, match="Trigger Admission"):
+        evaluate_prospective_query_gate(
+            registration=registration,
+            snapshot_set=snapshot_set,
+            trigger_admission=unrelated,
+            trigger_admission_authority=trigger_authority,
+            evidence_pack=evidence_pack,
+            decision_inputs=(decision_input,),
+            snapshot_store=store,
+            execution_plan=_execution_plan(registration),
+            model_profile_id=registration.model_profile_id,
+            model_cost_limit_usd=Decimal("5.00"),
+            evaluated_at=BARRIER + timedelta(minutes=2),
+        )
+
+
+def test_snapshot_set_reconciles_multiple_sources_under_one_semantic_route(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    sources = (_source("news-one"), _source("news-two"))
+    policies = tuple(_policy(sources=(source,)) for source in sources)
+    frozen_snapshots: list[DataSnapshot] = []
+    reports: list[SourceRouteAcceptanceReport] = []
+    for policy, source in zip(policies, sources, strict=True):
+        receipt = _receipt_snapshot(store, policy)
+        journal.record_snapshot(receipt, policy=policy)
+        frozen_snapshots.append(
+            journal.freeze_snapshot(
+                policy_id=policy.policy_id,
+                not_after=BARRIER,
+                window_start=policy.window_start,
+                minimum_data_sources=1,
+                frozen_at=BARRIER + timedelta(seconds=1),
+            )
+        )
+        reports.append(_accepted_report(receipt.snapshot_id, source=source))
+
+    snapshot_set = reconcile_prospective_checkpoint_snapshot_set(
+        registration=_v2_partial_registration(),
+        checkpoint_key="policy-event-v2",
+        barrier_at=BARRIER,
+        selections=tuple(
+            CheckpointRouteSelection(
+                capability=ObservationCapability.EVENT_REVELATION,
+                route_kind="established_news",
+                snapshot_id=frozen.snapshot_id,
+                collection_policy_id=policy.policy_id,
+                source_acceptance_report_id=report.report_id,
+            )
+            for policy, frozen, report in zip(policies, frozen_snapshots, reports, strict=True)
+        ),
+        store=store,
+        journal=journal,
+        policies={item.policy_id: item for item in policies},
+        acceptance_reports={item.report_id: item for item in reports},
+        reconciled_at=BARRIER + timedelta(minutes=1),
+        allow_partial=True,
+    )
+    event_binding = next(
+        item
+        for item in snapshot_set.capability_bindings
+        if item.capability is ObservationCapability.EVENT_REVELATION
+    )
+
+    assert len(event_binding.routes) == 2
+    assert {item.route_kind for item in event_binding.routes} == {"established_news"}
+    assert {item.upstream_source for item in event_binding.routes} == {"news-one", "news-two"}
 
 
 def test_partial_v2_query_gate_blocks_missing_trigger_but_not_optional_information(

@@ -29,7 +29,12 @@
     "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.prospective-query-gate-result.v4"},
+    "schema_version": {
+      "enum": [
+        "market-impact.prospective-query-gate-result.v4",
+        "market-impact.prospective-query-gate-result.v5"
+      ]
+    },
     "result_id": {
       "type": "string",
       "pattern": "^prospective-query-gate-[0-9a-f]{64}$"
@@ -76,11 +81,26 @@
     "blocking_required_gaps": {"$ref": "#/$defs/gaps"},
     "nonblocking_information_gaps": {"$ref": "#/$defs/gaps"},
     "model_run_eligible": {"type": "boolean"},
+    "trigger_admission_id": {
+      "type": "string",
+      "pattern": "^prospective-trigger-admission-[0-9a-f]{64}$"
+    },
     "claim_scope": {"const": "process_diagnostic_only_no_alpha_or_execution_claim"},
     "historical_pit_claim": {"const": false},
     "strategy_promotion_claim": {"const": false},
     "execution_capability": {"const": false}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "market-impact.prospective-query-gate-result.v5"}
+        }
+      },
+      "then": {"required": ["trigger_admission_id"]},
+      "else": {"not": {"required": ["trigger_admission_id"]}}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "gaps": {

@@ -245,6 +245,14 @@ when no defensible per-request price exists; unknown request counts for other Pr
 rather than inferred.
 _Avoid_: Billing invoice, estimated request count, successful empty Snapshot, model Usage Ledger
 
+**Prospective Collection Job Replacement**:
+An append-only, content-identified Harness transition from one exact registered Collection Job to
+one exact registered successor on the same accepted source route. The transition atomically marks
+the predecessor `replaced`, preserves all prior health and usage evidence, and rejects an active
+lease or unsettled staged actual receipt. It may correct schedule/request configuration without
+editing Job identity or restarting the supervisor; it grants no data, model, or execution authority.
+_Avoid_: Job mutation, history deletion, abandoned receipt, Provider retry
+
 **Prospective Collection Tracer Report**:
 A private, content-identified acceptance report for one bounded CSRC official-event Job and one
 Tushare market-context Job. It binds their accepted route reports, Collection Policies, logical
@@ -254,7 +262,7 @@ authenticate historical PIT, authorize a model call, promote Evidence, or open p
 _Avoid_: Historical qualification, service-install receipt, Query Gate, execution acceptance
 
 **Prospective Diagnostic Registration**:
-A content-identified requirements freeze for two or three first-eligible future checkpoints with
+A content-identified requirements freeze for two to four first-eligible future checkpoints with
 different event mechanisms. It fixes each checkpoint's end-of-day cutoff construction, explicit
 capability applicability, route-kind and source-diversity minima, cadence/gap/freshness limits,
 eligible venues and instruments, candidate horizons, paired Agent arms, replicate policy, aggregate
@@ -264,7 +272,8 @@ original all-required diagnostic. Schema v2 requires an actual-receipt event tri
 the other declared information capabilities to be optional observed context whose absence must stay
 visible to the Agent and evaluator. Schema v3 starts with two complete control/treatment pairs and
 requires a third complete pair only when either arm's first two decisions disagree; it never runs a
-single unpaired tie-breaker.
+single unpaired tie-breaker. Schema v4 retains that schedule, adds a broad material-event mechanism,
+and requires the registered CPA-priced model profile.
 _Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
 
 **Prospective Checkpoint Route Plan**:
@@ -314,6 +323,33 @@ finish time and requires it to equal `decided_at`. An earlier unresolved candida
 selection; non-selected material events may still enter EventAssessment or Attention Watch, and the
 Decision grants no downstream model or execution authority.
 _Avoid_: Model label, zero-impact finding, Signal Intent
+
+**Prospective EventAssessment Projection**:
+A content-identified, admission-specific projection of one canonical engine-neutral
+`EventAssessment`. It binds that canonical artifact hash to exact event observations, target and
+transmission-path candidates, horizon, evidence references, uncertainty, countercases and optional
+Position Snapshot/Historical Analogy Pack identities. It does not become a second causal-reasoning
+authority and cannot promote historical evidence lanes.
+_Avoid_: Duplicate EventAssessment authority, sentiment score, Signal
+
+**Prospective Materiality Gate Result**:
+A deterministic Harness check over one Prospective EventAssessment Projection. It admits only cited,
+in-scope target/path/horizon combinations and records absent optional position or analogy context as
+nonblocking information gaps. It verifies a formally assessed path; it does not infer causality,
+directional alpha, present tradability, or portfolio size.
+_Avoid_: Model materiality opinion, strategy score, Order admission
+
+**Prospective Trigger Admission**:
+The single content-identified bridge into checkpoint Snapshot freezing. `checkpoint_eligible` binds
+an exact selected Triage cluster for policy, earnings, and macro mechanisms. `material_event` is
+exclusive to the registered material-event checkpoint and requires a Triage-routed cluster,
+completed Prospective EventAssessment authority, registration-bound Materiality Gate, and every
+earlier routed cluster's non-admitted result across every completed Decision in the same route epoch
+before a later candidate can pass. The durable authority also rejects an earlier unresolved review
+or direct eligible candidate hidden in another batch. Both paths bind the registration, checkpoint,
+route plan/admission epoch and exact trigger Observation Versions. The artifact grants neither Query
+Gate, Judgment, Signal, nor execution authority.
+_Avoid_: Headline trigger, unchecked EventAssessment, policy-gate relaxation
 
 **Event Impact Triage Execution Plan**:
 A content-identified pre-model binding of one frozen Candidate Set to one Model Provider Profile,
@@ -425,6 +461,8 @@ registered coverage gaps: structurally valid present Snapshots remain usable, mi
 information remains visible, and no absent or unaccepted source is fabricated. Schema v4 also binds
 each accepted route to exact Source Observation IDs; Agent tools expose only the Query Gate-authorized
 Checkpoint Decision Input IDs projected from those observations, never every row in a shared Snapshot.
+Schema v5 additionally requires the exact Prospective Trigger Admission and permits multiple accepted
+sources under one semantic route without collapsing their identities.
 _Avoid_: Composite Data Snapshot, Evidence Pack, Provider fallback, execution approval
 
 **Prospective Evidence Lineage**:
@@ -446,6 +484,8 @@ granting authority; a caller cannot make fabricated data canonical by recomputin
 Schema v4 binds a single content-addressed evaluation material containing the exact registration,
 Snapshot Set, Decision Inputs, and underlying Data Snapshots so downstream paper admission can
 re-evaluate the Gate and restart recovery can reopen its authority evidence.
+Schema v5 also reopens the exact Prospective Trigger Admission; material-event target inputs must be
+a subset of the Materiality Gate's admitted targets.
 _Avoid_: Information-completeness score, strategy admission, order approval
 
 **Prospective Execution Plan**:
