@@ -13,6 +13,12 @@ from tempfile import TemporaryDirectory
 from types import MappingProxyType
 from typing import cast
 
+from market_impact_agent.account_state import (
+    AccountStateSnapshot,
+    PositionSnapshot,
+    account_state_snapshot_from_dict,
+    position_snapshot_from_dict,
+)
 from market_impact_agent.agent_contracts import (
     EvidencePack,
     JudgmentArtifact,
@@ -21,11 +27,17 @@ from market_impact_agent.agent_contracts import (
 )
 from market_impact_agent.agent_engine import CompletedAgentRunAuthority
 from market_impact_agent.agent_ensemble import execution_binding_hash
+from market_impact_agent.authorized_decision_view import (
+    AuthorizedDecisionView,
+    authorized_decision_view_from_dict,
+)
+from market_impact_agent.checkpoint_market_universe import ExchangeInstrumentRuleSet
 from market_impact_agent.data_inputs import (
     LocalDataSnapshotStore,
     data_snapshot_from_dict,
 )
 from market_impact_agent.decision_admission import (
+    DECISION_ADMISSION_SCHEMA_V2,
     DecisionAdmission,
     DecisionDisposition,
     DecisionRunManifest,
@@ -44,6 +56,13 @@ from market_impact_agent.domain import (
     require_aware,
 )
 from market_impact_agent.policy import HardPolicyEvaluator
+from market_impact_agent.portfolio_decision import (
+    OrderSizingDecision,
+    OrderSizingPolicy,
+    PortfolioDecision,
+    evaluate_portfolio_decision,
+    size_portfolio_decision,
+)
 from market_impact_agent.prospective_checkpoint_sets import (
     ProspectiveCheckpointSnapshotSet,
     prospective_checkpoint_snapshot_set_from_dict,
@@ -65,6 +84,7 @@ from market_impact_agent.providers import (
     Capability,
     ExecutionProvider,
     SubmissionCapability,
+    SubmissionCapabilityRejected,
     _issue_submission_capability,  # pyright: ignore[reportPrivateUsage]
 )
 from market_impact_agent.runtime_store import ArtifactStore, runtime_event_from_dict
@@ -172,9 +192,19 @@ class PaperExecutionService:
         clock: Callable[[], datetime] | None = None,
         lease_timeout_seconds: int = 30,
         agent_run_authorities: Mapping[str, CompletedAgentRunAuthority] | None = None,
+        account_state_snapshots: Mapping[str, AccountStateSnapshot] | None = None,
+        account_state_source: Callable[[], AccountStateSnapshot] | None = None,
+        account_state_max_age: timedelta = timedelta(minutes=5),
+        instrument_identities: Mapping[str, tuple[str, str]] | None = None,
+        instrument_rule_sets: Mapping[str, ExchangeInstrumentRuleSet] | None = None,
+        order_sizing_policies: Mapping[str, OrderSizingPolicy] | None = None,
     ) -> None:
         if lease_timeout_seconds < 1:
             raise ValueError("lease_timeout_seconds must be positive")
+        if account_state_max_age <= timedelta(0):
+            raise ValueError("account_state_max_age must be positive")
+        if account_state_max_age != timedelta(seconds=int(account_state_max_age.total_seconds())):
+            raise ValueError("account_state_max_age must use whole seconds")
         provider.manifest.assert_valid()
         if (
             not provider.manifest.enabled
@@ -196,6 +226,30 @@ class PaperExecutionService:
         self.clock = clock or (lambda: datetime.now(UTC))
         self.lease_timeout_seconds = lease_timeout_seconds
         self.__agent_run_authorities = MappingProxyType(dict(agent_run_authorities or {}))
+        accepted_account_states = dict(account_state_snapshots or {})
+        if any(key != value.snapshot_id for key, value in accepted_account_states.items()):
+            raise ValueError("Account State Snapshot registry key differs from content identity")
+        accepted_instrument_identities = dict(instrument_identities or {})
+        for instrument_id, identity in accepted_instrument_identities.items():
+            if (
+                not instrument_id
+                or instrument_id != instrument_id.strip()
+                or len(identity) != 2
+                or any(not value or value != value.strip() for value in identity)
+            ):
+                raise ValueError("Instrument identity registry contains invalid content")
+        self.__account_state_snapshots = MappingProxyType(accepted_account_states)
+        self.__account_state_source = account_state_source
+        self.__account_state_max_age = account_state_max_age
+        self.__instrument_identities = MappingProxyType(accepted_instrument_identities)
+        accepted_rule_sets = dict(instrument_rule_sets or {})
+        if any(key != value.rule_set_id for key, value in accepted_rule_sets.items()):
+            raise ValueError("instrument rule-set registry key differs from content identity")
+        accepted_sizing_policies = dict(order_sizing_policies or {})
+        if any(key != value.policy_id for key, value in accepted_sizing_policies.items()):
+            raise ValueError("Order Sizing Policy registry key differs from content identity")
+        self.__instrument_rule_sets = MappingProxyType(accepted_rule_sets)
+        self.__order_sizing_policies = MappingProxyType(accepted_sizing_policies)
         self._initialize()
         os.chmod(self.root, 0o700)
         os.chmod(self.database_path, 0o600)
@@ -213,7 +267,11 @@ class PaperExecutionService:
         return bool(row["blocked"])
 
     def admit(self, order: OrderIntent) -> PaperIntentRecord:
-        return self._admit(order, agent_admission_hash=None)
+        return self._admit(
+            order,
+            agent_admission_hash=None,
+            expected_price_basis_hash=None,
+        )
 
     def admit_decision(
         self,
@@ -230,9 +288,18 @@ class PaperExecutionService:
         execution_plan: ProspectiveExecutionPlan,
         signal: SignalIntent,
         paired_runs: tuple[PairedDecisionRun, ...],
+        authorized_view: AuthorizedDecisionView,
+        position_snapshot: PositionSnapshot,
+        portfolio_decision: PortfolioDecision,
+        sizing_decision: OrderSizingDecision,
+        price_basis: PriceBasis,
     ) -> PaperIntentRecord:
         if admission.disposition is not DecisionDisposition.PROPOSE:
             raise PermissionError("abstaining Decision Admission cannot reach paper execution")
+        if admission.schema_version != DECISION_ADMISSION_SCHEMA_V2:
+            raise PermissionError(
+                "Agent-directed paper requires portfolio-bound Decision Admission v2"
+            )
         if self.mandate.approval_mode is not ApprovalMode.MANUAL_EACH:
             raise PermissionError("initial Agent-directed paper requires manual_each approval")
         recomputed_query_gate = evaluate_prospective_query_gate(
@@ -248,12 +315,81 @@ class PaperExecutionService:
         )
         if recomputed_query_gate.to_dict() != query_gate.to_dict():
             raise ValueError("paper admission Query Gate was not deterministically evaluated")
+        account_state = self.__account_state_snapshots.get(
+            position_snapshot.account_state_snapshot_id
+        )
+        if account_state is None:
+            raise PermissionError("paper admission lacks accepted Account State authority")
+        expected_position_snapshot = account_state.project_positions(
+            evaluated_at=position_snapshot.evaluated_at,
+            max_age=self.__account_state_max_age,
+        )
+        if expected_position_snapshot.to_dict() != position_snapshot.to_dict():
+            raise ValueError("paper admission Position Snapshot is not a trusted projection")
+        self._require_current_account_state(
+            account_state=account_state,
+            position_snapshot=position_snapshot,
+            evaluated_at=self.clock(),
+        )
+        expected_authorized_view = AuthorizedDecisionView.build(
+            cutoff=authorized_view.cutoff,
+            frozen_at=authorized_view.frozen_at,
+            data_snapshot_ids=query_gate.authorized_snapshot_ids,
+            decision_input_ids=query_gate.authorized_decision_input_ids,
+            position_snapshot=position_snapshot,
+        )
+        if expected_authorized_view.to_dict() != authorized_view.to_dict():
+            raise ValueError("paper admission Authorized Decision View is not deterministic")
+        identity = self.__instrument_identities.get(signal.instrument_id)
+        if identity is None:
+            raise PermissionError("paper admission lacks accepted Instrument Master identity")
+        if identity != (portfolio_decision.venue, portfolio_decision.instrument_class):
+            raise ValueError(
+                "paper admission instrument venue/class differs from Instrument Master"
+            )
+        expected_portfolio_decision = evaluate_portfolio_decision(
+            signal=signal,
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            requested_action=portfolio_decision.requested_action,
+            venue=portfolio_decision.venue,
+            instrument_class=portfolio_decision.instrument_class,
+            evidence_refs=portfolio_decision.evidence_refs,
+            decided_at=portfolio_decision.decided_at,
+        )
+        if expected_portfolio_decision.to_dict() != portfolio_decision.to_dict():
+            raise ValueError(
+                "paper admission Portfolio Decision was not deterministically evaluated"
+            )
+        rule_set = self.__instrument_rule_sets.get(sizing_decision.instrument_rule_set_id)
+        sizing_policy = self.__order_sizing_policies.get(sizing_decision.sizing_policy_id)
+        if rule_set is None or sizing_policy is None:
+            raise PermissionError("paper admission lacks accepted sizing rule or policy authority")
+        expected_sizing_decision = size_portfolio_decision(
+            portfolio_decision=portfolio_decision,
+            position_snapshot=position_snapshot,
+            mandate=self.mandate,
+            price_basis=price_basis,
+            rule_set=rule_set,
+            sizing_policy=sizing_policy,
+            order_kind=sizing_decision.order_kind,
+            decided_at=sizing_decision.decided_at,
+        )
+        if expected_sizing_decision.to_dict() != sizing_decision.to_dict():
+            raise ValueError("paper admission Order Sizing was not deterministically evaluated")
         admission.assert_matches(
             manifest=manifest,
             query_gate=query_gate,
             evidence_pack=evidence_pack,
             signal=signal,
             order=order,
+            authorized_view=authorized_view,
+            account_state_snapshot=account_state,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            mandate=self.mandate,
+            price_basis=price_basis,
         )
         if (
             query_gate.agent_execution_plan_id != execution_plan.plan_id
@@ -332,6 +468,13 @@ class PaperExecutionService:
         execution_plan_artifact = self.artifacts.put_json(execution_plan.to_dict())
         manifest_artifact = self.artifacts.put_json(manifest.to_dict())
         signal_artifact = self.artifacts.put_json(signal.to_dict())
+        authorized_view_artifact = self.artifacts.put_json(authorized_view.to_dict())
+        account_state_artifact = self.artifacts.put_json(account_state.to_dict())
+        position_snapshot_artifact = self.artifacts.put_json(position_snapshot.to_dict())
+        portfolio_decision_artifact = self.artifacts.put_json(portfolio_decision.to_dict())
+        sizing_decision_artifact = self.artifacts.put_json(sizing_decision.to_dict())
+        price_basis_artifact = self.artifacts.put_json(price_basis.to_dict())
+        instrument_rule_set_artifact = self.artifacts.put_json(rule_set.to_dict())
         for paired, judgment, assessment in zip(
             paired_runs,
             judgments,
@@ -359,14 +502,33 @@ class PaperExecutionService:
             raise ValueError("Decision Admission run manifest hash is not exact")
         if execution_plan_artifact.content_hash != query_gate.agent_execution_plan_hash:
             raise ValueError("Decision Admission execution plan hash is not exact")
+        if authorized_view_artifact.content_hash != admission.authorized_decision_view_hash:
+            raise ValueError("Decision Admission Authorized Decision View hash is not exact")
+        if account_state_artifact.content_hash != admission.account_state_snapshot_hash:
+            raise ValueError("Decision Admission Account State Snapshot hash is not exact")
+        if position_snapshot_artifact.content_hash != admission.position_snapshot_hash:
+            raise ValueError("Decision Admission Position Snapshot hash is not exact")
+        if portfolio_decision_artifact.content_hash != admission.portfolio_decision_hash:
+            raise ValueError("Decision Admission Portfolio Decision hash is not exact")
+        if sizing_decision_artifact.content_hash != admission.order_sizing_decision_hash:
+            raise ValueError("Decision Admission Order Sizing Decision hash is not exact")
+        if price_basis_artifact.content_hash != sizing_decision.price_basis_hash:
+            raise ValueError("Order Sizing Decision Price Basis hash is not exact")
+        if instrument_rule_set_artifact.content_hash != sizing_decision.instrument_rule_set_hash:
+            raise ValueError("Order Sizing Decision instrument rule-set hash is not exact")
         admission_artifact = self.artifacts.put_json(admission.to_dict())
-        return self._admit(order, agent_admission_hash=admission_artifact.content_hash)
+        return self._admit(
+            order,
+            agent_admission_hash=admission_artifact.content_hash,
+            expected_price_basis_hash=sizing_decision.price_basis_hash,
+        )
 
     def _admit(
         self,
         order: OrderIntent,
         *,
         agent_admission_hash: str | None,
+        expected_price_basis_hash: str | None,
     ) -> PaperIntentRecord:
         now = self.clock()
         require_aware(now, "now")
@@ -399,6 +561,11 @@ class PaperExecutionService:
             raise PermissionError("price basis is mismatched, future-dated, or stale")
 
         price_artifact = self.artifacts.put_json(basis.to_dict())
+        if (
+            expected_price_basis_hash is not None
+            and price_artifact.content_hash != expected_price_basis_hash
+        ):
+            raise ValueError("paper admission price differs from deterministic sizing")
         decision = self.policy.evaluate(
             order,
             self.mandate,
@@ -521,6 +688,18 @@ class PaperExecutionService:
         if not actor_ref or actor_ref != actor_ref.strip():
             raise ValueError("actor_ref must be a non-empty trimmed string")
         with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_intents WHERE client_order_id = ?",
+                (client_order_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(client_order_id)
+        self._validate_binding_artifacts(row)
+        account_state_current = not approve or self._agent_account_state_is_current(
+            row,
+            evaluated_at=decided_at,
+        )
+        with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT * FROM paper_intents WHERE client_order_id = ?",
@@ -538,6 +717,7 @@ class PaperExecutionService:
                 decided_at >= _datetime(cast(str, row["order_expires_at"]))
                 or decided_at >= _datetime(cast(str, row["mandate_expires_at"]))
                 or decided_at >= _datetime(cast(str, row["price_valid_until"]))
+                or not account_state_current
             ):
                 connection.execute(
                     """
@@ -593,6 +773,29 @@ class PaperExecutionService:
         if claimed is None:
             return None
         row, submission_id = claimed
+        submit_checked_at = self.clock()
+        require_aware(submit_checked_at, "now")
+        try:
+            authorities_current = self._submission_authorities_are_current(
+                row,
+                evaluated_at=submit_checked_at,
+            )
+        except Exception as error:
+            self._expire_claim_before_submit(
+                row,
+                submission_id=submission_id,
+                expired_at=submit_checked_at,
+                error_kind=f"submission_authority_check_failed:{type(error).__name__}",
+            )
+            return self.get(cast(str, row["client_order_id"]))
+        if not authorities_current:
+            self._expire_claim_before_submit(
+                row,
+                submission_id=submission_id,
+                expired_at=submit_checked_at,
+                error_kind="submission_authority_expired_or_changed",
+            )
+            return self.get(cast(str, row["client_order_id"]))
         capability = _issue_submission_capability(
             order=_order_from_dict(self.artifacts.read_json(cast(str, row["order_hash"]))),
             submission_id=submission_id,
@@ -606,6 +809,16 @@ class PaperExecutionService:
             receipt = self.provider.submit(capability)
             if receipt.client_order_id != cast(str, row["client_order_id"]):
                 raise ValueError("provider receipt client_order_id mismatch")
+        except SubmissionCapabilityRejected:
+            rejected_at = self.clock()
+            require_aware(rejected_at, "now")
+            self._expire_claim_before_submit(
+                row,
+                submission_id=submission_id,
+                expired_at=rejected_at,
+                error_kind="provider_rejected_submission_capability",
+            )
+            return self.get(cast(str, row["client_order_id"]))
         except Exception as error:
             self._finish_ambiguous(
                 cast(str, row["client_order_id"]),
@@ -839,6 +1052,8 @@ class PaperExecutionService:
             return False
         try:
             self._validate_binding_artifacts(row)
+            if not self._submission_authorities_are_current(row, evaluated_at=now):
+                return False
         except (KeyError, OSError, TypeError, ValueError):
             return False
         return True
@@ -860,10 +1075,17 @@ class PaperExecutionService:
                 self.artifacts.read_json(agent_admission_hash),
                 "Decision Admission artifact",
             )
-            if _json_string(admission_payload, "schema_version") != (
-                "market-impact.decision-admission.v1"
-            ):
+            admission_schema = _json_string(admission_payload, "schema_version")
+            if admission_schema not in {
+                "market-impact.decision-admission.v1",
+                "market-impact.decision-admission.v2",
+            }:
                 raise ValueError("paper intent does not bind the canonical Decision Admission")
+            _validate_content_id(
+                admission_payload,
+                id_field="admission_id",
+                prefix="decision-admission-",
+            )
             if _json_string(admission_payload, "disposition") != "propose":
                 raise ValueError("abstaining Decision Admission reached the paper outbox")
             manifest_hash = _json_string(
@@ -926,6 +1148,14 @@ class PaperExecutionService:
                 self.artifacts.read_json(cast(str, row["order_hash"])),
                 "Order Intent artifact",
             )
+            if admission_schema == "market-impact.decision-admission.v2":
+                self._validate_portfolio_binding_artifacts(
+                    row=row,
+                    admission_payload=admission_payload,
+                    query_gate_payload=query_gate_payload,
+                    signal_payload=signal_payload,
+                    order_payload=order_payload,
+                )
             if _json_string(admission_payload, "query_gate_result_id") != _json_string(
                 query_gate_payload,
                 "result_id",
@@ -1202,6 +1432,270 @@ class PaperExecutionService:
             ):
                 raise ValueError("Decision Admission Signal instrument differs from Order Intent")
 
+    def _validate_portfolio_binding_artifacts(
+        self,
+        *,
+        row: sqlite3.Row,
+        admission_payload: dict[str, object],
+        query_gate_payload: dict[str, object],
+        signal_payload: dict[str, object],
+        order_payload: dict[str, object],
+    ) -> None:
+        bindings = (
+            (
+                "authorized_decision_view_hash",
+                "authorized_decision_view_id",
+                "view_id",
+                "authorized-decision-view-",
+                "Authorized Decision View",
+            ),
+            (
+                "account_state_snapshot_hash",
+                "account_state_snapshot_id",
+                "snapshot_id",
+                "account-state-snapshot-",
+                "Account State Snapshot",
+            ),
+            (
+                "position_snapshot_hash",
+                "position_snapshot_id",
+                "snapshot_id",
+                "position-snapshot-",
+                "Position Snapshot",
+            ),
+            (
+                "portfolio_decision_hash",
+                "portfolio_decision_id",
+                "decision_id",
+                "portfolio-decision-",
+                "Portfolio Decision",
+            ),
+            (
+                "order_sizing_decision_hash",
+                "order_sizing_decision_id",
+                "decision_id",
+                "order-sizing-decision-",
+                "Order Sizing Decision",
+            ),
+        )
+        payloads: dict[str, dict[str, object]] = {}
+        for hash_field, admission_id_field, artifact_id_field, prefix, label in bindings:
+            artifact_hash = _json_string(admission_payload, hash_field)
+            payload = _json_object(
+                self.artifacts.read_json(artifact_hash),
+                f"{label} artifact",
+            )
+            if canonical_hash(payload) != artifact_hash:
+                raise ValueError(f"{label} artifact hash is not exact")
+            _validate_content_id(payload, id_field=artifact_id_field, prefix=prefix)
+            if _json_string(admission_payload, admission_id_field) != _json_string(
+                payload,
+                artifact_id_field,
+            ):
+                raise ValueError(f"Decision Admission {label} identity is not exact")
+            payloads[hash_field] = payload
+
+        view = payloads["authorized_decision_view_hash"]
+        account_state = payloads["account_state_snapshot_hash"]
+        position = payloads["position_snapshot_hash"]
+        portfolio = payloads["portfolio_decision_hash"]
+        sizing = payloads["order_sizing_decision_hash"]
+        instrument_rule_set_hash = _json_string(sizing, "instrument_rule_set_hash")
+        instrument_rule_set = _json_object(
+            self.artifacts.read_json(instrument_rule_set_hash),
+            "instrument rule-set artifact",
+        )
+        if canonical_hash(instrument_rule_set) != instrument_rule_set_hash or _json_string(
+            instrument_rule_set, "rule_set_id"
+        ) != _json_string(sizing, "instrument_rule_set_id"):
+            raise ValueError("Order Sizing instrument rule-set artifact is not exact")
+        raw_rules = instrument_rule_set.get("rules")
+        if (
+            not isinstance(raw_rules, list)
+            or sum(
+                1
+                for item in cast(list[object], raw_rules)
+                if _json_string(_json_object(item, "instrument rule"), "rule_key")
+                == _json_string(sizing, "instrument_rule_key")
+            )
+            != 1
+        ):
+            raise ValueError("Order Sizing instrument rule is absent or ambiguous")
+        sizing_policy = _json_object(sizing.get("sizing_policy"), "Order Sizing Policy")
+        if _json_string(sizing, "sizing_policy_id") != (
+            f"order-sizing-policy-{canonical_hash(sizing_policy)}"
+        ):
+            raise ValueError("Order Sizing Policy identity is not exact")
+        mandate = _json_object(
+            self.artifacts.read_json(cast(str, row["mandate_hash"])),
+            "Trading Mandate artifact",
+        )
+        price_basis = _json_object(
+            self.artifacts.read_json(cast(str, row["price_basis_hash"])),
+            "Price Basis artifact",
+        )
+        trusted_account_state = self.__account_state_snapshots.get(
+            _json_string(account_state, "snapshot_id")
+        )
+        if trusted_account_state is None or trusted_account_state.to_dict() != account_state:
+            raise ValueError("persisted Account State lacks current trusted authority")
+        parsed_account_state = account_state_snapshot_from_dict(account_state)
+        parsed_position = position_snapshot_from_dict(position)
+        if (
+            parsed_account_state.project_positions(
+                evaluated_at=parsed_position.evaluated_at,
+                max_age=timedelta(seconds=parsed_position.max_age_seconds),
+            ).to_dict()
+            != position
+        ):
+            raise ValueError("persisted Position Snapshot is not a trusted projection")
+        if (
+            authorized_decision_view_from_dict(view).to_dict()
+            != AuthorizedDecisionView.build(
+                cutoff=_datetime(_json_string(view, "cutoff")),
+                frozen_at=_datetime(_json_string(view, "frozen_at")),
+                data_snapshot_ids=tuple(
+                    sorted(_json_string_list(query_gate_payload, "authorized_snapshot_ids"))
+                ),
+                decision_input_ids=tuple(
+                    sorted(
+                        _json_string_list(
+                            query_gate_payload,
+                            "authorized_decision_input_ids",
+                        )
+                    )
+                ),
+                position_snapshot=parsed_position,
+            ).to_dict()
+        ):
+            raise ValueError("persisted Authorized Decision View is not deterministic")
+        trusted_identity = self.__instrument_identities.get(
+            _json_string(portfolio, "instrument_id")
+        )
+        if trusted_identity != (
+            _json_string(portfolio, "venue"),
+            _json_string(portfolio, "instrument_class"),
+        ):
+            raise ValueError("persisted Portfolio Decision lacks Instrument Master authority")
+        if (
+            tuple(sorted(_json_string_list(view, "data_snapshot_ids")))
+            != tuple(sorted(_json_string_list(query_gate_payload, "authorized_snapshot_ids")))
+            or tuple(sorted(_json_string_list(view, "decision_input_ids")))
+            != tuple(sorted(_json_string_list(query_gate_payload, "authorized_decision_input_ids")))
+            or _json_string(view, "position_snapshot_id") != _json_string(position, "snapshot_id")
+            or _json_string(position, "account_state_snapshot_id")
+            != _json_string(account_state, "snapshot_id")
+        ):
+            raise ValueError("Authorized Decision View Query Gate lineage is not exact")
+        if (
+            _json_string(portfolio, "outcome") != "ready_for_sizing"
+            or _json_string(portfolio, "signal_id") != _json_string(signal_payload, "signal_id")
+            or _json_string(portfolio, "signal_hash") != canonical_hash(signal_payload)
+            or _json_string(portfolio, "authorized_decision_view_id")
+            != _json_string(view, "view_id")
+            or _json_string(portfolio, "authorized_decision_view_hash") != canonical_hash(view)
+            or _json_string(portfolio, "position_snapshot_id")
+            != _json_string(position, "snapshot_id")
+            or _json_string(portfolio, "position_snapshot_hash") != canonical_hash(position)
+            or portfolio.get("blockers") != []
+            or portfolio.get("execution_capability") is not False
+        ):
+            raise ValueError("Portfolio Decision persisted lineage is not exact")
+        if (
+            _json_string(sizing, "outcome") != "ready"
+            or _json_string(sizing, "portfolio_decision_id")
+            != _json_string(portfolio, "decision_id")
+            or _json_string(sizing, "portfolio_decision_hash") != canonical_hash(portfolio)
+            or _json_string(sizing, "position_snapshot_id") != _json_string(position, "snapshot_id")
+            or _json_string(sizing, "position_snapshot_hash") != canonical_hash(position)
+            or _json_string(sizing, "trading_mandate_hash") != cast(str, row["mandate_hash"])
+            or _json_string(sizing, "price_basis_hash") != cast(str, row["price_basis_hash"])
+            or sizing.get("blockers") != []
+            or sizing.get("execution_capability") is not False
+        ):
+            raise ValueError("Order Sizing Decision persisted lineage is not exact")
+        if (
+            canonical_hash(mandate) != cast(str, row["mandate_hash"])
+            or canonical_hash(price_basis) != cast(str, row["price_basis_hash"])
+            or _json_string(order_payload, "account_id") != _json_string(mandate, "account_id")
+            or _json_string(position, "account_reference_hash")
+            != _json_string(mandate, "account_id")
+            or _json_string(order_payload, "instrument_id") != _json_string(sizing, "instrument_id")
+            or _json_string(order_payload, "side") != _json_string(sizing, "side")
+            or _json_string(order_payload, "quantity") != _json_string(sizing, "quantity")
+            or _json_string(order_payload, "order_kind") != _json_string(sizing, "order_kind")
+            or order_payload.get("limit_price") != sizing.get("limit_price")
+            or _json_string(order_payload, "created_at") != _json_string(sizing, "decided_at")
+        ):
+            raise ValueError("Order Intent is not the persisted deterministic sizing output")
+
+    def _require_current_account_state(
+        self,
+        *,
+        account_state: AccountStateSnapshot,
+        position_snapshot: PositionSnapshot,
+        evaluated_at: datetime,
+    ) -> None:
+        require_aware(evaluated_at, "account-state currency time")
+        source = self.__account_state_source
+        if source is None:
+            raise PermissionError("Agent-directed paper requires a current Account State source")
+        current = source()
+        if current.to_dict() != account_state.to_dict():
+            raise PermissionError("current Account State differs from the admitted snapshot")
+        if evaluated_at < current.reconciled_at:
+            raise PermissionError("current Account State is future-dated")
+        if position_snapshot.max_age_seconds != int(self.__account_state_max_age.total_seconds()):
+            raise PermissionError("Position Snapshot freshness policy differs from Harness policy")
+        if evaluated_at - current.as_of > self.__account_state_max_age:
+            raise PermissionError("current Account State is stale")
+
+    def _agent_account_state_is_current(
+        self,
+        row: sqlite3.Row,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        admission_hash = cast(str | None, row["agent_admission_hash"])
+        if admission_hash is None:
+            return True
+        admission = _json_object(
+            self.artifacts.read_json(admission_hash),
+            "Decision Admission artifact",
+        )
+        if _json_string(admission, "schema_version") != DECISION_ADMISSION_SCHEMA_V2:
+            return False
+        account_state = account_state_snapshot_from_dict(
+            self.artifacts.read_json(_json_string(admission, "account_state_snapshot_hash"))
+        )
+        position_snapshot = position_snapshot_from_dict(
+            self.artifacts.read_json(_json_string(admission, "position_snapshot_hash"))
+        )
+        try:
+            self._require_current_account_state(
+                account_state=account_state,
+                position_snapshot=position_snapshot,
+                evaluated_at=evaluated_at,
+            )
+        except PermissionError:
+            return False
+        return True
+
+    def _submission_authorities_are_current(
+        self,
+        row: sqlite3.Row,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        require_aware(evaluated_at, "submission authority time")
+        if (
+            evaluated_at >= _datetime(cast(str, row["order_expires_at"]))
+            or evaluated_at >= _datetime(cast(str, row["mandate_expires_at"]))
+            or evaluated_at >= _datetime(cast(str, row["price_valid_until"]))
+        ):
+            return False
+        return self._agent_account_state_is_current(row, evaluated_at=evaluated_at)
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(
@@ -1297,6 +1791,19 @@ class PaperExecutionService:
 
     def _claim_next(self, now: datetime) -> tuple[sqlite3.Row, str] | None:
         with self._connect() as connection:
+            candidate = connection.execute(
+                """
+                SELECT * FROM paper_intents
+                WHERE outbox_state = ?
+                ORDER BY created_at, client_order_id
+                LIMIT 1
+                """,
+                (OutboxState.QUEUED.value,),
+            ).fetchone()
+        if candidate is None:
+            return None
+        self._validate_binding_artifacts(candidate)
+        with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             gate = connection.execute(
                 "SELECT blocked FROM paper_execution_gate WHERE singleton = 1"
@@ -1319,12 +1826,14 @@ class PaperExecutionService:
             if row is None:
                 connection.commit()
                 return None
+            if row["client_order_id"] != candidate["client_order_id"]:
+                connection.commit()
+                return None
             self._validate_binding_artifacts(row)
             client_order_id = cast(str, row["client_order_id"])
-            if (
-                now >= _datetime(cast(str, row["order_expires_at"]))
-                or now >= _datetime(cast(str, row["mandate_expires_at"]))
-                or now >= _datetime(cast(str, row["price_valid_until"]))
+            if not self._submission_authorities_are_current(
+                row,
+                evaluated_at=now,
             ):
                 connection.execute(
                     """
@@ -1375,6 +1884,55 @@ class PaperExecutionService:
         if claimed is None:
             raise RuntimeError("claimed paper intent disappeared")
         return claimed, submission_id
+
+    def _expire_claim_before_submit(
+        self,
+        row: sqlite3.Row,
+        *,
+        submission_id: str,
+        expired_at: datetime,
+        error_kind: str,
+    ) -> None:
+        client_order_id = cast(str, row["client_order_id"])
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute(
+                """
+                UPDATE paper_intents
+                SET outbox_state = ?, lease_token = NULL, lease_expires_at = NULL,
+                    updated_at = ?
+                WHERE client_order_id = ? AND outbox_state = ? AND lease_token = ?
+                """,
+                (
+                    OutboxState.EXPIRED.value,
+                    _timestamp(expired_at),
+                    client_order_id,
+                    OutboxState.SUBMITTING.value,
+                    submission_id,
+                ),
+            )
+            if updated.rowcount != 1:
+                connection.rollback()
+                raise RuntimeError("paper submission lease was lost before provider submit")
+            connection.execute(
+                """
+                UPDATE paper_submission_attempts
+                SET status = 'expired_before_submit',
+                    error_kind = ?,
+                    finished_at = ?
+                WHERE submission_id = ?
+                """,
+                (error_kind, _timestamp(expired_at), submission_id),
+            )
+            self._append_event(
+                connection,
+                client_order_id,
+                "submission_expired_before_provider",
+                cast(str, row["approval_hash"]),
+                expired_at,
+            )
+            self._set_gate(connection, False, None, expired_at)
+            connection.commit()
 
     def _recover_expired_leases(self, now: datetime) -> None:
         with self._connect() as connection:
@@ -1551,6 +2109,18 @@ def _json_string_list(payload: dict[str, object], field: str) -> tuple[str, ...]
     return tuple(items)
 
 
+def _validate_content_id(
+    payload: dict[str, object],
+    *,
+    id_field: str,
+    prefix: str,
+) -> None:
+    artifact_id = _json_string(payload, id_field)
+    core = {key: value for key, value in payload.items() if key != id_field}
+    if artifact_id != f"{prefix}{canonical_hash(core)}":
+        raise ValueError(f"artifact {id_field} does not match content")
+
+
 def _order_from_dict(payload: object) -> OrderIntent:
     if not isinstance(payload, dict):
         raise TypeError("stored Order Intent must be an object")
@@ -1574,18 +2144,7 @@ def _order_from_dict(payload: object) -> OrderIntent:
 
 
 def _mandate_dict(mandate: TradingMandate) -> dict[str, object]:
-    return {
-        "schema_version": "market-impact.trading-mandate.v1",
-        "mandate_id": mandate.mandate_id,
-        "account_id": mandate.account_id,
-        "environment": mandate.environment.value,
-        "approval_mode": mandate.approval_mode.value,
-        "valid_from": _timestamp(mandate.valid_from),
-        "expires_at": _timestamp(mandate.expires_at),
-        "allowed_instruments": sorted(mandate.allowed_instruments),
-        "allowed_sides": sorted(side.value for side in mandate.allowed_sides),
-        "max_order_notional": str(mandate.max_order_notional),
-    }
+    return mandate.to_dict()
 
 
 def _receipt_dict(receipt: ExecutionReceipt) -> dict[str, object]:

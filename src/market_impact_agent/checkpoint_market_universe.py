@@ -76,6 +76,18 @@ class ExchangeInstrumentRule:
     scope: str
     exceptions: tuple[str, ...]
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "rule_key": self.rule_key,
+            "venue": self.venue,
+            "instrument_class": self.instrument_class,
+            "buy_lot_size": self.buy_lot_size,
+            "price_tick": self.price_tick,
+            "currency": self.currency,
+            "scope": self.scope,
+            "exceptions": list(self.exceptions),
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class ExchangeInstrumentRuleSet:
@@ -83,6 +95,17 @@ class ExchangeInstrumentRuleSet:
     effective_from: date
     source_documents: tuple[dict[str, object], ...]
     rules: tuple[ExchangeInstrumentRule, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": EXCHANGE_INSTRUMENT_RULE_SET_SCHEMA,
+            "rule_set_id": self.rule_set_id,
+            "effective_from": self.effective_from.isoformat(),
+            "source_documents": [dict(item) for item in self.source_documents],
+            "rules": [item.to_dict() for item in self.rules],
+            "historical_pit_claim": False,
+            "execution_capability": False,
+        }
 
 
 def load_exchange_instrument_rule_set(path: Path) -> ExchangeInstrumentRuleSet:

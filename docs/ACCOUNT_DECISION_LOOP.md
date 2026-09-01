@@ -62,16 +62,17 @@ The Agent keeps three conclusions distinct:
    rotate or add exposure.
 
 There is no requirement to trade every day and no universal model-authored score. Missing optional
-context is visible; missing or stale account truth can still support a risk alert or reduction review
-but cannot authorize exposure increase. This separation prevents a valid macro thesis from silently
-becoming an unsuitable order for the current account.
+context is visible; missing or stale account truth can still support a risk alert or reduction
+proposal, but cannot authorize an order when position or open-order coverage is uncertain. This
+separation prevents a valid macro thesis from silently becoming an unsuitable order for the current
+account.
 
 ## Authorized Decision View
 
 An Agent run may discover and call every registered read-only capability authorized for that task:
 
 - frozen event, expectation, market, industry, macro, positioning and tradability inputs;
-- a credential-free Position Snapshot projected from a complete Account State Snapshot;
+- a credential-free Position Snapshot projected from an accepted Account State Snapshot;
 - open-order and recent-fill summaries needed to avoid duplicate or contradictory actions;
 - registered historical analogies and Research Method Skills with their evidence lane intact; and
 - local-first Monitoring Scope / Retrieval Resolution for missing information.
@@ -101,8 +102,9 @@ The Agent may propose only trading-related dispositions:
 
 The Agent may suggest target, direction, horizon, urgency and desired exposure. It cannot choose the
 final executable quantity. The Harness computes or rejects quantity from the exact Signal,
-unadjusted Price Basis, lot/tick/tradability rules, complete Account State Snapshot, Trading Mandate
-and versioned sizing policy. Model confidence remains observational and cannot size a position.
+unadjusted Price Basis, side-applicable lot/tick/tradability rules, trusted Account State Snapshot,
+Trading Mandate and versioned sizing policy. Model confidence remains observational and cannot size
+a position.
 
 Deposits, withdrawals, credential access, account-profile or permission changes, data-entitlement
 purchases and broker-session administration are outside the Agent tool surface.
@@ -112,8 +114,9 @@ purchases and broker-session administration are outside the Agent tool surface.
 `Account State Snapshot` is a content-identified, cutoff-bound, credential-free reconciliation of
 cash, positions, open orders, recent fills and explicit gaps for one opaque account reference and
 environment. The Provider reports broker facts; the Harness normalizes, persists and decides
-whether the snapshot is complete. An incomplete or stale snapshot may support risk notification but
-cannot authorize an exposure-increasing order.
+whether the snapshot is complete. An incomplete or stale snapshot may support risk notification,
+but an order requires authoritative position and open-order coverage; exposure increase additionally
+requires a gap-free view.
 
 The serialized account reference is a Harness-keyed pseudonym, not an unkeyed hash of a broker
 identifier. The pseudonymization key is atomically published into private state before any reader can
@@ -131,17 +134,32 @@ order/execution identifiers are keyed pseudonyms. Its 2026-09-01 local acceptanc
 record and empty position, API-open-order and recent-fill sets. IBKR requires client 0 binding to
 observe manually submitted TWS orders, which is outside this non-mutating adapter; the snapshot
 therefore retains `manual_tws_open_orders_not_observed`, remains usable for position-risk review and
-blocks exposure increase. Exact amounts, identifiers and artifacts remain in ignored private state.
+blocks every order mutation, including an apparently risk-reducing sell: an unseen manual order may
+already close or reverse the position. Exact amounts, identifiers and artifacts remain in ignored
+private state.
 The Authorized Decision View recomputes freshness at its own cutoff instead of copying an earlier
 readiness result, rejects exposure-increase readiness whenever any account observation gap remains,
 and mints the read tool only for the exact content-identified Position Snapshot it names. A
 caller-supplied lookalike tool is not part of this authority boundary. Cutoff and freeze instants are
 canonical UTC in serialized content identity, so equivalent aware timestamps cannot fork replay IDs.
 
-`Portfolio Decision` binds one Judgment/Signal candidate, the exact Account State and Position
-Snapshots, open-order conflicts and a disposition. It is a proposal-admission boundary, not an
-order. `Order Sizing Decision` is deterministic Harness output and is the only path that may create
-the quantity used by an Agent-originated `OrderIntent`.
+`Portfolio Decision` binds one Judgment/Signal candidate, the exact Position Snapshot,
+open-order conflicts and a disposition. Decision Admission v2 additionally binds its parent Account
+State Snapshot. The paper composition root reprojects the Position Snapshot from that trusted
+parent, rebuilds the Authorized Decision View, and checks venue/class against a trusted Instrument
+Master projection. `Portfolio Decision` is a proposal-admission boundary, not an order. `Order
+Sizing Decision` is deterministic Harness output and is the only path that may create the quantity
+used by an Agent-originated `OrderIntent`.
+
+Agent-directed admission, human approval and dispatch each re-read the trusted current Account State
+source. The exact snapshot must still match the admitted parent and remain inside the Harness
+composition-root maximum age; a caller-provided Position Snapshot cannot widen it. Dispatch repeats
+the check after the durable claim and the Provider capability validator repeats it with all hard
+expiries immediately before acceptance. Otherwise the pending approval or claimed outbox row expires
+without a Provider call and a fresh decision is required. A manual approval never extends
+account-state validity. Legacy Decision Admission v1 is replay-only and cannot mutate paper state.
+Close quantities also obey the applicable lot rule; the Harness does not silently submit a
+nonconforming full-position quantity.
 
 Submit, cancel and replace each have stable request identity, durable outbox state and an
 `unknown` outcome for ambiguous transport. No ambiguous operation is retried automatically.
@@ -154,10 +172,20 @@ state.
    contracts, fixture acceptance, one real local IB Gateway Paper read and the frozen
    `AuthorizedDecisionView`/`read_position_snapshot` Agent tool are accepted. No credential or
    mutation capability is exposed. This is bounded `ACCOUNT` read acceptance only; its explicit
-   manual-order coverage gap keeps exposure-increasing decisions closed.
-2. **Decision and sizing.** Add portfolio-action proposal plus deterministic sizing/rejection and
-   bind them into Decision Admission. Exercise open, increase, reduce, close, abstain and conflicting
-   open-order cases against the durable mock.
+   manual-order coverage gap keeps all order mutations closed.
+2. **Decision and sizing.** Complete for the provider-neutral `manual_each` mock path. Content-
+   identified Portfolio Decision and Order Sizing Decision contracts bind the exact Signal, parent
+   Account State, Authorized Decision View, Position Snapshot, Trading Mandate, raw Price Basis,
+   trusted Instrument Master identity, side-applicable venue/class rule and versioned sizing policy.
+   Exposure increase requires a gap-free view and no conflicting open order. Reduction and close
+   require authoritative open-order coverage; the current accepted A-share rule artifact only claims
+   ordinary buy-order scope, so long-position sells remain fail-closed until an accepted sell rule is
+   added. The Agent cannot write quantity and confidence never sizes an order. Decision Admission v2
+   reopens this full chain after restart before approval or dispatch; both stages also require the
+   bound Account State to remain current and unchanged. Open, blocked increase, blocked uncertain
+   reduction, non-lot close rejection, hold, rotate rejection, adjusted-price rejection and the
+   complete manual approval→mock accepted→reconciliation path pass locally. This is still synthetic
+   account/mock execution acceptance, not external broker-paper evidence.
 3. **Operation lifecycle.** Extend the provider-neutral execution port and outbox for cancel and
    replace, complete reconciliation, restart and fault injection. Replacement is cancel plus a new
    intent, never mutation of an admitted order.

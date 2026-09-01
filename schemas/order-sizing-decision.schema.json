@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/order-sizing-decision.schema.json",
+  "title": "Market Impact Order Sizing Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "decision_id", "portfolio_decision_id",
+    "portfolio_decision_hash", "position_snapshot_id", "position_snapshot_hash",
+    "trading_mandate_hash", "price_basis_hash", "instrument_rule_set_id", "instrument_rule_set_hash",
+    "instrument_rule_key", "sizing_policy_id", "sizing_policy", "instrument_id",
+    "side", "order_kind", "limit_price", "reference_price", "quantity",
+    "order_notional", "outcome", "blockers", "decided_at", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.order-sizing-decision.v1"},
+    "decision_id": {"type": "string", "pattern": "^order-sizing-decision-[0-9a-f]{64}$"},
+    "portfolio_decision_id": {"type": "string", "pattern": "^portfolio-decision-[0-9a-f]{64}$"},
+    "portfolio_decision_hash": {"$ref": "#/$defs/sha256"},
+    "position_snapshot_id": {"type": "string", "pattern": "^position-snapshot-[0-9a-f]{64}$"},
+    "position_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "trading_mandate_hash": {"$ref": "#/$defs/sha256"},
+    "price_basis_hash": {"$ref": "#/$defs/sha256"},
+    "instrument_rule_set_id": {"type": "string", "pattern": "^exchange-instrument-rule-set-[0-9a-f]{64}$"},
+    "instrument_rule_set_hash": {"$ref": "#/$defs/sha256"},
+    "instrument_rule_key": {"type": "string", "minLength": 1},
+    "sizing_policy_id": {"type": "string", "pattern": "^order-sizing-policy-[0-9a-f]{64}$"},
+    "sizing_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "max_available_cash_fraction", "reduction_fraction", "confidence_affects_size"],
+      "properties": {
+        "schema_version": {"const": "market-impact.order-sizing-policy.v1"},
+        "max_available_cash_fraction": {"$ref": "#/$defs/positive_decimal"},
+        "reduction_fraction": {"$ref": "#/$defs/positive_decimal"},
+        "confidence_affects_size": {"const": false}
+      }
+    },
+    "instrument_id": {"type": "string", "minLength": 1},
+    "side": {"enum": ["buy", "sell"]},
+    "order_kind": {"enum": ["market", "limit"]},
+    "limit_price": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/positive_decimal"}]},
+    "reference_price": {"$ref": "#/$defs/positive_decimal"},
+    "quantity": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/positive_decimal"}]},
+    "order_notional": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/positive_decimal"}]},
+    "outcome": {"enum": ["rejected", "ready"]},
+    "blockers": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "positive_decimal": {"type": "string", "pattern": "^(?:0*[1-9][0-9]*|0*[0-9]*\\.[0-9]*[1-9][0-9]*)$"}
+  }
+}

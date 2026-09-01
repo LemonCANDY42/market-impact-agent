@@ -24,9 +24,18 @@ Approval is a policy state machine, not a conversational promise.
    Record, complete Journal chain, terminal/transcript/raw/tool-result artifacts, and
    Journal-recomputed metrics. This provenance
    grants no execution authority. Gate evaluation precedes every run; Manifest creation precedes
-   Signal validity and Order creation.
-2. Validate the `OrderIntent`, including its explicit creation-to-expiry window, and its
-   parent signal/evidence references.
+   Signal validity. Decision Admission v2 additionally binds the trusted parent Account State
+   Snapshot, exact Authorized Decision View, Position Snapshot, Portfolio Decision, deterministic
+   Order Sizing Decision, Trading Mandate and raw Price Basis. The composition root reprojects the
+   position state, rebuilds the view and checks the target against its trusted Instrument Master
+   projection and side-applicable rule. It reopens that chain after restart and rejects any
+   caller-authored account state, identity or quantity before approval. Admission, approval and
+   dispatch each require the trusted current Account State source to still return the exact bound,
+   non-stale snapshot under the composition-root freshness policy; the caller cannot extend that
+   lifetime through `Position Snapshot`. Approval never extends it. Legacy Decision Admission v1
+   artifacts remain replayable research evidence but carry no approval or dispatch authority.
+2. Validate the sizing-derived `OrderIntent`, including its explicit creation-to-expiry window and
+   parent signal/evidence/account/mandate references.
 3. Evaluate non-overridable hard rules.
 4. Return `DENY`, `REQUIRE_MANUAL`, or `ELIGIBLE`.
 5. Only an `ELIGIBLE` intent may reach a configured semantic auto approver.
@@ -41,8 +50,8 @@ can choose a stricter result; it cannot override `DENY` or `REQUIRE_MANUAL`.
 
 Only the Harness-owned `PaperExecutionService` can turn an approved durable outbox row into
 the sealed capability accepted by a provider. Its Trading Mandate, clock, Price Basis source,
-provider, and Agent run authorities are bound by the trusted composition root, not supplied by the
-order caller.
+provider, Agent run authorities, Account State authority, Instrument Master projection, instrument
+rules and sizing policy are bound by the trusted composition root, not supplied by the order caller.
 The capability binds exact hashes for the intent, mandate, price, policy evaluation, and
 approval. `policy_auto` remains fail-closed because the bootstrap has no semantic approver;
 `autonomous` also remains fail-closed until its kill-switch gate exists. Direct submission of
@@ -57,9 +66,15 @@ that row with an expiring lease; an exception, lost acknowledgement, process cra
 lease produces `unknown`, never an automatic retry. Provider `accepted` is an acknowledgement,
 not a fill. `unknown` and `accepted` block further admission and dispatch until a complete
 provider reconciliation snapshot accounts for every known and external order without gaps.
+After claiming, the Harness rechecks account state and all hard expiries immediately before the
+Provider call; the sealed Provider capability validator repeats the same checks. A changed or
+expired authority before submission expires the claim without calling the Provider.
 
 Immutable contracts live in a content-addressed store. For the Agent path the outbox row additionally
-binds the `DecisionAdmission` artifact hash; the restart validator also reopens the Execution Plan,
+binds the portfolio-aware `DecisionAdmission` v2 artifact hash; the restart validator also reopens
+the Account State Snapshot, Authorized Decision View, Position Snapshot, Portfolio Decision,
+Order Sizing Decision,
+Trading Mandate, raw Price Basis, Execution Plan,
 all four or six Judgment, final validation-event, and metrics artifacts, treatment agreement, Signal
 validity, and Order binding. Before that immutable copy is admitted, the source Agent runtime
 authorities must have reopened and validated the actual runs; a caller cannot promote a fabricated

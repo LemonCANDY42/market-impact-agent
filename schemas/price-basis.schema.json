@@ -10,7 +10,7 @@
     "instrument_id": {"type": "string", "minLength": 1},
     "currency": {"type": "string", "minLength": 1},
     "unit": {"type": "string", "minLength": 1},
-    "basis_kind": {"enum": ["reference_quote", "limit_price"]},
+    "basis_kind": {"enum": ["reference_quote", "raw_reference_quote", "limit_price"]},
     "price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
     "source_id": {"type": "string", "minLength": 1},
     "source_version": {"type": "string", "minLength": 1},

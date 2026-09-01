@@ -7,6 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import cast
 
+from market_impact_agent.account_state import AccountStateSnapshot, PositionSnapshot
 from market_impact_agent.agent_contracts import (
     CandidateDirection,
     EvidencePack,
@@ -16,12 +17,21 @@ from market_impact_agent.agent_contracts import (
 )
 from market_impact_agent.agent_engine import AgentRunResult
 from market_impact_agent.agent_ensemble import execution_binding_hash
+from market_impact_agent.authorized_decision_view import AuthorizedDecisionView
 from market_impact_agent.domain import (
     OrderIntent,
     Side,
     SignalIntent,
     TradingEnvironment,
+    TradingMandate,
     require_aware,
+)
+from market_impact_agent.portfolio_decision import (
+    OrderSizingDecision,
+    OrderSizingOutcome,
+    PortfolioDecision,
+    PortfolioDecisionOutcome,
+    PriceBasisLike,
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
@@ -38,7 +48,12 @@ DECISION_RUN_MANIFEST_SCHEMA = DECISION_RUN_MANIFEST_SCHEMA_V1
 _SUPPORTED_DECISION_RUN_MANIFEST_SCHEMAS = frozenset(
     {DECISION_RUN_MANIFEST_SCHEMA_V1, DECISION_RUN_MANIFEST_SCHEMA_V2}
 )
-DECISION_ADMISSION_SCHEMA = "market-impact.decision-admission.v1"
+DECISION_ADMISSION_SCHEMA_V1 = "market-impact.decision-admission.v1"
+DECISION_ADMISSION_SCHEMA_V2 = "market-impact.decision-admission.v2"
+DECISION_ADMISSION_SCHEMA = DECISION_ADMISSION_SCHEMA_V1
+_SUPPORTED_DECISION_ADMISSION_SCHEMAS = frozenset(
+    {DECISION_ADMISSION_SCHEMA_V1, DECISION_ADMISSION_SCHEMA_V2}
+)
 DECISION_CLAIM_SCOPE = "execution_diagnostic_only_no_alpha_or_live_claim"
 
 
@@ -835,6 +850,16 @@ class DecisionAdmission:
     agreeing_judgment_artifact_ids: tuple[str, ...]
     paper_approval_mode: str
     created_at: datetime
+    authorized_decision_view_id: str | None = None
+    authorized_decision_view_hash: str | None = None
+    account_state_snapshot_id: str | None = None
+    account_state_snapshot_hash: str | None = None
+    position_snapshot_id: str | None = None
+    position_snapshot_hash: str | None = None
+    portfolio_decision_id: str | None = None
+    portfolio_decision_hash: str | None = None
+    order_sizing_decision_id: str | None = None
+    order_sizing_decision_hash: str | None = None
     claim_scope: str = DECISION_CLAIM_SCOPE
     alpha_claim: bool = False
     live_capability: bool = False
@@ -842,7 +867,7 @@ class DecisionAdmission:
     schema_version: str = DECISION_ADMISSION_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != DECISION_ADMISSION_SCHEMA:
+        if self.schema_version not in _SUPPORTED_DECISION_ADMISSION_SCHEMAS:
             raise ValueError("unsupported Decision Admission schema")
         _prefixed_hash(
             self.decision_run_manifest_id,
@@ -875,6 +900,83 @@ class DecisionAdmission:
         _strict_utc(self.created_at, "Decision Admission created_at")
         if self.paper_approval_mode != "manual_each":
             raise ValueError("initial Decision Admission requires manual_each approval")
+        portfolio_bindings = (
+            self.authorized_decision_view_id,
+            self.authorized_decision_view_hash,
+            self.account_state_snapshot_id,
+            self.account_state_snapshot_hash,
+            self.position_snapshot_id,
+            self.position_snapshot_hash,
+            self.portfolio_decision_id,
+            self.portfolio_decision_hash,
+            self.order_sizing_decision_id,
+            self.order_sizing_decision_hash,
+        )
+        if self.schema_version == DECISION_ADMISSION_SCHEMA_V1:
+            if any(item is not None for item in portfolio_bindings):
+                raise ValueError("Decision Admission v1 cannot bind portfolio artifacts")
+        else:
+            if self.disposition is not DecisionDisposition.PROPOSE or not all(
+                item is not None for item in portfolio_bindings
+            ):
+                raise ValueError(
+                    "Decision Admission v2 requires one complete proposed portfolio binding"
+                )
+            assert self.authorized_decision_view_id is not None
+            assert self.authorized_decision_view_hash is not None
+            assert self.account_state_snapshot_id is not None
+            assert self.account_state_snapshot_hash is not None
+            assert self.position_snapshot_id is not None
+            assert self.position_snapshot_hash is not None
+            assert self.portfolio_decision_id is not None
+            assert self.portfolio_decision_hash is not None
+            assert self.order_sizing_decision_id is not None
+            assert self.order_sizing_decision_hash is not None
+            _prefixed_hash(
+                self.authorized_decision_view_id,
+                "authorized-decision-view-",
+                "Decision Admission Authorized Decision View ID",
+            )
+            _sha256(
+                self.authorized_decision_view_hash,
+                "Decision Admission Authorized Decision View hash",
+            )
+            _prefixed_hash(
+                self.account_state_snapshot_id,
+                "account-state-snapshot-",
+                "Decision Admission Account State Snapshot ID",
+            )
+            _sha256(
+                self.account_state_snapshot_hash,
+                "Decision Admission Account State Snapshot hash",
+            )
+            _prefixed_hash(
+                self.position_snapshot_id,
+                "position-snapshot-",
+                "Decision Admission Position Snapshot ID",
+            )
+            _sha256(
+                self.position_snapshot_hash,
+                "Decision Admission Position Snapshot hash",
+            )
+            _prefixed_hash(
+                self.portfolio_decision_id,
+                "portfolio-decision-",
+                "Decision Admission Portfolio Decision ID",
+            )
+            _sha256(
+                self.portfolio_decision_hash,
+                "Decision Admission Portfolio Decision hash",
+            )
+            _prefixed_hash(
+                self.order_sizing_decision_id,
+                "order-sizing-decision-",
+                "Decision Admission Order Sizing Decision ID",
+            )
+            _sha256(
+                self.order_sizing_decision_hash,
+                "Decision Admission Order Sizing Decision hash",
+            )
         if self.disposition is DecisionDisposition.PROPOSE:
             if not all((self.signal_id, self.signal_intent_hash, self.order_intent_hash)):
                 raise ValueError("proposed Decision Admission requires Signal and Order bindings")
@@ -899,7 +1001,7 @@ class DecisionAdmission:
         return f"decision-admission-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "disposition": self.disposition.value,
             "decision_run_manifest_id": self.decision_run_manifest_id,
@@ -919,6 +1021,22 @@ class DecisionAdmission:
             "live_capability": self.live_capability,
             "execution_authority": self.execution_authority,
         }
+        if self.schema_version == DECISION_ADMISSION_SCHEMA_V2:
+            payload.update(
+                {
+                    "authorized_decision_view_id": self.authorized_decision_view_id,
+                    "authorized_decision_view_hash": self.authorized_decision_view_hash,
+                    "account_state_snapshot_id": self.account_state_snapshot_id,
+                    "account_state_snapshot_hash": self.account_state_snapshot_hash,
+                    "position_snapshot_id": self.position_snapshot_id,
+                    "position_snapshot_hash": self.position_snapshot_hash,
+                    "portfolio_decision_id": self.portfolio_decision_id,
+                    "portfolio_decision_hash": self.portfolio_decision_hash,
+                    "order_sizing_decision_id": self.order_sizing_decision_id,
+                    "order_sizing_decision_hash": self.order_sizing_decision_hash,
+                }
+            )
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "admission_id": self.admission_id}
@@ -931,6 +1049,13 @@ class DecisionAdmission:
         evidence_pack: EvidencePack,
         signal: SignalIntent | None,
         order: OrderIntent | None,
+        authorized_view: AuthorizedDecisionView | None = None,
+        account_state_snapshot: AccountStateSnapshot | None = None,
+        position_snapshot: PositionSnapshot | None = None,
+        portfolio_decision: PortfolioDecision | None = None,
+        sizing_decision: OrderSizingDecision | None = None,
+        mandate: TradingMandate | None = None,
+        price_basis: PriceBasisLike | None = None,
     ) -> None:
         if (
             self.decision_run_manifest_id != manifest.manifest_id
@@ -999,6 +1124,100 @@ class DecisionAdmission:
             raise ValueError("Decision Admission cannot predate its Order")
         if order.environment is not TradingEnvironment.PAPER:
             raise PermissionError("Decision Admission is paper-only")
+        if self.schema_version == DECISION_ADMISSION_SCHEMA_V1:
+            if any(
+                item is not None
+                for item in (
+                    authorized_view,
+                    account_state_snapshot,
+                    position_snapshot,
+                    portfolio_decision,
+                    sizing_decision,
+                    mandate,
+                    price_basis,
+                )
+            ):
+                raise ValueError("Decision Admission v1 cannot accept portfolio artifacts")
+            return
+        if any(
+            item is None
+            for item in (
+                authorized_view,
+                account_state_snapshot,
+                position_snapshot,
+                portfolio_decision,
+                sizing_decision,
+                mandate,
+                price_basis,
+            )
+        ):
+            raise ValueError("Decision Admission v2 requires complete portfolio artifacts")
+        assert authorized_view is not None
+        assert account_state_snapshot is not None
+        assert position_snapshot is not None
+        assert portfolio_decision is not None
+        assert sizing_decision is not None
+        assert mandate is not None
+        assert price_basis is not None
+        if (
+            self.authorized_decision_view_id != authorized_view.view_id
+            or self.authorized_decision_view_hash != canonical_hash(authorized_view.to_dict())
+            or self.account_state_snapshot_id != account_state_snapshot.snapshot_id
+            or self.account_state_snapshot_hash != canonical_hash(account_state_snapshot.to_dict())
+            or self.position_snapshot_id != position_snapshot.snapshot_id
+            or self.position_snapshot_hash != canonical_hash(position_snapshot.to_dict())
+            or self.portfolio_decision_id != portfolio_decision.decision_id
+            or self.portfolio_decision_hash != canonical_hash(portfolio_decision.to_dict())
+            or self.order_sizing_decision_id != sizing_decision.decision_id
+            or self.order_sizing_decision_hash != canonical_hash(sizing_decision.to_dict())
+        ):
+            raise ValueError("Decision Admission v2 binds different portfolio content")
+        if (
+            tuple(sorted(query_gate.authorized_snapshot_ids)) != authorized_view.data_snapshot_ids
+            or tuple(sorted(query_gate.authorized_decision_input_ids))
+            != authorized_view.decision_input_ids
+            or authorized_view.position_snapshot_id != position_snapshot.snapshot_id
+            or position_snapshot.account_state_snapshot_id != account_state_snapshot.snapshot_id
+            or position_snapshot.account_reference_hash
+            != account_state_snapshot.account_reference_hash
+            or position_snapshot.environment is not account_state_snapshot.environment
+            or position_snapshot.provider_id != account_state_snapshot.provider_id
+        ):
+            raise ValueError("Authorized Decision View differs from the Query Gate inputs")
+        if (
+            portfolio_decision.outcome is not PortfolioDecisionOutcome.READY_FOR_SIZING
+            or portfolio_decision.signal_id != signal.signal_id
+            or portfolio_decision.signal_hash != canonical_hash(signal.to_dict())
+            or portfolio_decision.authorized_decision_view_id != authorized_view.view_id
+            or portfolio_decision.authorized_decision_view_hash
+            != canonical_hash(authorized_view.to_dict())
+            or portfolio_decision.position_snapshot_id != position_snapshot.snapshot_id
+            or portfolio_decision.position_snapshot_hash
+            != canonical_hash(position_snapshot.to_dict())
+        ):
+            raise ValueError("Portfolio Decision lineage is not exact")
+        if (
+            sizing_decision.outcome is not OrderSizingOutcome.READY
+            or sizing_decision.portfolio_decision_id != portfolio_decision.decision_id
+            or sizing_decision.portfolio_decision_hash
+            != canonical_hash(portfolio_decision.to_dict())
+            or sizing_decision.position_snapshot_id != position_snapshot.snapshot_id
+            or sizing_decision.position_snapshot_hash != canonical_hash(position_snapshot.to_dict())
+            or sizing_decision.trading_mandate_hash != canonical_hash(mandate.to_dict())
+            or sizing_decision.price_basis_hash != canonical_hash(price_basis.to_dict())
+        ):
+            raise ValueError("Order Sizing Decision lineage is not exact")
+        if (
+            order.account_id != mandate.account_id
+            or order.environment is not mandate.environment
+            or order.instrument_id != sizing_decision.instrument_id
+            or order.side is not sizing_decision.side
+            or order.quantity != sizing_decision.quantity
+            or order.order_kind is not sizing_decision.order_kind
+            or order.limit_price != sizing_decision.limit_price
+            or order.created_at != sizing_decision.decided_at
+        ):
+            raise ValueError("Order Intent is not the exact deterministic sizing output")
 
 
 def prepare_decision_admission(
@@ -1057,6 +1276,102 @@ def prepare_decision_admission(
         evidence_pack=evidence_pack,
         signal=signal,
         order=order,
+    )
+    return admission
+
+
+def prepare_portfolio_decision_admission(
+    *,
+    manifest: DecisionRunManifest,
+    query_gate: ProspectiveQueryGateResult,
+    evidence_pack: EvidencePack,
+    signal: SignalIntent,
+    order: OrderIntent,
+    authorized_view: AuthorizedDecisionView,
+    account_state_snapshot: AccountStateSnapshot,
+    position_snapshot: PositionSnapshot,
+    portfolio_decision: PortfolioDecision,
+    sizing_decision: OrderSizingDecision,
+    mandate: TradingMandate,
+    price_basis: PriceBasisLike,
+    created_at: datetime,
+) -> DecisionAdmission:
+    _strict_utc(created_at, "Decision Admission created_at")
+    if created_at < sizing_decision.decided_at:
+        raise ValueError("Decision Admission cannot predate deterministic sizing")
+    bindings = {
+        "authorized_decision_view_id": authorized_view.view_id,
+        "authorized_decision_view_hash": canonical_hash(authorized_view.to_dict()),
+        "account_state_snapshot_id": account_state_snapshot.snapshot_id,
+        "account_state_snapshot_hash": canonical_hash(account_state_snapshot.to_dict()),
+        "position_snapshot_id": position_snapshot.snapshot_id,
+        "position_snapshot_hash": canonical_hash(position_snapshot.to_dict()),
+        "portfolio_decision_id": portfolio_decision.decision_id,
+        "portfolio_decision_hash": canonical_hash(portfolio_decision.to_dict()),
+        "order_sizing_decision_id": sizing_decision.decision_id,
+        "order_sizing_decision_hash": canonical_hash(sizing_decision.to_dict()),
+    }
+    core = {
+        "schema_version": DECISION_ADMISSION_SCHEMA_V2,
+        "disposition": manifest.disposition.value,
+        "decision_run_manifest_id": manifest.manifest_id,
+        "decision_run_manifest_hash": canonical_hash(manifest.to_dict()),
+        "query_gate_result_id": query_gate.result_id,
+        "query_gate_result_hash": canonical_hash(query_gate.to_dict()),
+        "evidence_pack_id": evidence_pack.pack_id,
+        "evidence_pack_hash": canonical_hash(evidence_pack.to_dict()),
+        "signal_id": signal.signal_id,
+        "signal_intent_hash": canonical_hash(signal.to_dict()),
+        "order_intent_hash": canonical_hash(order.to_dict()),
+        "agreeing_judgment_artifact_ids": list(manifest.agreeing_judgment_artifact_ids),
+        "paper_approval_mode": "manual_each",
+        "created_at": _timestamp(created_at),
+        "claim_scope": DECISION_CLAIM_SCOPE,
+        "alpha_claim": False,
+        "live_capability": False,
+        "execution_authority": False,
+        **bindings,
+    }
+    admission = DecisionAdmission(
+        admission_id=f"decision-admission-{canonical_hash(core)}",
+        disposition=manifest.disposition,
+        decision_run_manifest_id=manifest.manifest_id,
+        decision_run_manifest_hash=canonical_hash(manifest.to_dict()),
+        query_gate_result_id=query_gate.result_id,
+        query_gate_result_hash=canonical_hash(query_gate.to_dict()),
+        evidence_pack_id=evidence_pack.pack_id,
+        evidence_pack_hash=canonical_hash(evidence_pack.to_dict()),
+        signal_id=signal.signal_id,
+        signal_intent_hash=canonical_hash(signal.to_dict()),
+        order_intent_hash=canonical_hash(order.to_dict()),
+        agreeing_judgment_artifact_ids=manifest.agreeing_judgment_artifact_ids,
+        paper_approval_mode="manual_each",
+        created_at=created_at,
+        authorized_decision_view_id=authorized_view.view_id,
+        authorized_decision_view_hash=canonical_hash(authorized_view.to_dict()),
+        account_state_snapshot_id=account_state_snapshot.snapshot_id,
+        account_state_snapshot_hash=canonical_hash(account_state_snapshot.to_dict()),
+        position_snapshot_id=position_snapshot.snapshot_id,
+        position_snapshot_hash=canonical_hash(position_snapshot.to_dict()),
+        portfolio_decision_id=portfolio_decision.decision_id,
+        portfolio_decision_hash=canonical_hash(portfolio_decision.to_dict()),
+        order_sizing_decision_id=sizing_decision.decision_id,
+        order_sizing_decision_hash=canonical_hash(sizing_decision.to_dict()),
+        schema_version=DECISION_ADMISSION_SCHEMA_V2,
+    )
+    admission.assert_matches(
+        manifest=manifest,
+        query_gate=query_gate,
+        evidence_pack=evidence_pack,
+        signal=signal,
+        order=order,
+        authorized_view=authorized_view,
+        account_state_snapshot=account_state_snapshot,
+        position_snapshot=position_snapshot,
+        portfolio_decision=portfolio_decision,
+        sizing_decision=sizing_decision,
+        mandate=mandate,
+        price_basis=price_basis,
     )
     return admission
 

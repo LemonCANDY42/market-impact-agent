@@ -157,6 +157,20 @@ class TradingMandate:
         if not self.max_order_notional.is_finite() or self.max_order_notional <= 0:
             raise ValueError("max_order_notional must be finite and positive")
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.trading-mandate.v1",
+            "mandate_id": self.mandate_id,
+            "account_id": self.account_id,
+            "environment": self.environment.value,
+            "approval_mode": self.approval_mode.value,
+            "valid_from": _timestamp(self.valid_from),
+            "expires_at": _timestamp(self.expires_at),
+            "allowed_instruments": sorted(self.allowed_instruments),
+            "allowed_sides": sorted(item.value for item in self.allowed_sides),
+            "max_order_notional": str(self.max_order_notional),
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class HardPolicyDecision:

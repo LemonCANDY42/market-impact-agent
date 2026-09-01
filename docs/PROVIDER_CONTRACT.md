@@ -126,6 +126,22 @@ stream and query recovery, external-order classification, and reconciliation—b
 Nautilus does not automatically satisfy them. Public schemas and normalized domain events
 never expose NautilusTrader types.
 
+The provider-neutral account-to-order seam is now concrete rather than engine-specific:
+`AuthorizedDecisionView -> PortfolioDecision -> OrderSizingDecision -> OrderIntent ->
+DecisionAdmission v2`. The v2 admission binds the trusted parent account state, derived position,
+mandate, raw price, Instrument Master identity, side-applicable venue/class rule and deterministic
+quantity artifacts before the execution Provider is called.
+Admission, approval and dispatch each compare that parent with the trusted current Account State
+source and the composition-root maximum age. The admitted Position Snapshot cannot select or extend
+that policy. Dispatch checks the exact account state and order/mandate/price expiries both after the
+durable claim and inside the sealed Provider-capability validator. A changed or stale snapshot
+expires the pending operation before the Provider call; the Harness requires a fresh decision
+instead of carrying an old manual approval forward. Legacy Decision Admission v1 remains readable
+but is never executable.
+Nautilus and future sibling engines consume only the resulting engine-neutral operation; they do
+not recalculate Harness sizing or become a portfolio-policy authority. The accepted durable mock
+path proves this contract and restart validation, but does not satisfy `ibkr-nautilus-paper`.
+
 The bootstrap execution runtime remains separate from the narrow engine-neutral backtest
 port; replay requests never pass through `submit/cancel/reconcile`. Other engines can
 implement `BacktestBridge` through their own adapters and need not reproduce
@@ -139,3 +155,8 @@ expired mandates; mismatched accounts or environments; unknown order state; prov
 disconnects; external orders; and reconciliation gaps fail closed. An expired submission
 lease becomes `unknown` and is never returned to the queue. A semantic agent cannot turn an
 infrastructure uncertainty into approval.
+
+A Provider must reject a failed sealed-capability validation before any external mutation and
+report the typed `SubmissionCapabilityRejected` outcome. The Harness can then expire the durable
+claim because non-submission is known. Transport or Provider exceptions without that guarantee stay
+`unknown` and require reconciliation.

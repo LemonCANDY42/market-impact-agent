@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -12,6 +13,12 @@ from typing import cast
 
 import pytest
 
+from market_impact_agent.account_state import (
+    AccountStateSnapshot,
+    CashBalance,
+    PositionSnapshot,
+    capture_account_state_snapshot,
+)
 from market_impact_agent.agent_contracts import (
     CandidateDirection,
     CandidateImpact,
@@ -40,7 +47,9 @@ from market_impact_agent.agent_runtime import (
     ToolRegistry,
 )
 from market_impact_agent.agent_schema import validate_agent_contract
+from market_impact_agent.authorized_decision_view import AuthorizedDecisionView
 from market_impact_agent.checkpoint_decision_inputs import project_checkpoint_observation
+from market_impact_agent.checkpoint_market_universe import load_exchange_instrument_rule_set
 from market_impact_agent.data_inputs import (
     DataFetchStatus,
     DataPITLane,
@@ -57,6 +66,7 @@ from market_impact_agent.decision_admission import (
     build_decision_run_manifest,
     build_signal_from_decision_manifest,
     prepare_decision_admission,
+    prepare_portfolio_decision_admission,
 )
 from market_impact_agent.domain import (
     ApprovalMode,
@@ -75,8 +85,16 @@ from market_impact_agent.observations import (
 )
 from market_impact_agent.paper_execution import (
     ApprovalState,
+    OutboxState,
     PaperExecutionService,
     PriceBasis,
+)
+from market_impact_agent.portfolio_decision import (
+    OrderSizingPolicy,
+    PortfolioAction,
+    build_order_intent_from_sizing,
+    evaluate_portfolio_decision,
+    size_portfolio_decision,
 )
 from market_impact_agent.prospective_checkpoint_sets import (
     CheckpointCapabilityBinding,
@@ -100,7 +118,13 @@ from market_impact_agent.prospective_query_gate import (
     build_query_gate_evaluation_material,
     evaluate_prospective_query_gate,
 )
-from market_impact_agent.providers import MockExecutionProvider
+from market_impact_agent.providers import (
+    Capability,
+    MockExecutionProvider,
+    ProviderManifest,
+    ProviderTransport,
+    TrustTier,
+)
 from market_impact_agent.research import EvidenceTier, TransmissionDirectness
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
 
@@ -1283,31 +1307,57 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         valid_from=NOW - timedelta(minutes=5),
         expires_at=NOW + timedelta(minutes=30),
     )
-    order = OrderIntent(
-        client_order_id="decision-order-persisted",
-        signal_id=signal.signal_id,
-        account_id="paper-account",
-        environment=TradingEnvironment.PAPER,
-        instrument_id=signal.instrument_id,
-        side=signal.side,
-        quantity=Decimal("10"),
-        order_kind=OrderKind.MARKET,
-        created_at=NOW - timedelta(minutes=4),
-        expires_at=NOW + timedelta(minutes=20),
-    )
-    admission = prepare_decision_admission(
-        manifest=manifest,
-        query_gate=gate,
-        evidence_pack=pack,
-        signal=signal,
-        order=order,
-        created_at=NOW - timedelta(minutes=3),
-    )
     root = tmp_path / "paper"
     provider_path = tmp_path / "provider.sqlite3"
+    account_provider = ProviderManifest(
+        schema_version="market-impact.provider-manifest.v1",
+        provider_id="fixture-account",
+        provider_version="1",
+        transport=ProviderTransport.NATIVE,
+        environments=frozenset({TradingEnvironment.PAPER}),
+        declared_capabilities=frozenset({Capability.ACCOUNT}),
+        verified_capabilities=frozenset({Capability.ACCOUNT}),
+        markets=("XSHG",),
+        order_types=(),
+        supports_streaming=False,
+        supports_reconciliation=True,
+        enabled=True,
+        trust_tier=TrustTier.PAPER_VALIDATED,
+    )
+    account_state = capture_account_state_snapshot(
+        provider=account_provider,
+        account_reference="fixture-paper-account",
+        account_reference_key=b"decision-admission-account-key-32b",
+        environment=TradingEnvironment.PAPER,
+        as_of=gate.evaluated_at - timedelta(minutes=1),
+        reconciled_at=gate.evaluated_at - timedelta(minutes=1),
+        reconciliation_reference="fixture-account-reconciliation",
+        cash=(
+            CashBalance(
+                currency="CNY",
+                available=Decimal("50000"),
+                settled=Decimal("50000"),
+            ),
+        ),
+        positions=(),
+        open_orders=(),
+        recent_fills=(),
+        recent_fills_since=gate.evaluated_at - timedelta(days=1),
+    )
+    position_snapshot: PositionSnapshot = account_state.project_positions(
+        evaluated_at=gate.evaluated_at,
+        max_age=timedelta(minutes=5),
+    )
+    authorized_view = AuthorizedDecisionView.build(
+        cutoff=gate.evaluated_at,
+        frozen_at=gate.evaluated_at + timedelta(seconds=1),
+        data_snapshot_ids=gate.authorized_snapshot_ids,
+        decision_input_ids=gate.authorized_decision_input_ids,
+        position_snapshot=position_snapshot,
+    )
     mandate = TradingMandate(
         mandate_id="paper-manual-v1",
-        account_id="paper-account",
+        account_id=position_snapshot.account_reference_hash,
         environment=TradingEnvironment.PAPER,
         approval_mode=ApprovalMode.MANUAL_EACH,
         valid_from=NOW - timedelta(days=1),
@@ -1316,25 +1366,322 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         allowed_sides=frozenset({Side.BUY, Side.SELL}),
         max_order_notional=Decimal("10000"),
     )
+    price_basis = PriceBasis(
+        instrument_id="510300.XSHG",
+        currency="CNY",
+        unit="per_share",
+        basis_kind="raw_reference_quote",
+        price=Decimal("4"),
+        source_id="mock-price",
+        source_version="1",
+        observed_at=NOW - timedelta(minutes=5),
+        valid_until=NOW + timedelta(minutes=1),
+    )
+    portfolio_decision = evaluate_portfolio_decision(
+        signal=signal,
+        authorized_view=authorized_view,
+        position_snapshot=position_snapshot,
+        requested_action=PortfolioAction.OPEN,
+        venue="XSHG",
+        instrument_class="exchange_traded_fund",
+        evidence_refs=signal.evidence_refs,
+        decided_at=NOW - timedelta(minutes=4, seconds=30),
+    )
+    rule_set = load_exchange_instrument_rule_set(
+        Path(__file__).parents[1]
+        / "examples"
+        / "research"
+        / "a-share-exchange-instrument-rules-v1.json"
+    )
+    sizing_policy = OrderSizingPolicy(
+        max_available_cash_fraction=Decimal("0.20"),
+        reduction_fraction=Decimal("0.50"),
+    )
+    sizing_decision = size_portfolio_decision(
+        portfolio_decision=portfolio_decision,
+        position_snapshot=position_snapshot,
+        mandate=mandate,
+        price_basis=price_basis,
+        rule_set=rule_set,
+        sizing_policy=sizing_policy,
+        order_kind=OrderKind.MARKET,
+        decided_at=NOW - timedelta(minutes=4),
+    )
+    order = build_order_intent_from_sizing(
+        sizing_decision=sizing_decision,
+        signal=signal,
+        mandate=mandate,
+        expires_at=NOW + timedelta(minutes=20),
+    )
+    admission = prepare_portfolio_decision_admission(
+        manifest=manifest,
+        query_gate=gate,
+        evidence_pack=pack,
+        signal=signal,
+        order=order,
+        authorized_view=authorized_view,
+        account_state_snapshot=account_state,
+        position_snapshot=position_snapshot,
+        portfolio_decision=portfolio_decision,
+        sizing_decision=sizing_decision,
+        mandate=mandate,
+        price_basis=price_basis,
+        created_at=NOW - timedelta(minutes=3),
+    )
+    assert validate_agent_contract(admission.to_dict(), "decision-admission-v2.schema.json") == ()
+    service_now = gate.evaluated_at + timedelta(minutes=4)
+    main_clock = [service_now]
+    main_account_state = [account_state]
 
     def service() -> PaperExecutionService:
         return PaperExecutionService(
             root,
-            provider=MockExecutionProvider(provider_path, clock=lambda: NOW),
+            provider=MockExecutionProvider(provider_path, clock=lambda: main_clock[0]),
             mandate=mandate,
-            price_source=lambda _order: PriceBasis(
-                instrument_id="510300.XSHG",
-                currency="CNY",
-                unit="per_share",
-                basis_kind="raw_reference_quote",
-                price=Decimal("4"),
-                source_id="mock-price",
-                source_version="1",
-                observed_at=NOW - timedelta(seconds=1),
-                valid_until=NOW + timedelta(minutes=1),
-            ),
-            clock=lambda: NOW,
+            price_source=lambda _order: price_basis,
+            clock=lambda: main_clock[0],
             agent_run_authorities=authorities,
+            account_state_snapshots={account_state.snapshot_id: account_state},
+            account_state_source=lambda: main_account_state[0],
+            instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+            instrument_rule_sets={rule_set.rule_set_id: rule_set},
+            order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        )
+
+    def admit_with(target_service: PaperExecutionService):
+        return target_service.admit_decision(
+            order,
+            admission,
+            manifest=manifest,
+            query_gate=gate,
+            evidence_pack=pack,
+            registration=_registration(),
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=plan,
+            signal=signal,
+            paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
+        )
+
+    forged_sizing_core = sizing_decision.core_dict()
+    forged_sizing_core["quantity"] = "100"
+    forged_sizing_core["order_notional"] = "400"
+    forged_sizing = replace(
+        sizing_decision,
+        decision_id=f"order-sizing-decision-{canonical_hash(forged_sizing_core)}",
+        quantity=Decimal("100"),
+        order_notional=Decimal("400"),
+    )
+    forged_order = build_order_intent_from_sizing(
+        sizing_decision=forged_sizing,
+        signal=signal,
+        mandate=mandate,
+        expires_at=NOW + timedelta(minutes=20),
+    )
+    forged_sizing_admission = prepare_portfolio_decision_admission(
+        manifest=manifest,
+        query_gate=gate,
+        evidence_pack=pack,
+        signal=signal,
+        order=forged_order,
+        authorized_view=authorized_view,
+        account_state_snapshot=account_state,
+        position_snapshot=position_snapshot,
+        portfolio_decision=portfolio_decision,
+        sizing_decision=forged_sizing,
+        mandate=mandate,
+        price_basis=price_basis,
+        created_at=NOW - timedelta(minutes=3),
+    )
+    with pytest.raises(ValueError, match="not deterministically evaluated"):
+        service().admit_decision(
+            forged_order,
+            forged_sizing_admission,
+            manifest=manifest,
+            query_gate=gate,
+            evidence_pack=pack,
+            registration=_registration(),
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=plan,
+            signal=signal,
+            paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=forged_sizing,
+            price_basis=price_basis,
+        )
+
+    without_account_authority = PaperExecutionService(
+        tmp_path / "paper-without-account-authority",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-without-account-authority.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_source=lambda: account_state,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    with pytest.raises(PermissionError, match="Account State authority"):
+        without_account_authority.admit_decision(
+            order,
+            admission,
+            manifest=manifest,
+            query_gate=gate,
+            evidence_pack=pack,
+            registration=_registration(),
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=plan,
+            signal=signal,
+            paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
+        )
+
+    strict_freshness_service = PaperExecutionService(
+        tmp_path / "paper-strict-account-freshness",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-strict-account-freshness.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        account_state_max_age=timedelta(minutes=1),
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    with pytest.raises(ValueError, match="Position Snapshot is not a trusted projection"):
+        admit_with(strict_freshness_service)
+
+    without_instrument_identity = PaperExecutionService(
+        tmp_path / "paper-without-instrument-identity",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-without-instrument-identity.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    with pytest.raises(PermissionError, match="Instrument Master identity"):
+        without_instrument_identity.admit_decision(
+            order,
+            admission,
+            manifest=manifest,
+            query_gate=gate,
+            evidence_pack=pack,
+            registration=_registration(),
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=plan,
+            signal=signal,
+            paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
+        )
+
+    wrong_instrument_identity = PaperExecutionService(
+        tmp_path / "paper-wrong-instrument-identity",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-wrong-instrument-identity.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        instrument_identities={"510300.XSHG": ("XSHG", "equity")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    with pytest.raises(ValueError, match="differs from Instrument Master"):
+        wrong_instrument_identity.admit_decision(
+            order,
+            admission,
+            manifest=manifest,
+            query_gate=gate,
+            evidence_pack=pack,
+            registration=_registration(),
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=plan,
+            signal=signal,
+            paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
+        )
+
+    without_sizing_authority = PaperExecutionService(
+        tmp_path / "paper-without-sizing-authority",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-without-sizing-authority.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+    )
+    with pytest.raises(PermissionError, match="sizing rule or policy authority"):
+        without_sizing_authority.admit_decision(
+            order,
+            admission,
+            manifest=manifest,
+            query_gate=gate,
+            evidence_pack=pack,
+            registration=_registration(),
+            snapshot_set=snapshot_set,
+            decision_inputs=decision_inputs,
+            snapshot_store=snapshot_store,
+            execution_plan=plan,
+            signal=signal,
+            paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
         )
 
     forged_gate = _gate(pack, plan)
@@ -1352,27 +1699,27 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             execution_plan=plan,
             signal=signal,
             paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
         )
 
     without_authority = PaperExecutionService(
         tmp_path / "paper-without-run-authority",
         provider=MockExecutionProvider(
             tmp_path / "provider-without-run-authority.sqlite3",
-            clock=lambda: NOW,
+            clock=lambda: service_now,
         ),
         mandate=mandate,
-        price_source=lambda _order: PriceBasis(
-            instrument_id="510300.XSHG",
-            currency="CNY",
-            unit="per_share",
-            basis_kind="raw_reference_quote",
-            price=Decimal("4"),
-            source_id="mock-price",
-            source_version="1",
-            observed_at=NOW - timedelta(seconds=1),
-            valid_until=NOW + timedelta(minutes=1),
-        ),
-        clock=lambda: NOW,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
     )
     setattr(without_authority, "agent_run_authorities", authorities)  # noqa: B010
     with pytest.raises(PermissionError, match="Agent run authority"):
@@ -1389,22 +1736,14 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             execution_plan=plan,
             signal=signal,
             paired_runs=_paired_runs(runs),
+            authorized_view=authorized_view,
+            position_snapshot=position_snapshot,
+            portfolio_decision=portfolio_decision,
+            sizing_decision=sizing_decision,
+            price_basis=price_basis,
         )
 
-    record = service().admit_decision(
-        order,
-        admission,
-        manifest=manifest,
-        query_gate=gate,
-        evidence_pack=pack,
-        registration=_registration(),
-        snapshot_set=snapshot_set,
-        decision_inputs=decision_inputs,
-        snapshot_store=snapshot_store,
-        execution_plan=plan,
-        signal=signal,
-        paired_runs=_paired_runs(runs),
-    )
+    record = admit_with(service())
     assert record.approval_state is ApprovalState.PENDING_APPROVAL
     assert record.agent_admission_hash == canonical_hash(admission.to_dict())
     assert service().get(order.client_order_id) == record
@@ -1462,3 +1801,265 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
     ).path.unlink()
     with pytest.raises(FileNotFoundError):
         service().get(order.client_order_id)
+    missing_judgment = next(
+        result.judgment
+        for result in (*runs[manifest.control_arm], *runs[manifest.treatment_arm])
+        if result.judgment is not None
+        and canonical_hash(result.judgment.to_dict()) == missing_judgment_hash
+    )
+    assert missing_judgment is not None
+    assert (
+        service().artifacts.put_json(missing_judgment.to_dict()).content_hash
+        == missing_judgment_hash
+    )
+
+    approved = service().decide(
+        order.client_order_id,
+        approve=True,
+        actor_ref="fixture-human-approver",
+    )
+    assert approved.approval_state is ApprovalState.APPROVED
+    assert approved.outbox_state is OutboxState.QUEUED
+    accepted = service().dispatch_next()
+    assert accepted is not None
+    assert accepted.outbox_state is OutboxState.ACCEPTED
+    assert accepted.fill_status is None
+    reconciliation = service().reconcile()
+    assert reconciliation.complete
+    assert reconciliation.gaps == ()
+    assert service().get(order.client_order_id).outbox_state is OutboxState.RECONCILED
+
+    legacy_service = PaperExecutionService(
+        tmp_path / "paper-legacy-admission",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-legacy-admission.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    assert admit_with(legacy_service).approval_state is ApprovalState.PENDING_APPROVAL
+    legacy_admission = prepare_decision_admission(
+        manifest=manifest,
+        query_gate=gate,
+        evidence_pack=pack,
+        signal=signal,
+        order=order,
+        created_at=NOW - timedelta(minutes=3),
+    )
+    legacy_artifact = legacy_service.artifacts.put_json(legacy_admission.to_dict())
+    with sqlite3.connect(legacy_service.database_path) as connection:
+        connection.execute(
+            "UPDATE paper_intents SET agent_admission_hash = ? WHERE client_order_id = ?",
+            (legacy_artifact.content_hash, order.client_order_id),
+        )
+    legacy_result = legacy_service.decide(
+        order.client_order_id,
+        approve=True,
+        actor_ref="fixture-human-approver",
+    )
+    assert legacy_result.approval_state is ApprovalState.EXPIRED
+    assert legacy_result.outbox_state is None
+
+    stale_clock = [service_now]
+    stale_service = PaperExecutionService(
+        tmp_path / "paper-stale-before-approval",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-stale-before-approval.sqlite3",
+            clock=lambda: stale_clock[0],
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: stale_clock[0],
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: account_state,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    assert admit_with(stale_service).approval_state is ApprovalState.PENDING_APPROVAL
+    stale_clock[0] += timedelta(seconds=1)
+    stale_approval = stale_service.decide(
+        order.client_order_id,
+        approve=True,
+        actor_ref="fixture-human-approver",
+    )
+    assert stale_approval.approval_state is ApprovalState.EXPIRED
+
+    changed_account_state = capture_account_state_snapshot(
+        provider=account_provider,
+        account_reference="fixture-paper-account",
+        account_reference_key=b"decision-admission-account-key-32b",
+        environment=TradingEnvironment.PAPER,
+        as_of=account_state.as_of,
+        reconciled_at=account_state.reconciled_at,
+        reconciliation_reference="fixture-account-reconciliation-changed",
+        cash=(
+            CashBalance(
+                currency="CNY",
+                available=Decimal("49000"),
+                settled=Decimal("49000"),
+            ),
+        ),
+        positions=(),
+        open_orders=(),
+        recent_fills=(),
+        recent_fills_since=gate.evaluated_at - timedelta(days=1),
+    )
+    dispatch_account_state = [account_state]
+    dispatch_service = PaperExecutionService(
+        tmp_path / "paper-account-changed-before-dispatch",
+        provider=MockExecutionProvider(
+            tmp_path / "provider-account-changed-before-dispatch.sqlite3",
+            clock=lambda: service_now,
+        ),
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=lambda: dispatch_account_state[0],
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    assert admit_with(dispatch_service).approval_state is ApprovalState.PENDING_APPROVAL
+    assert (
+        dispatch_service.decide(
+            order.client_order_id,
+            approve=True,
+            actor_ref="fixture-human-approver",
+        ).outbox_state
+        is OutboxState.QUEUED
+    )
+    dispatch_account_state[0] = changed_account_state
+    assert dispatch_service.dispatch_next() is None
+    assert dispatch_service.get(order.client_order_id).outbox_state is OutboxState.EXPIRED
+
+    race_source_calls = [0]
+
+    def account_state_changes_after_claim() -> AccountStateSnapshot:
+        race_source_calls[0] += 1
+        if race_source_calls[0] <= 3:
+            return account_state
+        return changed_account_state
+
+    race_provider = MockExecutionProvider(
+        tmp_path / "provider-account-changed-after-claim.sqlite3",
+        clock=lambda: service_now,
+    )
+    race_service = PaperExecutionService(
+        tmp_path / "paper-account-changed-after-claim",
+        provider=race_provider,
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=account_state_changes_after_claim,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    assert admit_with(race_service).approval_state is ApprovalState.PENDING_APPROVAL
+    assert (
+        race_service.decide(
+            order.client_order_id,
+            approve=True,
+            actor_ref="fixture-human-approver",
+        ).outbox_state
+        is OutboxState.QUEUED
+    )
+    raced = race_service.dispatch_next()
+    assert raced is not None
+    assert raced.outbox_state is OutboxState.EXPIRED
+    assert race_provider.reconcile().receipts == ()
+    assert race_service.execution_blocked is False
+
+    source_error_calls = [0]
+
+    def account_state_check_fails_after_claim() -> AccountStateSnapshot:
+        source_error_calls[0] += 1
+        if source_error_calls[0] <= 3:
+            return account_state
+        raise RuntimeError("fixture Account State source unavailable")
+
+    source_error_provider = MockExecutionProvider(
+        tmp_path / "provider-account-source-error-after-claim.sqlite3",
+        clock=lambda: service_now,
+    )
+    source_error_service = PaperExecutionService(
+        tmp_path / "paper-account-source-error-after-claim",
+        provider=source_error_provider,
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=account_state_check_fails_after_claim,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    assert admit_with(source_error_service).approval_state is ApprovalState.PENDING_APPROVAL
+    assert (
+        source_error_service.decide(
+            order.client_order_id,
+            approve=True,
+            actor_ref="fixture-human-approver",
+        ).outbox_state
+        is OutboxState.QUEUED
+    )
+    source_error_result = source_error_service.dispatch_next()
+    assert source_error_result is not None
+    assert source_error_result.outbox_state is OutboxState.EXPIRED
+    assert source_error_provider.reconcile().receipts == ()
+    assert source_error_service.execution_blocked is False
+
+    validator_race_calls = [0]
+
+    def account_state_changes_inside_provider_validator() -> AccountStateSnapshot:
+        validator_race_calls[0] += 1
+        if validator_race_calls[0] <= 4:
+            return account_state
+        return changed_account_state
+
+    validator_race_provider = MockExecutionProvider(
+        tmp_path / "provider-account-changed-in-validator.sqlite3",
+        clock=lambda: service_now,
+    )
+    validator_race_service = PaperExecutionService(
+        tmp_path / "paper-account-changed-in-validator",
+        provider=validator_race_provider,
+        mandate=mandate,
+        price_source=lambda _order: price_basis,
+        clock=lambda: service_now,
+        agent_run_authorities=authorities,
+        account_state_snapshots={account_state.snapshot_id: account_state},
+        account_state_source=account_state_changes_inside_provider_validator,
+        instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        instrument_rule_sets={rule_set.rule_set_id: rule_set},
+        order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+    )
+    assert admit_with(validator_race_service).approval_state is ApprovalState.PENDING_APPROVAL
+    assert (
+        validator_race_service.decide(
+            order.client_order_id,
+            approve=True,
+            actor_ref="fixture-human-approver",
+        ).outbox_state
+        is OutboxState.QUEUED
+    )
+    validator_rejected = validator_race_service.dispatch_next()
+    assert validator_rejected is not None
+    assert validator_rejected.outbox_state is OutboxState.EXPIRED
+    assert validator_race_provider.reconcile().receipts == ()
+    assert validator_race_service.execution_blocked is False

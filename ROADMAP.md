@@ -1135,7 +1135,7 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   runtime authority and reopens its source Run Journal/artifact store before copying the immutable
   evidence into paper state; no such authority may be supplied by the order caller. This is
   mock-only `manual_each` contract acceptance; no real checkpoint has exercised it.
-- [ ] Add the account decision loop before an external paper claim.
+- [ ] Complete the account decision loop before an external paper claim.
   - [x] Freeze complete, credential-free Account State Snapshot and full Position Snapshot contracts
     with cash, quantities, side, concentration, open orders, recent fills, freshness, completeness
     and explicit gaps. The Harness derives content identity and a keyed, non-serialized account
@@ -1159,11 +1159,31 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
     canonicalized to UTC before content identity is derived. This accepts only the bounded `ACCOUNT`
     read path, not IBKR
     submit/cancel/replace or full broker-paper Provider acceptance.
-  - [ ] Add Portfolio Decision and deterministic Order Sizing Decision between Signal and Order
-    Intent. Agent confidence cannot affect size; exposure-increasing actions require complete fresh
-    account state, raw Price Basis, tradability, lot rules, mandate and open-order conflict checks.
-  - [ ] Exercise abstain/observe/hold/open/increase/reduce/close/rotate against the durable mock, then
-    add idempotent cancel and replace-as-cancel-plus-new-intent with unknown-state recovery.
+  - [x] Add content-identified Portfolio Decision and deterministic Order Sizing Decision between
+    Signal and Order Intent. Decision Admission v2 binds and restart-validates the trusted parent
+    Account State, exact Authorized Decision View, derived Position Snapshot, Portfolio Decision,
+    sizing output, Trading Mandate and raw Price Basis before the existing hard-policy and approval
+    gates. The paper composition root reprojects account state and validates target venue/class
+    against its trusted Instrument Master projection. Agent confidence cannot affect size; exposure
+    increase requires a gap-free fresh account view, exact venue/class rule, cash, mandate and no
+    target open-order conflict. Model-authored account state, identity or quantity can no longer
+    enter the Agent-directed mock path. Admission, approval and dispatch each re-read the trusted
+    current Account State source against the composition-root freshness policy; the caller cannot
+    extend it through Position Snapshot. Dispatch repeats account and hard-expiry checks after the
+    durable claim and inside the Provider capability validator. A changed or stale parent expires
+    before the Provider call and requires a fresh decision. Legacy Decision Admission v1 remains
+    replayable but cannot approve or dispatch an order.
+  - [x] Exercise open, blocked exposure increase, fail-closed risk-reducing sell, hold, rotate
+    rejection, adjusted-price rejection and missing-artifact restart failure against the durable
+    mock. A manual TWS order-coverage gap blocks every mutation because an unseen order may already
+    close or reverse the position. The accepted A-share rule artifact proves ordinary buy-order
+    semantics only, so long-position reduce/close sizing remains closed pending a separately
+    accepted sell rule; close quantities must also align with the applicable accepted lot rule. The
+    accepted path completes `manual_each` approval, mock submission, accepted-without-fill and full
+    reconciliation. This is provider-neutral mock acceptance only; the current real IB read gap
+    still blocks exposure increase.
+  - [ ] Add idempotent cancel and replace-as-cancel-plus-new-intent with unknown-state recovery, then
+    exercise explicit close and multi-leg rotate lifecycle through those operations.
   - [ ] Add durable approval/notification controls and a tested kill switch before any autonomous
     mode. Deposits, withdrawals, credentials and account administration remain out of scope.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus

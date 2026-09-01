@@ -375,6 +375,10 @@ class ExecutionProvider(Protocol):
     ) -> None: ...
 
 
+class SubmissionCapabilityRejected(PermissionError):
+    """The Provider rejected Harness authority before any external mutation."""
+
+
 class MockExecutionProvider:
     """An idempotent paper-only provider used to verify the harness boundary."""
 
@@ -427,7 +431,7 @@ class MockExecutionProvider:
         if not isinstance(capability, SubmissionCapability):
             raise TypeError("provider submission requires a harness-issued capability")
         if self._submission_validator is None or not self._submission_validator(capability):
-            raise PermissionError(
+            raise SubmissionCapabilityRejected(
                 "provider submission is not bound to an active durable outbox lease"
             )
         order = capability.order
