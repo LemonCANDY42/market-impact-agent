@@ -429,6 +429,24 @@ def test_callback_and_restart_activation_remain_fail_closed(
     )
 
 
+def test_persisted_profile_reopens_callbacks_but_is_not_implicitly_reoffered(
+    tmp_path: Path,
+) -> None:
+    store, journal, _, _, _, authority = _triage_setup(tmp_path)
+    context = authority.delegation_context()
+
+    reopened = AgentWatchAdmissionService(
+        store,
+        profiles=(),
+        delegation_authority=authority,
+        journal=journal,
+        watch_service=AttentionWatchService(store, journal=journal),
+    )
+
+    assert reopened.profiles
+    assert reopened.offered_profiles(context) == ()
+
+
 def test_concrete_triage_authority_derives_exact_event_cluster_projection(
     tmp_path: Path,
 ) -> None:

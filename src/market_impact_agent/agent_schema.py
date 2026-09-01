@@ -21,6 +21,7 @@ AGENT_SCHEMA_FILES = (
     "attention-watch-wake.schema.json",
     "agent-watch-request.schema.json",
     "agent-watch-admission.schema.json",
+    "agent-watch-wake-judgment-plan.schema.json",
     "monitoring-scope.schema.json",
     "retrieval-plan.schema.json",
     "retrieval-resolution.schema.json",

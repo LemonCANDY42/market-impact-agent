@@ -93,6 +93,64 @@ class TriggerAdmissionAuthority(Protocol):
     def assert_authoritative(self, admission: ProspectiveTriggerAdmission) -> None: ...
 
 
+def terminal_wake_resolution_parent_ids(
+    resolution_contexts: tuple[
+        tuple[
+            EventImpactTriageCandidateSet,
+            EventImpactTriageProposal,
+            EventImpactTriageDecision,
+            TriageClusterProposal,
+        ],
+        ...,
+    ],
+) -> tuple[str, ...]:
+    """Return parents whose exact Wake child reached a terminal non-Watch route."""
+
+    resolved: set[str] = set()
+    for candidate_set, _, decision, _ in resolution_contexts:
+        parent_cluster_id = candidate_set.parent_cluster_id
+        if parent_cluster_id is None:
+            continue
+        if (
+            decision.status is not TriageDecisionStatus.NEEDS_REVIEW
+            and not decision.attention_watch_cluster_ids
+        ):
+            resolved.add(parent_cluster_id)
+    return tuple(sorted(resolved))
+
+
+def unresolved_route_review_cluster_ids(
+    *,
+    earlier_contexts: tuple[
+        tuple[
+            EventImpactTriageCandidateSet,
+            EventImpactTriageProposal,
+            EventImpactTriageDecision,
+            TriageClusterProposal,
+        ],
+        ...,
+    ],
+    resolution_contexts: tuple[
+        tuple[
+            EventImpactTriageCandidateSet,
+            EventImpactTriageProposal,
+            EventImpactTriageDecision,
+            TriageClusterProposal,
+        ],
+        ...,
+    ],
+) -> tuple[str, ...]:
+    """Return earlier review clusters not terminally resolved by an exact Wake child."""
+
+    unresolved = {
+        cluster.cluster_id
+        for _, _, _, cluster in earlier_contexts
+        if cluster.checkpoint_eligibility is CheckpointEligibility.NEEDS_REVIEW
+    }
+    unresolved.difference_update(terminal_wake_resolution_parent_ids(resolution_contexts))
+    return tuple(sorted(unresolved))
+
+
 @dataclass(frozen=True, slots=True)
 class PositionHolding:
     target_id: str
@@ -850,10 +908,9 @@ class ProspectiveTriggerAdmissionStore:
         ):
             raise ValueError("Trigger Admission route epoch context differs from its Triage inputs")
         earlier_contexts = epoch_contexts[:selected_index]
-        unresolved_review = tuple(
-            epoch_cluster.cluster_id
-            for _, _, _, epoch_cluster in earlier_contexts
-            if epoch_cluster.checkpoint_eligibility is CheckpointEligibility.NEEDS_REVIEW
+        unresolved_review = unresolved_route_review_cluster_ids(
+            earlier_contexts=earlier_contexts,
+            resolution_contexts=epoch_contexts[: selected_index + 1],
         )
         if unresolved_review:
             raise ValueError("Trigger Admission has an earlier unresolved review candidate")

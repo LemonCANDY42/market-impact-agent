@@ -1099,13 +1099,20 @@ accepted for this exact Triage-owned path without adding a duplicate decision-vi
 equivalent Watch is reusable only while all three collection/wake budgets remain available;
 otherwise the admission records a typed budget-exhausted rejection.
 
-PDI-40 remains open for shared collection-opportunity fan-out, the bounded acquisition executor and
-installed scheduler. PDI-41 has accepted deterministic Wake-to-fresh-research-Run creation, durable
-per-callback binding, concurrent replay and both crash windows. The first dispatcher transaction
-freezes the accepted callback membership for that exact Wake; a later subscriber to a reused Watch
-can receive only a later Wake, so replay never grows the already-dispatched fan-out. PDI-41 remains
-open for freezing required Snapshots and invoking the bounded Judgment runtime. A model still cannot
-choose a URL, Provider, credential, destination, or same-run mutable context.
+The installed prospective collection worker now performs shared collection-opportunity fan-out: one
+completed Journaled Snapshot can advance every due Watch bound to that exact Collection Policy
+without a second Provider request. Profiles and the Triage parent resolver are durable, while each
+Watch retains its lease, matcher, budgets, aggregate freeze and outbox. PDI-40 remains open only for
+the separately admitted bounded acquisition executor when a local-first Resolution returns
+`fetch_required`; a model still cannot choose a URL, Provider, credential or destination.
+
+PDI-41 has accepted deterministic Wake-to-fresh-research-Run creation, durable per-callback binding,
+concurrent replay and both dispatch crash windows. It also freezes the Wake's exact new
+actual-receipt versions, binds the exact model Profile, direct Skill hashes and callback budget,
+invokes one bounded Triage coordinator, persists any resulting Triage Decision and terminalizes the
+dispatcher Run. Restart acceptance proves one physical Provider call. The first real admitted
+paid-news Watch has completed polls, but no new version matched its exact two-anchor scope; no real
+Wake or model result is therefore claimed yet.
 
 **Blocked by:** PDI-17 and PDI-22.
 
@@ -1115,17 +1122,17 @@ The durable creation boundary now derives one idempotent Run identity per immuta
 Wake/Admission/Profile callback, persists the exact binding under the shared Artifact Store and Run
 Journal, reopens the same Run under concurrent dispatch or either crash window, and acknowledges the
 Wake only after every callback binding in its first-dispatch immutable membership set is durable. It
-authorizes neither a model call nor execution.
+authorizes neither a model call nor execution by itself.
 
-Before starting a model, the remaining dispatcher work invokes the
-registered checkpoint coordinator to collect/freeze the selected required capabilities at the wake
-barrier cutoff; a structurally invalid required Snapshot defers or rejects dispatch, while absent
-optional inputs remain explicit gaps supplied to the Agent. It then starts one fresh bounded Agent Run
-with the internally verified selected Snapshot set
-and acknowledges only after durable run creation. Crash-before-create, crash-after-create,
-concurrent consumers, cancellation, budget exhaustion, invalid or incomplete Snapshots, cutoff
-drift, and terminal replay are accepted. The dispatcher exposes research capabilities only and
-cannot form or submit an order.
+The semantic executor then reopens that dispatch, resolves the exact local-first Retrieval Plan,
+freezes only the Wake's named new actual-receipt versions at its barrier cutoff, and builds a separate
+Candidate Set and Judgment Plan. It verifies the registered callback Agent profile, model Profile,
+direct Skill hashes and cost ceiling before one bounded coordinator call. Completed output may mint
+only a Triage Decision; the dispatcher Run is terminalized with its result identity and the Usage
+Ledger remains authoritative. Crash-before-create, crash-after-create, restart after dispatch,
+concurrent consumers, cancellation, invalid or incomplete Snapshots, cutoff drift and terminal
+replay have regression coverage. This path cannot form or submit an order. Real acceptance still
+requires the first naturally matching prospective Wake.
 
 **Blocked by:** PDI-30, PDI-32, and PDI-40.
 

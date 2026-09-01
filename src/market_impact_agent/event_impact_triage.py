@@ -22,6 +22,7 @@ from market_impact_agent.prospective_data import (
 from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 
 EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA = "market-impact.event-impact-triage-candidate-set.v1"
+EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2 = "market-impact.event-impact-triage-candidate-set.v2"
 EVENT_IMPACT_TRIAGE_BATCH_SELECTION_SCHEMA = "market-impact.event-impact-triage-batch-selection.v1"
 MAX_EVENT_IMPACT_TRIAGE_BATCH_CANDIDATES = 128
 EVENT_IMPACT_TRIAGE_PROPOSAL_SCHEMA = "market-impact.event-impact-triage-proposal.v1"
@@ -260,10 +261,38 @@ class EventImpactTriageCandidateSet:
     judgment_model_calls_authorized: bool = False
     execution_capability: bool = False
     schema_version: str = EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA
+    origin_wake_id: str | None = None
+    parent_cluster_id: str | None = None
+    wake_dispatch_binding_id: str | None = None
 
     def __post_init__(self) -> None:
-        if self.schema_version != EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA:
+        if self.schema_version not in {
+            EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA,
+            EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2,
+        }:
             raise ValueError("unsupported Event Impact Triage Candidate Set schema")
+        wake_lineage = (
+            self.origin_wake_id,
+            self.parent_cluster_id,
+            self.wake_dispatch_binding_id,
+        )
+        if self.schema_version == EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA:
+            if any(item is not None for item in wake_lineage):
+                raise ValueError("triage Candidate Set v1 cannot carry Wake lineage")
+        elif any(item is None for item in wake_lineage):
+            raise ValueError("triage Candidate Set v2 requires complete Wake lineage")
+        else:
+            _prefixed_hash(cast(str, self.origin_wake_id), "attention-wake-", "origin Wake")
+            _prefixed_hash(
+                cast(str, self.parent_cluster_id),
+                "event-impact-triage-cluster-",
+                "parent cluster",
+            )
+            _prefixed_hash(
+                cast(str, self.wake_dispatch_binding_id),
+                "agent-watch-wake-run-binding-",
+                "Wake dispatch binding",
+            )
         _prefixed_hash(
             self.registration_id,
             "prospective-diagnostic-registration-",
@@ -328,7 +357,7 @@ class EventImpactTriageCandidateSet:
         return tuple(item.version_id for item in self.observations)
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        core: dict[str, object] = {
             "schema_version": self.schema_version,
             "registration_id": self.registration_id,
             "checkpoint_key": self.checkpoint_key,
@@ -343,6 +372,15 @@ class EventImpactTriageCandidateSet:
             "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
             "execution_capability": self.execution_capability,
         }
+        if self.schema_version == EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2:
+            core.update(
+                {
+                    "origin_wake_id": self.origin_wake_id,
+                    "parent_cluster_id": self.parent_cluster_id,
+                    "wake_dispatch_binding_id": self.wake_dispatch_binding_id,
+                }
+            )
+        return core
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "candidate_set_id": self.candidate_set_id}
@@ -413,6 +451,7 @@ def event_impact_triage_candidate_set_from_dict(
     value: object,
 ) -> EventImpactTriageCandidateSet:
     payload = _object(value, "Event Impact Triage Candidate Set")
+    schema_version = _string(payload, "schema_version")
     expected = {
         "schema_version",
         "candidate_set_id",
@@ -429,6 +468,14 @@ def event_impact_triage_candidate_set_from_dict(
         "judgment_model_calls_authorized",
         "execution_capability",
     }
+    if schema_version == EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2:
+        expected.update(
+            {
+                "origin_wake_id",
+                "parent_cluster_id",
+                "wake_dispatch_binding_id",
+            }
+        )
     if set(payload) != expected:
         raise ValueError("Event Impact Triage Candidate Set fields are invalid")
     observation_fields = {
@@ -476,7 +523,22 @@ def event_impact_triage_candidate_set_from_dict(
         historical_pit_claim=_boolean(payload, "historical_pit_claim"),
         judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
         execution_capability=_boolean(payload, "execution_capability"),
-        schema_version=_string(payload, "schema_version"),
+        schema_version=schema_version,
+        origin_wake_id=(
+            _string(payload, "origin_wake_id")
+            if schema_version == EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2
+            else None
+        ),
+        parent_cluster_id=(
+            _string(payload, "parent_cluster_id")
+            if schema_version == EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2
+            else None
+        ),
+        wake_dispatch_binding_id=(
+            _string(payload, "wake_dispatch_binding_id")
+            if schema_version == EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2
+            else None
+        ),
     )
     if result.to_dict() != payload:
         raise ValueError("Event Impact Triage Candidate Set is not canonical")

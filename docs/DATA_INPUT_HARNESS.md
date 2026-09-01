@@ -788,17 +788,24 @@ closed. Free-text matching requires at least two co-occurring non-generic anchor
 term is accepted only on a structured identity field. Activation, restart recovery and later callback
 lookup each reopen the same parent Decision authority before proceeding. This makes profile offers,
 admission, lookup, shared callback fan-out and restart activation operational for that exact path.
-Shared due collection and the bounded acquisition executor remain later PDI-40 gates.
+The installed prospective collection worker now offers one completed Journaled Collection Snapshot
+to every due Watch bound to the same exact Collection Policy, without a second Provider request.
+Profile registration and multi-parent Triage resolution are durable; each Watch retains its own
+lease, matcher, budgets, aggregate freeze and callback outbox. Only the separately admitted bounded
+acquisition executor for a `fetch_required` Resolution remains a later PDI-40 gate.
 
 The callback lookup remains a read-only binding over a durable Wake, accepted Admission and exact
 still-registered delegate profile. `AgentWatchWakeDispatcher` can now create one deterministic fresh
 research-only Run plus its exact Wake/Admission/Profile binding for every callback, recover both
 crash windows and concurrent dispatch, and acknowledge the Wake only after all bindings in the
 immutable first-dispatch callback set are durable. A subscriber committed after that set was frozen
-is eligible only for a later Wake, not replay of the earlier Wake. It does not call a Judgment model
-or expose execution. Shared due-opportunity fan-out, the bounded
-acquisition executor and installed scheduler remain PDI-40 work; frozen required Snapshot collection
-and the actual bounded Judgment invocation remain PDI-41.
+is eligible only for a later Wake, not replay of the earlier Wake. The dispatcher itself does not
+call a model or expose execution. The semantic executor reopens that binding, resolves the exact
+local-first Retrieval Plan, freezes only the Wake's new actual-receipt versions, binds the model
+Profile, direct Skill hashes and callback budget, invokes one bounded Triage coordinator and
+terminalizes the dispatcher Run. Restart acceptance proves one physical Provider call. The first
+real Watch has completed polls without an exact matching new version, so no real prospective Wake
+model result is claimed yet.
 
 Prospective EventAssessment applies the same separation between observation throughput and decision
 authority. A completed no-path Watch or unresolved review remains a ready-time-order blocker for

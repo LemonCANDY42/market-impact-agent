@@ -1082,15 +1082,28 @@ def _field_values(payload: Mapping[str, object], field_path: str) -> tuple[str, 
             return ()
         value = cast(dict[str, object], raw_mapping).get(segment)
     if isinstance(value, str):
-        return (_normalized_term(value),)
+        normalized = _normalized_field_value(value)
+        return () if normalized is None else (normalized,)
     if not isinstance(value, list):
         return ()
     result: list[str] = []
     for item in cast(list[object], value):
         if not isinstance(item, str):
             return ()
-        result.append(_normalized_term(item))
+        normalized = _normalized_field_value(item)
+        if normalized is None:
+            return ()
+        result.append(normalized)
     return tuple(result)
+
+
+def _normalized_field_value(value: str) -> str | None:
+    """Normalize untrusted source text without applying query-term length limits."""
+
+    result = value.strip().casefold()
+    if not result or len(result) > 1_000_000 or "\x00" in result:
+        return None
+    return result
 
 
 def _matcher_from_dict(value: Mapping[str, object]) -> ObservationMatcher:

@@ -834,18 +834,36 @@ Stage 5 — automate bounded follow-up and open registered outcomes:
     each reopen the same parent authority. Caller projections, authority subclasses, archived
     clusters and EventAssessment-routed clusters remain fail-closed. Admission, shared-scope callback
     fan-out and admission-before-Watch activation recovery have concrete regression coverage.
-  - [ ] Install shared due-collection fan-out, the bounded acquisition executor and the scheduler.
-    Every remote fetch must enter the Journal and freeze a Snapshot before a fresh Agent Run can use
-    it; a child Watch cannot mutate its parent Judgment, widen the trading universe, or create an
-    Order Intent.
+  - [x] Reuse the installed prospective collection worker for shared due-collection fan-out. One
+    completed, Journaled Collection Snapshot is offered to every due Watch bound to that exact
+    Collection Policy; each Watch retains its own lease, matcher, byte/poll/wake budget and durable
+    outbox. Delegate Profiles and the Triage parent resolver are persisted under the same state root,
+    so restart does not depend on reconstructing one process-local Profile or parent object. A first
+    real paid-news Watch was admitted on 2026-09-01 and resumed after restart. The first failed poll
+    exposed and fixed an over-broad baseline rule: a new Watch proves recent coverage for at least
+    one route maximum-gap interval and then accumulates coverage from that frozen admission baseline;
+    an outage before Watch admission no longer blocks it forever, while any later gap still fails
+    closed. Subsequent real polls completed with no matching new version and therefore no Wake or
+    model call.
+  - [ ] Add the separate bounded acquisition executor for an admitted `fetch_required` Resolution.
+    It may select only an accepted source route and must Journal and freeze the result before a fresh
+    Agent Run can use it. A child Watch cannot mutate its parent Judgment, widen the trading
+    universe, or create an Order Intent.
 - [ ] `PDI-41` Dispatch a claimed Wake idempotently into one fresh bounded Judgment Run.
   - [x] Persist one deterministic fresh research-only Run and exact Wake/Admission/Profile binding
     per accepted callback. Concurrent dispatch and both crash windows reopen the same Run; the Wake
     freezes its callback membership on first dispatch and is acknowledged only after every binding
     in that immutable set is durable. Later subscribers to a reused Watch apply only to later Wakes.
     The boundary authorizes no Judgment model call and exposes no execution capability.
-  - [ ] Freeze the required checkpoint Snapshots at the Wake cutoff, invoke the registered bounded
-    Judgment runtime, and accept invalid-Snapshot, cancellation and budget-exhaustion behavior.
+  - [x] Freeze the exact new actual-receipt Observation Versions from a Wake into a separate
+    content-identified Candidate Set and Judgment Plan, then invoke the registered one-coordinator
+    Triage callback with its exact model Profile, Skill hashes and cost ceiling. Completion persists
+    a Triage Decision and terminalizes the dispatcher Run; invalid Retrieval/Snapshot authority,
+    Provider/profile drift, cancellation/terminal replay and restart after dispatch all remain under
+    the existing Run Journal and Usage Ledger. A restart regression proves one physical Provider call
+    across recovery. This grants neither Signal nor execution authority.
+  - [ ] Observe the first genuine matching prospective Wake and bounded model result, then route an
+    exact material/direct decision through PDI-30/PDI-31 rather than manufacturing a callback.
 - [ ] `PDI-42` Open outcomes after the registered horizon and issue the next-research go/no-go.
 
 ### Remaining Phase 1 research work

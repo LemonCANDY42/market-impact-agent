@@ -10,7 +10,7 @@ from enum import StrEnum
 from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
-from market_impact_agent.agent_engine import AgentRunResult, RunMetrics
+from market_impact_agent.agent_engine import AgentRunResult, CancellationToken, RunMetrics
 from market_impact_agent.agent_runtime import (
     MessageRole,
     ModelProvider,
@@ -32,6 +32,7 @@ from market_impact_agent.event_impact_triage import (
     TriageRunMemberEvidence,
     event_impact_triage_proposal_from_dict,
 )
+from market_impact_agent.model_json import load_model_json
 from market_impact_agent.model_provider import (
     ModelProviderProfile,
     load_builtin_model_provider_profile,
@@ -45,15 +46,18 @@ from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
 EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1 = "market-impact.event-impact-triage-execution-plan.v1"
 EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2 = "market-impact.event-impact-triage-execution-plan.v2"
+EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3 = "market-impact.event-impact-triage-execution-plan.v3"
 EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA = EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1
 EVENT_IMPACT_TRIAGE_SPECIALIST_ARTIFACT_SCHEMA = (
     "market-impact.event-impact-triage-specialist-artifact.v1"
 )
 EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V1 = "market-impact.event-impact-triage-run-artifact.v1"
 EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V2 = "market-impact.event-impact-triage-run-artifact.v2"
+EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V3 = "market-impact.event-impact-triage-run-artifact.v3"
 EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA = EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V1
 TRIAGE_RUNTIME_REF_V1 = "event-impact-triage-runtime-v1"
 TRIAGE_RUNTIME_REF_V2 = "event-impact-triage-runtime-v2"
+TRIAGE_RUNTIME_REF_V3 = "event-impact-triage-runtime-v3"
 TRIAGE_RUNTIME_REF = TRIAGE_RUNTIME_REF_V1
 TRIAGE_CANDIDATE_CONTENT_VIEW = "normalized-observation-payload-v1"
 TRIAGE_TOOL_SURFACE_HASH = canonical_hash([])
@@ -212,6 +216,7 @@ class EventImpactTriageExecutionPlan:
         if self.schema_version not in {
             EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
             EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
+            EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3,
         }:
             raise ValueError("unsupported Event Impact Triage Execution Plan schema")
         revision = _direct_plan_revision(self.schema_version)
@@ -332,11 +337,17 @@ def build_event_impact_triage_execution_plan(
     skills: SkillRegistry,
     position_snapshot_id: str | None = None,
     historical_analogy_pack_id: str | None = None,
+    max_turns: int | None = None,
+    max_input_tokens: int | None = None,
+    max_output_tokens: int | None = None,
+    max_estimated_cost_microusd: int | None = None,
+    coordinator_skills: tuple[str, ...] | None = None,
     _schema_version: str = EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
 ) -> EventImpactTriageExecutionPlan:
     if _schema_version not in {
         EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1,
         EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
+        EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3,
     }:
         raise ValueError("unsupported direct triage plan revision")
     revision = "v1" if _schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1 else "v2"
@@ -344,9 +355,15 @@ def build_event_impact_triage_execution_plan(
     if candidate_set.registration_id != registration.registration_id:
         raise ValueError("triage Candidate Set belongs to another registration")
     checkpoint = registration.checkpoint(candidate_set.checkpoint_key)
-    requested = dict(
+    requested: dict[TriageAgentRole, tuple[str, ...]] = dict(
         _BASELINE_ROLE_SKILLS if arm is TriageComparisonArm.BASELINE else _TREATMENT_ROLE_SKILLS
     )
+    if coordinator_skills is not None:
+        if arm is not TriageComparisonArm.BASELINE:
+            raise ValueError("custom coordinator Skills are accepted only by the direct baseline")
+        if not coordinator_skills or coordinator_skills != tuple(sorted(set(coordinator_skills))):
+            raise ValueError("custom coordinator Skills must be non-empty, unique, and sorted")
+        requested[TriageAgentRole.COORDINATOR] = coordinator_skills
     if arm is TriageComparisonArm.BASELINE and (
         position_snapshot_id is not None or historical_analogy_pack_id is not None
     ):
@@ -361,7 +378,26 @@ def build_event_impact_triage_execution_plan(
         requested[TriageAgentRole.HISTORICAL_ANALOGY] = ("pattern-review",)
     bindings: list[TriageRoleBinding] = []
     profile_budget = model_profile.budget
-    per_role_cost = profile_budget.max_estimated_cost_microusd or 0
+    selected_turns = min(3, profile_budget.max_turns)
+    selected_input = profile_budget.max_input_tokens
+    selected_output = profile_budget.max_output_tokens
+    selected_cost = profile_budget.max_estimated_cost_microusd or 0
+    for override, maximum, label in (
+        (max_turns, selected_turns, "max_turns"),
+        (max_input_tokens, selected_input, "max_input_tokens"),
+        (max_output_tokens, selected_output, "max_output_tokens"),
+        (max_estimated_cost_microusd, selected_cost, "max_estimated_cost_microusd"),
+    ):
+        if override is not None and (isinstance(override, bool) or override < 1):
+            raise ValueError(f"triage {label} override must be positive")
+        if override is not None and override > maximum:
+            raise ValueError(f"triage {label} override cannot widen the Provider profile")
+    selected_turns = selected_turns if max_turns is None else max_turns
+    selected_input = selected_input if max_input_tokens is None else max_input_tokens
+    selected_output = selected_output if max_output_tokens is None else max_output_tokens
+    selected_cost = (
+        selected_cost if max_estimated_cost_microusd is None else max_estimated_cost_microusd
+    )
     for role in sorted(requested, key=lambda item: item.value):
         loaded = skills.load(requested[role], allowed_capabilities=frozenset({"evidence.read"}))
         bindings.append(
@@ -376,10 +412,10 @@ def build_event_impact_triage_execution_plan(
                     if role is TriageAgentRole.COORDINATOR
                     else _specialist_output_contract(role, revision=revision)
                 ),
-                max_turns=min(3, profile_budget.max_turns),
-                max_input_tokens=profile_budget.max_input_tokens,
-                max_output_tokens=profile_budget.max_output_tokens,
-                max_estimated_cost_microusd=per_role_cost,
+                max_turns=selected_turns,
+                max_input_tokens=selected_input,
+                max_output_tokens=selected_output,
+                max_estimated_cost_microusd=selected_cost,
             )
         )
     ordered = tuple(bindings)
@@ -441,6 +477,11 @@ def build_event_impact_triage_execution_plan_v2(
     skills: SkillRegistry,
     position_snapshot_id: str | None = None,
     historical_analogy_pack_id: str | None = None,
+    max_turns: int | None = None,
+    max_input_tokens: int | None = None,
+    max_output_tokens: int | None = None,
+    max_estimated_cost_microusd: int | None = None,
+    coordinator_skills: tuple[str, ...] | None = None,
 ) -> EventImpactTriageExecutionPlan:
     """Build a backward-compatible direct plan with a typed model-output contract."""
 
@@ -453,7 +494,48 @@ def build_event_impact_triage_execution_plan_v2(
         skills=skills,
         position_snapshot_id=position_snapshot_id,
         historical_analogy_pack_id=historical_analogy_pack_id,
+        max_turns=max_turns,
+        max_input_tokens=max_input_tokens,
+        max_output_tokens=max_output_tokens,
+        max_estimated_cost_microusd=max_estimated_cost_microusd,
+        coordinator_skills=coordinator_skills,
         _schema_version=EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
+    )
+
+
+def build_event_impact_triage_execution_plan_v3(
+    *,
+    arm: TriageComparisonArm,
+    candidate_set: EventImpactTriageCandidateSet,
+    registration: ProspectiveDiagnosticRegistration,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+    position_snapshot_id: str | None = None,
+    historical_analogy_pack_id: str | None = None,
+    max_turns: int | None = None,
+    max_input_tokens: int | None = None,
+    max_output_tokens: int | None = None,
+    max_estimated_cost_microusd: int | None = None,
+    coordinator_skills: tuple[str, ...] | None = None,
+) -> EventImpactTriageExecutionPlan:
+    """Build the direct typed plan with bounded JSON-repair evidence."""
+
+    return build_event_impact_triage_execution_plan(
+        arm=arm,
+        candidate_set=candidate_set,
+        registration=registration,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        position_snapshot_id=position_snapshot_id,
+        historical_analogy_pack_id=historical_analogy_pack_id,
+        max_turns=max_turns,
+        max_input_tokens=max_input_tokens,
+        max_output_tokens=max_output_tokens,
+        max_estimated_cost_microusd=max_estimated_cost_microusd,
+        coordinator_skills=coordinator_skills,
+        _schema_version=EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3,
     )
 
 
@@ -722,7 +804,12 @@ class EventImpactTriageRunner:
         self._token_counter = Utf8TokenEstimator()
         self._validate_static_bindings()
 
-    async def run(self) -> EventImpactTriageRunResult:
+    async def run(
+        self,
+        *,
+        cancellation: CancellationToken | None = None,
+    ) -> EventImpactTriageRunResult:
+        token = cancellation or CancellationToken()
         contents = self.content_resolver.resolve(self.candidate_set)
         self._validate_contents(contents)
         completed: list[TriageAgentRunResult] = []
@@ -740,6 +827,7 @@ class EventImpactTriageRunner:
                 binding=binding,
                 contents=contents,
                 specialist_artifacts=tuple(specialist_artifacts),
+                cancellation=token,
             )
             completed.append(result)
             self._append_usage(result)
@@ -907,6 +995,7 @@ class EventImpactTriageRunner:
         binding: TriageRoleBinding,
         contents: tuple[TriageCandidateContent, ...],
         specialist_artifacts: tuple[TriageSpecialistArtifact, ...],
+        cancellation: CancellationToken,
     ) -> TriageAgentRunResult:
         run_id = f"triage-{self.plan.plan_id[-16:]}-{binding.role.value}"
         messages = self._messages(binding, contents, specialist_artifacts)
@@ -959,6 +1048,8 @@ class EventImpactTriageRunner:
         active_messages: tuple[dict[str, object], ...] = messages
         try:
             for turn_number in range(1, binding.max_turns + 1):
+                if cancellation.cancelled:
+                    raise _TriageCancelled("triage role cancelled before model dispatch")
                 estimated_input = self._token_counter.count_request(active_messages, ())
                 if metrics.input_tokens + estimated_input > binding.max_input_tokens:
                     raise _TriageBudgetExceeded("triage role lacks input-token budget")
@@ -1005,7 +1096,9 @@ class EventImpactTriageRunner:
                         "triage Provider usage exceeded the frozen role budget"
                     )
                 try:
-                    specialist, proposal = self._parse_role_output(binding.role, turn)
+                    specialist, proposal, parse_evidence = self._parse_role_output(
+                        binding.role, turn
+                    )
                 except (KeyError, TypeError, ValueError) as exc:
                     if turn_number >= binding.max_turns:
                         raise ValueError("model failed the closed Triage output contract") from exc
@@ -1033,6 +1126,7 @@ class EventImpactTriageRunner:
                     metrics=metrics.freeze(),
                     specialist_artifact=specialist,
                     proposal=proposal,
+                    parse_evidence=parse_evidence,
                 )
             raise _TriageBudgetExceeded("triage role exhausted its turn budget")
         except TimeoutError as exc:
@@ -1045,6 +1139,15 @@ class EventImpactTriageRunner:
                 record,
                 execution_binding_hash,
                 RunStatus.BUDGET_EXHAUSTED,
+                exc,
+                metrics.freeze(),
+            )
+        except _TriageCancelled as exc:
+            return self._seal_failure(
+                binding,
+                record,
+                execution_binding_hash,
+                RunStatus.CANCELLED,
                 exc,
                 metrics.freeze(),
             )
@@ -1112,18 +1215,32 @@ class EventImpactTriageRunner:
 
     def _parse_role_output(
         self, role: TriageAgentRole, turn: ModelTurn
-    ) -> tuple[TriageSpecialistArtifact | None, EventImpactTriageProposal | None]:
+    ) -> tuple[
+        TriageSpecialistArtifact | None,
+        EventImpactTriageProposal | None,
+        dict[str, object] | None,
+    ]:
         content = turn.assistant_message.get("content")
         if not isinstance(content, str) or not content or content != content.strip():
             raise ValueError("triage model output must be one canonical JSON object")
-        try:
-            value: object = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError("triage model output is not valid JSON") from exc
+        parse_evidence: dict[str, object] | None = None
+        if self.plan.schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+            parsed = load_model_json(content)
+            value = parsed.value
+            parse_evidence = parsed.evidence.to_dict()
+        else:
+            try:
+                value = json.loads(content)
+            except json.JSONDecodeError as exc:
+                raise ValueError("triage model output is not valid JSON") from exc
         payload = _object(value, "triage model output")
         if role is TriageAgentRole.COORDINATOR:
-            return None, _proposal_from_draft(payload, self.candidate_set)
-        return _specialist_from_draft(payload, role, self.candidate_set), None
+            return None, _proposal_from_draft(payload, self.candidate_set), parse_evidence
+        return (
+            _specialist_from_draft(payload, role, self.candidate_set),
+            None,
+            parse_evidence,
+        )
 
     def _seal_completed(
         self,
@@ -1136,6 +1253,7 @@ class EventImpactTriageRunner:
         metrics: RunMetrics,
         specialist_artifact: TriageSpecialistArtifact | None,
         proposal: EventImpactTriageProposal | None,
+        parse_evidence: dict[str, object] | None,
     ) -> TriageAgentRunResult:
         run_record = cast("RunRecordLike", record)
         output = (
@@ -1150,23 +1268,33 @@ class EventImpactTriageRunner:
             }
         )
         metrics_artifact = self.artifact_store.put_json(metrics.to_dict())
+        parse_evidence_artifact = None
+        if self.plan.schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+            if parse_evidence is None:
+                raise ValueError("triage v3 completion requires JSON parse evidence")
+            parse_evidence_artifact = self.artifact_store.put_json(parse_evidence)
+        elif parse_evidence is not None:
+            raise ValueError("legacy triage completion cannot carry JSON parse evidence")
+        validation_payload: dict[str, object] = {
+            "plan_id": self.plan.plan_id,
+            "role": binding.role.value,
+            "execution_binding_hash": execution_binding_hash,
+            "output_hash": canonical_hash(output),
+            "transcript_hash": transcript.content_hash,
+            "metrics_hash": metrics_artifact.content_hash,
+            "metrics": metrics.to_dict(),
+        }
+        if parse_evidence_artifact is not None:
+            validation_payload["json_parse_evidence_hash"] = parse_evidence_artifact.content_hash
         event = self.journal.append(
             run_id=run_record.run_id,
             event_id=f"{run_record.run_id}.triage.validated",
             event_type="triage.output.validated",
             observed_at=self._now(),
-            payload={
-                "plan_id": self.plan.plan_id,
-                "role": binding.role.value,
-                "execution_binding_hash": execution_binding_hash,
-                "output_hash": canonical_hash(output),
-                "transcript_hash": transcript.content_hash,
-                "metrics_hash": metrics_artifact.content_hash,
-                "metrics": metrics.to_dict(),
-            },
+            payload=validation_payload,
         )
         finished_at = self._now()
-        terminal_payload = {
+        terminal_payload: dict[str, object] = {
             "schema_version": _direct_run_artifact_schema(self.plan.schema_version),
             "run_id": run_record.run_id,
             "plan_id": self.plan.plan_id,
@@ -1186,6 +1314,8 @@ class EventImpactTriageRunner:
             "metrics_hash": metrics_artifact.content_hash,
             "output": output,
         }
+        if parse_evidence_artifact is not None:
+            terminal_payload["json_parse_evidence_hash"] = parse_evidence_artifact.content_hash
         terminal = self.artifact_store.put_json(terminal_payload)
         self.journal.finish(
             run_id=run_record.run_id,
@@ -1322,6 +1452,8 @@ class EventImpactTriageRunner:
             "metrics_hash",
             "output",
         }
+        if self.plan.schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+            expected.add("json_parse_evidence_hash")
         if set(payload) != expected:
             raise ValueError("triage terminal artifact fields are invalid")
         if payload.get("schema_version") != _direct_run_artifact_schema(self.plan.schema_version):
@@ -1336,6 +1468,26 @@ class EventImpactTriageRunner:
             or payload.get("tool_surface_hash") != TRIAGE_TOOL_SURFACE_HASH
         ):
             raise ValueError("triage terminal artifact runtime identity drifted")
+        if self.plan.schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+            evidence_hash = _string(payload, "json_parse_evidence_hash")
+            _sha256(evidence_hash, "triage JSON parse evidence hash")
+            transcript = _object(
+                self.artifact_store.read_json(_string(payload, "transcript_hash")),
+                "triage transcript",
+            )
+            assistant = _object(
+                transcript.get("final_assistant_message"),
+                "triage final assistant message",
+            )
+            content = assistant.get("content")
+            if not isinstance(content, str):
+                raise ValueError("triage final assistant content is not text")
+            evidence = load_model_json(content).evidence.to_dict()
+            if (
+                canonical_hash(evidence) != evidence_hash
+                or self.artifact_store.read_json(evidence_hash) != evidence
+            ):
+                raise ValueError("triage JSON parse evidence is not authoritative")
         return payload
 
     def _append_usage(self, result: TriageAgentRunResult) -> None:
@@ -1501,6 +1653,10 @@ class _MutableTriageMetrics:
 
 
 class _TriageBudgetExceeded(RuntimeError):
+    pass
+
+
+class _TriageCancelled(RuntimeError):
     pass
 
 
@@ -1847,15 +2003,22 @@ def _direct_contract_revision(prompt_template_id: str) -> str:
 def _direct_plan_revision(schema_version: str) -> str:
     if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1:
         return "v1"
-    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
+    if schema_version in {
+        EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2,
+        EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3,
+    }:
         return "v2"
     raise ValueError("unsupported direct triage plan revision")
 
 
 def _direct_runtime_ref(schema_version: str) -> str:
-    return {"v1": TRIAGE_RUNTIME_REF_V1, "v2": TRIAGE_RUNTIME_REF_V2}[
-        _direct_plan_revision(schema_version)
-    ]
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V1:
+        return TRIAGE_RUNTIME_REF_V1
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
+        return TRIAGE_RUNTIME_REF_V2
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+        return TRIAGE_RUNTIME_REF_V3
+    raise ValueError("unsupported direct triage plan revision")
 
 
 def _direct_run_artifact_schema(schema_version: str) -> str:
@@ -1863,6 +2026,8 @@ def _direct_run_artifact_schema(schema_version: str) -> str:
         return EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V1
     if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
         return EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V2
+    if schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+        return EVENT_IMPACT_TRIAGE_RUN_ARTIFACT_SCHEMA_V3
     raise ValueError("unsupported direct triage plan revision")
 
 
@@ -1871,6 +2036,8 @@ def _direct_error_artifact_schema(schema_version: str) -> str:
         revision = "v1"
     elif schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V2:
         revision = "v2"
+    elif schema_version == EVENT_IMPACT_TRIAGE_EXECUTION_PLAN_SCHEMA_V3:
+        revision = "v3"
     else:
         raise ValueError("unsupported direct triage plan revision")
     return f"market-impact.event-impact-triage-run-error.{revision}"

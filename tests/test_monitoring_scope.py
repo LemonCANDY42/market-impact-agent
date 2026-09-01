@@ -283,6 +283,19 @@ def test_registered_template_binds_matcher_bounds_and_nested_tushare_paths() -> 
         )
         is None
     )
+    long_content_matcher = ObservationMatcher(
+        (
+            ObservationMatchClause.build(
+                field_path="record.content",
+                mode=MonitoringMatchMode.CONTAINS_ALL,
+                terms=("alpha", "safety"),
+            ),
+        )
+    )
+    assert long_content_matcher.matches(
+        {"record": {"content": "prefix " * 100 + "Alpha safety follow-up"}}
+    ) == ("record.content",)
+    assert long_content_matcher.matches({"record": {"content": "x" * 1_000_001}}) is None
     assert plan.template_matcher_contract_hash == template.matcher_contract_hash
     with pytest.raises(ValueError, match="field path"):
         RetrievalPlan.bind(

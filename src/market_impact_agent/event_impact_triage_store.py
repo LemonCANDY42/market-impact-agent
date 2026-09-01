@@ -716,6 +716,52 @@ class EventImpactTriageDecisionStore:
             raise KeyError(f"unknown event impact Triage Candidate Set: {candidate_set_id}")
         return self._reopen(row)
 
+    def get_watch_context_by_cluster(
+        self,
+        cluster_id: str,
+    ) -> tuple[
+        EventImpactTriageCandidateSet,
+        EventImpactTriageProposal,
+        EventImpactTriageDecision,
+        TriageClusterProposal,
+    ]:
+        """Resolve one globally content-identified Attention Watch parent."""
+
+        if not cluster_id.startswith("event-impact-triage-cluster-"):
+            raise ValueError("Triage Watch lookup requires a cluster ID")
+        with self._connect() as connection:
+            rows = tuple(
+                connection.execute(
+                    """
+                    SELECT * FROM event_impact_triage_decisions
+                    ORDER BY decided_at, decision_id
+                    """
+                ).fetchall()
+            )
+        matches: list[
+            tuple[
+                EventImpactTriageCandidateSet,
+                EventImpactTriageProposal,
+                EventImpactTriageDecision,
+                TriageClusterProposal,
+            ]
+        ] = []
+        for row in rows:
+            candidate, proposal, decision = self._reopen(row)
+            clusters = tuple(item for item in proposal.clusters if item.cluster_id == cluster_id)
+            if clusters:
+                if len(clusters) != 1:
+                    raise ValueError("Triage Decision contains a duplicate cluster identity")
+                matches.append((candidate, proposal, decision, clusters[0]))
+        if not matches:
+            raise KeyError(f"unknown event impact Triage cluster: {cluster_id}")
+        if len(matches) != 1:
+            raise ValueError("Triage cluster identity resolves to multiple Decisions")
+        candidate, proposal, decision, cluster = matches[0]
+        if cluster_id not in decision.attention_watch_cluster_ids:
+            raise ValueError("Triage cluster is not authorized for Attention Watch")
+        return candidate, proposal, decision, cluster
+
     def route_epoch_contexts(
         self,
         *,

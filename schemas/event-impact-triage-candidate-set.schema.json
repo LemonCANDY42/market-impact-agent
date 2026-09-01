@@ -21,7 +21,12 @@
     "execution_capability"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.event-impact-triage-candidate-set.v1"},
+    "schema_version": {
+      "enum": [
+        "market-impact.event-impact-triage-candidate-set.v1",
+        "market-impact.event-impact-triage-candidate-set.v2"
+      ]
+    },
     "candidate_set_id": {
       "type": "string",
       "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
@@ -57,8 +62,56 @@
     },
     "historical_pit_claim": {"const": false},
     "judgment_model_calls_authorized": {"const": false},
-    "execution_capability": {"const": false}
+    "execution_capability": {"const": false},
+    "origin_wake_id": {
+      "type": "string",
+      "pattern": "^attention-wake-[0-9a-f]{64}$"
+    },
+    "parent_cluster_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"
+    },
+    "wake_dispatch_binding_id": {
+      "type": "string",
+      "pattern": "^agent-watch-wake-run-binding-[0-9a-f]{64}$"
+    }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-candidate-set.v1"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["origin_wake_id"]},
+            {"required": ["parent_cluster_id"]},
+            {"required": ["wake_dispatch_binding_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-candidate-set.v2"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "origin_wake_id",
+          "parent_cluster_id",
+          "wake_dispatch_binding_id"
+        ]
+      }
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "observation": {

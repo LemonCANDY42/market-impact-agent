@@ -250,15 +250,22 @@ The bootstrap implements:
   branch/depth/global and collection/callback budgets, equivalent-scope reuse and per-parent callback
   bindings without granting model or execution authority. The operational seam remains fail-closed:
   a caller-created or self-hashed parent projection cannot authorize offers, admission, lookup,
-  callbacks or restart activation. One concrete parent Run/Decision owner must still derive that
-  projection before the layer can create a Watch. The
-  shared due-collection scheduler, acquisition executor, and fresh-run dispatcher are not installed;
+  callbacks or restart activation. The concrete Triage Decision owner derives that projection for
+  event clusters it actually routed to Watch. Delegate Profiles and multi-parent resolution persist
+  across restart. The installed collection worker reuses one Journaled Snapshot across every due
+  Watch on its exact Collection Policy, while each Watch retains its own lease, matcher, budgets,
+  aggregate freeze and outbox. A durable dispatcher and semantic executor freeze only a Wake's new
+  actual-receipt versions and may run one Profile/Skill/budget-bound Triage callback; they cannot
+  form an Order Intent. The first real paid-news Watch has completed polls without an exact matching
+  new version, so no real Wake model result is claimed. Only the separately admitted acquisition
+  executor for a `fetch_required` Resolution remains unimplemented;
 - a specified continuous market-and-account sensing loop with new-evidence and scheduled-portfolio
   triggers over the same frozen Authorized Decision View. Market/company thesis, security readiness
   and account action remain separate conclusions; a missing or stale account snapshot may produce a
   risk alert but cannot authorize exposure increase. Complete read-only Account State/Position
-  contracts are the first delivery gate; an accepted broker account Provider and mutation tools are
-  still absent;
+  contracts and one bounded real IB Gateway Paper account-read path are accepted. The current
+  nonzero client cannot prove absence of manually submitted TWS orders, so that explicit gap blocks
+  mutation. Submit/cancel/replace and external broker-paper Provider acceptance remain absent;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic

@@ -141,7 +141,7 @@ def test_wake_callback_membership_is_frozen_before_late_reuse(tmp_path: Path) ->
     service = dispatcher.admission_service
     authority = cast(EventImpactTriageWatchAuthority, service.delegation_authority)
     context = authority.delegation_context()
-    profile = next(iter(service.profiles.values()))
+    profile = service.offered_profiles(context)[0]
 
     late = service.admit(
         _triage_request(

@@ -624,8 +624,60 @@ def test_watch_rejects_a_frozen_baseline_with_a_shorter_policy_window(tmp_path: 
     watch = _watch_policy(collection_policy=policy, initial_snapshot=shortened)
     service = AttentionWatchService(store, journal=journal)
 
-    with pytest.raises(ValueError, match="window does not match policy"):
+    with pytest.raises(ValueError, match="shorter than maximum gap"):
         service.create(watch, created_at=FIRST_RECEIPT)
+
+
+def test_watch_poll_uses_admission_baseline_window_not_old_policy_start(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        sources=(_source(),),
+        window_start=FIRST_RECEIPT - timedelta(days=1),
+        parameters={"keywords": ["policy"], "max_items": 20},
+        poll_interval_seconds=60,
+        maximum_gap_seconds=90,
+    )
+    for retrieved_at in (FIRST_RECEIPT, SECOND_RECEIPT):
+        journal.record_snapshot(
+            _snapshot(store, policy=policy, retrieved_at=retrieved_at),
+            policy=policy,
+        )
+    recent_start = FIRST_RECEIPT - timedelta(seconds=policy.maximum_gap_seconds)
+    baseline = journal.freeze_snapshot(
+        policy_id=policy.policy_id,
+        not_after=SECOND_RECEIPT,
+        window_start=recent_start,
+        frozen_at=SECOND_RECEIPT,
+    )
+    watch = _watch_policy(
+        collection_policy=policy,
+        initial_snapshot=baseline,
+        starts_at=THIRD_RECEIPT,
+    )
+    service = AttentionWatchService(store, journal=journal)
+    service.create(watch, created_at=SECOND_RECEIPT)
+    next_collection = _snapshot(
+        store,
+        policy=policy,
+        retrieved_at=THIRD_RECEIPT,
+        raw_record=b'{"headline":"Policy decision updated"}',
+        headline="Policy decision updated",
+    )
+    journal.record_snapshot(next_collection, policy=policy)
+
+    result = service.run_due(
+        watch.watch_id,
+        now=THIRD_RECEIPT,
+        collector=_collector(next_collection),
+    )
+
+    assert result.outcome == "triggered"
+    assert result.frozen_data_snapshot_id is not None
+    assert store.get(result.frozen_data_snapshot_id).query.window_start == recent_start
 
 
 def test_provider_failure_is_recorded_without_a_wake(tmp_path: Path) -> None:
@@ -866,6 +918,43 @@ def test_wake_delivery_acknowledgement_is_idempotent(tmp_path: Path) -> None:
     service.mark_wake_delivered(result.wake.wake_id, delivered_at=THIRD_RECEIPT)
 
     assert service.pending_wakes(watch_id=watch.watch_id) == ()
+
+
+def test_due_watch_reuses_one_journaled_collection_snapshot_without_provider_call(
+    tmp_path: Path,
+) -> None:
+    store, journal, policy, initial, service = _setup(tmp_path)
+    watch = _watch_policy(collection_policy=policy, initial_snapshot=initial)
+    service.create(watch, created_at=FIRST_RECEIPT)
+    changed = _snapshot(
+        store,
+        policy=policy,
+        retrieved_at=SECOND_RECEIPT,
+        raw_record=b'{"headline":"Correction"}',
+        headline="Correction",
+    )
+    journal.record_snapshot(changed, policy=policy)
+
+    assert service.due_watch_ids(
+        collection_policy_id=policy.policy_id,
+        now=SECOND_RECEIPT,
+    ) == (watch.watch_id,)
+    result = service.run_due_from_snapshot(
+        watch.watch_id,
+        now=SECOND_RECEIPT,
+        collection_snapshot_id=changed.snapshot_id,
+    )
+
+    assert result.outcome == "triggered"
+    assert result.collection_snapshot_id == changed.snapshot_id
+    assert result.wake is not None
+    assert (
+        service.due_watch_ids(
+            collection_policy_id=policy.policy_id,
+            now=SECOND_RECEIPT,
+        )
+        == ()
+    )
 
 
 def test_expired_or_exhausted_watch_does_not_call_provider(tmp_path: Path) -> None:

@@ -286,6 +286,21 @@ class RunJournal:
             raise KeyError(f"unknown run_id: {run_id}")
         return _run_record(row)
 
+    def records(self, *, status: RunStatus | None = None) -> tuple[RunRecord, ...]:
+        """Return durable Run records in creation order for bounded recovery workers."""
+
+        with self._connect() as connection:
+            if status is None:
+                rows = connection.execute(
+                    "SELECT * FROM runs ORDER BY created_at, run_id"
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM runs WHERE status = ? ORDER BY created_at, run_id",
+                    (status.value,),
+                ).fetchall()
+        return tuple(_run_record(row) for row in rows)
+
     def append(
         self,
         *,

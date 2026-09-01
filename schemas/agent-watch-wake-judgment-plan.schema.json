@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/agent-watch-wake-judgment-plan.schema.json",
+  "title": "Market Impact Agent Watch Wake Judgment Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "dispatch_binding_id",
+    "dispatch_binding_hash",
+    "wake_id",
+    "admission_id",
+    "parent_cluster_id",
+    "source_data_snapshot_id",
+    "retrieval_resolution_id",
+    "frozen_data_snapshot_id",
+    "candidate_set_id",
+    "candidate_set_hash",
+    "triage_execution_plan_id",
+    "triage_execution_plan_hash",
+    "callback_agent_profile_ref",
+    "model_profile_alias",
+    "model_profile_id",
+    "model_profile_hash",
+    "direct_skill_manifest_hashes",
+    "research_only",
+    "judgment_model_calls_authorized",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.agent-watch-wake-judgment-plan.v1"},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^agent-watch-wake-judgment-plan-[0-9a-f]{64}$"
+    },
+    "dispatch_binding_id": {
+      "type": "string",
+      "pattern": "^agent-watch-wake-run-binding-[0-9a-f]{64}$"
+    },
+    "dispatch_binding_hash": {"$ref": "#/$defs/sha256"},
+    "wake_id": {"type": "string", "pattern": "^attention-wake-[0-9a-f]{64}$"},
+    "admission_id": {
+      "type": "string",
+      "pattern": "^agent-watch-admission-[0-9a-f]{64}$"
+    },
+    "parent_cluster_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-cluster-[0-9a-f]{64}$"
+    },
+    "source_data_snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "retrieval_resolution_id": {
+      "type": "string",
+      "pattern": "^retrieval-resolution-[0-9a-f]{64}$"
+    },
+    "frozen_data_snapshot_id": {
+      "type": "string",
+      "pattern": "^data-snapshot-[0-9a-f]{64}$"
+    },
+    "candidate_set_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-candidate-set-[0-9a-f]{64}$"
+    },
+    "candidate_set_hash": {"$ref": "#/$defs/sha256"},
+    "triage_execution_plan_id": {
+      "type": "string",
+      "pattern": "^event-impact-triage-execution-plan-[0-9a-f]{64}$"
+    },
+    "triage_execution_plan_hash": {"$ref": "#/$defs/sha256"},
+    "callback_agent_profile_ref": {
+      "type": "string",
+      "pattern": "^agent-profile-[0-9a-f]{64}$"
+    },
+    "model_profile_alias": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "model_profile_id": {
+      "type": "string",
+      "pattern": "^model-provider-[0-9a-f]{64}$"
+    },
+    "model_profile_hash": {"$ref": "#/$defs/sha256"},
+    "direct_skill_manifest_hashes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sha256"}
+    },
+    "research_only": {"const": true},
+    "judgment_model_calls_authorized": {"const": true},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -11,6 +11,7 @@ from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.event_impact_triage import (
     EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA,
+    EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2,
     EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3,
     CheckpointEligibility,
     EventImpactTriageCandidateSet,
@@ -303,6 +304,70 @@ def _triage(
         schema_version=EVENT_IMPACT_TRIAGE_DECISION_SCHEMA_V3,
     )
     return candidate_set, proposal, decision, cluster
+
+
+def _with_wake_lineage(
+    context: tuple[
+        EventImpactTriageCandidateSet,
+        EventImpactTriageProposal,
+        EventImpactTriageDecision,
+        TriageClusterProposal,
+    ],
+    *,
+    parent_cluster_id: str,
+    seed: int,
+) -> tuple[
+    EventImpactTriageCandidateSet,
+    EventImpactTriageProposal,
+    EventImpactTriageDecision,
+    TriageClusterProposal,
+]:
+    candidate_set, _, decision, cluster = context
+    candidate_core = {
+        **candidate_set.core_dict(),
+        "schema_version": EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2,
+        "origin_wake_id": f"attention-wake-{_hex(seed)}",
+        "parent_cluster_id": parent_cluster_id,
+        "wake_dispatch_binding_id": f"agent-watch-wake-run-binding-{_hex(seed + 1)}",
+    }
+    child = EventImpactTriageCandidateSet(
+        candidate_set_id=(f"event-impact-triage-candidate-set-{canonical_hash(candidate_core)}"),
+        registration_id=candidate_set.registration_id,
+        checkpoint_key=candidate_set.checkpoint_key,
+        route_plan_id=candidate_set.route_plan_id,
+        route_admission_id=candidate_set.route_admission_id,
+        readiness_report_id=candidate_set.readiness_report_id,
+        data_snapshot_id=candidate_set.data_snapshot_id,
+        admitted_at=candidate_set.admitted_at,
+        frozen_at=candidate_set.frozen_at,
+        observations=candidate_set.observations,
+        schema_version=EVENT_IMPACT_TRIAGE_CANDIDATE_SET_SCHEMA_V2,
+        origin_wake_id=cast(str, candidate_core["origin_wake_id"]),
+        parent_cluster_id=parent_cluster_id,
+        wake_dispatch_binding_id=cast(str, candidate_core["wake_dispatch_binding_id"]),
+    )
+    proposal = EventImpactTriageProposal.build(candidate_set=child, clusters=(cluster,))
+    decision_core = {
+        **decision.core_dict(),
+        "candidate_set_id": child.candidate_set_id,
+        "proposal_id": proposal.proposal_id,
+    }
+    child_decision = EventImpactTriageDecision(
+        decision_id=f"event-impact-triage-decision-{canonical_hash(decision_core)}",
+        candidate_set_id=child.candidate_set_id,
+        proposal_id=proposal.proposal_id,
+        run_evidence=decision.run_evidence,
+        status=decision.status,
+        selected_cluster_id=decision.selected_cluster_id,
+        blocking_review_cluster_ids=decision.blocking_review_cluster_ids,
+        unselected_eligible_cluster_ids=decision.unselected_eligible_cluster_ids,
+        event_assessment_cluster_ids=decision.event_assessment_cluster_ids,
+        attention_watch_cluster_ids=decision.attention_watch_cluster_ids,
+        archive_cluster_ids=decision.archive_cluster_ids,
+        decided_at=decision.decided_at,
+        schema_version=decision.schema_version,
+    )
+    return child, proposal, child_decision, cluster
 
 
 def _two_cluster_triage(
@@ -856,6 +921,110 @@ def test_checkpoint_admission_rejects_an_earlier_unresolved_review(
             candidate_set=second_candidate,
             proposal=second_proposal,
             decision=second_decision,
+            triage_authority=authority,
+        )
+
+
+def test_checkpoint_admission_accepts_a_terminal_wake_child_as_review_resolution(
+    tmp_path: Path,
+) -> None:
+    registration = _registration()
+    first = _triage(
+        registration,
+        checkpoint_key="next-a-share-policy-event",
+        needs_review=True,
+        seed_offset=500,
+    )
+    child = _with_wake_lineage(
+        _triage(
+            registration,
+            checkpoint_key="next-a-share-policy-event",
+            selected=True,
+            seed_offset=600,
+            available_after_minutes=10,
+            frozen_after_minutes=14,
+        ),
+        parent_cluster_id=first[3].cluster_id,
+        seed=700,
+    )
+    candidate_set, proposal, decision, cluster = child
+    admission = admit_prospective_trigger(
+        registration=registration,
+        candidate_set=candidate_set,
+        proposal=proposal,
+        decision=decision,
+        cluster_id=cluster.cluster_id,
+        admitted_at=decision.decided_at + timedelta(minutes=1),
+    )
+    authority = _TriageAuthority(
+        (candidate_set, proposal, decision),
+        epoch_contexts=(first, child),
+    )
+
+    assert (
+        ProspectiveTriggerAdmissionStore(LocalDataSnapshotStore(tmp_path / "state")).record(
+            admission,
+            registration=registration,
+            candidate_set=candidate_set,
+            proposal=proposal,
+            decision=decision,
+            triage_authority=authority,
+        )
+        == admission
+    )
+
+
+def test_checkpoint_admission_keeps_parent_blocked_when_wake_child_needs_review(
+    tmp_path: Path,
+) -> None:
+    registration = _registration()
+    first = _triage(
+        registration,
+        checkpoint_key="next-a-share-policy-event",
+        needs_review=True,
+        seed_offset=800,
+    )
+    child = _with_wake_lineage(
+        _triage(
+            registration,
+            checkpoint_key="next-a-share-policy-event",
+            needs_review=True,
+            seed_offset=900,
+            available_after_minutes=8,
+            frozen_after_minutes=12,
+        ),
+        parent_cluster_id=first[3].cluster_id,
+        seed=1000,
+    )
+    selected = _triage(
+        registration,
+        checkpoint_key="next-a-share-policy-event",
+        selected=True,
+        seed_offset=1100,
+        available_after_minutes=16,
+        frozen_after_minutes=20,
+    )
+    candidate_set, proposal, decision, cluster = selected
+    admission = admit_prospective_trigger(
+        registration=registration,
+        candidate_set=candidate_set,
+        proposal=proposal,
+        decision=decision,
+        cluster_id=cluster.cluster_id,
+        admitted_at=decision.decided_at + timedelta(minutes=1),
+    )
+    authority = _TriageAuthority(
+        (candidate_set, proposal, decision),
+        epoch_contexts=(first, child, selected),
+    )
+
+    with pytest.raises(ValueError, match="earlier unresolved review"):
+        ProspectiveTriggerAdmissionStore(LocalDataSnapshotStore(tmp_path / "state")).record(
+            admission,
+            registration=registration,
+            candidate_set=candidate_set,
+            proposal=proposal,
+            decision=decision,
             triage_authority=authority,
         )
 

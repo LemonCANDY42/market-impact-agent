@@ -50,6 +50,7 @@ from market_impact_agent.archive_authority import (
     VerifiedArchiveRecord,
     load_common_crawl_locator,
 )
+from market_impact_agent.attention_watch import AttentionWatchService
 from market_impact_agent.backtests import (
     BacktestRunStatus,
     backtest_request_from_dict,
@@ -892,6 +893,54 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-root",
         type=Path,
         default=Path(".market-impact/event-assessments/current"),
+    )
+    triage_watch_admit_parser = agent_subparsers.add_parser(
+        "triage-watch-admit",
+        help="Materialize one authorized Triage attention-watch route without a model call",
+    )
+    triage_watch_admit_parser.add_argument("--cluster-id", required=True)
+    triage_watch_admit_parser.add_argument("--collection-policy-id", required=True)
+    triage_watch_admit_parser.add_argument(
+        "--model-profile-alias",
+        default="cliproxyapi-luna-xhigh-cpa-v1",
+    )
+    triage_watch_admit_parser.add_argument("--match-field-path", default="record.content")
+    triage_watch_admit_parser.add_argument("--admitted-at", type=_aware_timestamp)
+    triage_watch_admit_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    triage_watch_admit_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    watch_wake_run_parser = agent_subparsers.add_parser(
+        "watch-wake-run",
+        help="Dispatch and recover bounded semantic callbacks for pending Attention Wakes",
+    )
+    watch_wake_run_parser.add_argument("--registration", required=True, type=Path)
+    watch_wake_run_parser.add_argument(
+        "--model-profile-alias",
+        default="cliproxyapi-luna-xhigh-cpa-v1",
+    )
+    watch_wake_run_parser.add_argument("--dispatched-at", type=_aware_timestamp)
+    watch_wake_run_parser.add_argument("--maximum-callbacks", type=int, default=4)
+    watch_wake_run_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    watch_wake_run_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    watch_wake_run_parser.add_argument(
+        "--run-root",
+        type=Path,
+        default=Path(".market-impact/watch-wake/current"),
     )
     prospective_triage_compare_parser = agent_subparsers.add_parser(
         "prospective-triage-compare-run",
@@ -2315,6 +2364,36 @@ def run_due_prospective_collection_jobs(
         ) as executor:
             results = list(executor.map(run_one, selected_job_ids))
     health_at = run_at if now is not None else runtime_clock()
+    watch_results: list[dict[str, object]] = []
+    watch_fanout_errors: list[dict[str, str]] = []
+    watch_service: AttentionWatchService | None = None
+    for result in results:
+        snapshot_id = result.get("data_snapshot_id")
+        if not isinstance(snapshot_id, str):
+            continue
+        try:
+            if watch_service is None:
+                watch_service = AttentionWatchService(store)
+            snapshot = store.get(snapshot_id)
+            watch_now = max(health_at, snapshot.completed_at)
+            for watch_id in watch_service.due_watch_ids(
+                collection_policy_id=snapshot.query.source_policy_id,
+                now=watch_now,
+            ):
+                watch_results.append(
+                    watch_service.run_due_from_snapshot(
+                        watch_id,
+                        now=watch_now,
+                        collection_snapshot_id=snapshot_id,
+                    ).to_dict()
+                )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            watch_fanout_errors.append(
+                {
+                    "data_snapshot_id": snapshot_id,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
     health = [runtime.health(job_id, now=health_at).to_dict() for job_id in selected_job_ids]
     return {
         "completed": True,
@@ -2323,6 +2402,9 @@ def run_due_prospective_collection_jobs(
         "maximum_concurrent_opportunities": maximum_concurrent_opportunities,
         "results": results,
         "health": health,
+        "watch_fanout_count": len(watch_results),
+        "watch_results": watch_results,
+        "watch_fanout_errors": watch_fanout_errors,
         "historical_pit_claim": False,
         "evidence_promoted": False,
         "execution_capability": False,
@@ -3263,6 +3345,71 @@ def _run_prospective_event_assessment_command(args: argparse.Namespace) -> int:
         return 1
     print(json.dumps(assessment_summary, indent=2, sort_keys=True))
     return 0 if outcome.status is RunStatus.COMPLETED else 1
+
+
+def _run_triage_watch_admit_command(args: argparse.Namespace) -> int:
+    try:
+        from market_impact_agent.triage_watch_runtime import admit_triage_follow_up_watch
+
+        result = admit_triage_follow_up_watch(
+            state_root=args.state_root,
+            cluster_id=args.cluster_id,
+            collection_policy_id=args.collection_policy_id,
+            model_profile_alias=args.model_profile_alias,
+            skill_root=args.skill_root,
+            match_field_path=args.match_field_path,
+            admitted_at=(datetime.now(UTC) if args.admitted_at is None else args.admitted_at),
+        ).summary()
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        print(
+            json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+            file=sys.stderr,
+        )
+        return 1
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result["outcome"] in {"admitted", "reused"} else 1
+
+
+def _run_watch_wake_command(args: argparse.Namespace) -> int:
+    try:
+        from market_impact_agent.triage_watch_runtime import run_triage_watch_wake_callbacks
+
+        registration = load_prospective_diagnostic_registration(args.registration)
+        result = asyncio.run(
+            run_triage_watch_wake_callbacks(
+                state_root=args.state_root,
+                run_root=args.run_root,
+                registration=registration,
+                model_profile_alias=args.model_profile_alias,
+                skill_root=args.skill_root,
+                dispatched_at=(
+                    datetime.now(UTC) if args.dispatched_at is None else args.dispatched_at
+                ),
+                maximum_callbacks=args.maximum_callbacks,
+            )
+        )
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        print(
+            json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+            file=sys.stderr,
+        )
+        return 1
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -4361,6 +4508,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
     if args.command == "agent" and args.agent_command == "prospective-event-assessment-run":
         return _run_prospective_event_assessment_command(args)
+    if args.command == "agent" and args.agent_command == "triage-watch-admit":
+        return _run_triage_watch_admit_command(args)
+    if args.command == "agent" and args.agent_command == "watch-wake-run":
+        return _run_watch_wake_command(args)
     if args.command == "agent" and args.agent_command == "prospective-triage-compare-run":
         try:
             from market_impact_agent.event_impact_triage_evaluation import (

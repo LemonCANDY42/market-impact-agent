@@ -1145,6 +1145,38 @@ class ProspectiveDataJournal:
     def assert_frozen_snapshot(self, snapshot: DataSnapshot) -> None:
         """Require a complete aggregate produced from this journal's receipt selections."""
 
+        self._assert_journal_freeze(snapshot, require_policy_window=True)
+
+    def assert_watch_baseline_snapshot(self, snapshot: DataSnapshot) -> None:
+        """Require complete recent coverage sufficient to seed a prospective Watch.
+
+        A long-lived Collection Policy may contain an old outage that is irrelevant to a
+        newly admitted Watch.  The Watch baseline may therefore use a shorter proven
+        window, but it must span at least one route maximum-gap interval and retain the
+        same exact receipt-selection evidence as an ordinary Journal freeze.
+        """
+
+        policy = self._assert_journal_freeze(snapshot, require_policy_window=False)
+        window_start = snapshot.query.window_start
+        if window_start is None:
+            raise AssertionError("validated Watch baseline lacks a bounded window")
+        requested = snapshot.query.parameters.get("requested_not_after")
+        if not isinstance(requested, str):
+            raise ValueError("prospective Watch baseline cutoff is missing")
+        not_after = _datetime(requested, "Watch baseline requested_not_after")
+        if window_start != policy.window_start and not_after - window_start < timedelta(
+            seconds=policy.maximum_gap_seconds
+        ):
+            raise ValueError("prospective Watch baseline window is shorter than maximum gap")
+
+    def _assert_journal_freeze(
+        self,
+        snapshot: DataSnapshot,
+        *,
+        require_policy_window: bool,
+    ) -> ProspectiveCollectionPolicy:
+        """Reopen the common immutable Journal-freeze proof."""
+
         if not snapshot.coverage_complete:
             raise ValueError("prospective journal baseline requires complete coverage")
         if snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE:
@@ -1152,7 +1184,9 @@ class ProspectiveDataJournal:
         if snapshot.query.window_start is None:
             raise ValueError("prospective journal baseline requires a bounded window")
         policy = self.policy(snapshot.query.source_policy_id)
-        if snapshot.query.window_start != policy.window_start:
+        if snapshot.query.window_start < policy.window_start or (
+            require_policy_window and snapshot.query.window_start != policy.window_start
+        ):
             raise ValueError("prospective journal baseline window does not match policy")
         if snapshot.query.capability is not policy.capability:
             raise ValueError("prospective journal baseline capability does not match policy")
@@ -1180,6 +1214,7 @@ class ProspectiveDataJournal:
             raise ValueError("prospective journal baseline receipts do not match policy")
         if snapshot.observations:
             self._dataset_rows_for_snapshot(snapshot)
+        return policy
 
     def materialize_snapshot_parquet(
         self,

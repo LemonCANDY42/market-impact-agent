@@ -325,6 +325,17 @@ class AttentionWatchRunResult:
     wake: AttentionWake | None
     error_kind: str | None
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "watch_id": self.watch_id,
+            "outcome": self.outcome,
+            "polled": self.polled,
+            "collection_snapshot_id": self.collection_snapshot_id,
+            "frozen_data_snapshot_id": self.frozen_data_snapshot_id,
+            "wake": None if self.wake is None else self.wake.to_dict(),
+            "error_kind": self.error_kind,
+        }
+
 
 WatchCollector = Callable[[ProspectiveCollectionPolicy], DataSnapshot]
 
@@ -444,7 +455,7 @@ class AttentionWatchService:
                 collection_policy=collection_policy,
             )
         initial = self.store.get(policy.initial_data_snapshot_id)
-        self.journal.assert_frozen_snapshot(initial)
+        self.journal.assert_watch_baseline_snapshot(initial)
         if initial.query.source_policy_id != collection_policy.policy_id:
             raise ValueError("Attention Watch baseline does not match collection policy")
         baseline_cutoff = initial.query.parameters.get("requested_not_after")
@@ -514,6 +525,66 @@ class AttentionWatchService:
         if row is None:
             raise KeyError(f"unknown Attention Watch: {watch_id}")
         return _state_from_row(row)
+
+    def due_watch_ids(
+        self,
+        *,
+        collection_policy_id: str,
+        now: datetime,
+        limit: int = 100,
+    ) -> tuple[str, ...]:
+        """Return due Watches that can reuse one completed collection opportunity."""
+
+        _strict_utc(now, "Attention Watch due query time")
+        if not collection_policy_id.startswith("prospective-collection-policy-"):
+            raise ValueError("Attention Watch due query requires a Collection Policy ID")
+        if limit < 1:
+            raise ValueError("Attention Watch due query limit must be positive")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT watch_id FROM attention_watch_policies
+                WHERE collection_policy_id = ?
+                  AND status IN (?, ?, ?)
+                  AND next_due_at <= ?
+                ORDER BY next_due_at, watch_id
+                LIMIT ?
+                """,
+                (
+                    collection_policy_id,
+                    AttentionWatchStatus.ACTIVE.value,
+                    AttentionWatchStatus.BACKING_OFF.value,
+                    AttentionWatchStatus.TRIGGERED.value,
+                    _timestamp(now),
+                    limit,
+                ),
+            ).fetchall()
+        return tuple(cast(str, row["watch_id"]) for row in rows)
+
+    def run_due_from_snapshot(
+        self,
+        watch_id: str,
+        *,
+        now: datetime,
+        collection_snapshot_id: str,
+    ) -> AttentionWatchRunResult:
+        """Evaluate one due Watch without issuing a second Provider request.
+
+        The ordinary collection runtime already journaled the exact collection
+        Snapshot. Reopening and passing that Snapshot through ``run_due`` keeps
+        lease, budget, freeze, matcher, outbox, and replay behavior under the
+        existing Watch owner while avoiding duplicate acquisition.
+        """
+
+        snapshot = self.store.get(collection_snapshot_id)
+        policy = self.policy(watch_id)
+        if snapshot.query.source_policy_id != policy.collection_policy_id:
+            raise ValueError("shared collection Snapshot does not match Attention Watch policy")
+        return self.run_due(
+            watch_id,
+            now=now,
+            collector=lambda _: snapshot,
+        )
 
     def run_due(
         self,
@@ -675,10 +746,14 @@ class AttentionWatchService:
                 error_kind="watch_source_incomplete",
             )
 
+        initial = self.store.get(policy.initial_data_snapshot_id)
+        baseline_window_start = initial.query.window_start
+        if baseline_window_start is None:
+            raise ValueError("Attention Watch baseline requires a bounded window")
         frozen = self.journal.freeze_snapshot(
             policy_id=collection_policy.policy_id,
             not_after=collection_snapshot.query.as_of,
-            window_start=collection_policy.window_start,
+            window_start=baseline_window_start,
             frozen_at=poll_completed_at,
         )
         if not frozen.coverage_complete:
@@ -867,6 +942,18 @@ class AttentionWatchService:
                 self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
             )
             for row in rows
+        )
+
+    def wake(self, wake_id: str) -> AttentionWake:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT artifact_hash FROM attention_watch_outbox WHERE wake_id = ?",
+                (wake_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown Attention Wake: {wake_id}")
+        return attention_wake_from_dict(
+            self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
         )
 
     def mark_wake_delivered(self, wake_id: str, *, delivered_at: datetime) -> None:

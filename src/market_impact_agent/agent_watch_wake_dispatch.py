@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_watch_admission import (
@@ -17,7 +18,7 @@ from market_impact_agent.agent_watch_admission import (
 )
 from market_impact_agent.attention_watch import AttentionWake, AttentionWatchService
 from market_impact_agent.domain import require_aware
-from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunRecord
+from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunRecord, RunStatus
 
 AGENT_WATCH_WAKE_RUN_BINDING_SCHEMA = "market-impact.agent-watch-wake-run-binding.v1"
 AGENT_WATCH_WAKE_RUN_BOUND_EVENT = "agent.watch-wake.run-bound"
@@ -116,6 +117,7 @@ class AgentWatchWakeRunBinding:
 class AgentWatchWakeDispatch:
     binding: AgentWatchWakeRunBinding
     binding_artifact_hash: str
+    wake: AttentionWake
     run: RunRecord
 
 
@@ -175,6 +177,38 @@ class AgentWatchWakeDispatcher:
             for result in self.dispatch_wake(wake, dispatched_at=dispatched_at)
         )
 
+    def reopen_dispatch(self, run_id: str) -> AgentWatchWakeDispatch:
+        """Reopen one durable callback reservation after process restart."""
+
+        run = self.run_journal.get_run(run_id)
+        binding = agent_watch_wake_run_binding_from_dict(self.artifacts.read_json(run.config_hash))
+        if binding.run_id != run_id:
+            raise ValueError("Watch Wake Run config belongs to another Run")
+        events = self.run_journal.events(run_id)
+        if (
+            not events
+            or events[0].event_type != AGENT_WATCH_WAKE_RUN_BOUND_EVENT
+            or events[0].payload != _binding_event_payload(binding, run.config_hash)
+        ):
+            raise ValueError("Watch Wake Run lacks its exact durable binding event")
+        wake = self.watch_service.wake(binding.wake_id)
+        if wake.watch_id != binding.watch_id:
+            raise ValueError("Watch Wake Run carries a Wake from another Watch")
+        return AgentWatchWakeDispatch(
+            binding=binding,
+            binding_artifact_hash=run.config_hash,
+            wake=wake,
+            run=run,
+        )
+
+    def running_dispatches(self) -> tuple[AgentWatchWakeDispatch, ...]:
+        """Return unfinished callbacks owned by this dedicated Run Journal."""
+
+        return tuple(
+            self.reopen_dispatch(run.run_id)
+            for run in self.run_journal.records(status=RunStatus.RUNNING)
+        )
+
     def _dispatch_callback(
         self,
         callback: WatchCallbackBinding,
@@ -188,6 +222,7 @@ class AgentWatchWakeDispatcher:
         if claim is None:
             return self._await_concurrent_dispatch(
                 binding,
+                wake=callback.wake,
                 binding_artifact_hash=artifact.content_hash,
                 event_id=event_id,
             )
@@ -209,6 +244,7 @@ class AgentWatchWakeDispatcher:
         return AgentWatchWakeDispatch(
             binding=binding,
             binding_artifact_hash=artifact.content_hash,
+            wake=callback.wake,
             run=run,
         )
 
@@ -216,6 +252,7 @@ class AgentWatchWakeDispatcher:
         self,
         binding: AgentWatchWakeRunBinding,
         *,
+        wake: AttentionWake,
         binding_artifact_hash: str,
         event_id: str,
     ) -> AgentWatchWakeDispatch:
@@ -239,6 +276,7 @@ class AgentWatchWakeDispatcher:
             return AgentWatchWakeDispatch(
                 binding=binding,
                 binding_artifact_hash=binding_artifact_hash,
+                wake=wake,
                 run=run,
             )
         raise RuntimeError("concurrent Watch Wake Run creation did not become durable")
@@ -334,6 +372,84 @@ def _binding_event_payload(
         "judgment_model_calls_authorized": False,
         "execution_capability": False,
     }
+
+
+def agent_watch_wake_run_binding_from_dict(value: object) -> AgentWatchWakeRunBinding:
+    if not isinstance(value, dict):
+        raise TypeError("Agent Watch Wake Run binding must be an object")
+    payload = cast(dict[object, object], value)
+    if any(not isinstance(key, str) for key in payload):
+        raise TypeError("Agent Watch Wake Run binding keys must be strings")
+    fields = cast(dict[str, object], payload)
+    raw_limits = fields.get("limits")
+    if not isinstance(raw_limits, dict):
+        raise TypeError("Agent Watch Wake Run binding limits must be an object")
+    untyped_limits = cast(dict[object, object], raw_limits)
+    if any(not isinstance(key, str) for key in untyped_limits):
+        raise TypeError("Agent Watch Wake Run binding limit keys must be strings")
+    limits = cast(dict[str, object], untyped_limits)
+
+    def string(name: str) -> str:
+        item = fields.get(name)
+        if not isinstance(item, str):
+            raise TypeError(f"Agent Watch Wake Run binding {name} must be a string")
+        return item
+
+    def strings(name: str) -> tuple[str, ...]:
+        item = fields.get(name)
+        if not isinstance(item, list):
+            raise TypeError(f"Agent Watch Wake Run binding {name} must be strings")
+        members = cast(list[object], item)
+        if any(not isinstance(member, str) for member in members):
+            raise TypeError(f"Agent Watch Wake Run binding {name} must be strings")
+        return tuple(cast(list[str], members))
+
+    def integer(name: str) -> int:
+        item = limits.get(name)
+        if not isinstance(item, int) or isinstance(item, bool):
+            raise TypeError(f"Agent Watch Wake Run binding {name} must be an integer")
+        return item
+
+    def boolean(name: str) -> bool:
+        item = fields.get(name)
+        if not isinstance(item, bool):
+            raise TypeError(f"Agent Watch Wake Run binding {name} must be a boolean")
+        return item
+
+    binding = AgentWatchWakeRunBinding(
+        binding_id=string("binding_id"),
+        run_id=string("run_id"),
+        wake_id=string("wake_id"),
+        watch_id=string("watch_id"),
+        admission_id=string("admission_id"),
+        request_id=string("request_id"),
+        delegate_profile_id=string("delegate_profile_id"),
+        callback_agent_type=string("callback_agent_type"),
+        callback_agent_profile_ref=string("callback_agent_profile_ref"),
+        parent_ref=string("parent_ref"),
+        parent_authority_hash=string("parent_authority_hash"),
+        monitoring_scope_id=string("monitoring_scope_id"),
+        retrieval_plan_id=string("retrieval_plan_id"),
+        data_snapshot_id=string("data_snapshot_id"),
+        prior_data_snapshot_id=string("prior_data_snapshot_id"),
+        new_version_ids=strings("new_version_ids"),
+        collection_policy_id=string("collection_policy_id"),
+        use_class=string("use_class"),
+        preloaded_skills=strings("preloaded_skills"),
+        skill_manifest_hashes=strings("skill_manifest_hashes"),
+        required_capabilities=strings("required_capabilities"),
+        max_turns=integer("max_turns"),
+        max_input_tokens=integer("max_input_tokens"),
+        max_output_tokens=integer("max_output_tokens"),
+        max_cost_microusd=integer("max_cost_microusd"),
+        research_only=boolean("research_only"),
+        judgment_model_calls_authorized=boolean("judgment_model_calls_authorized"),
+        execution_capability=boolean("execution_capability"),
+        schema_version=string("schema_version"),
+    )
+    if binding.to_dict() != fields:
+        raise ValueError("Agent Watch Wake Run binding is not canonical")
+    return binding
 
 
 def _strict_utc(value: datetime, name: str) -> None:

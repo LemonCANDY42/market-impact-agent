@@ -62,6 +62,7 @@ packages = ["src/market_impact_agent"]
 "schemas/attention-watch-wake.schema.json" = "market_impact_agent/schemas/attention-watch-wake.schema.json"
 "schemas/agent-watch-request.schema.json" = "market_impact_agent/schemas/agent-watch-request.schema.json"
 "schemas/agent-watch-admission.schema.json" = "market_impact_agent/schemas/agent-watch-admission.schema.json"
+"schemas/agent-watch-wake-judgment-plan.schema.json" = "market_impact_agent/schemas/agent-watch-wake-judgment-plan.schema.json"
 "schemas/monitoring-scope.schema.json" = "market_impact_agent/schemas/monitoring-scope.schema.json"
 "schemas/retrieval-plan.schema.json" = "market_impact_agent/schemas/retrieval-plan.schema.json"
 "schemas/retrieval-resolution.schema.json" = "market_impact_agent/schemas/retrieval-resolution.schema.json"

@@ -613,7 +613,22 @@ EventAssessment-routed clusters remain fail-closed. Exact profile offers, admiss
 shared-scope fan-out and admission-before-Watch activation recovery are therefore accepted only for
 this Triage-owned path. The first dispatch freezes the callback subscriber set for that exact Wake;
 later subscribers to a reused Watch cannot change its replay fan-out and apply only to future Wakes.
-Remote acquisition and installed scheduling remain separate PDI-40 work.
+The installed prospective collection worker now reuses each completed Journaled Snapshot across all
+due Watches on the same exact Collection Policy. Profile registration and multi-parent Triage
+resolution are durable; individual Watch leases, budgets, matchers, aggregate freezes and callback
+outboxes are not shared. A first real paid-news Watch was admitted on 2026-09-01. Its initial
+recovery exposed an old-policy-window overconstraint, now fixed by freezing a recent admission
+baseline spanning at least one maximum-gap interval and accumulating proof only from that baseline
+forward. Later real polls completed with no exact matching new version, so the system correctly made
+no Wake or model call. The separate bounded executor for an admitted `fetch_required` Resolution
+remains PDI-40 work.
+
+The Wake semantic callback is also concrete. It reopens the exact dispatch and parent authority,
+freezes only the Wake's new actual-receipt versions, binds a content-identified Candidate Set and
+Judgment Plan to the registered model Profile, Skill hashes and callback budget, and runs one bounded
+coordinator. Completion persists a Triage Decision and terminalizes the original dispatcher Run;
+restart reuses the terminal authority and cannot create a second Provider call. This is a research
+callback only. A naturally matching prospective Wake and its real model result remain outstanding.
 
 Still required for real acceptance:
 

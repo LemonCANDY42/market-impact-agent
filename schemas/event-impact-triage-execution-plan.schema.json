@@ -33,7 +33,8 @@
     "schema_version": {
       "enum": [
         "market-impact.event-impact-triage-execution-plan.v1",
-        "market-impact.event-impact-triage-execution-plan.v2"
+        "market-impact.event-impact-triage-execution-plan.v2",
+        "market-impact.event-impact-triage-execution-plan.v3"
       ]
     },
     "plan_id": {
@@ -103,6 +104,22 @@
         "properties": {
           "schema_version": {
             "const": "market-impact.event-impact-triage-execution-plan.v2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "role_bindings": {
+            "items": {"$ref": "#/$defs/roleBindingV2"}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "market-impact.event-impact-triage-execution-plan.v3"
           }
         }
       },

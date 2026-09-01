@@ -20,7 +20,6 @@ from market_impact_agent.agent_runtime import (
 )
 from market_impact_agent.data_inputs import LocalDataSnapshotStore, SourceObservation
 from market_impact_agent.event_impact_triage import (
-    CheckpointEligibility,
     EventImpactTriageCandidateSet,
     EventImpactTriageDecision,
     EventImpactTriageProposal,
@@ -53,6 +52,8 @@ from market_impact_agent.prospective_trigger_admission import (
     TransmissionPath,
     admit_prospective_trigger,
     evaluate_event_materiality,
+    terminal_wake_resolution_parent_ids,
+    unresolved_route_review_cluster_ids,
 )
 from market_impact_agent.provider_reliability import (
     ProviderAttemptEvent,
@@ -1558,11 +1559,18 @@ async def run_prospective_event_assessment(
     aggregate_limit = int(Decimal(registration.aggregate_model_cost_limit_usd) * 1_000_000)
     unit_cost_reservation = _maximum_event_assessment_cost(profile)
     provider_health_store = ProviderHealthStore(run_root / "provider-health.sqlite3")
-    admission_blocked_by_unresolved_predecessor = False
-    for context_candidate, context_proposal, context_decision, cluster in contexts:
+    unresolved_assessment_watch_ids: set[str] = set()
+    for context_index, (
+        context_candidate,
+        context_proposal,
+        context_decision,
+        cluster,
+    ) in enumerate(contexts):
+        resolution_contexts = contexts[: context_index + 1]
+        unresolved_assessment_watch_ids.difference_update(
+            terminal_wake_resolution_parent_ids(resolution_contexts)
+        )
         if cluster.cluster_id not in context_decision.event_assessment_cluster_ids:
-            if cluster.checkpoint_eligibility is CheckpointEligibility.NEEDS_REVIEW:
-                admission_blocked_by_unresolved_predecessor = True
             continue
         if _sum_metrics(metrics).estimated_cost_microusd + unit_cost_reservation > aggregate_limit:
             status = RunStatus.BUDGET_EXHAUSTED
@@ -1606,7 +1614,7 @@ async def run_prospective_event_assessment(
         dispositions.append(disposition)
         if result.assessment is None:
             if disposition is MaterialityDisposition.WATCH:
-                admission_blocked_by_unresolved_predecessor = True
+                unresolved_assessment_watch_ids.add(cluster.cluster_id)
             continue
         assessment = result.assessment
         if result.materiality is None:
@@ -1622,7 +1630,10 @@ async def run_prospective_event_assessment(
         )
         if materiality.disposition is not MaterialityDisposition.ADMIT:
             continue
-        if admission_blocked_by_unresolved_predecessor:
+        if unresolved_assessment_watch_ids or unresolved_route_review_cluster_ids(
+            earlier_contexts=contexts[:context_index],
+            resolution_contexts=resolution_contexts,
+        ):
             continue
         now = datetime.now(UTC)
         preceding = tuple(zip(assessments[:-1], materialities[:-1], strict=True))
