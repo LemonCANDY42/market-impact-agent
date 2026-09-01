@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import uuid
@@ -88,6 +89,7 @@ from market_impact_agent.providers import (
     CancellationCommandReceipt,
     Capability,
     ExecutionProvider,
+    NewOrderAdmissionProvider,
     SubmissionCapability,
     SubmissionCapabilityRejected,
     _issue_cancellation_capability,  # pyright: ignore[reportPrivateUsage]
@@ -184,6 +186,9 @@ class PaperIntentRecord:
     provider_order_id: str | None
     provider_status: str | None
     fill_status: str | None
+    filled_quantity: Decimal
+    fill_ids: tuple[str, ...]
+    provider_observed_at: datetime | None
     updated_at: datetime
 
 
@@ -216,6 +221,17 @@ class PaperReplacementRecord:
     replacement_order_hash: str
     admitted_client_order_id: str | None
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class _ReconciledIntentUpdate:
+    client_order_id: str
+    provider_order_id: str | None
+    provider_status: str
+    fill_status: str | None
+    filled_quantity: Decimal
+    fill_ids: tuple[str, ...]
+    provider_observed_at: datetime
 
 
 class PaperExecutionService:
@@ -674,6 +690,8 @@ class PaperExecutionService:
                 mandate_hash=mandate_artifact.content_hash,
                 agent_admission_hash=agent_admission_hash,
             )
+        if not _provider_accepts_new_orders(self.provider):
+            raise PermissionError("execution Provider admission is closed for new orders")
 
         basis = self.price_source(order)
         if basis is None:
@@ -1012,7 +1030,11 @@ class PaperExecutionService:
         if (
             OutboxState(cast(str, intent["outbox_state"])) is not OutboxState.RECONCILED
             or provider_order_id is None
-            or cast(str | None, intent["provider_status"]) != ExecutionStatus.ACCEPTED.value
+            or cast(str | None, intent["provider_status"])
+            not in {
+                ExecutionStatus.ACCEPTED.value,
+                ExecutionStatus.PARTIALLY_FILLED.value,
+            }
         ):
             raise PermissionError("cancel requires one reconciled open provider order")
         duplicate = connection.execute(
@@ -1386,6 +1408,14 @@ class PaperExecutionService:
         row, submission_id = claimed
         submit_checked_at = self.clock()
         require_aware(submit_checked_at, "now")
+        if not _provider_accepts_new_orders(self.provider):
+            self._expire_claim_before_submit(
+                row,
+                submission_id=submission_id,
+                expired_at=submit_checked_at,
+                error_kind="provider_new_order_admission_closed",
+            )
+            return self.get(cast(str, row["client_order_id"]))
         try:
             authorities_current = self._submission_authorities_are_current(
                 row,
@@ -1422,6 +1452,15 @@ class PaperExecutionService:
             receipt = self.provider.submit(capability)
             if receipt.client_order_id != cast(str, row["client_order_id"]):
                 raise ValueError("provider receipt client_order_id mismatch")
+            if (
+                receipt.status is not ExecutionStatus.ACCEPTED
+                or receipt.provider_order_id is None
+                or receipt.filled_quantity != 0
+                or receipt.fill_ids
+            ):
+                raise ValueError(
+                    "provider submission receipt must be accepted without fill evidence"
+                )
         except SubmissionCapabilityRejected:
             rejected_at = self.clock()
             require_aware(rejected_at, "now")
@@ -1447,13 +1486,15 @@ class PaperExecutionService:
                 """
                 UPDATE paper_intents
                 SET outbox_state = ?, provider_order_id = ?, provider_status = ?,
-                    lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+                    provider_observed_at = ?, lease_token = NULL,
+                    lease_expires_at = NULL, updated_at = ?
                 WHERE client_order_id = ? AND lease_token = ?
                 """,
                 (
                     OutboxState.ACCEPTED.value,
                     receipt.provider_order_id,
                     receipt.status.value,
+                    _timestamp(receipt.observed_at),
                     _timestamp(current),
                     receipt.client_order_id,
                     submission_id,
@@ -1495,11 +1536,18 @@ class PaperExecutionService:
         kill_generation = cast(int, kill["generation"])
         snapshot = self.provider.reconcile()
         receipts: dict[str, ExecutionReceipt] = {}
+        fill_owners: dict[str, str] = {}
         gaps = list(snapshot.gaps)
         for receipt in snapshot.receipts:
             if receipt.client_order_id in receipts:
                 gaps.append(f"duplicate_provider_order:{receipt.client_order_id}")
             receipts[receipt.client_order_id] = receipt
+            for fill_id in receipt.fill_ids:
+                previous_owner = fill_owners.get(fill_id)
+                if previous_owner is not None:
+                    gaps.append(f"duplicate_provider_fill:{fill_id}")
+                else:
+                    fill_owners[fill_id] = receipt.client_order_id
         snapshot_artifact = self.artifacts.put_json(snapshot.to_dict())
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -1536,25 +1584,28 @@ class PaperExecutionService:
             }
             rows = connection.execute(
                 """
-                SELECT i.client_order_id, i.outbox_state, i.provider_order_id,
-                       i.provider_status, i.provider_id, i.provider_version,
+                SELECT i.client_order_id, i.order_hash, i.outbox_state,
+                       i.provider_order_id, i.provider_status,
+                       i.filled_quantity, i.fill_ids_json, i.provider_observed_at,
+                       i.provider_id, i.provider_version,
                        MAX(a.started_at) AS started_at
                 FROM paper_intents AS i
                 LEFT JOIN paper_submission_attempts AS a
                     ON a.client_order_id = i.client_order_id
-                WHERE i.outbox_state IN (?, ?, ?)
-                   OR (i.outbox_state = ? AND i.provider_status = ?)
-                GROUP BY i.client_order_id, i.outbox_state, i.provider_order_id,
-                         i.provider_status, i.provider_id, i.provider_version
+                WHERE i.outbox_state IN (?, ?, ?, ?)
+                GROUP BY i.client_order_id, i.order_hash, i.outbox_state,
+                         i.provider_order_id, i.provider_status,
+                         i.filled_quantity, i.fill_ids_json, i.provider_observed_at,
+                         i.provider_id, i.provider_version
                 """,
                 (
                     OutboxState.SUBMITTING.value,
                     OutboxState.UNKNOWN.value,
                     OutboxState.ACCEPTED.value,
                     OutboxState.RECONCILED.value,
-                    ExecutionStatus.ACCEPTED.value,
                 ),
             ).fetchall()
+            pending_intent_updates: list[_ReconciledIntentUpdate] = []
             for row in rows:
                 client_order_id = cast(str, row["client_order_id"])
                 if not provider_matches:
@@ -1572,12 +1623,60 @@ class PaperExecutionService:
                 receipt = receipts.get(client_order_id)
                 outbox_state = OutboxState(cast(str, row["outbox_state"]))
                 expected_provider_order_id = cast(str | None, row["provider_order_id"])
-                if receipt is not None and (
-                    expected_provider_order_id is not None
+                if (
+                    receipt is not None
+                    and expected_provider_order_id is not None
                     and receipt.provider_order_id != expected_provider_order_id
                 ):
                     gaps.append(f"provider_order_identity_mismatch:{client_order_id}")
                     continue
+                fill_status: str | None = None
+                receipt_valid = True
+                if receipt is not None:
+                    order = _order_from_dict(self.artifacts.read_json(cast(str, row["order_hash"])))
+                    if receipt.filled_quantity > order.quantity:
+                        gaps.append(f"provider_order_overfilled:{client_order_id}")
+                        receipt_valid = False
+                    elif (
+                        receipt.status is ExecutionStatus.FILLED
+                        and receipt.filled_quantity != order.quantity
+                    ):
+                        gaps.append(f"provider_filled_quantity_mismatch:{client_order_id}")
+                        receipt_valid = False
+                    elif (
+                        receipt.status is ExecutionStatus.PARTIALLY_FILLED
+                        and receipt.filled_quantity >= order.quantity
+                    ):
+                        gaps.append(f"provider_partial_fill_not_partial:{client_order_id}")
+                        receipt_valid = False
+                    stored_quantity = Decimal(cast(str, row["filled_quantity"]))
+                    stored_fill_ids = tuple(
+                        cast(list[str], json.loads(cast(str, row["fill_ids_json"])))
+                    )
+                    if receipt.filled_quantity < stored_quantity:
+                        gaps.append(f"provider_fill_quantity_regressed:{client_order_id}")
+                        receipt_valid = False
+                    if not set(stored_fill_ids).issubset(receipt.fill_ids):
+                        gaps.append(f"provider_fill_identity_regressed:{client_order_id}")
+                        receipt_valid = False
+                    previous_observed_at = cast(str | None, row["provider_observed_at"])
+                    if previous_observed_at is not None and receipt.observed_at < _datetime(
+                        previous_observed_at
+                    ):
+                        gaps.append(f"provider_order_observation_regressed:{client_order_id}")
+                        receipt_valid = False
+                    if not _execution_transition_allowed(
+                        cast(str | None, row["provider_status"]),
+                        receipt.status,
+                    ):
+                        gaps.append(f"provider_order_status_regressed:{client_order_id}")
+                        receipt_valid = False
+                    if receipt.status is ExecutionStatus.FILLED:
+                        fill_status = ExecutionStatus.FILLED.value
+                    elif receipt.filled_quantity > 0:
+                        fill_status = ExecutionStatus.PARTIALLY_FILLED.value
+                    if not receipt_valid:
+                        continue
                 if outbox_state is OutboxState.RECONCILED:
                     if receipt is None:
                         if snapshot.complete:
@@ -1586,10 +1685,26 @@ class PaperExecutionService:
                     if receipt.status is ExecutionStatus.UNKNOWN:
                         gaps.append(f"provider_order_unknown:{client_order_id}")
                     elif (
-                        receipt.status is not ExecutionStatus.ACCEPTED
+                        receipt.status is ExecutionStatus.PENDING_CANCEL
                         and client_order_id not in cancellation_target_ids
+                    ) or (
+                        receipt.status is ExecutionStatus.CANCELED
+                        and client_order_id not in cancellation_target_ids
+                        and cast(str | None, row["provider_status"])
+                        != ExecutionStatus.CANCELED.value
                     ):
                         gaps.append(f"unexpected_provider_status:{client_order_id}")
+                    pending_intent_updates.append(
+                        _ReconciledIntentUpdate(
+                            client_order_id=client_order_id,
+                            provider_order_id=receipt.provider_order_id,
+                            provider_status=receipt.status.value,
+                            fill_status=fill_status,
+                            filled_quantity=receipt.filled_quantity,
+                            fill_ids=receipt.fill_ids,
+                            provider_observed_at=receipt.observed_at,
+                        )
+                    )
                     continue
                 if receipt is not None:
                     if receipt.status is ExecutionStatus.UNKNOWN:
@@ -1597,28 +1712,30 @@ class PaperExecutionService:
                         continue
                     provider_order_id = receipt.provider_order_id
                     provider_status = receipt.status.value
+                    filled_quantity = receipt.filled_quantity
+                    fill_ids = receipt.fill_ids
+                    provider_observed_at = receipt.observed_at
                 elif snapshot.complete:
                     if outbox_state is OutboxState.ACCEPTED:
                         gaps.append(f"acknowledged_order_missing:{client_order_id}")
                         continue
                     provider_order_id = None
                     provider_status = "not_found"
+                    filled_quantity = Decimal(cast(str, row["filled_quantity"]))
+                    fill_ids = tuple(cast(list[str], json.loads(cast(str, row["fill_ids_json"]))))
+                    provider_observed_at = snapshot.observed_at
                 else:
                     continue
-                connection.execute(
-                    """
-                    UPDATE paper_intents
-                    SET outbox_state = ?, provider_order_id = ?, provider_status = ?,
-                        lease_token = NULL, lease_expires_at = NULL, updated_at = ?
-                    WHERE client_order_id = ?
-                    """,
-                    (
-                        OutboxState.RECONCILED.value,
-                        provider_order_id,
-                        provider_status,
-                        _timestamp(current),
-                        client_order_id,
-                    ),
+                pending_intent_updates.append(
+                    _ReconciledIntentUpdate(
+                        client_order_id=client_order_id,
+                        provider_order_id=provider_order_id,
+                        provider_status=provider_status,
+                        fill_status=fill_status,
+                        filled_quantity=filled_quantity,
+                        fill_ids=fill_ids,
+                        provider_observed_at=provider_observed_at,
+                    )
                 )
             confirmed_cancellations: list[tuple[str, str]] = []
             for cancellation in cancellation_rows:
@@ -1651,6 +1768,28 @@ class PaperExecutionService:
             unique_gaps = tuple(sorted(set(gaps)))
             complete = snapshot.complete and not unique_gaps
             if complete:
+                for update in pending_intent_updates:
+                    connection.execute(
+                        """
+                        UPDATE paper_intents
+                        SET outbox_state = ?, provider_order_id = ?, provider_status = ?,
+                            fill_status = ?, filled_quantity = ?, fill_ids_json = ?,
+                            provider_observed_at = ?, lease_token = NULL,
+                            lease_expires_at = NULL, updated_at = ?
+                        WHERE client_order_id = ?
+                        """,
+                        (
+                            OutboxState.RECONCILED.value,
+                            update.provider_order_id,
+                            update.provider_status,
+                            update.fill_status,
+                            str(update.filled_quantity),
+                            json.dumps(list(update.fill_ids), separators=(",", ":")),
+                            _timestamp(update.provider_observed_at),
+                            _timestamp(current),
+                            update.client_order_id,
+                        ),
+                    )
                 for cancellation_id, client_order_id in confirmed_cancellations:
                     connection.execute(
                         """
@@ -1841,7 +1980,11 @@ class PaperExecutionService:
             or cast(str, row["request_hash"]) != capability.request_hash
             or approval_hash != capability.approval_hash
             or cast(str | None, intent["provider_order_id"]) != capability.provider_order_id
-            or cast(str | None, intent["provider_status"]) != "accepted"
+            or cast(str | None, intent["provider_status"])
+            not in {
+                ExecutionStatus.ACCEPTED.value,
+                ExecutionStatus.PARTIALLY_FILLED.value,
+            }
             or OutboxState(cast(str, intent["outbox_state"])) is not OutboxState.RECONCILED
         ):
             return False
@@ -2507,6 +2650,9 @@ class PaperExecutionService:
                     provider_order_id TEXT,
                     provider_status TEXT,
                     fill_status TEXT,
+                    filled_quantity TEXT NOT NULL DEFAULT '0',
+                    fill_ids_json TEXT NOT NULL DEFAULT '[]',
+                    provider_observed_at TEXT,
                     provider_id TEXT NOT NULL,
                     provider_version TEXT NOT NULL,
                     order_expires_at TEXT NOT NULL,
@@ -2606,6 +2752,16 @@ class PaperExecutionService:
                 connection.execute("ALTER TABLE paper_intents ADD COLUMN provider_id TEXT")
             if "provider_version" not in columns:
                 connection.execute("ALTER TABLE paper_intents ADD COLUMN provider_version TEXT")
+            if "filled_quantity" not in columns:
+                connection.execute(
+                    "ALTER TABLE paper_intents ADD COLUMN filled_quantity TEXT NOT NULL DEFAULT '0'"
+                )
+            if "fill_ids_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE paper_intents ADD COLUMN fill_ids_json TEXT NOT NULL DEFAULT '[]'"
+                )
+            if "provider_observed_at" not in columns:
+                connection.execute("ALTER TABLE paper_intents ADD COLUMN provider_observed_at TEXT")
             cancellation_columns = {
                 cast(str, row["name"])
                 for row in connection.execute("PRAGMA table_info(paper_cancellations)").fetchall()
@@ -3203,6 +3359,13 @@ def _record(row: sqlite3.Row) -> PaperIntentRecord:
         provider_order_id=cast(str | None, row["provider_order_id"]),
         provider_status=cast(str | None, row["provider_status"]),
         fill_status=cast(str | None, row["fill_status"]),
+        filled_quantity=Decimal(cast(str, row["filled_quantity"])),
+        fill_ids=tuple(cast(list[str], json.loads(cast(str, row["fill_ids_json"])))),
+        provider_observed_at=(
+            _datetime(cast(str, row["provider_observed_at"]))
+            if row["provider_observed_at"] is not None
+            else None
+        ),
         updated_at=_datetime(cast(str, row["updated_at"])),
     )
 
@@ -3307,6 +3470,63 @@ def _receipt_dict(receipt: ExecutionReceipt) -> dict[str, object]:
         "status": receipt.status.value,
         "observed_at": _timestamp(receipt.observed_at),
     }
+
+
+def _execution_transition_allowed(
+    previous_value: str | None,
+    current: ExecutionStatus,
+) -> bool:
+    if current is ExecutionStatus.UNKNOWN:
+        return False
+    if previous_value is None:
+        return True
+    try:
+        previous = ExecutionStatus(previous_value)
+    except ValueError:
+        return True
+    allowed: dict[ExecutionStatus, frozenset[ExecutionStatus]] = {
+        ExecutionStatus.ACCEPTED: frozenset(
+            {
+                ExecutionStatus.ACCEPTED,
+                ExecutionStatus.PENDING_CANCEL,
+                ExecutionStatus.CANCELED,
+                ExecutionStatus.PARTIALLY_FILLED,
+                ExecutionStatus.FILLED,
+                ExecutionStatus.REJECTED,
+                ExecutionStatus.EXPIRED,
+            }
+        ),
+        ExecutionStatus.PENDING_CANCEL: frozenset(
+            {
+                ExecutionStatus.ACCEPTED,
+                ExecutionStatus.PENDING_CANCEL,
+                ExecutionStatus.CANCELED,
+                ExecutionStatus.PARTIALLY_FILLED,
+                ExecutionStatus.FILLED,
+            }
+        ),
+        ExecutionStatus.PARTIALLY_FILLED: frozenset(
+            {
+                ExecutionStatus.PARTIALLY_FILLED,
+                ExecutionStatus.PENDING_CANCEL,
+                ExecutionStatus.CANCELED,
+                ExecutionStatus.FILLED,
+                ExecutionStatus.EXPIRED,
+            }
+        ),
+        ExecutionStatus.CANCELED: frozenset({ExecutionStatus.CANCELED}),
+        ExecutionStatus.FILLED: frozenset({ExecutionStatus.FILLED}),
+        ExecutionStatus.REJECTED: frozenset({ExecutionStatus.REJECTED}),
+        ExecutionStatus.EXPIRED: frozenset({ExecutionStatus.EXPIRED}),
+        ExecutionStatus.UNKNOWN: frozenset(),
+    }
+    return current in allowed[previous]
+
+
+def _provider_accepts_new_orders(provider: ExecutionProvider) -> bool:
+    if isinstance(provider, NewOrderAdmissionProvider):
+        return provider.new_order_admission_open
+    return True
 
 
 def _cancellation_receipt_dict(receipt: CancellationCommandReceipt) -> dict[str, object]:

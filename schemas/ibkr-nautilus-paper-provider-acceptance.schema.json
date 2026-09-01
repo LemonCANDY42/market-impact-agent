@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/ibkr-nautilus-paper-provider-acceptance.schema.json",
+  "title": "IBKR Nautilus Paper Provider Acceptance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "acceptance_id",
+    "provider_id",
+    "provider_version",
+    "configuration_hash",
+    "account_reference_hash",
+    "instrument_routes_hash",
+    "markets",
+    "order_types",
+    "accepted_scenarios",
+    "evidence_hashes",
+    "accepted_at",
+    "valid_until",
+    "complete",
+    "gaps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.ibkr-nautilus-paper-provider-acceptance.v1"
+    },
+    "acceptance_id": {
+      "type": "string",
+      "pattern": "^ibkr-nautilus-paper-acceptance-[0-9a-f]{64}$"
+    },
+    "provider_id": {"const": "ibkr-nautilus-paper"},
+    "provider_version": {"const": "0.1.0-candidate"},
+    "configuration_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "account_reference_hash": {
+      "type": "string",
+      "pattern": "^account-ref-[0-9a-f]{64}$"
+    },
+    "instrument_routes_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "markets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z0-9._-]+$"}
+    },
+    "order_types": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["market", "limit"]}
+    },
+    "accepted_scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evidence_hashes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "accepted_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"},
+    "complete": {"type": "boolean"},
+    "gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

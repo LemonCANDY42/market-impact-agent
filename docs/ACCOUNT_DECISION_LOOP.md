@@ -223,7 +223,14 @@ success never establishes broker order, fill, position or cash state.
 5. **IBKR paper execution.** Implement and independently accept `ibkr-nautilus-paper` for submit,
    cancel, replace, fill, ambiguous acknowledgement, restart and complete account reconciliation.
    The accepted direct account read, mutation-free Nautilus readiness probe and mock evidence cannot
-   satisfy this gate.
+   satisfy this gate. The disabled adapter candidate, durable identity/no-redispatch boundary,
+   provider-neutral partial/full-fill reconciliation and external Provider Acceptance artifact are
+   now implemented and tested with an injected runtime. Acceptance is validity-bounded and binds
+   configuration, anonymous account scope, Instrument routes, markets and order types; durable
+   bindings prevent cross-account reuse. Fill state is cumulative and monotonic, while partially
+   filled orders retain an exact cancel path for the remainder. The concrete long-lived Nautilus command
+   runtime and real broker fault evidence remain open; therefore no external Paper execution
+   capability is advertised.
 6. **Live.** Require explicit authorization, versioned live mandate and limits, credential
    isolation, tested kill switch and separate live Provider Acceptance.
 

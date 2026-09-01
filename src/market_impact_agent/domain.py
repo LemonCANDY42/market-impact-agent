@@ -38,7 +38,12 @@ class HardPolicyOutcome(StrEnum):
 
 class ExecutionStatus(StrEnum):
     ACCEPTED = "accepted"
+    PENDING_CANCEL = "pending_cancel"
     CANCELED = "canceled"
+    PARTIALLY_FILLED = "partially_filled"
+    FILLED = "filled"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
     UNKNOWN = "unknown"
 
 
@@ -181,12 +186,57 @@ class HardPolicyDecision:
 @dataclass(frozen=True, slots=True)
 class ExecutionReceipt:
     client_order_id: str
-    provider_order_id: str
+    provider_order_id: str | None
     status: ExecutionStatus
     observed_at: datetime
+    filled_quantity: Decimal = Decimal(0)
+    fill_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         require_aware(self.observed_at, "observed_at")
+        if self.provider_order_id is not None and (
+            not self.provider_order_id or self.provider_order_id != self.provider_order_id.strip()
+        ):
+            raise ValueError("provider_order_id must be a non-empty trimmed string")
+        if (
+            self.status
+            in {
+                ExecutionStatus.ACCEPTED,
+                ExecutionStatus.PENDING_CANCEL,
+                ExecutionStatus.CANCELED,
+                ExecutionStatus.PARTIALLY_FILLED,
+                ExecutionStatus.FILLED,
+            }
+            and self.provider_order_id is None
+        ):
+            raise ValueError("broker-observed order state requires provider_order_id")
+        if not self.filled_quantity.is_finite() or self.filled_quantity < 0:
+            raise ValueError("filled_quantity must be finite and non-negative")
+        if len(set(self.fill_ids)) != len(self.fill_ids) or any(
+            not item or item != item.strip() for item in self.fill_ids
+        ):
+            raise ValueError("fill_ids must be unique, non-empty strings")
+        object.__setattr__(self, "fill_ids", tuple(sorted(self.fill_ids)))
+        if (self.filled_quantity > 0) != bool(self.fill_ids):
+            raise ValueError("filled_quantity and fill_ids must be present together")
+        if (
+            self.status
+            in {
+                ExecutionStatus.PARTIALLY_FILLED,
+                ExecutionStatus.FILLED,
+            }
+            and self.filled_quantity == 0
+        ):
+            raise ValueError("filled order status requires fill evidence")
+        if (
+            self.status
+            in {
+                ExecutionStatus.ACCEPTED,
+                ExecutionStatus.REJECTED,
+            }
+            and self.filled_quantity > 0
+        ):
+            raise ValueError("unfilled terminal or accepted status cannot carry fill evidence")
 
 
 def _timestamp(value: datetime) -> str:

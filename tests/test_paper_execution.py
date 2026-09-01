@@ -385,10 +385,18 @@ def test_existing_paper_database_adds_nullable_agent_admission_binding(
         columns = {
             row[1] for row in connection.execute("PRAGMA table_info(paper_intents)").fetchall()
         }
+        legacy_fill_state = connection.execute(
+            "SELECT filled_quantity, fill_ids_json FROM paper_intents WHERE client_order_id = ?",
+            ("legacy-open-order",),
+        ).fetchone()
 
     assert "agent_admission_hash" in columns
     assert "provider_id" in columns
     assert "provider_version" in columns
+    assert "filled_quantity" in columns
+    assert "fill_ids_json" in columns
+    assert "provider_observed_at" in columns
+    assert legacy_fill_state == ("0", "[]")
     assert service.execution_blocked
     with pytest.raises(PermissionError, match="blocked pending reconciliation"):
         service.admit(make_order())
@@ -1123,6 +1131,242 @@ def test_paper_state_and_artifacts_are_private(tmp_path: Path) -> None:
         media_type="application/json",
     )
     assert S_IMODE(artifact.path.stat().st_mode) == 0o600
+
+
+def test_reconciliation_preserves_partial_then_complete_fill_lifecycle(tmp_path: Path) -> None:
+    provider = MockExecutionProvider(tmp_path / "provider.sqlite3", clock=lambda: NOW)
+    service = make_service(tmp_path / "paper", provider)
+    service.admit(make_order())
+    accepted = service.dispatch_next()
+    assert accepted is not None
+    assert service.reconcile().complete
+    assert accepted.provider_order_id is not None
+
+    partial = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=1),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.PARTIALLY_FILLED,
+                observed_at=NOW + timedelta(seconds=1),
+                filled_quantity=Decimal("4"),
+                fill_ids=("fill-1",),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, partial)
+    assert service.reconcile().complete
+    partially_filled = service.get("order-1")
+    assert partially_filled.provider_status == ExecutionStatus.PARTIALLY_FILLED.value
+    assert partially_filled.fill_status == ExecutionStatus.PARTIALLY_FILLED.value
+    assert partially_filled.filled_quantity == Decimal("4")
+    assert partially_filled.fill_ids == ("fill-1",)
+
+    filled = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=2),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.FILLED,
+                observed_at=NOW + timedelta(seconds=2),
+                filled_quantity=Decimal("10"),
+                fill_ids=("fill-1", "fill-2"),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, filled)
+    assert service.reconcile().complete
+    fully_filled = service.get("order-1")
+    assert fully_filled.provider_status == ExecutionStatus.FILLED.value
+    assert fully_filled.fill_status == ExecutionStatus.FILLED.value
+    assert fully_filled.filled_quantity == Decimal("10")
+    assert fully_filled.fill_ids == ("fill-1", "fill-2")
+    assert (
+        validate_agent_contract(
+            filled.to_dict(),
+            "provider-reconciliation-snapshot-v2.schema.json",
+        )
+        == ()
+    )
+
+
+def test_partial_fill_can_request_cancel_of_remaining_quantity(tmp_path: Path) -> None:
+    provider = MockExecutionProvider(tmp_path / "provider.sqlite3", clock=lambda: NOW)
+    service = make_service(tmp_path / "paper", provider)
+    service.admit(make_order())
+    accepted = service.dispatch_next()
+    assert accepted is not None
+    assert service.reconcile().complete
+    assert accepted.provider_order_id is not None
+    partial = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=1),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.PARTIALLY_FILLED,
+                observed_at=NOW + timedelta(seconds=1),
+                filled_quantity=Decimal("4"),
+                fill_ids=("fill-1",),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, partial)
+    assert service.reconcile().complete
+    service.provider = provider
+
+    cancellation = service.request_cancel(
+        "order-1",
+        cancellation_id="cancel-partial-order-1",
+        reason="risk invalidation after partial fill",
+    )
+
+    assert cancellation.state is CancellationState.PENDING_APPROVAL
+
+
+def test_reconciliation_rejects_cross_snapshot_fill_and_terminal_regressions(
+    tmp_path: Path,
+) -> None:
+    provider = MockExecutionProvider(tmp_path / "provider.sqlite3", clock=lambda: NOW)
+    service = make_service(tmp_path / "paper", provider)
+    service.admit(make_order())
+    accepted = service.dispatch_next()
+    assert accepted is not None
+    assert service.reconcile().complete
+    assert accepted.provider_order_id is not None
+
+    partial = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=1),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.PARTIALLY_FILLED,
+                observed_at=NOW + timedelta(seconds=1),
+                filled_quantity=Decimal("4"),
+                fill_ids=("fill-1",),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, partial)
+    assert service.reconcile().complete
+
+    regressed = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=2),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.PARTIALLY_FILLED,
+                observed_at=NOW + timedelta(seconds=2),
+                filled_quantity=Decimal("2"),
+                fill_ids=("fill-1",),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, regressed)
+    run = service.reconcile()
+
+    assert not run.complete
+    assert run.gaps == ("provider_fill_quantity_regressed:order-1",)
+    unchanged = service.get("order-1")
+    assert unchanged.filled_quantity == Decimal("4")
+    assert unchanged.fill_ids == ("fill-1",)
+
+    filled = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=3),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.FILLED,
+                observed_at=NOW + timedelta(seconds=3),
+                filled_quantity=Decimal("10"),
+                fill_ids=("fill-1", "fill-2"),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, filled)
+    assert service.reconcile().complete
+
+    terminal_regression = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=4),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.ACCEPTED,
+                observed_at=NOW + timedelta(seconds=4),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, terminal_regression)
+    run = service.reconcile()
+
+    assert not run.complete
+    assert "provider_order_status_regressed:order-1" in run.gaps
+    terminal = service.get("order-1")
+    assert terminal.provider_status == ExecutionStatus.FILLED.value
+    assert terminal.filled_quantity == Decimal("10")
+
+
+def test_reconciliation_blocks_overfill_and_duplicate_fill_identity(tmp_path: Path) -> None:
+    provider = MockExecutionProvider(tmp_path / "provider.sqlite3", clock=lambda: NOW)
+    service = make_service(tmp_path / "paper", provider)
+    service.admit(make_order())
+    accepted = service.dispatch_next()
+    assert accepted is not None
+    assert service.reconcile().complete
+    assert accepted.provider_order_id is not None
+    snapshot = ReconciliationSnapshot.build(
+        provider_id=provider.manifest.provider_id,
+        observed_at=NOW + timedelta(seconds=1),
+        complete=True,
+        receipts=(
+            ExecutionReceipt(
+                client_order_id="order-1",
+                provider_order_id=accepted.provider_order_id,
+                status=ExecutionStatus.FILLED,
+                observed_at=NOW + timedelta(seconds=1),
+                filled_quantity=Decimal("11"),
+                fill_ids=("fill-1",),
+            ),
+            ExecutionReceipt(
+                client_order_id="external-order",
+                provider_order_id="external-provider-order",
+                status=ExecutionStatus.CANCELED,
+                observed_at=NOW + timedelta(seconds=1),
+                filled_quantity=Decimal("1"),
+                fill_ids=("fill-1",),
+            ),
+        ),
+    )
+    service.provider = ReconciliationOverride(provider, snapshot)
+
+    run = service.reconcile()
+
+    assert not run.complete
+    assert run.gaps == (
+        "duplicate_provider_fill:fill-1",
+        "external_provider_order:external-order",
+        "provider_order_overfilled:order-1",
+    )
 
 
 def make_service(

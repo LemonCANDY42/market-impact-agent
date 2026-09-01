@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/provider-reconciliation-snapshot-v2.schema.json",
+  "title": "Market Impact Provider Reconciliation Snapshot v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider_id",
+    "snapshot_id",
+    "observed_at",
+    "complete",
+    "receipts",
+    "gaps"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.provider-reconciliation-snapshot.v2"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "complete": {"type": "boolean"},
+    "receipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "client_order_id",
+          "provider_order_id",
+          "status",
+          "observed_at",
+          "filled_quantity",
+          "fill_ids"
+        ],
+        "properties": {
+          "client_order_id": {"type": "string", "minLength": 1},
+          "provider_order_id": {
+            "oneOf": [
+              {"type": "string", "minLength": 1},
+              {"type": "null"}
+            ]
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "pending_cancel",
+              "canceled",
+              "partially_filled",
+              "filled",
+              "rejected",
+              "expired",
+              "unknown"
+            ]
+          },
+          "observed_at": {"type": "string", "format": "date-time"},
+          "filled_quantity": {"type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"},
+          "fill_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "accepted",
+                    "pending_cancel",
+                    "canceled",
+                    "partially_filled",
+                    "filled"
+                  ]
+                }
+              },
+              "required": ["status"]
+            },
+            "then": {
+              "properties": {
+                "provider_order_id": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "filled_quantity": {"pattern": "^0(?:\\.0+)?$"}
+              },
+              "required": ["filled_quantity"]
+            },
+            "then": {
+              "properties": {
+                "fill_ids": {"maxItems": 0}
+              }
+            },
+            "else": {
+              "properties": {
+                "fill_ids": {"minItems": 1}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {"enum": ["partially_filled", "filled"]}
+              },
+              "required": ["status"]
+            },
+            "then": {
+              "properties": {
+                "filled_quantity": {
+                  "pattern": "^(?:0\\.(?:0*[1-9][0-9]*)|[1-9][0-9]*(?:\\.[0-9]+)?)$"
+                },
+                "fill_ids": {"minItems": 1}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {"enum": ["accepted", "rejected"]}
+              },
+              "required": ["status"]
+            },
+            "then": {
+              "properties": {
+                "filled_quantity": {"pattern": "^0(?:\\.0+)?$"},
+                "fill_ids": {"maxItems": 0}
+              }
+            }
+          }
+        ]
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

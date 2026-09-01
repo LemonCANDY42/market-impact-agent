@@ -6,6 +6,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
@@ -282,6 +283,15 @@ def _issue_submission_capability(  # pyright: ignore[reportUnusedFunction]
     )
 
 
+def _canonical_decimal_string(value: Decimal) -> str:
+    if value == 0:
+        return "0"
+    rendered = format(value, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered
+
+
 @dataclass(frozen=True, slots=True)
 class ReconciliationSnapshot:
     provider_id: str
@@ -309,6 +319,8 @@ class ReconciliationSnapshot:
                     "observed_at": receipt.observed_at.astimezone(UTC)
                     .isoformat()
                     .replace("+00:00", "Z"),
+                    "filled_quantity": _canonical_decimal_string(receipt.filled_quantity),
+                    "fill_ids": list(receipt.fill_ids),
                 }
                 for receipt in self.receipts
             ],
@@ -337,6 +349,8 @@ class ReconciliationSnapshot:
                     "observed_at": receipt.observed_at.astimezone(UTC)
                     .isoformat()
                     .replace("+00:00", "Z"),
+                    "filled_quantity": _canonical_decimal_string(receipt.filled_quantity),
+                    "fill_ids": list(receipt.fill_ids),
                 }
                 for receipt in receipts
             ],
@@ -353,7 +367,7 @@ class ReconciliationSnapshot:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema_version": "market-impact.provider-reconciliation-snapshot.v1",
+            "schema_version": "market-impact.provider-reconciliation-snapshot.v2",
             "provider_id": self.provider_id,
             "snapshot_id": self.snapshot_id,
             "observed_at": self.observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
@@ -366,6 +380,8 @@ class ReconciliationSnapshot:
                     "observed_at": receipt.observed_at.astimezone(UTC)
                     .isoformat()
                     .replace("+00:00", "Z"),
+                    "filled_quantity": _canonical_decimal_string(receipt.filled_quantity),
+                    "fill_ids": list(receipt.fill_ids),
                 }
                 for receipt in self.receipts
             ],
@@ -385,6 +401,14 @@ class ExecutionProvider(Protocol):
         self,
         validator: Callable[[SubmissionCapability], bool],
     ) -> None: ...
+
+
+@runtime_checkable
+class NewOrderAdmissionProvider(Protocol):
+    """Optional Provider signal that can close new exposure while retaining recovery."""
+
+    @property
+    def new_order_admission_open(self) -> bool: ...
 
 
 class SubmissionCapabilityRejected(PermissionError):

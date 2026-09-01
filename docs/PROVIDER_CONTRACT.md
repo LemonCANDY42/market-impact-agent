@@ -127,6 +127,20 @@ Paper validation never upgrades a provider to live validation.
   account read. The probe loads no Strategy and emits a content-identified private readiness
   report. The remaining manual-TWS-order coverage gap makes the report read-only accepted but not
   exposure-increase-ready; this is configuration/lifecycle evidence, not execution acceptance.
+  The execution-side candidate now exists behind a provider-neutral
+  `NautilusPaperExecutionRuntime` port. It validates the exact sealed Harness capability,
+  translates only registered Instrument Master routes carrying an explicit market, assigns a deterministic bounded
+  Nautilus client order ID and commits its identity before dispatch. A lost response leaves that
+  identity ambiguous and reconciliation-only; neither submit nor cancel is silently sent again
+  after restart. The candidate is disabled by default. A complete content-identified Harness
+  Provider Acceptance must match the runtime configuration hash, opaque account scope and complete
+  Instrument route-set hash before the Provider can recover or reduce risk. New-order admission is
+  separately open only during that acceptance's explicit validity interval, and every new mutation
+  is also checked against the accepted market and order-type sets. Durable
+  order and cancellation bindings retain those scope hashes, so a reused state database cannot send
+  an old identity to another account or runtime. After submit admission expires, cancellation may
+  remain available only as exact-scope risk reduction for an already bound order; new exposure stays
+  disabled. No such real acceptance exists yet.
   Separately, the narrower
   `ibkr-paper-account-read` adapter has completed one real local IB Gateway Paper account read: it
   exposes no mutation method, waits for independent account, summary, API-open-order and execution
@@ -147,6 +161,19 @@ definitive-versus-unknown outcomes, risk before execution, duplicate-fill protec
 stream and query recovery, external-order classification, and reconciliation—but using
 Nautilus does not automatically satisfy them. Public schemas and normalized domain events
 never expose NautilusTrader types.
+
+Provider reconciliation v2 distinguishes acknowledgement from lifecycle state. An order may be
+`accepted`, `pending_cancel`, `canceled`, `partially_filled`, `filled`, `rejected`, `expired`, or
+`unknown`; cumulative filled quantity and unique Provider fill identities accompany the state.
+The Harness canonicalizes their order before hashing and rejects duplicate fill identity across
+orders, overfill, a full-fill quantity
+that differs from the immutable Order Intent, a partial-fill quantity that is not partial, any
+cross-snapshot decrease in cumulative quantity, disappearance of an earlier fill identity, stale
+order observation or terminal-state regression. Reconciliation changes canonical order state only
+when the whole normalized snapshot is complete and gap-free. A partially filled open order remains
+eligible for cancel of its unfilled remainder.
+Submission receipts remain accepted-without-fill acknowledgements. A fast fill before that
+acknowledgement is therefore ambiguous until reconciliation rather than being mislabeled accepted.
 
 The provider-neutral account-to-order seam is now concrete rather than engine-specific:
 `AuthorizedDecisionView -> PortfolioDecision -> OrderSizingDecision -> OrderIntent ->

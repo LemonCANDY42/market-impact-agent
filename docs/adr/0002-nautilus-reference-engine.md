@@ -60,3 +60,10 @@ claim IBKR, VeighNa, paper, or live capability.
   process and version lifecycle.
 - NautilusTrader is an external LGPL-3.0-only dependency; copied or modified code, if
   ever needed, requires a separate license-compliance review.
+- External execution admission remains outside Nautilus. The Harness adapter persists only the
+  identity and exact runtime/account/Instrument-route scope needed to prevent duplicate or
+  cross-account dispatch, while Nautilus and the broker provide runtime and venue observations. A
+  separate validity-bounded, content-identified Provider Acceptance binds that scope plus accepted
+  markets, order types and fault evidence; without it the adapter manifest remains disabled and
+  unverified. Expiry closes new exposure but may retain exact-scope cancellation of an already bound
+  order as a risk-reduction operation.

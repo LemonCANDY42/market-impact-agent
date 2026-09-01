@@ -1225,14 +1225,30 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
     and portfolio initialization, loaded no Strategy, and matched the direct reader's account,
     open-order and open-position counts. Its content-identified report stays in ignored private
     state. The explicit manual-TWS-order coverage gap keeps exposure increase closed.
-  - [ ] Implement the long-lived Harness operation bridge and exact Instrument Master translation,
-    then accept submit, cancel, replace, partial/duplicate fill, ambiguous acknowledgement,
-    disconnect, Gateway/process restart, external-order classification and full account
-    reconciliation. No real Paper mutation occurs without the exact `manual_each` approval.
-- Add a Harness-owned Provider Acceptance artifact before advertising external paper capability. It
-  must bind the exact adapter/dependency/configuration/environment/account scope and the accepted
-  ambiguity, restart, fault, and account-level reconciliation evidence; a Provider manifest cannot
-  verify itself.
+  - [x] Add the disabled Harness operation-adapter candidate, exact one-to-one Instrument Master
+    translation, deterministic Harness-to-Nautilus order identity, SQLite WAL/FULL dispatch memory,
+    sealed capability validation and no-redispatch behavior after ambiguous submit/cancel across
+    restart. A fake long-lived runtime fault suite covers the adapter boundary; no broker mutation
+    was made and the concrete Nautilus command runtime remains unaccepted.
+  - [x] Extend the provider-neutral reconciliation lifecycle to preserve pending cancel, partial and
+    complete fill, rejection and expiry without calling them accepted. Bind cumulative fill quantity
+    and unique fill IDs; duplicate fills, overfills, cross-snapshot quantity/identity regression,
+    stale observations and terminal-state regression block the global gate. Partial fills retain an
+    exact cancellation path for the remaining quantity.
+  - [x] Add a content-identified Harness-owned Provider Acceptance artifact. It binds the exact
+    validity interval, runtime configuration hash, opaque account scope, complete Instrument route
+    hash, markets and order types plus
+    evidence for submit/cancel/replace, partial/duplicate fill, ambiguous acknowledgement,
+    disconnect, Gateway/process restart, external orders and account reconciliation. The external
+    Provider cannot recover or reduce risk unless the complete accepted artifact matches its exact
+    runtime scope, and new-order admission is open only during the artifact's validity interval.
+    Durable mutation identities bind the same scope and cannot be replayed across account/runtime
+    changes; expiry may preserve only reconciliation and exact-scope cancellation of an existing
+    order. A manifest cannot verify itself.
+  - [ ] Implement and fault-test the concrete long-lived Nautilus Strategy/runtime, then collect the
+    real acceptance evidence above against the authorized Paper account. Resolve or explicitly bind
+    manual TWS order visibility, and reconcile broker orders, fills, positions and cash after every
+    injected failure. No real Paper mutation occurs without the exact `manual_each` order approval.
 - Add CLI, MCP approval tools, generic webhook, and macOS notifications.
 - Pass crash/restart/reconciliation and duplicate-order acceptance.
 
