@@ -600,15 +600,20 @@ equivalent active collection scopes, and preserves a callback subscription for e
 This keeps discovery open-ended enough to follow a newly supported transmission while preventing a
 speculative association from silently becoming a trade-universe or account action.
 
-The proposal/admission boundary is deliberately still fail-closed. A first implementation froze a
-caller-supplied parent projection, but append-only self-signing proves only immutability, not that the
-evidence, subjects or matcher terms came from a real parent Run. That minting path was removed. The
-current `AgentDelegationContextStore` cannot issue a context and rejects even a content-addressed
-caller artifact; profile offers, admission, lookup, callback and restart activation therefore remain
-closed. PDI-40 must next name one concrete parent Run/Decision owner whose durable artifact can derive
-the complete projection without a second generic decision-view state machine. Admission-before-Watch
-activation recovery has isolated mechanics tests, but cannot become operational acceptance until the
-parent authority is real.
+The proposal/admission boundary now has one concrete authority without adding a second generic
+decision-view state machine. `EventImpactTriageWatchAuthority` reopens the exact durable Candidate
+Set, Proposal and Triage Decision, accepts only a cluster explicitly listed for Attention Watch, and
+derives its evidence references, event-cluster subject and bounded matcher terms from that cluster's
+frozen Observation versions. Free-text scopes require at least two co-occurring non-generic anchors;
+single-term exact scopes are restricted to structured identity fields. Activation, restart and Wake
+callback resolution each reopen the same parent Decision authority. The generic
+`AgentDelegationContextStore` still cannot mint authority;
+caller-created projections, self-hashed artifacts, subclasses, archived clusters and
+EventAssessment-routed clusters remain fail-closed. Exact profile offers, admission, callback lookup,
+shared-scope fan-out and admission-before-Watch activation recovery are therefore accepted only for
+this Triage-owned path. The first dispatch freezes the callback subscriber set for that exact Wake;
+later subscribers to a reused Watch cannot change its replay fan-out and apply only to future Wakes.
+Remote acquisition and installed scheduling remain separate PDI-40 work.
 
 Still required for real acceptance:
 
@@ -620,8 +625,9 @@ Still required for real acceptance:
   does not construct or probe a Provider, and rejects authority subclasses or reinstallation of an
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
-  ingress roles; the complete Account State/Position Snapshot contract is read-only infrastructure
-  and still needs a real accepted account Provider plus binding into the Authorized Decision View;
+  ingress roles; the real read-only IBKR Paper Account/Position Snapshot path is now bound into the
+  Authorized Decision View, while portfolio decisions, sizing and broker-paper execution remain
+  separate downstream gates;
 - one real path-bearing PDI-29G EventAssessment that passes deterministic Materiality; the concrete
   runtime/authority and a real completed no-path Watch are accepted, while v8-v11 terminal comparison
   versions remain negative evidence and cannot be recycled;

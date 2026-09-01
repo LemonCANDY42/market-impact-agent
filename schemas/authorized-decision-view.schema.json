@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/authorized-decision-view.schema.json",
+  "title": "Market Impact Authorized Decision View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "view_id",
+    "cutoff",
+    "frozen_at",
+    "data_snapshot_ids",
+    "decision_input_ids",
+    "position_snapshot_id",
+    "position_snapshot_tool_manifest_hash",
+    "observation_gaps",
+    "risk_observation_ready",
+    "exposure_increase_ready",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.authorized-decision-view.v1"},
+    "view_id": {"type": "string", "pattern": "^authorized-decision-view-[0-9a-f]{64}$"},
+    "cutoff": {"type": "string", "format": "date-time"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "data_snapshot_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "decision_input_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "position_snapshot_id": {
+      "type": "string",
+      "pattern": "^position-snapshot-[0-9a-f]{64}$"
+    },
+    "position_snapshot_tool_manifest_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "observation_gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "risk_observation_ready": {"type": "boolean"},
+    "exposure_increase_ready": {"type": "boolean"},
+    "execution_capability": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"exposure_increase_ready": {"const": true}},
+        "required": ["exposure_increase_ready"]
+      },
+      "then": {
+        "properties": {
+          "observation_gaps": {"maxItems": 0},
+          "risk_observation_ready": {"const": true}
+        }
+      }
+    }
+  ]
+}

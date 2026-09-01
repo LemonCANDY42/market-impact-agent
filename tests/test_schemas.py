@@ -1,4 +1,5 @@
 import json
+import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -8,6 +9,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from referencing import Registry
 from referencing.jsonschema import DRAFT202012, Schema
 
+from market_impact_agent.agent_schema import AGENT_SCHEMA_FILES
 from market_impact_agent.backtests import backtest_request_from_dict
 from market_impact_agent.event_impact_triage import TriageAgentRole
 from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
@@ -17,6 +19,17 @@ ROOT = Path(__file__).parents[1]
 
 class Validator(Protocol):
     def validate(self, instance: object) -> None: ...
+
+
+def test_wheel_packages_every_registered_agent_schema() -> None:
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    force_include = cast(
+        dict[str, str],
+        config["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"],
+    )
+    packaged_schema_names = {Path(source).name for source in force_include}
+
+    assert set(AGENT_SCHEMA_FILES) <= packaged_schema_names
 
 
 @pytest.mark.parametrize(
@@ -50,6 +63,7 @@ class Validator(Protocol):
         "event-impact-triage-cluster-partition.schema.json",
         "event-impact-triage-proposal.schema.json",
         "event-impact-triage-decision.schema.json",
+        "authorized-decision-view.schema.json",
         "account-state-snapshot.schema.json",
         "position-snapshot.schema.json",
         "prospective-position-snapshot.schema.json",

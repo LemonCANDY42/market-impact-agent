@@ -52,6 +52,7 @@ AGENT_SCHEMA_FILES = (
     "event-impact-triage-label-set.schema.json",
     "event-impact-triage-comparison-registration.schema.json",
     "event-impact-triage-comparison-report.schema.json",
+    "authorized-decision-view.schema.json",
     "account-state-snapshot.schema.json",
     "position-snapshot.schema.json",
     "prospective-position-snapshot.schema.json",

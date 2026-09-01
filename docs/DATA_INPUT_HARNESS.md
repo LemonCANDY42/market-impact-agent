@@ -776,21 +776,29 @@ matcher and route, and records a content-identified admitted, reused or rejected
 global limits are committed under one immediate transaction. Equivalent active scopes use one
 Attention Watch rather than duplicate collection; every accepted parent remains a distinct callback
 subscriber, so sharing collection never silently transfers lineage. A cancelled or expired Watch is
-not reused.
+not reused, and a Watch whose poll, byte or wake budget is already exhausted rejects a late
+subscriber instead of promising a future callback.
 
-This is bounded mechanics, not PDI-40 acceptance. A caller-created parent projection remains
-self-declaration even when it is append-only and content-addressed, so the project removed the
-context-minting path. The concrete store currently rejects every candidate context; profile offers,
-admission, lookup, callbacks and restart activation stay fail-closed. The next workslice must bind one
-named parent Run/Decision authority and derive allowed evidence references, subjects/frozen members
-and matcher terms from its reopened durable artifact. Only then can the existing unrelated-scope and
-admission-before-Watch activation recovery tests become operational evidence. Shared due collection
-and the bounded acquisition executor remain later PDI-40 gates.
+The generic caller-created parent projection remains self-declaration even when append-only and
+content-addressed, so the project retains no generic context-minting path. One concrete authority is
+now accepted: `EventImpactTriageWatchAuthority` reopens an exact durable Triage Decision and derives
+the allowed evidence references, event-cluster subject and bounded matcher terms for a cluster
+explicitly routed to Attention Watch. Unrelated, archived and EventAssessment-routed clusters remain
+closed. Free-text matching requires at least two co-occurring non-generic anchors; a single exact
+term is accepted only on a structured identity field. Activation, restart recovery and later callback
+lookup each reopen the same parent Decision authority before proceeding. This makes profile offers,
+admission, lookup, shared callback fan-out and restart activation operational for that exact path.
+Shared due collection and the bounded acquisition executor remain later PDI-40 gates.
 
-The callback lookup is intentionally a read-only binding over a durable Wake, accepted Admission and
-the exact still-registered delegate profile. It does not claim or acknowledge the Wake, call a model,
-or dispatch a task. Shared due-opportunity fan-out, the bounded acquisition executor and installed
-scheduler remain PDI-40 work; idempotent Wake-to-fresh-Run dispatch remains PDI-41.
+The callback lookup remains a read-only binding over a durable Wake, accepted Admission and exact
+still-registered delegate profile. `AgentWatchWakeDispatcher` can now create one deterministic fresh
+research-only Run plus its exact Wake/Admission/Profile binding for every callback, recover both
+crash windows and concurrent dispatch, and acknowledge the Wake only after all bindings in the
+immutable first-dispatch callback set are durable. A subscriber committed after that set was frozen
+is eligible only for a later Wake, not replay of the earlier Wake. It does not call a Judgment model
+or expose execution. Shared due-opportunity fan-out, the bounded
+acquisition executor and installed scheduler remain PDI-40 work; frozen required Snapshot collection
+and the actual bounded Judgment invocation remain PDI-41.
 
 Prospective EventAssessment applies the same separation between observation throughput and decision
 authority. A completed no-path Watch or unresolved review remains a ready-time-order blocker for

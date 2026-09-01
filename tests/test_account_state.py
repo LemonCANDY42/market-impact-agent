@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -23,6 +25,7 @@ from market_impact_agent.account_state import (
     RecentFill,
     account_state_snapshot_from_dict,
     capture_account_state_snapshot,
+    load_or_create_account_reference_key,
     opaque_account_reference_hash,
     position_snapshot_from_dict,
 )
@@ -335,6 +338,47 @@ def test_capture_requires_an_account_capability_and_does_not_upgrade_mock_execut
             recent_fills=(),
             recent_fills_since=AS_OF - timedelta(hours=1),
         )
+
+
+def test_account_reference_key_store_is_stable_private_and_rejects_unsafe_file(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "private" / "account-reference.key"
+    first = load_or_create_account_reference_key(path)
+    second = load_or_create_account_reference_key(path)
+    assert first == second
+    assert len(first) == 32
+    assert path.stat().st_mode & 0o077 == 0
+
+    os.chmod(path, 0o644)
+    with pytest.raises(PermissionError, match="group- or world-accessible"):
+        load_or_create_account_reference_key(path)
+
+
+def test_account_reference_key_store_rejects_symbolic_link(tmp_path: Path) -> None:
+    target = tmp_path / "target.key"
+    target.write_bytes(b"x" * 32)
+    target.chmod(0o600)
+    link = tmp_path / "account-reference.key"
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="directly readable file"):
+        load_or_create_account_reference_key(link)
+
+
+def test_account_reference_key_store_publishes_one_complete_key_concurrently(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "private" / "account-reference.key"
+
+    def load_key(_: int) -> bytes:
+        return load_or_create_account_reference_key(path)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        keys = tuple(executor.map(load_key, range(32)))
+
+    assert len(set(keys)) == 1
+    assert len(keys[0]) == 32
 
 
 def _validate(schema_name: str, payload: dict[str, object]) -> None:

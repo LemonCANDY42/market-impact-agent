@@ -116,8 +116,27 @@ whether the snapshot is complete. An incomplete or stale snapshot may support ri
 cannot authorize an exposure-increasing order.
 
 The serialized account reference is a Harness-keyed pseudonym, not an unkeyed hash of a broker
-identifier. The pseudonymization key and raw reference never enter the Snapshot or Agent view. A
-Position Snapshot cannot be evaluated before its reconciliation timestamp.
+identifier. The pseudonymization key is atomically published into private state before any reader can
+use it, and neither the key nor the raw reference enters the Snapshot or Agent view. A Position
+Snapshot cannot be evaluated before its reconciliation timestamp.
+
+The first real read-only adapter now connects only to a local IB Gateway Paper session with a
+nonzero client identity and exposes no submit, cancel or replace method. It waits for API readiness,
+then independently closes the account-download, account-summary, all-open-orders and executions
+barriers before the Harness can mint an Account State Snapshot. Closing the fourth barrier freezes
+one immutable callback state under the reader lock; later broker callbacks cannot drift content
+beneath the earlier reconciliation time. Cash, positions, open orders and recent fills use typed
+absence when a section cannot be proven complete; broker account and
+order/execution identifiers are keyed pseudonyms. Its 2026-09-01 local acceptance observed one cash
+record and empty position, API-open-order and recent-fill sets. IBKR requires client 0 binding to
+observe manually submitted TWS orders, which is outside this non-mutating adapter; the snapshot
+therefore retains `manual_tws_open_orders_not_observed`, remains usable for position-risk review and
+blocks exposure increase. Exact amounts, identifiers and artifacts remain in ignored private state.
+The Authorized Decision View recomputes freshness at its own cutoff instead of copying an earlier
+readiness result, rejects exposure-increase readiness whenever any account observation gap remains,
+and mints the read tool only for the exact content-identified Position Snapshot it names. A
+caller-supplied lookalike tool is not part of this authority boundary. Cutoff and freeze instants are
+canonical UTC in serialized content identity, so equivalent aware timestamps cannot fork replay IDs.
 
 `Portfolio Decision` binds one Judgment/Signal candidate, the exact Account State and Position
 Snapshots, open-order conflicts and a disposition. It is a proposal-admission boundary, not an
@@ -131,9 +150,11 @@ state.
 
 ## Delivery gates
 
-1. **Read-only portfolio context.** Normalized Account State and full Position Snapshot contracts
-   plus fixture acceptance are complete. Next bind an accepted account Provider and frozen Agent
-   tools. No mutation capability.
+1. **Read-only portfolio context.** Complete. Normalized Account State and full Position Snapshot
+   contracts, fixture acceptance, one real local IB Gateway Paper read and the frozen
+   `AuthorizedDecisionView`/`read_position_snapshot` Agent tool are accepted. No credential or
+   mutation capability is exposed. This is bounded `ACCOUNT` read acceptance only; its explicit
+   manual-order coverage gap keeps exposure-increasing decisions closed.
 2. **Decision and sizing.** Add portfolio-action proposal plus deterministic sizing/rejection and
    bind them into Decision Admission. Exercise open, increase, reduce, close, abstain and conflicting
    open-order cases against the durable mock.
@@ -142,8 +163,9 @@ state.
    intent, never mutation of an admitted order.
 4. **Operational control.** Add durable approval inbox/notifications, kill switch and reconciliation
    escalation. Wake remains separately gated.
-5. **IBKR paper.** Implement and independently accept `ibkr-nautilus-paper` for account, submit,
-   cancel, replace, fill and restart reconciliation. Mock evidence cannot satisfy this gate.
+5. **IBKR paper execution.** Implement and independently accept `ibkr-nautilus-paper` for submit,
+   cancel, replace, fill, ambiguous acknowledgement, restart and complete account reconciliation.
+   The accepted read-only account adapter and mock evidence cannot satisfy this gate.
 6. **Live.** Require explicit authorization, versioned live mandate and limits, credential
    isolation, tested kill switch and separate live Provider Acceptance.
 

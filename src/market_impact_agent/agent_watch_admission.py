@@ -25,8 +25,14 @@ from market_impact_agent.attention_watch import (
     attention_wake_from_dict,
     attention_watch_policy_from_dict,
 )
-from market_impact_agent.data_inputs import LocalDataSnapshotStore
+from market_impact_agent.data_inputs import LocalDataSnapshotStore, SourceObservation
 from market_impact_agent.domain import require_aware
+from market_impact_agent.event_impact_triage import (
+    EventImpactTriageCandidateSet,
+    TriageClusterProposal,
+    TriageRoute,
+)
+from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
 from market_impact_agent.monitoring_scope import (
     EffectiveMembershipContext,
     MonitoringMatchMode,
@@ -39,7 +45,10 @@ from market_impact_agent.monitoring_scope import (
     RegisteredQueryTemplate,
     RetrievalPlan,
 )
-from market_impact_agent.prospective_data import ProspectiveDataJournal
+from market_impact_agent.prospective_data import (
+    ProspectiveDataJournal,
+    prospective_observation_version_id,
+)
 
 AGENT_WATCH_REQUEST_SCHEMA = "market-impact.agent-watch-request.v1"
 AGENT_WATCH_ADMISSION_SCHEMA = "market-impact.agent-watch-admission.v1"
@@ -51,6 +60,40 @@ _ACTIVE_WATCH_STATUSES = (
     AttentionWatchStatus.ACTIVE.value,
     AttentionWatchStatus.BACKING_OFF.value,
     AttentionWatchStatus.TRIGGERED.value,
+)
+_TRIAGE_COORDINATOR_AGENT_TYPE = "triage.coordinator"
+_MATCHER_TERM = re.compile(r"[a-z][a-z0-9._:-]{2,63}|[\u3400-\u9fff]{2,16}")
+_MAX_AUTHORIZED_MATCHER_TERMS = 32
+_GENERIC_TRIAGE_MATCHER_TERMS = frozenset(
+    {
+        "announcement",
+        "authority",
+        "company",
+        "event",
+        "follow-up",
+        "issuer",
+        "market",
+        "news",
+        "update",
+        "事件",
+        "公司",
+        "公告",
+        "市场",
+        "新闻",
+        "更新",
+    }
+)
+_EXACT_TRIAGE_MATCH_FIELDS = frozenset(
+    {
+        "event_cluster_ids",
+        "industry_codes",
+        "issuer_ids",
+        "instrument_ids",
+        "etf_ids",
+        "subject_refs",
+        "ts_code",
+        "record.ts_code",
+    }
 )
 
 
@@ -71,6 +114,7 @@ class WatchAdmissionBlocker(StrEnum):
     MATCHER_OUTSIDE_PARENT_VIEW = "matcher_outside_parent_view"
     BRANCH_LIMIT_EXHAUSTED = "branch_limit_exhausted"
     ACTIVE_WATCH_LIMIT_EXHAUSTED = "active_watch_limit_exhausted"
+    WATCH_BUDGET_EXHAUSTED = "watch_budget_exhausted"
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +184,76 @@ class AgentDelegationContextStore:
             "Agent Watch parent authority integration is not configured; "
             "delegation contexts cannot be minted from caller data"
         )
+
+
+class EventImpactTriageWatchAuthority:
+    """One exact durable Triage cluster authorized to propose an Attention Watch."""
+
+    def __init__(
+        self,
+        store: LocalDataSnapshotStore,
+        *,
+        decision_store: EventImpactTriageDecisionStore,
+        candidate_set_id: str,
+        cluster_id: str,
+    ) -> None:
+        if type(store) is not LocalDataSnapshotStore:
+            raise TypeError("Triage Watch authority requires the concrete Data Snapshot store")
+        if type(decision_store) is not EventImpactTriageDecisionStore:
+            raise TypeError("Triage Watch authority requires the concrete Triage Decision store")
+        if decision_store.root != store.root:
+            raise ValueError("Triage Watch authority stores must share one exact state root")
+        if not candidate_set_id.startswith("event-impact-triage-candidate-set-"):
+            raise ValueError("Triage Watch authority requires a Candidate Set ID")
+        if not cluster_id.startswith("event-impact-triage-cluster-"):
+            raise ValueError("Triage Watch authority requires a cluster ID")
+        self.store = store
+        self.decision_store = decision_store
+        self.candidate_set_id = candidate_set_id
+        self.cluster_id = cluster_id
+
+    def delegation_context(self) -> AgentDelegationContext:
+        """Derive the projection anew from the append-only Triage Decision owner."""
+
+        candidate_set, proposal, decision = self.decision_store.get_context(self.candidate_set_id)
+        matches = tuple(item for item in proposal.clusters if item.cluster_id == self.cluster_id)
+        if len(matches) != 1:
+            raise ValueError("Triage Watch cluster is not in the authoritative Proposal")
+        cluster = matches[0]
+        if (
+            cluster.cluster_id not in decision.attention_watch_cluster_ids
+            or cluster.recommended_route is not TriageRoute.ATTENTION_WATCH
+        ):
+            raise ValueError("Triage cluster is not authorized for Attention Watch")
+        evidence_refs = tuple(
+            sorted({*cluster.candidate_version_ids, *cluster.evidence_version_ids})
+        )
+        return AgentDelegationContext(
+            parent_ref=cluster.cluster_id,
+            parent_agent_type=_TRIAGE_COORDINATOR_AGENT_TYPE,
+            lineage_depth=0,
+            created_at=decision.decided_at,
+            authorized_evidence_refs=evidence_refs,
+            authorized_subjects=(
+                MonitoringSubjectRef(
+                    MonitoringSubjectKind.EVENT_CLUSTER,
+                    cluster.cluster_id,
+                ),
+            ),
+            authorized_matcher_terms=_triage_matcher_terms(
+                store=self.store,
+                candidate_set=candidate_set,
+                cluster=cluster,
+            ),
+        )
+
+    def reopen(self, context: AgentDelegationContext) -> AgentDelegationContext:
+        """Compare a caller projection with freshly reopened durable authority."""
+
+        authoritative = self.delegation_context()
+        if context != authoritative:
+            raise ValueError("Agent Watch parent projection differs from Triage authority")
+        return authoritative
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,7 +707,7 @@ class AgentWatchAdmissionService:
         store: LocalDataSnapshotStore,
         *,
         profiles: tuple[WatchDelegateProfile, ...],
-        delegation_authority: object,
+        delegation_authority: AgentDelegationContextStore | EventImpactTriageWatchAuthority,
         journal: ProspectiveDataJournal | None = None,
         watch_service: AttentionWatchService | None = None,
     ) -> None:
@@ -606,7 +720,10 @@ class AgentWatchAdmissionService:
             if watch_service is None
             else watch_service
         )
-        if type(delegation_authority) is not AgentDelegationContextStore:
+        if type(delegation_authority) not in {
+            AgentDelegationContextStore,
+            EventImpactTriageWatchAuthority,
+        }:
             raise TypeError("Agent Watch admission requires concrete delegation store authority")
         self.delegation_authority = delegation_authority
         if self.journal.store.root != store.root or self.watch_service.store.root != store.root:
@@ -622,6 +739,8 @@ class AgentWatchAdmissionService:
                 raise ValueError("Watch delegate profile coverage exceeds its route")
         self.index_path = store.index_path
         self._initialize()
+        if type(self.delegation_authority) is EventImpactTriageWatchAuthority:
+            self._reconcile_pending_watch_activations()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.index_path)
@@ -662,6 +781,10 @@ class AgentWatchAdmissionService:
                     ON agent_watch_admissions(
                         operational_scope_key, delegate_profile_id, outcome, expires_at
                     );
+                CREATE TABLE IF NOT EXISTS agent_watch_wake_callback_sets (
+                    wake_id TEXT PRIMARY KEY,
+                    artifact_hash TEXT NOT NULL UNIQUE
+                );
                 """
             )
 
@@ -677,6 +800,10 @@ class AgentWatchAdmissionService:
                     for profile in self.profiles.values()
                     if context.parent_agent_type in profile.allowed_parent_agent_types
                     and context.lineage_depth < profile.maximum_lineage_depth
+                    and (
+                        type(self.delegation_authority) is not EventImpactTriageWatchAuthority
+                        or MonitoringSubjectKind.EVENT_CLUSTER in profile.allowed_subject_kinds
+                    )
                 ),
                 key=lambda item: item.profile_id,
             )
@@ -691,9 +818,11 @@ class AgentWatchAdmissionService:
             ).fetchone()
         if row is None:
             raise KeyError(f"unknown Agent Watch admission: {admission_id}")
-        return agent_watch_admission_from_dict(
+        admission = agent_watch_admission_from_dict(
             self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
         )
+        self._reopen_triage_admission(admission)
+        return admission
 
     def admit(
         self,
@@ -723,7 +852,10 @@ class AgentWatchAdmissionService:
                 decided_at,
                 WatchAdmissionBlocker.PROFILE_NOT_OFFERED,
             )
-        if request.subject.kind not in profile.allowed_subject_kinds:
+        if request.subject.kind not in profile.allowed_subject_kinds or (
+            type(self.delegation_authority) is EventImpactTriageWatchAuthority
+            and request.subject.kind is not MonitoringSubjectKind.EVENT_CLUSTER
+        ):
             return self._reject(
                 request,
                 context,
@@ -778,7 +910,10 @@ class AgentWatchAdmissionService:
                 WatchAdmissionBlocker.SUBJECT_OUTSIDE_PARENT_VIEW,
             )
         matcher_terms = {term for clause in request.matcher.clauses for term in clause.terms}
-        if not matcher_terms <= set(context.authorized_matcher_terms):
+        if not matcher_terms <= set(context.authorized_matcher_terms) or (
+            type(self.delegation_authority) is EventImpactTriageWatchAuthority
+            and not _specific_triage_matcher(request.matcher)
+        ):
             return self._reject(
                 request,
                 context,
@@ -836,6 +971,7 @@ class AgentWatchAdmissionService:
     def callback_bindings(self, wake: AttentionWake) -> tuple[WatchCallbackBinding, ...]:
         self._require_parent_authority_integration("callbacks")
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             wake_row = connection.execute(
                 "SELECT artifact_hash FROM attention_watch_outbox WHERE wake_id = ?",
                 (wake.wake_id,),
@@ -847,9 +983,9 @@ class AgentWatchAdmissionService:
             )
             if authoritative_wake != wake:
                 raise ValueError("Watch callback Wake does not match durable authority")
-            rows = connection.execute(
+            available_rows = connection.execute(
                 """
-                SELECT artifact_hash, request_id, delegate_profile_id
+                SELECT admission_id, artifact_hash, request_id, delegate_profile_id
                 FROM agent_watch_admissions
                 WHERE watch_id = ? AND outcome IN (?, ?)
                 ORDER BY admitted_at, admission_id
@@ -860,6 +996,37 @@ class AgentWatchAdmissionService:
                     WatchAdmissionOutcome.REUSED.value,
                 ),
             ).fetchall()
+            callback_set_row = connection.execute(
+                "SELECT artifact_hash FROM agent_watch_wake_callback_sets WHERE wake_id = ?",
+                (wake.wake_id,),
+            ).fetchone()
+            if callback_set_row is None:
+                admission_ids = tuple(cast(str, row["admission_id"]) for row in available_rows)
+                if not admission_ids:
+                    raise ValueError("Attention Wake has no accepted Agent Watch admission")
+                callback_set = {
+                    "schema_version": "market-impact.agent-watch-wake-callback-set.v1",
+                    "wake_id": wake.wake_id,
+                    "watch_id": wake.watch_id,
+                    "admission_ids": list(admission_ids),
+                }
+                artifact = self.store.artifacts.put_json(callback_set)
+                connection.execute(
+                    """
+                    INSERT INTO agent_watch_wake_callback_sets(wake_id, artifact_hash)
+                    VALUES (?, ?)
+                    """,
+                    (wake.wake_id, artifact.content_hash),
+                )
+            else:
+                callback_set = self.store.artifacts.read_json(
+                    cast(str, callback_set_row["artifact_hash"])
+                )
+                admission_ids = _wake_callback_admission_ids(callback_set, wake=wake)
+            rows_by_id = {cast(str, row["admission_id"]): row for row in available_rows}
+            if any(admission_id not in rows_by_id for admission_id in admission_ids):
+                raise ValueError("Wake callback set references a missing accepted admission")
+            rows = tuple(rows_by_id[admission_id] for admission_id in admission_ids)
         if not rows:
             raise ValueError("Attention Wake has no accepted Agent Watch admission")
         bindings: list[WatchCallbackBinding] = []
@@ -867,6 +1034,7 @@ class AgentWatchAdmissionService:
             admission = agent_watch_admission_from_dict(
                 self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
             )
+            self._reopen_triage_admission(admission)
             request = self._request(cast(str, row["request_id"]))
             profile = self.profiles.get(cast(str, row["delegate_profile_id"]))
             if profile is None:
@@ -882,10 +1050,28 @@ class AgentWatchAdmissionService:
         return tuple(bindings)
 
     def _require_parent_authority_integration(self, operation: str) -> None:
+        if type(self.delegation_authority) is EventImpactTriageWatchAuthority:
+            return
         raise ValueError(
             "Agent Watch parent authority integration is not configured; "
             f"{operation} cannot be authorized"
         )
+
+    def _reopen_triage_admission(
+        self,
+        admission: AgentWatchAdmission,
+    ) -> AgentDelegationContext:
+        if type(self.delegation_authority) is not EventImpactTriageWatchAuthority:
+            raise ValueError("Agent Watch admission has no concrete Triage parent authority")
+        context = self.delegation_authority.delegation_context()
+        if (
+            admission.parent_ref != context.parent_ref
+            or admission.parent_agent_type != context.parent_agent_type
+            or admission.parent_authority_hash != context.authority_hash
+            or admission.lineage_depth != context.lineage_depth + 1
+        ):
+            raise ValueError("Agent Watch admission differs from reopened Triage authority")
+        return context
 
     def callback_binding(self, wake: AttentionWake) -> WatchCallbackBinding:
         bindings = self.callback_bindings(wake)
@@ -1028,7 +1214,8 @@ class AgentWatchAdmissionService:
                 )
             equivalent = connection.execute(
                 """
-                SELECT admission.artifact_hash
+                SELECT admission.artifact_hash, watch.watch_id AS active_watch_id,
+                       watch.poll_count, watch.byte_count, watch.wake_count
                 FROM agent_watch_admissions AS admission
                 LEFT JOIN attention_watch_policies AS watch
                   ON watch.watch_id = admission.watch_id
@@ -1052,6 +1239,18 @@ class AgentWatchAdmissionService:
                 ),
             ).fetchone()
             if equivalent is not None:
+                if cast(str | None, equivalent["active_watch_id"]) is not None and (
+                    cast(int, equivalent["poll_count"]) >= profile.maximum_polls
+                    or cast(int, equivalent["byte_count"]) >= profile.maximum_bytes
+                    or cast(int, equivalent["wake_count"]) >= profile.maximum_wakes
+                ):
+                    return self._reject_in_connection(
+                        connection,
+                        request,
+                        context,
+                        decided_at,
+                        WatchAdmissionBlocker.WATCH_BUDGET_EXHAUSTED,
+                    )
                 owner = agent_watch_admission_from_dict(
                     self.store.artifacts.read_json(cast(str, equivalent["artifact_hash"]))
                 )
@@ -1214,6 +1413,8 @@ class AgentWatchAdmissionService:
     def _ensure_watch_activated(self, admission: AgentWatchAdmission) -> None:
         if admission.outcome is WatchAdmissionOutcome.REJECTED:
             return
+        if type(self.delegation_authority) is EventImpactTriageWatchAuthority:
+            self._reopen_triage_admission(admission)
         if admission.watch_id is None:
             raise AssertionError("accepted Agent Watch admission is missing its Watch")
         try:
@@ -1240,6 +1441,8 @@ class AgentWatchAdmissionService:
         owner = agent_watch_admission_from_dict(
             self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
         )
+        if type(self.delegation_authority) is EventImpactTriageWatchAuthority:
+            self._reopen_triage_admission(owner)
         try:
             self.watch_service.create(policy, created_at=owner.admitted_at)
         except sqlite3.IntegrityError:
@@ -1265,12 +1468,20 @@ class AgentWatchAdmissionService:
                 """,
                 (WatchAdmissionOutcome.ADMITTED.value,),
             ).fetchall()
+        authority = cast(EventImpactTriageWatchAuthority, self.delegation_authority)
+        context = authority.delegation_context()
         for row in rows:
-            self._ensure_watch_activated(
-                agent_watch_admission_from_dict(
-                    self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
-                )
+            admission = agent_watch_admission_from_dict(
+                self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
             )
+            if (
+                admission.parent_ref != context.parent_ref
+                or admission.parent_agent_type != context.parent_agent_type
+                or admission.parent_authority_hash != context.authority_hash
+                or admission.lineage_depth != context.lineage_depth + 1
+            ):
+                continue
+            self._ensure_watch_activated(admission)
 
 
 def _admission(
@@ -1333,6 +1544,100 @@ def _operational_scope_key(profile: WatchDelegateProfile, scope: MonitoringScope
     values = scope.core_dict()
     values.pop("origin_refs")
     return canonical_hash({"delegate_profile_id": profile.profile_id, "scope": values})
+
+
+def _triage_matcher_terms(
+    *,
+    store: LocalDataSnapshotStore,
+    candidate_set: EventImpactTriageCandidateSet,
+    cluster: TriageClusterProposal,
+) -> tuple[str, ...]:
+    """Derive a small allowlist from frozen structured cluster and observation content."""
+
+    snapshot = store.get(candidate_set.data_snapshot_id)
+    observations_by_version = {
+        prospective_observation_version_id(item): item for item in snapshot.observations
+    }
+    refs_by_version = {item.version_id: item for item in candidate_set.observations}
+    selected: list[SourceObservation] = []
+    for version_id in cluster.candidate_version_ids:
+        observation = observations_by_version.get(version_id)
+        ref = refs_by_version.get(version_id)
+        if observation is None or ref is None:
+            raise ValueError("Triage Watch cluster version is absent from its frozen Snapshot")
+        if (
+            observation.observation_id != ref.observation_id
+            or observation.raw_content_hash != ref.raw_content_hash
+            or canonical_hash(observation.normalized_payload) != ref.normalized_payload_hash
+        ):
+            raise ValueError("Triage Watch frozen observation differs from its Candidate Set")
+        selected.append(observation)
+    structured_values: list[object] = [
+        cluster.changed_facts,
+        cluster.watch_questions,
+        cluster.uncertainty_notes,
+        cluster.affected_entity_refs,
+        tuple(item.value for item in cluster.event_archetypes),
+        tuple(item.value for item in cluster.transmission_channels),
+        tuple(item.normalized_payload for item in selected),
+    ]
+    terms: set[str] = set()
+    pending: list[object] = list(structured_values)
+    while pending:
+        value = pending.pop()
+        if isinstance(value, str):
+            terms.update(_MATCHER_TERM.findall(value.casefold()))
+        elif isinstance(value, Mapping):
+            pending.extend(cast(Mapping[object, object], value).values())
+        elif isinstance(value, (tuple, list)):
+            pending.extend(cast(tuple[object, ...] | list[object], value))
+    bounded = tuple(sorted(terms - _GENERIC_TRIAGE_MATCHER_TERMS))[:_MAX_AUTHORIZED_MATCHER_TERMS]
+    if not bounded:
+        raise ValueError("Triage Watch authority has no bounded structured matcher terms")
+    return bounded
+
+
+def _specific_triage_matcher(matcher: ObservationMatcher) -> bool:
+    """Require either exact structured identity or multiple co-occurring text anchors."""
+
+    if all(
+        clause.mode is MonitoringMatchMode.EXACT and clause.field_path in _EXACT_TRIAGE_MATCH_FIELDS
+        for clause in matcher.clauses
+    ):
+        return True
+    terms = {term for clause in matcher.clauses for term in clause.terms}
+    return len(terms) >= 2 and all(
+        clause.mode is MonitoringMatchMode.CONTAINS_ALL for clause in matcher.clauses
+    )
+
+
+def _wake_callback_admission_ids(
+    value: object,
+    *,
+    wake: AttentionWake,
+) -> tuple[str, ...]:
+    if not isinstance(value, Mapping):
+        raise TypeError("Wake callback set must be an object")
+    payload = cast(Mapping[object, object], value)
+    if any(not isinstance(key, str) for key in payload):
+        raise TypeError("Wake callback set keys must be strings")
+    fields = cast(Mapping[str, object], payload)
+    if set(fields) != {"schema_version", "wake_id", "watch_id", "admission_ids"}:
+        raise ValueError("Wake callback set fields are invalid")
+    if fields["schema_version"] != "market-impact.agent-watch-wake-callback-set.v1":
+        raise ValueError("Wake callback set schema is unsupported")
+    if fields["wake_id"] != wake.wake_id or fields["watch_id"] != wake.watch_id:
+        raise ValueError("Wake callback set differs from durable Wake authority")
+    raw_ids = fields["admission_ids"]
+    if not isinstance(raw_ids, list):
+        raise TypeError("Wake callback set admission_ids must be strings")
+    raw_items = cast(list[object], raw_ids)
+    if any(not isinstance(item, str) for item in raw_items):
+        raise TypeError("Wake callback set admission_ids must be strings")
+    admission_ids = tuple(cast(list[str], raw_items))
+    if not admission_ids or len(set(admission_ids)) != len(admission_ids):
+        raise ValueError("Wake callback set requires unique accepted admissions")
+    return admission_ids
 
 
 def agent_delegation_context_from_dict(value: object) -> AgentDelegationContext:

@@ -105,7 +105,14 @@ Paper validation never upgrades a provider to live validation.
 - `ibkr-nautilus-paper` is the first planned US/HK paper Provider identity. It binds a
   pinned Nautilus version, the official IB adapter, Harness translation, configuration,
   market, and environment. A direct IBKR Provider remains possible if that stack cannot
-  satisfy recovery or reconciliation acceptance. No account is connected.
+  satisfy recovery or reconciliation acceptance. Separately, the narrower
+  `ibkr-paper-account-read` adapter has completed one real local IB Gateway Paper account read: it
+  exposes no mutation method, waits for independent account, summary, API-open-order and execution
+  barriers, and normalizes only credential-free content-identified account state. A nonzero client
+  cannot prove the absence of manually submitted TWS orders without binding them, so that exact gap
+  remains explicit and blocks exposure increase. This accepts bounded `ACCOUNT` reads only; it does
+  not verify submit/cancel/replace, external-order recovery, restart reconciliation, market data, or
+  `ibkr-nautilus-paper` execution.
 - VeighNa is represented as a disabled external-process bridge. Its core may be usable on
   Python 3.13, but common A-share gateways depend on vendor runtimes and are not claimed
   to work on macOS or Python 3.14.

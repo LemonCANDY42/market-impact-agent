@@ -14,9 +14,9 @@ The shortest accepted path to Agent-directed paper operation is:
    rejected by the ordinary run path before any Provider call, while v11 may run only for a new
    non-comparison-bound actual-receipt batch; and
    failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
-   and Usage. Agent Watch admission remains globally fail-closed until a named concrete parent
-   Run/Decision owner can derive its evidence, subject and matcher projection; a caller context or
-   self-hashed artifact is not authority;
+   and Usage. Agent Watch admission is enabled only for an exact Watch-listed cluster reopened from
+   the durable Triage Decision owner, which derives its evidence, event-cluster subject and matcher
+   terms. Caller contexts and self-hashed artifacts remain non-authoritative;
 2. retain v11 as immutable negative evidence. Its sealed blind comparison showed that exposing the
    registered eligibility/exclusion rules, target venues and instrument classes is necessary but not
    sufficient: baseline over-routed Watch and treatment promoted five out-of-scope Hong Kong issuer
@@ -142,12 +142,14 @@ the active head; this local-only path neither constructs nor probes a Provider. 
 require the exact concrete Comparison Store and Work Runner types, and a terminalized batch cannot be
 reinstalled as a new active head. Caller-consistent stubs, authority subclasses, post-Report Usage
 changes and both crash windows are explicit regression cases. A self-issued Agent Watch parent
-projection remained circular, so that issuer was
-removed: offers, admission lookup, callbacks and restart activation now all fail closed until a
-concrete parent authority is integrated. These repairs authorize neither a Watch scheduler nor
-reinterpreting an old terminal batch. The v10 and v11 pristine comparisons remain immutable negative
-precision evidence; v11 operational use applies only to new, non-comparison-bound batches, while
-PDI-29G and PDI-40 parent/scheduler acceptance remain separate gates.
+projection remained circular, so that issuer was removed. The follow-up now derives one concrete
+parent projection from the exact durable Triage Decision and its Watch-listed cluster; unrelated,
+archived and EventAssessment-routed clusters remain ineligible. This enables bounded admission,
+callback lookup and restart activation for that exact path, but authorizes neither a Watch
+acquisition scheduler nor reinterpretation of an old terminal batch. The v10 and v11 pristine
+comparisons remain immutable negative precision evidence; v11 operational use applies only to new,
+non-comparison-bound batches, while PDI-29G and the remaining PDI-40 acquisition/scheduler gate stay
+separate.
 
 Provider resolution remains lazy for new Work only. Factory or availability failure before dispatch
 is recorded as a zero-attempt `not_started` preparation failure, leaves the Run nonterminal, returns
@@ -821,18 +823,29 @@ Stage 5 — automate bounded follow-up and open registered outcomes:
     budget, callback model/tools or execution capability. Durable Harness admission reuses
     `MonitoringScope.origin_refs`, caps branches/depth/duration/collection and callback cost/active
     Watches, and binds only the profile's exact query template and Collection Policy. Equivalent
-    active scopes share one Watch while durable callback bindings preserve every accepted parent.
-  - [ ] Integrate one named concrete parent Run/Decision authority. It must reopen its own durable
-    artifact and derive every allowed evidence reference, subject/frozen member and matcher term;
-    neither a caller-created projection nor a self-hashed Artifact Store object may mint delegation
-    authority. Until that owner exists, profile offers, admission, lookup, callbacks and restart
-    activation remain fail-closed. The inactive admission mechanics retain regression coverage for
-    unrelated scopes and admission-before-Watch activation, but are not PDI-40 acceptance evidence.
+    active scopes share one Watch while durable callback bindings preserve every accepted parent;
+    an equivalent Watch with an exhausted poll, byte or wake budget rejects a late subscriber with a
+    typed blocker rather than accepting a callback it cannot deliver.
+  - [x] Integrate one named concrete parent Decision authority. `EventImpactTriageWatchAuthority`
+    reopens the exact durable Candidate Set, Proposal and Decision, accepts only a cluster explicitly
+    routed to Attention Watch, and derives its evidence references, event-cluster subject and bounded
+    matcher terms. Text matching requires at least two co-occurring non-generic anchors; exact
+    single-term matching is limited to structured identity fields. Activation, restart and callback
+    each reopen the same parent authority. Caller projections, authority subclasses, archived
+    clusters and EventAssessment-routed clusters remain fail-closed. Admission, shared-scope callback
+    fan-out and admission-before-Watch activation recovery have concrete regression coverage.
   - [ ] Install shared due-collection fan-out, the bounded acquisition executor and the scheduler.
     Every remote fetch must enter the Journal and freeze a Snapshot before a fresh Agent Run can use
     it; a child Watch cannot mutate its parent Judgment, widen the trading universe, or create an
     Order Intent.
 - [ ] `PDI-41` Dispatch a claimed Wake idempotently into one fresh bounded Judgment Run.
+  - [x] Persist one deterministic fresh research-only Run and exact Wake/Admission/Profile binding
+    per accepted callback. Concurrent dispatch and both crash windows reopen the same Run; the Wake
+    freezes its callback membership on first dispatch and is acknowledged only after every binding
+    in that immutable set is durable. Later subscribers to a reused Watch apply only to later Wakes.
+    The boundary authorizes no Judgment model call and exposes no execution capability.
+  - [ ] Freeze the required checkpoint Snapshots at the Wake cutoff, invoke the registered bounded
+    Judgment runtime, and accept invalid-Snapshot, cancellation and budget-exhaustion behavior.
 - [ ] `PDI-42` Open outcomes after the registered horizon and issue the next-research go/no-go.
 
 ### Remaining Phase 1 research work
@@ -1130,8 +1143,22 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
     enabled reconciliation-capable Provider with verified `ACCOUNT`, and marks missing positions or
     concentration as not exposure-increase-ready. Mock execution still declares no account
     capability. This is contract/fixture acceptance only.
-  - [ ] Bind one accepted read-only account Provider and its exact Account/Position projections into
-    the Authorized Decision View. No credential or mutation surface may enter the Agent Run.
+  - [x] Bind one accepted read-only account Provider and its exact Account/Position projections into
+    the Authorized Decision View. A local IB Gateway Paper session completed API-ready, account,
+    summary, API-open-order and execution barriers and produced content-identified private Account
+    State and Position Snapshots. The stable account reference is Harness-keyed; the Agent can read
+    the frozen credential-free balances, quantities and order/fill context, but no raw account
+    reference, credential or mutation surface enters its Run, and no account amount enters the
+    repository. Because a nonzero read-only client cannot prove the absence of manually submitted
+    TWS orders, that exact coverage gap stays visible and blocks exposure increase while retaining
+    position-risk observation. The adapter seals one immutable callback state when all four broker
+    barriers have closed and ignores later callback drift; the local account-pseudonym key is
+    atomically published before use. The decision view recomputes account freshness at its own cutoff,
+    rejects any exposure-increase-ready state that retains an observation gap, and alone mints the
+    tool for its exact content-identified Position Snapshot. Equivalent aware decision times are
+    canonicalized to UTC before content identity is derived. This accepts only the bounded `ACCOUNT`
+    read path, not IBKR
+    submit/cancel/replace or full broker-paper Provider acceptance.
   - [ ] Add Portfolio Decision and deterministic Order Sizing Decision between Signal and Order
     Intent. Agent confidence cannot affect size; exposure-increasing actions require complete fresh
     account state, raw Price Basis, tradability, lot rules, mandate and open-order conflict checks.
@@ -1140,8 +1167,10 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   - [ ] Add durable approval/notification controls and a tested kill switch before any autonomous
     mode. Deposits, withdrawals, credentials and account administration remain out of scope.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
-  engine and official IB adapter; create a direct IBKR Provider only if that path cannot
-  pass lifecycle and reconciliation acceptance.
+  engine and official IB adapter; create a direct IBKR execution Provider only if that path cannot
+  pass lifecycle and reconciliation acceptance. The optional pinned Nautilus IB dependency also
+  supplies the official IB Python API used by the narrower accepted read-only account adapter; that
+  adapter is not an execution-engine substitution or execution acceptance.
 - Add a Harness-owned Provider Acceptance artifact before advertising external paper capability. It
   must bind the exact adapter/dependency/configuration/environment/account scope and the accepted
   ambiguity, restart, fault, and account-level reconciliation evidence; a Provider manifest cannot

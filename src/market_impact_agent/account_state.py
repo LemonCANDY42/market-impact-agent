@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import re
+import secrets
+import stat
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
+from pathlib import Path
 from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash
@@ -15,6 +20,73 @@ from market_impact_agent.providers import Capability, ProviderManifest
 
 ACCOUNT_STATE_SNAPSHOT_SCHEMA = "market-impact.account-state-snapshot.v1"
 POSITION_SNAPSHOT_SCHEMA = "market-impact.position-snapshot.v1"
+ACCOUNT_REFERENCE_KEY_BYTES = 32
+
+
+def load_or_create_account_reference_key(path: Path) -> bytes:
+    """Load a private Harness key, creating it atomically with owner-only permissions."""
+
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    cloexec = getattr(os, "O_CLOEXEC", 0)
+    try:
+        return _read_account_reference_key(path, nofollow=nofollow, cloexec=cloexec)
+    except FileNotFoundError:
+        pass
+
+    key = secrets.token_bytes(ACCOUNT_REFERENCE_KEY_BYTES)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        dir=path.parent,
+    )
+    temporary_path = Path(temporary_name)
+    published = False
+    try:
+        try:
+            remaining = memoryview(key)
+            while remaining:
+                written = os.write(descriptor, remaining)
+                if written <= 0:
+                    raise OSError("could not write the complete account-reference key")
+                remaining = remaining[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        try:
+            os.link(temporary_path, path, follow_symlinks=False)
+            published = True
+        except FileExistsError:
+            pass
+        if published:
+            directory_descriptor = os.open(path.parent, os.O_RDONLY | cloexec)
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return _read_account_reference_key(path, nofollow=nofollow, cloexec=cloexec)
+
+
+def _read_account_reference_key(path: Path, *, nofollow: int, cloexec: int) -> bytes:
+    try:
+        descriptor = os.open(path, os.O_RDONLY | nofollow | cloexec)
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise ValueError("account-reference key must be a directly readable file") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("account-reference key path must be a regular file")
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise PermissionError("account-reference key must not be group- or world-accessible")
+        key = os.read(descriptor, ACCOUNT_REFERENCE_KEY_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    if len(key) != ACCOUNT_REFERENCE_KEY_BYTES:
+        raise ValueError("account-reference key must contain exactly 32 bytes")
+    return key
 
 
 class AccountStateSection(StrEnum):

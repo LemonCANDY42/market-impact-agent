@@ -1085,26 +1085,39 @@ fetched result is usable only after the Harness records it and freezes a qualify
 never appended directly to the requesting Agent Run. Attention Watch v2 embeds the exact Scope and
 wakes only on matching versions, while v1 remains replayable.
 
-The closed proposal/admission contracts and inactive mechanics are implemented. `WatchDelegateProfile` provides the
-Skill-like name and description exposed to an allowed parent while content-binding the callback
-Agent profile, Skill hashes, read-only capabilities, legal subject kinds, route and all limits.
-`AgentWatchRequest` deliberately omits route, Provider, model/tool, budget and execution controls.
-The service does not currently accept any parent context: an append-only, self-hashed projection was
-still caller authority and its minting path was removed. A named concrete parent Run/Decision owner
-must reopen its durable artifact and derive the evidence, subject and matcher projection before the
-transactional admission, equivalent-scope sharing, activation recovery or callback mechanics may be
-enabled. This keeps PDI-40 fail-closed without adding a duplicate generic decision-view authority.
+The closed proposal/admission contracts and mechanics are implemented. `WatchDelegateProfile`
+provides the Skill-like name and description exposed to an allowed parent while content-binding the
+callback Agent profile, Skill hashes, read-only capabilities, legal subject kinds, route and all
+limits. `AgentWatchRequest` deliberately omits route, Provider, model/tool, budget and execution
+controls. `EventImpactTriageWatchAuthority` is the first named concrete parent owner: it reopens the
+exact durable Candidate Set, Proposal and Triage Decision and derives one Watch-listed cluster's
+evidence, event-cluster subject and matcher terms. Free-text scopes require two co-occurring
+non-generic anchors, while exact single-term scopes are limited to structured identity fields. The
+generic context store still cannot mint caller authority. Transactional admission, equivalent-scope
+sharing, activation recovery and callback mechanics reopen the same parent authority and are
+accepted for this exact Triage-owned path without adding a duplicate decision-view authority. An
+equivalent Watch is reusable only while all three collection/wake budgets remain available;
+otherwise the admission records a typed budget-exhausted rejection.
 
 PDI-40 remains open for shared collection-opportunity fan-out, the bounded acquisition executor and
-installed scheduler. PDI-41 separately owns idempotent Wake claim and fresh Agent Run creation. A
-model still cannot choose a URL, Provider, credential, destination, or same-run mutable context.
+installed scheduler. PDI-41 has accepted deterministic Wake-to-fresh-research-Run creation, durable
+per-callback binding, concurrent replay and both crash windows. The first dispatcher transaction
+freezes the accepted callback membership for that exact Wake; a later subscriber to a reused Watch
+can receive only a later Wake, so replay never grows the already-dispatched fan-out. PDI-41 remains
+open for freezing required Snapshots and invoking the bounded Judgment runtime. A model still cannot
+choose a URL, Provider, credential, destination, or same-run mutable context.
 
 **Blocked by:** PDI-17 and PDI-22.
 
 #### PDI-41 — Dispatch one claimed Wake to a fresh Judgment Run
 
-Add a durable claim/lease around pending Wakes and derive an idempotent dispatch identity from the
-immutable Wake and runtime registration. Before starting a model, the dispatcher invokes the
+The durable creation boundary now derives one idempotent Run identity per immutable
+Wake/Admission/Profile callback, persists the exact binding under the shared Artifact Store and Run
+Journal, reopens the same Run under concurrent dispatch or either crash window, and acknowledges the
+Wake only after every callback binding in its first-dispatch immutable membership set is durable. It
+authorizes neither a model call nor execution.
+
+Before starting a model, the remaining dispatcher work invokes the
 registered checkpoint coordinator to collect/freeze the selected required capabilities at the wake
 barrier cutoff; a structurally invalid required Snapshot defers or rejects dispatch, while absent
 optional inputs remain explicit gaps supplied to the Agent. It then starts one fresh bounded Agent Run
