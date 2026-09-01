@@ -960,11 +960,12 @@ hashes. Its blocker taxonomy and batch gate are internally closed. Any downstrea
 the Harness replay authority, which fully reopens both arms and requires byte-identical evaluator
 output; schema validity or a caller-rehashed Report alone is insufficient.
 
-**Blocked by:** typed Position Snapshot and Historical Analogy Pack payload bindings before their
-optional roles can be enabled; labels sealed before execution; replay of the current unclassified
-versions through both arms; a second pristine blind batch; and passing semantic metrics. Opaque
+**Blocked by:** the in-scope target-evidence boundary identified by the terminal v11 comparison;
+passing a later sealed semantic comparison; and binding the already-persisted typed Position Snapshot
+and Historical Analogy Pack payload identities into the optional specialist prompts/runtime. Opaque
 context IDs are not sufficient model inputs, while missing optional contexts do not block factual or
-checkpoint-rule triage.
+checkpoint-rule triage. V8-v11 remain immutable negative evidence and their terminal versions cannot
+be recycled.
 
 **Boundary:** no Triage artifact grants historical PIT, downstream Judgment, Strategy Admission,
 paper/live execution, account access, approval, or broker authority. Full design and dual-track

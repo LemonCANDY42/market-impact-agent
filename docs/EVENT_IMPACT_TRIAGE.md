@@ -546,19 +546,26 @@ four-field positional route output, and retains v10's evidence-bounded fact/tran
 Watch/archive rules. Its sole input addition is a closed projection of the registered checkpoint's
 `eligibility_rule`, `exclusion_rules`, `target_venues`, and `allowed_instrument_classes`. Those
 fields constrain routing; the coordinator cannot invent cross-market target links. It creates no
-target map, new authority, state or entity. V2-v10 remain immutable replay dialects, and v11 needs a
-new sealed pristine comparison.
+target map, new authority, state or entity. V2-v10 remain immutable replay dialects. Its new sealed
+pristine comparison completed on 12 actual-receipt versions. Baseline produced zero unsupported
+EventAssessment routes but over-routed foreign and routine context to Watch; treatment promoted all
+five out-of-scope Hong Kong issuer earnings to EventAssessment. Both arms scored 6/12 exact routes
+and routed all four sealed Watch items to Watch. Total authoritative usage was 13,626 input / 19,447
+output Tokens and 26,062 microusd. The failed Report terminalized all versions and released the
+active head without creating a Decision.
 
-The failure localizes the remaining ingress problem: an LLM can invent a generic path from almost
-any market print or foreign-policy fact to risk appetite, discount rates or future policy. The fix
-must not narrow discovery. A valid next revision instead requires evidence of a new causal fact and
-a concrete, evidence-bounded transmission variable for EventAssessment; routine closes or scheduled
-statistics without a stated surprise belong in archive, while a plausible event missing one named
-observable belongs in Watch. Watch and downstream EventAssessment may propose additional anchored
-Monitoring Scopes for newly discovered issuers, industries, ETFs, frozen sets or information aspects,
-but those scopes need separate Harness admission, budget, PIT lineage and a fresh Run. They cannot
-silently widen the original decision or trading universe. The next revision must use a new pristine
-batch rather than relabeling or rerunning these 11 versions.
+The v9-v11 failures localize the remaining ingress problem: semantic scope instructions do not make
+an LLM a stable scope authority. It may still invent a generic path from an out-of-scope issuer or
+foreign-policy fact to risk appetite, discount rates or future policy, or move that uncertainty into
+an over-broad Watch. The fix must not narrow discovery. Before another model dialect, the smallest
+complete design review must require EventAssessment to cite a supplied or Harness-resolved in-scope
+target whose venue/class satisfies the registered rule. A plausible event missing that target may
+request one bounded target-resolution Watch; it cannot claim materiality or silently expand the
+trading universe. Routine context remains archived. Watch and downstream EventAssessment may
+propose additional anchored Monitoring Scopes for newly discovered issuers, industries, ETFs,
+frozen sets or information aspects, but those scopes need separate Harness admission, budget, PIT
+lineage and a fresh Run. They cannot silently widen the original decision or trading universe. The
+next revision must use a new pristine batch rather than relabeling or rerunning exposed versions.
 
 That controlled expansion now has a concrete proposal/admission seam. A parent Agent sees only the
 named `WatchDelegateProfile` records permitted for its Agent type and lineage depth, similar to Skill
@@ -590,8 +597,8 @@ Still required for real acceptance:
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
   ingress roles, and the current Position Snapshot remains identity-only;
-- one new pristine batch for v11; v8-v10 remain terminal negative
-  evidence and cannot be recycled as blind acceptance data;
+- an accepted in-scope target-evidence boundary and one later pristine comparison; v8-v11 remain
+  terminal negative evidence and cannot be recycled as blind acceptance data;
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,
   unsupported transmission paths and resource use;
 - a real selected event passed through PDI-30 and Query Gate.

@@ -10,37 +10,33 @@ The shortest accepted path to Agent-directed paper operation is:
 0. keep the admitted v5 registration/v6 route epoch and supervisor healthy without resetting its
    append-only misses, receipts or replacement history. Collection health is supporting
    infrastructure, not the current experiment blocker;
-1. preserve the closed Triage authority boundaries before consuming another actual-receipt version:
-   comparison-governed material-ingress v9-v11 is rejected by the ordinary run path before any
-   Provider call, and
+1. preserve the closed Triage authority boundaries: comparison-governed material-ingress v9-v11 is
+   rejected by the ordinary run path before any Provider call, and
    failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
    and Usage. Agent Watch admission remains globally fail-closed until a named concrete parent
    Run/Decision owner can derive its evidence, subject and matcher projection; a caller context or
    self-hashed artifact is not authority;
-2. use the frozen v11 material-ingress rule: retain v10's evidence-bounded fact/transmission and
-   Watch/archive behavior while projecting the registered checkpoint eligibility/exclusion, venue and
-   instrument-class bounds into the sole coordinator input. Those bounds constrain routing and forbid
-   invented cross-market target links. Retain
-   broad discovery, archive routine context without a stated surprise, send plausible but unresolved
-   relevance with one named observable to Attention Watch, and require both a new causal fact and a
-   concrete evidence-bounded transmission variable for EventAssessment. Its scripted mechanics are
-   accepted; run it once on a new sealed pristine batch; do not retune or rerun the exposed v8-v10
-   batches. A pass must produce a formal
-   Triage Decision and either select the first rule-eligible event or route one supported material
-   event onward; a failure is terminal and should trigger an input/task-definition review rather than
-   another local prompt dialect;
-3. create one exact Trigger Admission: either the checkpoint-selected Triage cluster, or a canonical
+2. retain v11 as immutable negative evidence. Its sealed blind comparison showed that exposing the
+   registered eligibility/exclusion rules, target venues and instrument classes is necessary but not
+   sufficient: baseline over-routed Watch and treatment promoted five out-of-scope Hong Kong issuer
+   earnings to EventAssessment;
+3. review the smallest deterministic in-scope target-evidence boundary before another model batch.
+   Broad discovery and anchored Watch remain open, but EventAssessment must cite a supplied or
+   Harness-resolved target whose venue/class is inside the registered scope; an unresolved target may
+   request one bounded Watch/retrieval step and cannot silently widen the trading universe;
+4. only after that boundary passes a new sealed comparison, create one exact Trigger Admission:
+   either the checkpoint-selected Triage cluster, or a canonical
    EventAssessment projection whose cited target/path passes the deterministic Materiality Gate;
-4. for that admission, freeze the internally verifiable Snapshot Set, explicit optional gaps,
+5. for that admission, freeze the internally verifiable Snapshot Set, explicit optional gaps,
    Prospective Evidence Lineage, tools, and Query Gate;
-5. run two complete paired Judgment replicates, add a third complete pair only when either arm's
+6. run two complete paired Judgment replicates, add a third complete pair only when either arm's
    first two decisions disagree, and freeze one Decision Run Manifest;
-6. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
+7. require treatment-arm two-of-three target-and-direction agreement when the third pair is needed,
    or the matching first two when the registered early-stop rule applies; otherwise archive without a
    Signal or Order; the control arm is comparison-only;
-7. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
+8. persist one Decision Admission and, under `manual_each`, route its exact paper Order Intent through
    the already accepted durable mock outbox;
-8. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
+9. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
    account-scoped reconciliation before any real broker-paper claim.
 
 The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
@@ -103,8 +99,8 @@ changes and both crash windows are explicit regression cases. A self-issued Agen
 projection remained circular, so that issuer was
 removed: offers, admission lookup, callbacks and restart activation now all fail closed until a
 concrete parent authority is integrated. These repairs authorize neither another real batch nor a
-Watch scheduler; the v10 pristine blind comparison and PDI-40 parent/scheduler acceptance remain
-separate gates.
+Watch scheduler. The v10 and v11 pristine comparisons are now terminal negative evidence; the
+in-scope target-evidence review and PDI-40 parent/scheduler acceptance remain separate gates.
 
 Provider resolution remains lazy for new Work only. Factory or availability failure before dispatch
 is recorded as a zero-attempt `not_started` preparation failure, leaves the Run nonterminal, returns
@@ -597,9 +593,18 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       closed input projection carries only the checkpoint eligibility/exclusion rules, target venues
       and allowed instrument classes. These fields constrain routing and forbid invented cross-market
       target links; no new authority, state or entity is introduced.
-    - [ ] Freeze sealed labels for a new actual-receipt v11 Candidate Set and run one same-contract
-      pristine comparison. Zero must-catch misses and zero unsupported material routes are required;
-      failure remains terminal and does not trigger another prompt-only revision.
+    - [x] Freeze sealed labels for a new actual-receipt v11 Candidate Set and run one same-contract
+      pristine comparison. The terminal batch contained 12 versions. Baseline produced zero
+      unsupported EventAssessment routes but over-routed routine and foreign items to Watch;
+      treatment promoted five out-of-scope Hong Kong issuer earnings to EventAssessment. Both arms
+      scored 6/12 exact routes and satisfied all four Watch labels. Total authoritative usage was
+      13,626 input / 19,447 output Tokens and 26,062 microusd. The failed gate released the active
+      head and created no Decision or downstream authority.
+    - [ ] Define and accept the smallest in-scope target-evidence boundary before another semantic
+      batch. EventAssessment must bind a supplied or Harness-resolved target to the registered
+      venue/class; missing target evidence may become a bounded anchored Watch or archive, never an
+      invented cross-market link. Reuse the existing Monitoring Scope/Retrieval Resolution and
+      Materiality Gate owners rather than adding another generic state machine.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate

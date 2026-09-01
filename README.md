@@ -146,11 +146,18 @@ The bootstrap implements:
   12 versions; baseline had 7 unsupported routes, 5/12 exact routes and 8,494 microusd; treatment
   had 6 unsupported routes, 6/12 exact routes and 8,363 microusd. The authoritative total was 14,391
   input / 11,648 output Tokens and 16,857 microusd; the failed comparison created no Decision. New
-  material-event batches use v11. It preserves v10's one-call graph and four-field positional output,
+  V11 was the last tested material-event ingress dialect. It preserves v10's one-call graph and four-field positional output,
   but adds a closed registered checkpoint-rule projection with eligibility/exclusion rules, target
   venues and allowed instrument classes. Those fields constrain routing; the model cannot invent
-  cross-market target links. A new sealed v11 pristine comparison remains required before it can
-  create a Triage Decision.
+  cross-market target links. Its sealed pristine comparison completed on 12 new actual-receipt
+  versions. Baseline produced zero unsupported EventAssessment routes but over-routed routine and
+  foreign items to Watch; treatment produced five unsupported EventAssessment routes by promoting
+  out-of-scope Hong Kong issuer earnings. Both arms scored 6/12 exact routes. Total authoritative
+  usage was 13,626 input / 19,447 output Tokens and 26,062 microusd. The gate terminalized the batch,
+  released the active head and created no Decision. Registered-scope visibility is therefore
+  necessary but not sufficient; the next design review must require an evidence-backed in-scope
+  target before EventAssessment without narrowing broad discovery or silently expanding the trading
+  universe.
   The prospective repair also journals
   each physical attempt with a
   correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized

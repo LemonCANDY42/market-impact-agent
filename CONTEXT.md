@@ -454,7 +454,12 @@ unresolved expansion to Attention Watch. Its scripted contract is accepted, but 
 pristine comparison was negative and terminal: 12 versions; baseline had 7 unsupported routes and
 5/12 exact routes at 8,494 microusd, treatment had 6 unsupported routes and 6/12 exact routes at
 8,363 microusd, for 14,391 input / 11,648 output Tokens and 16,857 microusd total. It created no
-Decision. V11 requires a new pristine blind batch.
+Decision. V11's later pristine comparison was also negative and terminal: both arms scored 6/12
+exact routes; baseline produced zero unsupported EventAssessment routes but over-routed foreign and
+routine items to Watch, while treatment promoted five out-of-scope Hong Kong issuer earnings to
+EventAssessment. Total authoritative usage was 13,626 input / 19,447 output Tokens and 26,062
+microusd. Registered scope in model context is therefore necessary but not sufficient evidence of a
+stable material-ingress rule. No Triage Decision or downstream authority exists.
 The Harness injects authoritative atom, cluster and cited-evidence identities
 into the unchanged canonical Digest, Partition and Proposal artifacts. All schemas freeze the
 repeated map roles per Work Unit, one
