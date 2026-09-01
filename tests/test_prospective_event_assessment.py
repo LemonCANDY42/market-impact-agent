@@ -43,6 +43,7 @@ from market_impact_agent.prospective_diagnostic import (
 from market_impact_agent.prospective_event_assessment import (
     EventAssessmentRunAuthority,
     EventAssessmentRunner,
+    EventAssessmentRunResult,
     ExposureCandidate,
     ExposureCandidateView,
     build_exposure_candidate_view,
@@ -495,6 +496,90 @@ def test_aggregate_budget_blocks_trigger_admission_before_authority(
     assert outcome.admission is None
     assert outcome.assessments == ()
     assert outcome.cluster_dispositions == ()
+
+
+def test_unresolved_watch_does_not_block_later_assessment_throughput(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import market_impact_agent.prospective_event_assessment as module
+
+    registration, candidate_set, proposal, decision, cluster, contents = _inputs()
+
+    class FakeTriageStore:
+        def __init__(self, state_root: Path) -> None:
+            _ = state_root
+
+        def get_context(self, candidate_set_id: str) -> tuple[object, object, object]:
+            assert candidate_set_id == candidate_set.candidate_set_id
+            return candidate_set, proposal, decision
+
+        def route_epoch_contexts(self, **kwargs: object) -> tuple[tuple[object, ...], ...]:
+            _ = kwargs
+            return (
+                (candidate_set, proposal, decision, cluster),
+                (candidate_set, proposal, decision, cluster),
+            )
+
+    class FakeResolver:
+        def __init__(self, store: object) -> None:
+            _ = store
+
+        def resolve(self, selected: object) -> tuple[TriageCandidateContent, ...]:
+            assert selected == candidate_set
+            return contents
+
+    results = [MaterialityDisposition.WATCH, MaterialityDisposition.ARCHIVE]
+
+    class FakeRunner:
+        def __init__(self, **kwargs: object) -> None:
+            _ = kwargs
+
+        async def run(self) -> EventAssessmentRunResult:
+            disposition = results.pop(0)
+            return EventAssessmentRunResult(
+                run_id=f"agent-run-{'a' * 64}",
+                status=RunStatus.COMPLETED,
+                assessment=None,
+                materiality=None,
+                disposition=disposition,
+                blockers=(),
+                terminal_artifact_hash="b" * 64,
+                metrics=RunMetrics(0, 0, 0, 0, 0, 0.0, 0, 0),
+            )
+
+    monkeypatch.setattr(module, "EventImpactTriageDecisionStore", FakeTriageStore)
+    monkeypatch.setattr(module, "SnapshotTriageCandidateContentResolver", FakeResolver)
+    monkeypatch.setattr(module, "EventAssessmentRunner", FakeRunner)
+
+    def build_view(**kwargs: object) -> ExposureCandidateView:
+        _ = kwargs
+        return _exposure_view(candidate_set, decision, cluster)
+
+    monkeypatch.setattr(
+        module,
+        "build_exposure_candidate_view",
+        build_view,
+    )
+
+    outcome = asyncio.run(
+        run_prospective_event_assessment(
+            registration=registration,
+            candidate_set_id=candidate_set.candidate_set_id,
+            state_root=tmp_path / "state",
+            run_root=tmp_path / "runs",
+            skill_root=ROOT / "skills",
+            provider=FixtureProvider((_valid_response(),)),
+        )
+    )
+
+    assert outcome.status is RunStatus.COMPLETED
+    assert outcome.attempted_cluster_count == 2
+    assert outcome.cluster_dispositions == (
+        MaterialityDisposition.WATCH,
+        MaterialityDisposition.ARCHIVE,
+    )
+    assert outcome.admission is None
+    assert results == []
 
 
 def test_assessment_rejects_target_outside_frozen_exposure_view(tmp_path: Path) -> None:

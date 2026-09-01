@@ -33,7 +33,7 @@ The separate research-only market-context panel uses
 ## Prospective Observation Provider
 
 `src/market_impact_agent/tushare_observation.py` implements one credential-isolated HTTPS transport
-and twenty-three content-identified route configurations. The owner's separately purchased news
+and thirty content-identified route configurations. The owner's separately purchased news
 entitlement and 10,000-plus-point account are treated as fully usable for this private Harness; the
 token is read only from `TUSHARE_TOKEN` and is excluded from requests persisted for replay, hashes,
 logs, errors, configs, and Agent tools.
@@ -41,6 +41,8 @@ logs, errors, configs, and Agent tools.
 The official route contracts are [`news`](https://tushare.pro/document/2?doc_id=143),
 [`major_news`](https://tushare.pro/document/2?doc_id=195),
 [`index_daily`](https://tushare.pro/document/2?doc_id=95),
+[`daily_basic`](https://tushare.pro/document/2?doc_id=32),
+[`index_dailybasic`](https://tushare.pro/document/2?doc_id=128),
 [`fund_daily`](https://tushare.pro/document/2?doc_id=127),
 [`trade_cal`](https://tushare.pro/document/2?doc_id=26),
 [`etf_basic`](https://tushare.pro/document/2?doc_id=385),
@@ -80,6 +82,8 @@ passed the same capture, Journal, isolated replay, rights, and seven-gate path o
 | Route | Capability | Accepted observations | Acceptance report |
 | --- | --- | ---: | --- |
 | `index_daily` | market context | 1 | `source-route-acceptance-report-653c4bc24cbad5d3d020cf567b37295702d8b8636cee4b5e62127093d94c11c5` |
+| `daily_basic` (2026-08-31 full A-share date) | market context | 5,545 | `source-route-acceptance-report-5ce22b2192206cf3be6d6b074a4091ccf74376be14365901a6cc5bd447533a63` |
+| `index_dailybasic` (`000300.SH`, 2026-08-31) | market context | 1 | `source-route-acceptance-report-2e542b4a478b9dddac2c38ede159ee2e4e1dfa6e5e4eb1f383bc718e4480af55` |
 | `fund_daily` | market context | 1 | `source-route-acceptance-report-3fd9945ec5fb09815f929f7b9d0b48f92a71814a91ac98693eb5ef7265324d84` |
 | `trade_cal` | market context | 1 | `source-route-acceptance-report-4dc04dc822718ae1b75089ea9f0bc25dedbbe7be2d665e70ad601b675e910216` |
 | `etf_basic` | exposure candidates | 1 | `source-route-acceptance-report-59730b892100961a32fdf4eaa6ed789974831202db6ce21ba9c26df519ed43a3` |
@@ -93,6 +97,12 @@ passed the same capture, Journal, isolated replay, rights, and seven-gate path o
 | `cn_schedule` | macro schedule | 14 | `source-route-acceptance-report-52d94fbcbf6bd5959d82a16013d67413c37a04f5d31b6cf6fc1fb74f5635da2c` |
 | `report_rc` | prior expectation observations | 4,802 | `source-route-acceptance-report-a79d8525ea67763d8022a8909dcfd7a85683f5c476ab6ff2f89149aec9fba8ff` |
 | `news` (`src=sina`) | event revelation | 29 | `source-route-acceptance-report-e9bc974b0b3e0101701fed3b0dd37e57cc7fc595b93dff3802129fb125b9dde8` |
+
+The two valuation/context routes passed all seven gates on 2026-09-01 and are registered as bounded
+daily prospective Jobs after the normal post-close publication window. `daily_basic` contributes
+close, turnover, PE/PB/PS, dividend yield, share base, market value and limit status for the received
+trade date; `index_dailybasic` contributes the corresponding supported-index valuation and market
+value fields. They are actual-receipt context, not strict historical PIT or an execution price.
 
 The purchased news entitlement was then exercised across every documented short-news source and
 `major_news` with bounded current windows. Seven additional short-news sources and `major_news`

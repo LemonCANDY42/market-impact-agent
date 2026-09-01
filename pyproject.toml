@@ -48,6 +48,8 @@ dev = [
 packages = ["src/market_impact_agent"]
 
 [tool.hatch.build.targets.wheel.force-include]
+"schemas/account-state-snapshot.schema.json" = "market_impact_agent/schemas/account-state-snapshot.schema.json"
+"schemas/position-snapshot.schema.json" = "market_impact_agent/schemas/position-snapshot.schema.json"
 "schemas/data-query.schema.json" = "market_impact_agent/schemas/data-query.schema.json"
 "schemas/data-snapshot.schema.json" = "market_impact_agent/schemas/data-snapshot.schema.json"
 "schemas/syndication-feed-source.schema.json" = "market_impact_agent/schemas/syndication-feed-source.schema.json"

@@ -33,6 +33,39 @@ boundaries. A missing optional input is visible degradation; missing authority f
 tradable target, raw price basis, account reconciliation, mandate, approval or execution state is a
 hard blocker at that owning boundary.
 
+## Continuous market and account sensing
+
+Market monitoring and position monitoring are one operating loop, not two competing authorities.
+The Harness continuously collects accepted source routes, while either a new-evidence trigger or a
+scheduled portfolio review freezes one Authorized Decision View and starts a bounded Agent run. The
+same view may include:
+
+- news, official releases, macro vintages, expectations and positioning;
+- raw tradable bars plus cutoff-correct adjusted research series, volume, turnover, liquidity and
+  volatility;
+- stock and index valuation/context fields such as PE, PB, market value and dividend yield;
+- instrument status, limits and the then-effective index, industry and ETF constituent graph; and
+- credential-free cash, positions, open orders, recent fills, concentration and account gaps.
+
+A broad discovery run may find a new issuer, industry, ETF, constituent set or information aspect
+and request a bounded Watch. A holdings review starts from every current position and open-order
+conflict before considering new exposure. Both may request accepted local-first retrieval, but only
+the Harness can collect, journal and freeze new data for a fresh Run.
+
+The Agent keeps three conclusions distinct:
+
+1. **Market/company thesis:** what changed, confirming and disconfirming evidence, catalyst and
+   invalidation conditions.
+2. **Security readiness:** whether the mapped stock or ETF is liquid, tradable, valued and timed well
+   enough to consider.
+3. **Portfolio action:** whether the exact reconciled account should observe, hold, reduce, close,
+   rotate or add exposure.
+
+There is no requirement to trade every day and no universal model-authored score. Missing optional
+context is visible; missing or stale account truth can still support a risk alert or reduction review
+but cannot authorize exposure increase. This separation prevents a valid macro thesis from silently
+becoming an unsuitable order for the current account.
+
 ## Authorized Decision View
 
 An Agent run may discover and call every registered read-only capability authorized for that task:
@@ -82,6 +115,10 @@ environment. The Provider reports broker facts; the Harness normalizes, persists
 whether the snapshot is complete. An incomplete or stale snapshot may support risk notification but
 cannot authorize an exposure-increasing order.
 
+The serialized account reference is a Harness-keyed pseudonym, not an unkeyed hash of a broker
+identifier. The pseudonymization key and raw reference never enter the Snapshot or Agent view. A
+Position Snapshot cannot be evaluated before its reconciliation timestamp.
+
 `Portfolio Decision` binds one Judgment/Signal candidate, the exact Account State and Position
 Snapshots, open-order conflicts and a disposition. It is a proposal-admission boundary, not an
 order. `Order Sizing Decision` is deterministic Harness output and is the only path that may create
@@ -94,8 +131,9 @@ state.
 
 ## Delivery gates
 
-1. **Read-only portfolio context.** Add normalized Account State and full Position Snapshot
-   contracts, fixture Provider acceptance and frozen Agent tools. No mutation capability.
+1. **Read-only portfolio context.** Normalized Account State and full Position Snapshot contracts
+   plus fixture acceptance are complete. Next bind an accepted account Provider and frozen Agent
+   tools. No mutation capability.
 2. **Decision and sizing.** Add portfolio-action proposal plus deterministic sizing/rejection and
    bind them into Decision Admission. Exercise open, increase, reduce, close, abstain and conflicting
    open-order cases against the durable mock.
@@ -130,3 +168,24 @@ one Run identity; restart or audit reopens its frozen response and tool results 
 the model again. A materially different Snapshot, retrieval result, account state or policy creates
 a new Run. Research features may use cutoff-correct adjusted/total-return prices, while fills, fees,
 limits and order prices always use the raw tradable basis.
+
+## Effectiveness evidence
+
+Engineering acceptance and investment effectiveness are separate. The common loop must first prove
+that it can replay the same frozen inputs, account state, policies and costs across historical,
+mock-paper and broker-paper environments. Strategy or Skill promotion then requires independent
+chronological cases in its declared market, event family and horizon, with later outcomes opened only
+after the decision is sealed.
+
+Reports compare after-cost results against the relevant cash/no-action, scheduled investment,
+index/ETF buy-and-hold and simple trend or volatility baselines. They report return together with
+maximum drawdown, tail loss/CVaR, Sharpe and Sortino, adverse excursion, downside capture, turnover,
+liquidity and the opportunity cost of avoided exposure. A claimed risk-avoidance decision must show
+the loss reduced relative to holding and also disclose rallies it missed. One lucky event, one market
+regime or a lower drawdown obtained only by staying in cash cannot promote a strategy.
+
+A reusable general or domain-specific Skill remains a candidate until it has more than one
+independent validation, no unresolved material counterexample or conflict with an existing Skill,
+and an observational trace showing when it was offered, loaded, reported as used and influenced the
+proposal. Promotion is limited to the demonstrated domain; with/without-Skill comparisons test
+incremental value rather than attributing the whole Agent result to the Skill.

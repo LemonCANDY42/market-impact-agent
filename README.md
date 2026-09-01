@@ -44,7 +44,7 @@ The bootstrap implements:
   runtime authority that reopens each completed Run Record, full hash-chained Journal, terminal
   Judgment, transcript/raw response, tool-result, validation-event, and recomputed metrics artifact.
   There is still
-  no Agent execution tool, account capability, broker connection, or live path;
+  no Agent execution tool, accepted account Provider, broker connection, or live path;
 - immutable point-in-time Evidence Items, Event Envelopes, deterministic
   fast/deep/combined routing, and evidence-linked Transmission Paths;
 - a separate read-only Observation Provider contract plus current public Polymarket and
@@ -199,15 +199,18 @@ The bootstrap implements:
   reusable seven-gate Source Route Acceptance Report that binds captured rights evidence, exact raw
   JSON records, publication time, actual receipt, append-only revisions, and deterministic replay;
   the accepted route is private-research only and grants neither historical PIT nor execution;
-- a prospective `tushare-observation` Provider with twenty-eight separately content-identified
-  routes for news, index/ETF/calendar context, instrument/industry/ETF-PCF exposure, margin
-  positioning, macro schedule, and analyst forecasts; the accepted routes have passed real private
+- a prospective `tushare-observation` Provider with thirty separately content-identified
+  routes for news, stock/index/ETF/calendar price and valuation context,
+  instrument/industry/ETF-PCF exposure, margin positioning, macro schedule, and analyst forecasts;
+  the accepted routes have passed real private
   capture, stored-bundle replay, and the seven route gates without exposing the purchased token or
   licensed rows. The purchased news entitlement now has seven active short-news source Jobs and one
   `major_news` Job at 2-, 5-, or 15-minute cadence. Accepted `forecast_vip`, `express_vip`, raw
   `daily`, and `adj_factor` routes use date-only rolling request semantics; `suspend_d` remains
   unaccepted after bounded transport failures. Two documented short-news sources remain valid-empty
-  rather than falsely accepted as non-empty routes;
+  rather than falsely accepted as non-empty routes. Full-date `daily_basic` and supported-index
+  `index_dailybasic` routes passed real seven-gate acceptance on 2026-09-01 and are registered for
+  bounded daily collection; their valuation fields are research context, never fill prices;
 - an append-only Prospective Receipt Journal that preserves every source attempt and content
   revision, deduplicates repeat sightings, freezes cadence-qualified Data Snapshots, and writes
   private Parquet/ZSTD analytical projections without becoming another evidence authority;
@@ -250,6 +253,12 @@ The bootstrap implements:
   callbacks or restart activation. One concrete parent Run/Decision owner must still derive that
   projection before the layer can create a Watch. The
   shared due-collection scheduler, acquisition executor, and fresh-run dispatcher are not installed;
+- a specified continuous market-and-account sensing loop with new-evidence and scheduled-portfolio
+  triggers over the same frozen Authorized Decision View. Market/company thesis, security readiness
+  and account action remain separate conclusions; a missing or stale account snapshot may produce a
+  risk alert but cannot authorize exposure increase. Complete read-only Account State/Position
+  contracts are the first delivery gate; an accepted broker account Provider and mutation tools are
+  still absent;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic

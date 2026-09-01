@@ -53,6 +53,11 @@ does not rename two weeks of observations as long-run alpha evidence or authoriz
   runtime, Judgment, Signal, portfolio-policy, sizing, Intent and hard-policy path across historical,
   paper and live environments. Freeze Run identity and reuse the persisted response on replay; only
   account/fill time and the engine-neutral Provider differ.
+- **Days 1-7 — continuous sensing.** Treat market and account monitoring as one Harness loop with
+  two triggers: new evidence and scheduled portfolio review. Continuously collect accepted news,
+  price, valuation, instrument/ETF-constituent, macro, expectation and positioning routes; every
+  holdings review starts from a complete credential-free account snapshot. Discovery may create a
+  bounded Watch, while missing account truth blocks exposure increase rather than all analysis.
 - **Days 3-8 — first real paper loop.** Admit an actual-receipt trigger, pass Query Gate, complete
   the registered adaptive Agent runs, and route an auditable non-empty Intent through
   `manual_each` durable mock paper. Abstention remains a valid terminal result but does not count as
@@ -63,6 +68,10 @@ does not rename two weeks of observations as long-run alpha evidence or authoriz
   separate. Compare after-cost performance, drawdown/tail risk, adverse excursion, opportunity cost
   of avoidance, turnover and stability against cash/no-action, index, sector and simple-rule
   baselines.
+  Require broad directional/time-band correctness plus evidence that relevant risk-adjusted
+  performance improves: return cannot be reported without maximum drawdown, tail loss, downside
+  capture, adverse excursion and avoidance opportunity cost. A Skill is promoted only within its
+  demonstrated family/horizon after more than one independent validation and traced incremental use.
 - **Days 6-14 — account and broker-paper loop.** Complete read-only reconciled account context,
   deterministic sizing, cancel/replace, kill switch and failure/restart acceptance, then accept the
   `ibkr-nautilus-paper` Provider against an authorized paper account. Missing external account or
@@ -683,8 +692,12 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     Provider outcome with nonzero attempt usage. The final real acceptance consumed one Provider
     attempt, 27,847 input / 2,424 output Tokens and 8,479 microusd. A credential-free replay returned
     the exact same terminal result with one reconciled Usage record and a healthy Provider circuit. It
-    created no EventAssessment path, Trigger Admission, Judgment or execution authority, and stopped
-    before later route candidates because the earlier Watch remains unresolved. The three superseded
+    created no EventAssessment path, Trigger Admission, Judgment or execution authority, and the
+    recorded run stopped before later route candidates because the earlier Watch remained unresolved.
+    The runtime now continues assessing later ready-time candidates after an unresolved Watch or
+    review, while preserving the earlier item as a global Trigger Admission blocker. A later
+    candidate therefore gains an auditable assessment but cannot skip ready-time authority and admit
+    a trigger. The three superseded
     real runs remain immutable negative evidence; across all four PDI-29G calls usage was 85,820 input
     / 6,288 output Tokens and 24,712 microusd. Scripted acceptance separately proves a path-bearing
     completed run, deterministic Materiality, exact replay and target-boundary rejection.
@@ -1110,9 +1123,15 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   evidence into paper state; no such authority may be supplied by the order caller. This is
   mock-only `manual_each` contract acceptance; no real checkpoint has exercised it.
 - [ ] Add the account decision loop before an external paper claim.
-  - [ ] Freeze a complete, credential-free Account State Snapshot and full Position Snapshot with
-    cash, quantities, side, concentration, open orders, recent fills, completeness and gaps; expose
-    only their read-only projections through the Authorized Decision View.
+  - [x] Freeze complete, credential-free Account State Snapshot and full Position Snapshot contracts
+    with cash, quantities, side, concentration, open orders, recent fills, freshness, completeness
+    and explicit gaps. The Harness derives content identity and a keyed, non-serialized account
+    pseudonym, requires an
+    enabled reconciliation-capable Provider with verified `ACCOUNT`, and marks missing positions or
+    concentration as not exposure-increase-ready. Mock execution still declares no account
+    capability. This is contract/fixture acceptance only.
+  - [ ] Bind one accepted read-only account Provider and its exact Account/Position projections into
+    the Authorized Decision View. No credential or mutation surface may enter the Agent Run.
   - [ ] Add Portfolio Decision and deterministic Order Sizing Decision between Signal and Order
     Intent. Agent confidence cannot affect size; exposure-increasing actions require complete fresh
     account state, raw Price Basis, tradability, lot rules, mandate and open-order conflict checks.

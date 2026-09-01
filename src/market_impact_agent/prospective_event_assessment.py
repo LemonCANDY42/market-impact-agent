@@ -1558,11 +1558,11 @@ async def run_prospective_event_assessment(
     aggregate_limit = int(Decimal(registration.aggregate_model_cost_limit_usd) * 1_000_000)
     unit_cost_reservation = _maximum_event_assessment_cost(profile)
     provider_health_store = ProviderHealthStore(run_root / "provider-health.sqlite3")
+    admission_blocked_by_unresolved_predecessor = False
     for context_candidate, context_proposal, context_decision, cluster in contexts:
         if cluster.cluster_id not in context_decision.event_assessment_cluster_ids:
             if cluster.checkpoint_eligibility is CheckpointEligibility.NEEDS_REVIEW:
-                status = RunStatus.HUMAN_INPUT_REQUIRED
-                break
+                admission_blocked_by_unresolved_predecessor = True
             continue
         if _sum_metrics(metrics).estimated_cost_microusd + unit_cost_reservation > aggregate_limit:
             status = RunStatus.BUDGET_EXHAUSTED
@@ -1606,7 +1606,7 @@ async def run_prospective_event_assessment(
         dispositions.append(disposition)
         if result.assessment is None:
             if disposition is MaterialityDisposition.WATCH:
-                break
+                admission_blocked_by_unresolved_predecessor = True
             continue
         assessment = result.assessment
         if result.materiality is None:
@@ -1621,6 +1621,8 @@ async def run_prospective_event_assessment(
             assessment=assessment,
         )
         if materiality.disposition is not MaterialityDisposition.ADMIT:
+            continue
+        if admission_blocked_by_unresolved_predecessor:
             continue
         now = datetime.now(UTC)
         preceding = tuple(zip(assessments[:-1], materialities[:-1], strict=True))

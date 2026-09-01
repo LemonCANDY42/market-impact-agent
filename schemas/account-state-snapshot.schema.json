@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/account-state-snapshot.schema.json",
+  "title": "Market Impact Account State Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "account_reference_hash",
+    "environment",
+    "provider_id",
+    "provider_version",
+    "provider_manifest_hash",
+    "as_of",
+    "reconciled_at",
+    "reconciliation_reference",
+    "cash",
+    "positions",
+    "open_orders",
+    "recent_fills",
+    "recent_fills_since",
+    "missing_sections",
+    "reconciliation_gaps",
+    "complete"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.account-state-snapshot.v1"},
+    "snapshot_id": {"type": "string", "pattern": "^account-state-snapshot-[0-9a-f]{64}$"},
+    "account_reference_hash": {"type": "string", "pattern": "^account-ref-[0-9a-f]{64}$"},
+    "environment": {"enum": ["backtest", "paper", "live"]},
+    "provider_id": {"type": "string", "minLength": 1},
+    "provider_version": {"type": "string", "minLength": 1},
+    "provider_manifest_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "as_of": {"type": "string", "format": "date-time"},
+    "reconciled_at": {"type": "string", "format": "date-time"},
+    "reconciliation_reference": {"type": "string", "minLength": 1},
+    "cash": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/cash_balances"}]},
+    "positions": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/positions"}]},
+    "open_orders": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/open_orders"}]},
+    "recent_fills": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/recent_fills"}]},
+    "recent_fills_since": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
+    "missing_sections": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["cash", "positions", "open_orders", "recent_fills"]}
+    },
+    "reconciliation_gaps": {"$ref": "#/$defs/gaps"},
+    "complete": {"type": "boolean"}
+  },
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"},
+    "positive_decimal": {"type": "string", "pattern": "^(?:0\\.(?:0*[1-9][0-9]*)|[1-9][0-9]*(?:\\.[0-9]+)?)$"},
+    "gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "cash_balance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "available", "settled"],
+      "properties": {
+        "currency": {"type": "string", "minLength": 1},
+        "available": {"$ref": "#/$defs/decimal"},
+        "settled": {"$ref": "#/$defs/decimal"}
+      }
+    },
+    "cash_balances": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/cash_balance"}
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "venue",
+        "instrument_class",
+        "side",
+        "quantity",
+        "concentration",
+        "concentration_gap"
+      ],
+      "properties": {
+        "target_id": {"type": "string", "minLength": 1},
+        "venue": {"type": "string", "minLength": 1},
+        "instrument_class": {"type": "string", "minLength": 1},
+        "side": {"enum": ["buy", "sell"]},
+        "quantity": {"$ref": "#/$defs/positive_decimal"},
+        "concentration": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/decimal"}]},
+        "concentration_gap": {"oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "concentration": {"$ref": "#/$defs/decimal"},
+            "concentration_gap": {"type": "null"}
+          }
+        },
+        {
+          "properties": {
+            "concentration": {"type": "null"},
+            "concentration_gap": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "positions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/position"}
+    },
+    "open_order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_reference",
+        "target_id",
+        "venue",
+        "instrument_class",
+        "side",
+        "quantity",
+        "status",
+        "submitted_at"
+      ],
+      "properties": {
+        "order_reference": {"type": "string", "minLength": 1},
+        "target_id": {"type": "string", "minLength": 1},
+        "venue": {"type": "string", "minLength": 1},
+        "instrument_class": {"type": "string", "minLength": 1},
+        "side": {"enum": ["buy", "sell"]},
+        "quantity": {"$ref": "#/$defs/positive_decimal"},
+        "status": {"enum": ["working", "partially_filled", "pending_cancel"]},
+        "submitted_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "open_orders": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/open_order"}
+    },
+    "recent_fill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fill_reference",
+        "order_reference",
+        "target_id",
+        "venue",
+        "instrument_class",
+        "side",
+        "quantity",
+        "filled_at"
+      ],
+      "properties": {
+        "fill_reference": {"type": "string", "minLength": 1},
+        "order_reference": {"type": "string", "minLength": 1},
+        "target_id": {"type": "string", "minLength": 1},
+        "venue": {"type": "string", "minLength": 1},
+        "instrument_class": {"type": "string", "minLength": 1},
+        "side": {"enum": ["buy", "sell"]},
+        "quantity": {"$ref": "#/$defs/positive_decimal"},
+        "filled_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "recent_fills": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/recent_fill"}
+    }
+  }
+}

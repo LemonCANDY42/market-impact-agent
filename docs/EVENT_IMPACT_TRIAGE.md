@@ -585,6 +585,12 @@ propose additional anchored Monitoring Scopes for newly discovered issuers, indu
 frozen sets or information aspects, but those scopes need separate Harness admission, budget, PIT
 lineage and a fresh Run. They cannot silently widen the original decision or trading universe.
 
+An unresolved `watch` or `needs_review` result no longer prevents the runtime from evaluating later
+ready-time EventAssessment candidates. It still blocks Trigger Admission for the route epoch until
+the earlier authority is resolved. This separates analysis throughput from admission order: later
+events can acquire durable, replayable assessments, but none can leapfrog an unresolved predecessor
+into Query Gate or trading authority.
+
 That controlled expansion now has a concrete proposal/admission seam. A parent Agent sees only the
 named `WatchDelegateProfile` records permitted for its Agent type and lineage depth, similar to Skill
 selection by description. It may choose one profile and propose a subject, question,
@@ -614,7 +620,8 @@ Still required for real acceptance:
   does not construct or probe a Provider, and rejects authority subclasses or reinstallation of an
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
-  ingress roles, and the current Position Snapshot remains identity-only;
+  ingress roles; the complete Account State/Position Snapshot contract is read-only infrastructure
+  and still needs a real accepted account Provider plus binding into the Authorized Decision View;
 - one real path-bearing PDI-29G EventAssessment that passes deterministic Materiality; the concrete
   runtime/authority and a real completed no-path Watch are accepted, while v8-v11 terminal comparison
   versions remain negative evidence and cannot be recycled;

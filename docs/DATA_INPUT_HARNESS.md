@@ -792,5 +792,11 @@ the exact still-registered delegate profile. It does not claim or acknowledge th
 or dispatch a task. Shared due-opportunity fan-out, the bounded acquisition executor and installed
 scheduler remain PDI-40 work; idempotent Wake-to-fresh-Run dispatch remains PDI-41.
 
+Prospective EventAssessment applies the same separation between observation throughput and decision
+authority. A completed no-path Watch or unresolved review remains a ready-time-order blocker for
+Trigger Admission, but it does not stop later candidates from receiving their own durable bounded
+assessment. The Harness may therefore keep monitoring and analyzing new information without letting
+a later event bypass the unresolved predecessor into Snapshot Set, Query Gate or an Order Intent.
+
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.

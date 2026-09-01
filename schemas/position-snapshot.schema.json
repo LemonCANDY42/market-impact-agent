@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/position-snapshot.schema.json",
+  "title": "Market Impact Position Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "account_state_snapshot_id",
+    "account_reference_hash",
+    "environment",
+    "provider_id",
+    "as_of",
+    "reconciled_at",
+    "evaluated_at",
+    "max_age_seconds",
+    "cash",
+    "positions",
+    "open_orders",
+    "recent_fills",
+    "recent_fills_since",
+    "complete",
+    "observation_gaps",
+    "risk_observation_ready",
+    "exposure_increase_ready"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.position-snapshot.v1"},
+    "snapshot_id": {"type": "string", "pattern": "^position-snapshot-[0-9a-f]{64}$"},
+    "account_state_snapshot_id": {
+      "type": "string",
+      "pattern": "^account-state-snapshot-[0-9a-f]{64}$"
+    },
+    "account_reference_hash": {"type": "string", "pattern": "^account-ref-[0-9a-f]{64}$"},
+    "environment": {"enum": ["backtest", "paper", "live"]},
+    "provider_id": {"type": "string", "minLength": 1},
+    "as_of": {"type": "string", "format": "date-time"},
+    "reconciled_at": {"type": "string", "format": "date-time"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "max_age_seconds": {"type": "integer", "minimum": 1},
+    "cash": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://schemas.market-impact-agent.local/account-state-snapshot.schema.json#/$defs/cash_balances"}
+      ]
+    },
+    "positions": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://schemas.market-impact-agent.local/account-state-snapshot.schema.json#/$defs/positions"}
+      ]
+    },
+    "open_orders": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://schemas.market-impact-agent.local/account-state-snapshot.schema.json#/$defs/open_orders"}
+      ]
+    },
+    "recent_fills": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "https://schemas.market-impact-agent.local/account-state-snapshot.schema.json#/$defs/recent_fills"}
+      ]
+    },
+    "recent_fills_since": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
+    "complete": {"type": "boolean"},
+    "observation_gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "risk_observation_ready": {"type": "boolean"},
+    "exposure_increase_ready": {"type": "boolean"}
+  }
+}
