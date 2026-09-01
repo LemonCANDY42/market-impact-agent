@@ -39,6 +39,42 @@ The shortest accepted path to Agent-directed paper operation is:
 9. separately accept Wake dispatch and then a Harness-owned `ibkr-nautilus-paper` Provider with
    account-scoped reconciliation before any real broker-paper claim.
 
+### Fourteen-day convergence program — 2026-09-01 through 2026-09-15
+
+The engineering and first-evidence target is compressed into one bounded two-week program. This
+does not rename two weeks of observations as long-run alpha evidence or authorize real capital.
+
+- **Days 1-3 — unblock decisions.** Accept one minimal in-scope target-evidence boundary and one
+  new blind comparison, while allowing already-registered direct policy, earnings and macro
+  checkpoints to proceed independently. A failed broad-event comparison degrades that entrance to
+  archive/Watch and does not restart prompt tuning or block direct checkpoints.
+- **Days 1-7 — backtest/live parity.** Reuse one cutoff-bound Authorized Decision View, Agent
+  runtime, Judgment, Signal, portfolio-policy, sizing, Intent and hard-policy path across historical,
+  paper and live environments. Freeze Run identity and reuse the persisted response on replay; only
+  account/fill time and the engine-neutral Provider differ.
+- **Days 3-8 — first real paper loop.** Admit an actual-receipt trigger, pass Query Gate, complete
+  the registered adaptive Agent runs, and route an auditable non-empty Intent through
+  `manual_each` durable mock paper. Abstention remains a valid terminal result but does not count as
+  a non-empty Intent demonstration.
+- **Days 4-12 — historical effectiveness screen.** Run opened-outcome discovery separately from
+  sealed chronological validation across materially different volatility, trend, rotation and shock
+  states and short/medium/long horizons. Strict-PIT, Modeled-PIT and retrospective evidence remain
+  separate. Compare after-cost performance, drawdown/tail risk, adverse excursion, opportunity cost
+  of avoidance, turnover and stability against cash/no-action, index, sector and simple-rule
+  baselines.
+- **Days 6-14 — account and broker-paper loop.** Complete read-only reconciled account context,
+  deterministic sizing, cancel/replace, kill switch and failure/restart acceptance, then accept the
+  `ibkr-nautilus-paper` Provider against an authorized paper account. Missing external account or
+  gateway access is reported as an external acceptance blocker, never replaced by mock evidence.
+- **Throughout — prospective evidence.** Keep collection and eligible paper decisions running;
+  append every decision, abstention, Skill/tool trace, cost, latency and later outcome without
+  changing the frozen historical holdout or expanding a failed sample.
+
+The day-14 report separately states engineering completion, historical Strict-PIT evidence,
+historical Modeled-PIT evidence and prospective paper evidence. Live plumbing may be complete and
+remain `disabled`; enabling any real-capital Provider still requires explicit authorization plus its
+own mandate, limits, credential isolation, kill-switch and reconciliation acceptance.
+
 The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
 incremental: read-only reconciled account/position context, then deterministic portfolio/sizing
 admission, then cancel/replace lifecycle and operational controls, and only then IBKR paper. A broad

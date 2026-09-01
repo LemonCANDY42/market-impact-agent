@@ -47,6 +47,24 @@ The registry is content-identified. Cases remain `retrospective_research_candida
 `identity_sensitive`. Missing market or industry anchors retain an `incomplete` case in the report;
 they are never dropped from the denominator.
 
+### Accelerated effectiveness lane
+
+The two-week convergence program may use broad opened-outcome history to discover or reject event,
+industry, macro, rotation and risk-control hypotheses, but promotion evidence comes only from a
+separately frozen chronological holdout whose outcome labels and post-cutoff inputs are unavailable
+to the Agent. The same Harness decision runtime and cutoff-bound tools used by prospective paper
+must run that holdout. Full-information analysis can propose a Skill candidate; it cannot score the
+candidate that it created.
+
+Coverage must cross materially different trend, volatility, dispersion and shock states and include
+short, medium and long registered horizons. A candidate is retained only after more than one
+non-overlapping validation slice shows no material contradiction, and conflict checks compare it
+against existing Skill logic before merge, specialization or rejection. Evaluation reports lead
+time, after-cost return, maximum drawdown, CVaR, adverse excursion, turnover, upside capture,
+downside participation, avoided loss and the opportunity cost of false avoidance. Results remain
+separate by Strict-PIT, Modeled-PIT and retrospective lane and by model; repeating one event or model
+response does not increase the independent sample count.
+
 ## Rich-source study registration
 
 `examples/research/market-regime-study-registration-v1.json` binds all 15 cases to a checkpoint

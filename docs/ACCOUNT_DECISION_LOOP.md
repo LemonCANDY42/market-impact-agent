@@ -112,3 +112,21 @@ state.
 Backtest and prospective work share EventAssessment, Signal, portfolio-policy and order semantics.
 Backtests use cutoff-bound simulated Account State and deterministic fills; paper/live use actual
 reconciled state. Neither lane upgrades the other's evidence authority.
+
+## Decision-path parity and replay
+
+Backtest, paper and live use the same decision path up to the execution Provider. They must bind the
+same frozen evidence/tool view, Agent runtime and Skill surface, Judgment validation, Signal,
+portfolio-action policy, deterministic sizing, Order Intent, hard policy and mandate semantics.
+Environment-specific code may supply only the owning facts it must own:
+
+- a backtest supplies cutoff-bound simulated account state and later deterministic fills;
+- paper supplies reconciled paper-account state and broker events; and
+- live supplies separately authorized live-account state and broker events.
+
+This is decision-path equivalence plus replay-safe idempotence, not a claim that a nondeterministic
+model will independently emit byte-identical text. The first physical model call is journaled under
+one Run identity; restart or audit reopens its frozen response and tool results rather than calling
+the model again. A materially different Snapshot, retrieval result, account state or policy creates
+a new Run. Research features may use cutoff-correct adjusted/total-return prices, while fills, fees,
+limits and order prices always use the raw tradable basis.
