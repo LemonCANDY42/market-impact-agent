@@ -106,6 +106,22 @@ unadjusted Price Basis, side-applicable lot/tick/tradability rules, trusted Acco
 Trading Mandate and versioned sizing policy. Model confidence remains observational and cannot size
 a position.
 
+The additive paper v2 proposal makes that boundary explicit: the Agent may supply target instrument,
+long or bearish direction, horizon, target gross-exposure ratio, rationale, counterevidence and
+invalidation, but no quantity or account authority. The ratio denominator is the Trading Mandate
+v2 gross-exposure limit, never inferred account NAV. The Harness computes the signed target delta
+from the exact raw execution price and current marked position, then enforces the mandate's gross,
+net, single-position, position-count, turnover, submission and cash limits. A bearish ordinary ETF
+requires a current account-bound permission and borrow proof; an allowlisted exactly non-levered
+inverse ETF is expressed as a long buy. Missing, stale, mismatched or insufficient proof fails
+closed, and the Harness cannot substitute an instrument after the proposal is bound.
+The binding's self-description is not proof: a Harness-owned borrow/Instrument Master authority
+must reopen the exact content before Portfolio Decision admission and again at sizing, where expiry
+is rechecked. Likewise, sizing accepts a Portfolio Exposure View only through the Harness-owned
+exposure/reconciliation-ledger authority; a caller-created view with plausible balances or lower
+turnover is not admissible. Every actionable leg binds its exact current Position Snapshot entry,
+and each sized leg plus the sizing decision identity records the exact raw Price Basis hash.
+
 Deposits, withdrawals, credential access, account-profile or permission changes, data-entitlement
 purchases and broker-session administration are outside the Agent tool surface.
 
@@ -156,6 +172,73 @@ parent, rebuilds the Authorized Decision View, and checks venue/class against a 
 Master projection. `Portfolio Decision` is a proposal-admission boundary, not an order. `Order
 Sizing Decision` is deterministic Harness output and is the only path that may create the quantity
 used by an Agent-originated `OrderIntent`.
+
+Portfolio Decision v2 represents rotation as two linked non-atomic legs. The source reduce/close leg
+is sized first. The destination open/increase leg is recorded as
+`blocked_pending_source_reconciliation`; it cannot create an Order Intent until a later exact
+reconciliation proves the source transition and the Harness rebuilds current account and exposure
+views. The contract does not claim an atomic broker combo or let the Agent pre-authorize both legs.
+
+The additive autonomous Paper v2 execution owner consumes only this v2 chain. Its daily Trading
+Mandate is Paper-only and `autonomous`, denominated in USD, and capped at $10,000 gross exposure,
+the -$10,000 to +$10,000 net band, ten positions, $50,000 daily turnover, fifty submissions, a $300
+daily-loss kill and a $1,000 strategy peak-drawdown kill. `account_id` is the opaque
+`account-ref-...` identity from Account State, not a raw broker account identifier. Its content and
+identity include the canonical `LocalDataSnapshotStore.harness_authority_id`; the same mandate
+cannot be recreated as authority in another root. `PaperExecutionService` owns the durable Provider
+acceptance, and autonomous admission and dispatch can obtain a lease only by reopening that exact
+content-addressed acceptance in the same Harness authority root. The lease binds
+Provider version, opaque account, exact Trading Mandate content hash, instrument-route hash, Paper
+environment, accepted market, market-order capability, DAY time-in-force and validity. That mandate
+hash participates in the lease identity and is rechecked on service open and every Provider mutation;
+a lease cannot be reopened under a more permissive same-account mandate. Legacy lease payloads
+without this binding fail closed and are not upgraded in place. An unsealed acceptance-shaped object
+or a caller-provided equality verifier has no authorization role. The lease, mandate-day risk state,
+outbox and reconciliation tables share the store's persisted `harness_authority_id`; a fresh root
+cannot mint or reopen the original root's lease or reset its baseline, even if it records a new
+acceptance for identical Provider facts. The same Harness composition root supplies historical,
+mock and IBKR providers; none receives a separate authority path.
+
+No per-order human approval is introduced on this path. The Harness still persists the exact Policy
+Evaluation, Trading Mandate binding and policy approval before creating a durable outbox lease.
+At Mandate-day activation the canonical Harness authority transactionally initializes day-start and peak
+equity from the exact authoritative reconciled Account State and Exposure View. It never accepts a
+baseline, peak, cash-flow adjustment, measurement, source hash or kill label from a caller. Each
+subsequent authoritative observation updates the persisted peak monotonically and internally
+recomputes daily P&L and drawdown from mandate-currency settled cash plus marked net exposure.
+External cash flow is zero unless a future broker-ledger authority is introduced; a caller cannot
+adjust it. A stale risk observation activates a durable kill and blocks increases, while exact
+reduce/close, cancel and reconciliation remain available. Each
+admitted operation atomically reserves its
+submission, turnover, signed/gross exposure delta, cash and position-count effects. A consumed
+Exposure View cannot authorize a second distinct decision, and a newer view is evaluated together
+with every still-active reservation plus the durable daily submission and turnover ledger.
+Unknown acknowledgement, incomplete coverage, reconciliation difference, stale/incomplete account
+state, daily loss, peak drawdown or Provider loss activates a durable kill. A kill blocks new or
+increased exposure but leaves already admitted exact reduce/close, cancel and reconciliation
+operations available. Interrupted submitting leases become `unknown` on restart and are never
+blindly retried. Provider reconciliation alone cannot clear coverage or release a reservation: the
+Harness reconciliation authority itself rebuilds a newer Account State and Exposure View from that
+exact Provider reconciliation snapshot. Release additionally proves terminal orders are absent from
+open orders, exact receipt fill IDs and quantities appear in recent fills, and the resulting signed
+positions reflect those fills; merely copying a pre-fill view under a new snapshot hash fails. An
+ambiguous submit or cancel remains killed until the order has
+an authoritative terminal state; an `accepted` or `unknown` receipt is insufficient. Clean terminal
+reconciliation is the only route that can clear acknowledgement gaps; strategy risk kills remain
+active. Before cancellation, one short canonical Harness transaction atomically claims the exact
+lease and cancellation attempt. Provider-side validation reopens only that durable claim, and the
+Provider call runs without holding the SQLite write lock. Revocation is an explicit durable request:
+it immediately blocks new mutation claims, remains pending while an already-authorized call is in
+flight, and becomes final when that call records its receipt or unknown acknowledgement. Direct
+deletion of an active claim is rejected. Restart converts a stranded claim to `unknown`, applies any
+pending revocation and never retries it. A root-specific `0600` OS advisory lock permits exactly one
+active autonomous service for each canonical Harness root and is acquired before any recovery. A
+second service fails without changing the durable claim; clean `close()` or context-manager exit
+releases the lock, while an OS process exit releases it automatically so a successor can recover.
+The lease records its acquiring process and is close-on-exec: a forked child cannot use the copied
+service, and closing or destroying its copied descriptor never unlocks the parent's lease.
+Rotation destination admission remains impossible until a new post-source-reconciliation v2 decision
+and sizing chain is built.
 
 Agent-directed admission, human approval and dispatch each re-read the trusted current Account State
 source. The exact snapshot must still match the admitted parent and remain inside the Harness
@@ -270,6 +353,10 @@ maximum drawdown, tail loss/CVaR, Sharpe and Sortino, adverse excursion, downsid
 liquidity and the opportunity cost of avoided exposure. A claimed risk-avoidance decision must show
 the loss reduced relative to holding and also disclose rallies it missed. One lucky event, one market
 regime or a lower drawdown obtained only by staying in cash cannot promote a strategy.
+
+The exact registration, denominator, balanced return/risk gate, concentration checks and stopping
+rules are owned by `AGENT_EFFECTIVENESS_ACCEPTANCE.md`. This document owns the account and decision
+loop only; it does not independently promote a strategy or Skill.
 
 A reusable general or domain-specific Skill remains a candidate until it has more than one
 independent validation, no unresolved material counterexample or conflict with an existing Skill,

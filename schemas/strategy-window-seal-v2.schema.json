@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/strategy-window-seal-v2.schema.json",
+  "title": "Strategy Window Seal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "seal_id", "harness_authority_id", "window_id", "strategy_epoch_id", "sealed_at", "last_sequence", "journal_head_hash", "admission_ids", "stale"],
+  "properties": {
+    "schema_version": {"const": "market-impact.strategy-window-seal.v2"},
+    "seal_id": {"type": "string", "pattern": "^strategy-window-seal-[0-9a-f]{64}$"},
+    "harness_authority_id": {"type": "string", "pattern": "^harness-authority-[0-9a-f]{32}$"},
+    "window_id": {"type": "string", "pattern": "^strategy-window-[0-9a-f]{64}$"},
+    "strategy_epoch_id": {"type": "string", "minLength": 1},
+    "sealed_at": {"type": "string", "format": "date-time"},
+    "last_sequence": {"type": "integer", "minimum": 1},
+    "journal_head_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "admission_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^prospective-trigger-admission-[0-9a-f]{64}$"}},
+    "stale": {"const": false}
+  }
+}

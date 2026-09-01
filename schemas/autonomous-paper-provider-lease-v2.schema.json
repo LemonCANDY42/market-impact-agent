@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/autonomous-paper-provider-lease-v2.schema.json",
+  "title": "Autonomous Paper Provider Lease v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lease_id",
+    "harness_authority_id",
+    "provider_id",
+    "provider_version",
+    "account_reference_hash",
+    "environment",
+    "instrument_routes_hash",
+    "mandate_hash",
+    "markets",
+    "order_types",
+    "time_in_force",
+    "issued_at",
+    "valid_until"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.autonomous-paper-provider-lease.v2"},
+    "lease_id": {"type": "string", "pattern": "^autonomous-paper-provider-lease-[0-9a-f]{64}$"},
+    "harness_authority_id": {"type": "string", "pattern": "^harness-authority-[0-9a-f]{32}$"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "provider_version": {"type": "string", "minLength": 1},
+    "account_reference_hash": {"type": "string", "pattern": "^account-ref-[0-9a-f]{64}$"},
+    "environment": {"const": "paper"},
+    "instrument_routes_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mandate_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "markets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "order_types": {"type": "array", "contains": {"const": "market"}, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "time_in_force": {"const": ["DAY"]},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"}
+  }
+}

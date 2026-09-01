@@ -71,7 +71,10 @@ from market_impact_agent.prospective_checkpoint_readiness import (
 )
 from market_impact_agent.prospective_collection_runtime import ProspectiveCollectionRuntime
 from market_impact_agent.prospective_data import ProspectiveDataJournal
-from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
+from market_impact_agent.prospective_diagnostic import (
+    DiagnosticMechanism,
+    ProspectiveDiagnosticRegistration,
+)
 from market_impact_agent.provider_reliability import ProviderHealthStore
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
@@ -910,7 +913,7 @@ def prepare_next_prospective_triage_work(
     evaluated_at: datetime,
     maximum_candidate_count: int = 32,
 ) -> PreparedProspectiveTriageWork:
-    """Freeze the next actual-receipt prefix and its minimal material-ingress plan."""
+    """Freeze the next actual-receipt prefix and its checkpoint-specific plan."""
 
     if evaluated_at.tzinfo is None or evaluated_at.utcoffset() is None:
         raise ValueError("prospective triage evaluated_at must be timezone-aware")
@@ -964,7 +967,13 @@ def prepare_next_prospective_triage_work(
         ),
     )
     profile = load_builtin_model_provider_profile(registration.model_profile_id)
-    plan = build_event_impact_triage_work_execution_plan_v11(
+    checkpoint = registration.checkpoint(checkpoint_key)
+    plan_builder = (
+        build_event_impact_triage_work_execution_plan_v11
+        if checkpoint.mechanism is DiagnosticMechanism.MATERIAL_EVENT
+        else build_event_impact_triage_work_execution_plan_v8
+    )
+    plan = plan_builder(
         candidate_set=candidate_set,
         work_manifest=manifest,
         registration=registration,

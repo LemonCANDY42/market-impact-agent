@@ -82,6 +82,11 @@ from market_impact_agent.prospective_query_gate import (
     build_query_gate_evaluation_material,
     evaluate_prospective_query_gate,
 )
+from market_impact_agent.prospective_trigger_admission import (
+    ProspectiveTriggerAdmission,
+    TriggerAdmissionAuthority,
+    prospective_trigger_admission_from_dict,
+)
 from market_impact_agent.providers import (
     CancelExecutionProvider,
     CancellationCapability,
@@ -254,6 +259,7 @@ class PaperExecutionService:
         instrument_identities: Mapping[str, tuple[str, str]] | None = None,
         instrument_rule_sets: Mapping[str, ExchangeInstrumentRuleSet] | None = None,
         order_sizing_policies: Mapping[str, OrderSizingPolicy] | None = None,
+        trigger_admission_authority: TriggerAdmissionAuthority | None = None,
     ) -> None:
         if lease_timeout_seconds < 1:
             raise ValueError("lease_timeout_seconds must be positive")
@@ -306,6 +312,7 @@ class PaperExecutionService:
             raise ValueError("Order Sizing Policy registry key differs from content identity")
         self.__instrument_rule_sets = MappingProxyType(accepted_rule_sets)
         self.__order_sizing_policies = MappingProxyType(accepted_sizing_policies)
+        self.__trigger_admission_authority = trigger_admission_authority
         self._initialize()
         os.chmod(self.root, 0o700)
         os.chmod(self.database_path, 0o600)
@@ -328,6 +335,71 @@ class PaperExecutionService:
         if kill_row is None:
             raise RuntimeError("paper kill switch is missing")
         return bool(row["blocked"]) or bool(kill_row["active"])
+
+    def record_provider_acceptance(self, store: LocalDataSnapshotStore) -> str:
+        """Persist this concrete execution owner's accepted Provider in one Harness root."""
+
+        source = self.__account_state_source
+        if source is None:
+            raise PermissionError("Provider acceptance requires a current Account State source")
+        account_state = source()
+        now = self.clock().astimezone(UTC)
+        readiness = account_state.readiness(
+            evaluated_at=now,
+            max_age=self.__account_state_max_age,
+        )
+        manifest_hash = canonical_hash(self.provider.manifest.to_dict())
+        if (
+            not readiness.exposure_increase_ready
+            or account_state.provider_id != self.provider.manifest.provider_id
+            or account_state.provider_version != self.provider.manifest.provider_version
+            or account_state.provider_manifest_hash != manifest_hash
+            or account_state.environment is not TradingEnvironment.PAPER
+        ):
+            raise PermissionError("Paper execution owner cannot reopen accepted Provider state")
+        payload = {
+            "schema_version": "market-impact.paper-provider-acceptance.v2",
+            "harness_authority_id": store.harness_authority_id,
+            "provider_id": self.provider.manifest.provider_id,
+            "provider_version": self.provider.manifest.provider_version,
+            "provider_manifest_hash": manifest_hash,
+            "account_reference_hash": account_state.account_reference_hash,
+            "account_state_hash": canonical_hash(account_state.to_dict()),
+            "accepted_at": _timestamp(now),
+        }
+        acceptance_id = "paper-provider-acceptance-" + canonical_hash(payload)
+        artifact = store.artifacts.put_json({"acceptance_id": acceptance_id, **payload})
+        with store.authority_transaction() as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS paper_provider_acceptances (
+                    acceptance_id TEXT PRIMARY KEY,
+                    harness_authority_id TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    provider_version TEXT NOT NULL,
+                    provider_manifest_hash TEXT NOT NULL,
+                    account_reference_hash TEXT NOT NULL,
+                    account_state_hash TEXT NOT NULL,
+                    artifact_hash TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO paper_provider_acceptances VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    acceptance_id,
+                    store.harness_authority_id,
+                    self.provider.manifest.provider_id,
+                    self.provider.manifest.provider_version,
+                    manifest_hash,
+                    account_state.account_reference_hash,
+                    canonical_hash(account_state.to_dict()),
+                    artifact.content_hash,
+                ),
+            )
+        return acceptance_id
 
     @property
     def kill_switch_active(self) -> bool:
@@ -434,6 +506,7 @@ class PaperExecutionService:
         portfolio_decision: PortfolioDecision,
         sizing_decision: OrderSizingDecision,
         price_basis: PriceBasis,
+        trigger_admission: ProspectiveTriggerAdmission | None = None,
     ) -> PaperIntentRecord:
         if admission.disposition is not DecisionDisposition.PROPOSE:
             raise PermissionError("abstaining Decision Admission cannot reach paper execution")
@@ -453,6 +526,8 @@ class PaperExecutionService:
             model_profile_id=query_gate.model_profile_id,
             model_cost_limit_usd=Decimal(query_gate.model_cost_limit_usd),
             evaluated_at=query_gate.evaluated_at,
+            trigger_admission=trigger_admission,
+            trigger_admission_authority=self.__trigger_admission_authority,
         )
         if recomputed_query_gate.to_dict() != query_gate.to_dict():
             raise ValueError("paper admission Query Gate was not deterministically evaluated")
@@ -603,6 +678,7 @@ class PaperExecutionService:
                 snapshot_set=snapshot_set,
                 decision_inputs=decision_inputs,
                 snapshot_store=snapshot_store,
+                trigger_admission=trigger_admission,
             )
         )
         evidence_pack_artifact = self.artifacts.put_json(evidence_pack.to_dict())
@@ -1829,7 +1905,7 @@ class PaperExecutionService:
             run_artifact = self.artifacts.put_json(run_payload)
             connection.execute(
                 """
-                INSERT INTO paper_reconciliation_runs (
+                INSERT OR IGNORE INTO paper_reconciliation_runs (
                     reconciliation_hash, complete, gaps_json, kill_generation, observed_at
                 ) VALUES (?, ?, ?, ?, ?)
                 """,
@@ -2052,9 +2128,14 @@ class PaperExecutionService:
                 ),
                 "prospective Query Gate evaluation material",
             )
-            if _json_string(evaluation_material_payload, "schema_version") != (
-                "market-impact.prospective-query-gate-evaluation-material.v1"
-            ):
+            evaluation_material_schema = _json_string(
+                evaluation_material_payload,
+                "schema_version",
+            )
+            if evaluation_material_schema not in {
+                "market-impact.prospective-query-gate-evaluation-material.v1",
+                "market-impact.prospective-query-gate-evaluation-material.v2",
+            }:
                 raise ValueError("Query Gate evaluation material schema is not canonical")
             registration_payload = _json_object(
                 evaluation_material_payload.get("registration"),
@@ -2064,6 +2145,18 @@ class PaperExecutionService:
                 evaluation_material_payload.get("checkpoint_snapshot_set"),
                 "prospective checkpoint Snapshot Set",
             )
+            trigger_admission = None
+            if evaluation_material_schema == (
+                "market-impact.prospective-query-gate-evaluation-material.v2"
+            ):
+                trigger_admission = prospective_trigger_admission_from_dict(
+                    evaluation_material_payload.get("trigger_admission")
+                )
+                if self.__trigger_admission_authority is None:
+                    raise PermissionError(
+                        "paper restart lacks prospective Trigger Admission authority"
+                    )
+                self.__trigger_admission_authority.assert_authoritative(trigger_admission)
             evidence_pack = evidence_pack_from_dict(self.artifacts.read_json(evidence_pack_hash))
             execution_plan_hash = _json_string(
                 query_gate_payload,
@@ -2164,6 +2257,8 @@ class PaperExecutionService:
                         _json_string(query_gate_payload, "model_cost_limit_usd")
                     ),
                     evaluated_at=_datetime(_json_string(query_gate_payload, "evaluated_at")),
+                    trigger_admission=trigger_admission,
+                    trigger_admission_authority=self.__trigger_admission_authority,
                 )
             if recomputed_query_gate.to_dict() != query_gate_payload:
                 raise ValueError("persisted prospective Query Gate does not re-evaluate exactly")

@@ -128,7 +128,12 @@ Paper validation never upgrades a provider to live validation.
   report. The remaining manual-TWS-order coverage gap makes the report read-only accepted but not
   exposure-increase-ready; this is configuration/lifecycle evidence, not execution acceptance.
   The execution-side candidate now exists behind a provider-neutral
-  `NautilusPaperExecutionRuntime` port. It validates the exact sealed Harness capability,
+  `NautilusPaperExecutionRuntime` port, with concrete runtime version
+  `0.2.0-candidate` pinned to NautilusTrader `1.231.0` and its exact installed
+  `nautilus_ibapi` version. One long-lived `TradingNode` and one bounded Harness Strategy
+  own submit, cancel, event delivery, and broker reconciliation;
+  the Harness adapter does not implement another OMS or infer broker lifecycle state.
+  It validates the exact sealed Harness capability,
   translates only registered Instrument Master routes carrying an explicit market, assigns a deterministic bounded
   Nautilus client order ID and commits its identity before dispatch. A lost response leaves that
   identity ambiguous and reconciliation-only; neither submit nor cancel is silently sent again
@@ -138,9 +143,82 @@ Paper validation never upgrades a provider to live validation.
   separately open only during that acceptance's explicit validity interval, and every new mutation
   is also checked against the accepted market and order-type sets. Durable
   order and cancellation bindings retain those scope hashes, so a reused state database cannot send
-  an old identity to another account or runtime. After submit admission expires, cancellation may
+  an old identity to another account or runtime. The concrete runtime uses `DAY` only; the exact
+  time-in-force, Provider/runtime/dependency versions, anonymous account scope, market set,
+  Instrument route-set, order types, validity interval, and per-scenario fault evidence are all
+  part of Provider Acceptance v3. The anonymous account reference is an HMAC-SHA-256
+  pseudonym derived from the raw Paper account reference with a Harness-held key; callers cannot
+  supply an arbitrary account hash. The configuration hash also binds every accepted Nautilus
+  instrument ID, Gateway route/client setting, and startup/command timeout that can change runtime
+  behavior. After submit admission expires, cancellation may
   remain available only as exact-scope risk reduction for an already bound order; new exposure stays
-  disabled. No such real acceptance exists yet.
+  disabled.
+
+  The runtime requires IB client ID `0` and the official adapter's
+  `fetch_all_open_orders=True` path. That establishes an all-open-orders discovery request, not
+  ownership, continuous subscription, or cancellation control. Acceptance additionally requires a
+  positively observed exclusive API-client scope and positive evidence for the Gateway/TWS
+  manual-order auto-bind path. These are observed results, not trusted configuration switches:
+  the effective adapter client ID must remain `0`, and any client-ID collision, fallback, or
+  missing auto-bind observation fails closed. Every discovered external/manual order remains classified as
+  external, is reconciled, and creates a fail-closed Provider gap; it is never adopted into a
+  Harness order binding. Broker account, order, permanent-order, and execution identifiers remain
+  inside private Provider evidence; public acceptance binds only opaque account and content hashes.
+  Runtime reconciliation covers cash, positions, orders, and executions as separate completeness
+  facets. Orders, executions, and positions are normalized from the exact
+  `generate_mass_status()` return rather than a later asynchronous cache view. Each successful
+  query barrier is stamped with the current connection generation, so a
+  prior startup or pre-disconnect result cannot satisfy post-reconnect readiness. Because a full
+  disconnect/reconnect can occur between two high-level connected-state observations, each
+  reconciliation and canonical mutation also binds the official IB adapter's exact
+  `_last_disconnection_ns` marker. Native submit/cancel rereads that marker immediately before the
+  Strategy mutation and requires exact equality, including `None`; a changed marker requires a
+  fresh full reconciliation. This private adapter dependency is guarded by the exact pinned
+  NautilusTrader `1.231.0` version and fails closed if the field is absent or has an invalid type.
+  It deduplicates
+  identical fills by broker execution identity and fails closed on conflicting duplicates, missing
+  or stale facets, disconnect, any local gap, or any external order. Process and Gateway restart recovery
+  reuses the deterministic Harness/Nautilus client identity and official startup/continuous
+  reconciliation; an ambiguous acknowledgement is never redispatched. Native modify and native
+  replace are not accepted capabilities. Replace semantics are a Harness-owned cancel followed by
+  a fresh submit: persist and dispatch cancel, reconcile the exact original broker identity to
+  `canceled`, then separately admit, persist, and submit a new intent with a new Harness
+  order/submission identity. An ambiguous cancel,
+  incomplete reconciliation, external order, or any other gap prevents the replacement submission.
+  Exact canceled reconciliation advances a prepared/dispatched cancellation row to terminal
+  `canceled` idempotently, so a process restarted after a lost cancel response can resume replace
+  without redispatching cancel. The native driver also rechecks the command's `created_at`,
+  `expires_at`, and activation authorization against its clock immediately before
+  `Strategy.submit_order`; admission before a queue delay cannot authorize an expired mutation.
+  No real
+  Paper mutation or Provider Acceptance has been performed yet.
+
+  Acceptance cannot be minted from caller-provided scenario hashes or pass booleans. A secret-bearing
+  Harness acceptance-runner capability HMAC-seals each exact JSON artifact/result pair. The durable
+  evidence authority verifies that runner provenance before storing the bytes, sealed observation,
+  and observation identities used by an acceptance. Evidence acceptance alone cannot construct an
+  enabled Provider. Production activation remains closed because no external canonical provisioner
+  yet registers the exact acceptance-runner authority in `LocalDataSnapshotStore`. Once that
+  external prerequisite exists, acceptance creation can use one Harness authority transaction to
+  bind the sealed acceptance content ID, evidence store, runtime registration, Instrument-route
+  registration, mutation outbox and activation validity into one current head under the store's
+  persisted `harness_authority_id`. The sole issuance entry accepts only that concrete store and
+  accepted evidence content ID; it accepts no caller runtime, routes, verifier, signing key, clock,
+  raw command or acceptance object. Both Provider status and runtime mutation reopen and fully
+  verify the sealed acceptance payload/evidence and registrations from the same root. Mutation also
+  requires the exact active runtime, current connection generation, and a fresh bounded
+  reconciliation scope. Execution-state mechanics are tested through an explicitly test-only
+  adapter and do not establish activation authority. The runtime's
+  evidence-authority pin remains an evidence-scope check, not activation authority. A caller-owned
+  evidence database, runner key, verifier, runtime, matching self-pin, imported constructor seal, or
+  fresh state root without the registered runner authority therefore remains disabled. Loading or
+  enabling an acceptance re-resolves every stored
+  artifact/result, verifies its runner HMAC, exact scope, authority identity, and derived result. A
+  missing, edited, fabricated, mismatched, or unauthenticated artifact leaves the Provider unverified.
+  Arbitrary local filesystem or SQLite mutation is outside the in-process capability threat model;
+  content identity, current-head checks and evidence reopening detect such drift where possible.
+  Public artifacts expose only anonymous content hashes. Raw broker
+  account, order, permanent-order, and execution identifiers stay inside the private evidence store.
   Separately, the narrower
   `ibkr-paper-account-read` adapter has completed one real local IB Gateway Paper account read: it
   exposes no mutation method, waits for independent account, summary, API-open-order and execution

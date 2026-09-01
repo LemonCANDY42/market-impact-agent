@@ -1,5 +1,6 @@
 import json
 import warnings
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -9,16 +10,38 @@ import pytest
 
 pytest.importorskip("nautilus_trader")
 
+from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.backtests import (
     BacktestMetric,
     BacktestRequest,
     BacktestRunStatus,
     SimulationSpec,
+    StrategyBacktestArm,
+    StrategyBacktestOutcomeMissing,
+    StrategyBacktestRequestTemplate,
+    StrategyBacktestVariant,
+    reopen_strategy_backtest_outcome,
+)
+from market_impact_agent.data_inputs import (
+    DataFetchStatus,
+    DataPITLane,
+    DataProviderAttempt,
+    DataQuery,
+    DataSnapshot,
+    DataSourceBinding,
+    LocalDataSnapshotStore,
+    SourceObservation,
 )
 from market_impact_agent.domain import Side, SignalIntent
 from market_impact_agent.nautilus_backtest import (
     NautilusBacktestBridge,
     load_a_share_daily_bar_snapshot,
+)
+from market_impact_agent.observations import (
+    AvailabilityBasis,
+    ObservationCapability,
+    ObservationTimes,
+    OccurrenceBasis,
 )
 
 SNAPSHOT_PATH = (
@@ -31,10 +54,11 @@ def signal(
     side: Side = Side.BUY,
     evidence_refs: tuple[str, ...] = ("synthetic-evidence-1",),
     expires_at: datetime = datetime(2026, 9, 1, 8, tzinfo=UTC),
+    event_id: str = "synthetic-event-1",
 ) -> SignalIntent:
     return SignalIntent(
         signal_id="synthetic-signal-1",
-        event_id="synthetic-event-1",
+        event_id=event_id,
         instrument_id="600028.XSHG",
         side=side,
         valid_from=datetime(2026, 8, 25, 7, tzinfo=UTC),
@@ -49,6 +73,7 @@ def request(
     book_type: str = "top_of_book",
     bound_signal: SignalIntent | None = None,
     horizons_sessions: tuple[int, ...] = (3,),
+    data_snapshot_id: str = "synthetic-xshg-600028-20260825-v1",
 ) -> BacktestRequest:
     return BacktestRequest(
         request_id="synthetic-xshg-replay-1",
@@ -58,7 +83,7 @@ def request(
         end_at=datetime(2026, 9, 4, 8, tzinfo=UTC),
         market="CN",
         instrument_ids=("600028.XSHG",),
-        data_snapshot_id="synthetic-xshg-600028-20260825-v1",
+        data_snapshot_id=data_snapshot_id,
         target_selection_ref="manual-integration-fixture:synthetic.v1",
         strategy_ref="event-impact-hold.v1",
         horizons_sessions=horizons_sessions,
@@ -166,7 +191,7 @@ def test_nautilus_bridge_replay_is_stable_when_warnings_are_errors() -> None:
         result = NautilusBacktestBridge(SNAPSHOT_PATH).run(request())
 
     assert result.status is BacktestRunStatus.COMPLETED
-    assert result.result_hash == "604d9aee20f97377b4d7327b0ffd876204a67f7de9789ef9e7ec9dd3c29a3e89"
+    assert result.result_hash == "4f0d2925fec2220e0e8108b8366f2fa24313db563ff877af1da7ea0392e34e99"
 
 
 def test_repeated_frozen_replays_have_the_same_result_identity() -> None:
@@ -182,10 +207,10 @@ def test_repeated_frozen_replays_have_the_same_result_identity() -> None:
         "7b4c27086bdd810aaf1853217df5f92a23010600e22a485c5929fcf267c2690b"
     )
     assert first.manifest.engine_config_hash == (
-        "0761605fe3adf6bd300ced939338e57e4c5ebae003b52472c4e0a8aa42fc5a41"
+        "e52b47a26f75677d32380b5748a7a484b639ada3314615cecd5781ede4e9de1c"
     )
     assert first.result_hash == second.result_hash
-    assert first.result_hash == ("604d9aee20f97377b4d7327b0ffd876204a67f7de9789ef9e7ec9dd3c29a3e89")
+    assert first.result_hash == ("4f0d2925fec2220e0e8108b8366f2fa24313db563ff877af1da7ea0392e34e99")
     assert first.metrics == second.metrics
     assert first.artifact_refs == second.artifact_refs
 
@@ -203,6 +228,229 @@ def test_unsupported_simulation_contract_fails_closed_and_deterministically() ->
         "ValueError: unsupported book_type: expected 'top_of_book', got 'bar'",
     )
     assert first.result_hash == second.result_hash
+
+
+def test_authoritative_bridge_persists_reopenable_outcome_and_actual_stress(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    source = _authoritative_source_snapshot(store)
+    bridge = NautilusBacktestBridge(
+        SNAPSHOT_PATH,
+        snapshot_store=store,
+        artifact_store=store.artifacts,
+    )
+    bound = request(data_snapshot_id=source.snapshot_id)
+    variant = StrategyBacktestVariant.build(
+        arm=StrategyBacktestArm.CANDIDATE,
+        baseline_id=None,
+        strategy_ref=bound.strategy_ref,
+        target_selection_ref=bound.target_selection_ref,
+        request_template=StrategyBacktestRequestTemplate.from_request(bound),
+        simulation=bound.simulation,
+    )
+
+    receipt = bridge.run_strategy_outcome(
+        bound,
+        case_id="case-1",
+        variant=variant,
+    )
+    assert not isinstance(receipt, StrategyBacktestOutcomeMissing)
+    reopened, result = reopen_strategy_backtest_outcome(store, receipt.receipt_id)
+
+    assert reopened == receipt
+    assert result.status is BacktestRunStatus.COMPLETED
+    assert receipt.source_snapshot_id == source.snapshot_id
+    assert tuple(item.side for item in receipt.fills) == ("buy", "sell")
+    assert all(item.available_liquidity_quantity is not None for item in receipt.fills)
+    assert all(
+        cast(Decimal, item.available_liquidity_quantity) >= item.quantity for item in receipt.fills
+    )
+    assert receipt.capital_path[-1].equity - receipt.capital_path[0].equity == receipt.net_pnl
+    assert receipt.adverse_excursion_path
+    assert max(item.adverse_excursion for item in receipt.adverse_excursion_path) == (
+        receipt.adverse_excursion
+    )
+    assert receipt.stressed_net_return is not None
+    assert receipt.stress_evidence_artifact_hash is not None
+    stress = store.artifacts.read_json(receipt.stress_evidence_artifact_hash)
+    assert isinstance(stress, dict)
+    assert stress["adverse_excursion_path"]
+    stress_fills = cast(list[dict[str, object]], stress["fills"])
+    assert all("available_liquidity_quantity" in item for item in stress_fills)
+    assert receipt.stressed_net_return < receipt.net_return
+
+
+def test_legacy_backtest_result_has_no_promotion_receipt(tmp_path: Path) -> None:
+    result = NautilusBacktestBridge(SNAPSHOT_PATH).run(request())
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+
+    with pytest.raises(KeyError, match="unknown strategy backtest outcome receipt"):
+        reopen_strategy_backtest_outcome(store, result.result_hash)
+
+
+def test_unsupported_frozen_baseline_is_typed_missing_not_candidate_reuse(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    source = _authoritative_source_snapshot(store)
+    bridge = NautilusBacktestBridge(
+        SNAPSHOT_PATH,
+        snapshot_store=store,
+        artifact_store=store.artifacts,
+    )
+    baseline_request = replace(
+        request(data_snapshot_id=source.snapshot_id),
+        strategy_ref="broad-etf-hold.v1",
+        target_selection_ref="broad-etf.v1",
+    )
+    variant = StrategyBacktestVariant.build(
+        arm=StrategyBacktestArm.PRIMARY_BASELINE,
+        baseline_id="broad-etf-hold",
+        strategy_ref=baseline_request.strategy_ref,
+        target_selection_ref=baseline_request.target_selection_ref,
+        request_template=StrategyBacktestRequestTemplate.from_request(baseline_request),
+        simulation=baseline_request.simulation,
+    )
+
+    outcome = bridge.run_strategy_outcome(
+        baseline_request,
+        case_id="case-1",
+        variant=variant,
+    )
+
+    assert outcome == StrategyBacktestOutcomeMissing(
+        case_id="case-1",
+        arm=StrategyBacktestArm.PRIMARY_BASELINE,
+        strategy_variant_hash=variant.strategy_variant_hash,
+        reason="unsupported_strategy_ref:broad-etf-hold.v1",
+    )
+
+
+def test_cash_no_action_baseline_executes_as_a_flat_capital_path(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    source = _authoritative_source_snapshot(store)
+    bridge = NautilusBacktestBridge(
+        SNAPSHOT_PATH,
+        snapshot_store=store,
+        artifact_store=store.artifacts,
+    )
+    baseline_request = replace(
+        request(data_snapshot_id=source.snapshot_id),
+        strategy_ref="cash-no-action.v1",
+        target_selection_ref="cash-baseline-metadata.v1",
+    )
+    variant = StrategyBacktestVariant.build(
+        arm=StrategyBacktestArm.PRIMARY_BASELINE,
+        baseline_id="cash",
+        strategy_ref=baseline_request.strategy_ref,
+        target_selection_ref=baseline_request.target_selection_ref,
+        request_template=StrategyBacktestRequestTemplate.from_request(baseline_request),
+        simulation=baseline_request.simulation,
+    )
+
+    outcome = bridge.run_strategy_outcome(
+        baseline_request,
+        case_id="case-1",
+        variant=variant,
+    )
+
+    assert not isinstance(outcome, StrategyBacktestOutcomeMissing)
+    assert outcome.fills == ()
+    assert outcome.costs == ()
+    assert tuple(point.equity for point in outcome.capital_path) == (
+        baseline_request.simulation.starting_cash,
+        baseline_request.simulation.starting_cash,
+    )
+    assert outcome.portfolio_net_return == Decimal(0)
+    assert outcome.stressed_net_return == Decimal(0)
+    assert outcome.turnover == Decimal(0)
+    assert outcome.adverse_excursion_path
+    assert all(item.adverse_excursion == 0 for item in outcome.adverse_excursion_path)
+
+
+def _authoritative_source_snapshot(store: LocalDataSnapshotStore) -> DataSnapshot:
+    raw_hash = load_a_share_daily_bar_snapshot(SNAPSHOT_PATH).content_hash
+    source = DataSourceBinding(
+        provider_id="nautilus-fixture",
+        provider_version="1.0.0",
+        upstream_source="synthetic-a-share-daily-bars",
+        manifest_hash="a" * 64,
+        source_config_hash="b" * 64,
+        required=True,
+    )
+    as_of = datetime(2026, 8, 25, 8, tzinfo=UTC)
+    query = DataQuery.build(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        pit_lane=DataPITLane.RETROSPECTIVE,
+        as_of=as_of,
+        window_start=datetime(2026, 8, 24, 8, tzinfo=UTC),
+        source_policy_id="nautilus-fixture-source-v1",
+        parameters={"instrument_id": "600028.XSHG"},
+        sources=(source,),
+        minimum_data_sources=1,
+    )
+    retrieved_at = as_of
+    times = ObservationTimes(
+        occurred_at=datetime(2026, 8, 24, 7, tzinfo=UTC),
+        published_at=datetime(2026, 8, 24, 7, tzinfo=UTC),
+        available_at=datetime(2026, 8, 24, 7, tzinfo=UTC),
+        source_updated_at=datetime(2026, 8, 24, 7, tzinfo=UTC),
+        aggregator_fetched_at=None,
+        retrieved_at=retrieved_at,
+        occurrence_basis=OccurrenceBasis.SOURCE_REPORTED,
+        availability_basis=AvailabilityBasis.SOURCE_REPORTED,
+    )
+    observation = SourceObservation.build(
+        capability=ObservationCapability.MARKET_CONTEXT,
+        provider_id=source.provider_id,
+        provider_version=source.provider_version,
+        upstream_source=source.upstream_source,
+        upstream_record_id="synthetic-xshg-600028-20260825-v1",
+        source_ref="fixture://synthetic-xshg-600028-20260825-v1",
+        lineage_id="synthetic-xshg-600028-20260825-v1",
+        times=times,
+        authority_at=None,
+        authority_kind=None,
+        raw_content_hash=raw_hash,
+        normalized_payload={"instrument_id": "600028.XSHG"},
+        license_scope="test_fixture",
+    )
+    attempt = DataProviderAttempt(
+        provider_id=source.provider_id,
+        provider_version=source.provider_version,
+        upstream_source=source.upstream_source,
+        required=True,
+        status=DataFetchStatus.DATA,
+        retrieved_at=retrieved_at,
+        raw_response_hash=raw_hash,
+        received_count=1,
+        accepted_count=1,
+        rejected_missing_availability=0,
+        rejected_after_cutoff=0,
+        rejected_missing_authority=0,
+        rejected_authority_after_cutoff=0,
+        rejected_lane_mismatch=0,
+        error_kind=None,
+    )
+    core = {
+        "schema_version": "market-impact.data-snapshot.v2",
+        "query": query.to_dict(),
+        "attempts": [attempt.to_dict()],
+        "observations": [observation.to_dict()],
+        "coverage_complete": True,
+        "completed_at": retrieved_at.isoformat().replace("+00:00", "Z"),
+    }
+    snapshot = DataSnapshot(
+        snapshot_id=f"data-snapshot-{canonical_hash(core)}",
+        query=query,
+        attempts=(attempt,),
+        observations=(observation,),
+        coverage_complete=True,
+        completed_at=retrieved_at,
+    )
+    store.put(snapshot)
+    return snapshot
 
 
 def _metrics_by_name(metrics: tuple[BacktestMetric, ...]) -> dict[str, BacktestMetric]:

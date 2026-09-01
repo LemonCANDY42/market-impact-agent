@@ -1,5 +1,9 @@
 # Market-state and sector-rotation research dataset
 
+> Regime research owns historical case construction and lane-specific diagnostics. It may propose
+> hypotheses and Skill candidates, but promotion is governed only by
+> [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md).
+
 This research slice supplies market context for later Agent and baseline comparisons. It does
 not add a strategy, accepted alpha, paper-trading capability, or live execution path. Historical
 case identity and outcome labels are evaluator-only and must never enter Agent-visible inputs.
@@ -244,6 +248,41 @@ source versions whose archive/provider authority actually predates each cutoff; 
 inputs or merely adding personas is not evidence-bearing.
 
 ## Opened-outcome Modeled-PIT process diagnostic
+
+### Decision-readiness checkpoint boundary
+
+A later Modeled-PIT rerun may assemble a content-addressed readiness checkpoint before any
+Judgment model is invoked. Only `ProspectiveDecisionPipeline`, the existing Harness composition
+root, can materialize it. The pipeline reopens the frozen diagnostic registration, exact
+`ProspectiveCheckpointSnapshotSet`, durable Trigger Admission and EventAssessment context, and
+`LocalDataSnapshotStore`. It rematerializes Decision Inputs and builds the production Market
+Universe internally; there is no caller-buildable source bundle, readiness authority, Universe,
+horizon, hedge, or price surface. EventAssessment horizons must be present in the durable diagnostic
+preregistration.
+
+Pipeline output is accepted only through an authority index in that same
+`LocalDataSnapshotStore` root. The index binds the checkpoint ID and hash, stored artifact hash,
+Harness authority ID, frozen registration and Snapshot Set identities, Trigger Admission,
+EventAssessment, and exchange rule set. Authoritative reopen is by checkpoint ID through the
+pipeline and reconstructs the checkpoint from the current durable sources. A self-hashed JSON
+object, an artifact copied to another root, or schema parsing alone does not establish readiness
+authority.
+
+Snapshot membership alone is not evidence authority. Matching Snapshot and Observation IDs cannot
+authorize changed source, time, payload, or content-hash fields. Caller-shaped Decision Input
+mappings are never accepted: matching Snapshot, Observation, and rehashed record IDs cannot replace
+the SourceObservation content reopened from the store. The raw price remains the exact projected
+source observation, and its trade-date session close must not follow the checkpoint cutoff.
+
+The checkpoint is only a fail-closed readiness record. It contains no outcome or return labels and
+cannot authorize model calls, signals, orders, paper trading, or live trading. Production Market
+Universe semantics expose decision-time tradability only as `unverified` or `ineligible`; the
+checkpoint preserves those types rather than inventing a verified state. An optional missing prior
+expectation and unknown tradability may remain typed information gaps for Judgment readiness, but
+Intent readiness is always fail-closed until a later owner proves current tradability, suspension
+status, and an executable raw price. Historical close data is not that proof. Hedge readiness remains
+typed unavailable because the composition root has no approved exposure-to-hedge mapping; arbitrary
+references or risk-reducing booleans cannot change it.
 
 The separate Modeled-PIT lane tests whether the Harness and Agent can use the available historical
 content when immutable historical authority is unavailable. Policy

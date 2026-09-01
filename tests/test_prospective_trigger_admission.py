@@ -35,6 +35,7 @@ from market_impact_agent.prospective_trigger_admission import (
     ProspectiveHistoricalAnalogyPack,
     ProspectivePositionSnapshot,
     ProspectiveTriggerAdmissionStore,
+    StrategyAdmissionCaseMapping,
     TransmissionPath,
     TriggerAdmissionKind,
     admit_prospective_trigger,
@@ -564,6 +565,20 @@ def test_material_event_can_enter_the_checkpoint_path_without_becoming_policy_el
     assert admission.judgment_model_calls_authorized is False
     assert admission.execution_capability is False
     durable = ProspectiveTriggerAdmissionStore(LocalDataSnapshotStore(tmp_path / "state"))
+    window_id = durable.open_strategy_window(
+        strategy_epoch_id="strategy-epoch-v2",
+        qualification_policy_hash=_hex(42),
+        opened_at=admission.admitted_at - timedelta(minutes=1),
+        cutoff_at=admission.admitted_at + timedelta(minutes=1),
+        registration_mapping=(
+            StrategyAdmissionCaseMapping(
+                registration_id=admission.registration_id,
+                case_id="prospective-case-01",
+                root_event_id="prospective-root-01",
+                regime="energy-supply-shock",
+            ),
+        ),
+    )
     with pytest.raises(ValueError, match="completed EventAssessment authority"):
         durable.record(
             admission,
@@ -609,6 +624,45 @@ def test_material_event_can_enter_the_checkpoint_path_without_becoming_policy_el
         assessment,
         materiality,
     )
+    window_seal = durable.seal_strategy_window(
+        window_id,
+        sealed_at=admission.admitted_at + timedelta(minutes=2),
+    )
+    assert window_seal.admission_ids == (admission.admission_id,)
+    assert window_seal.harness_authority_id == durable.store.harness_authority_id
+    late_window_id = durable.open_strategy_window(
+        strategy_epoch_id="strategy-epoch-v2-late",
+        qualification_policy_hash=_hex(43),
+        opened_at=admission.admitted_at - timedelta(minutes=1),
+        cutoff_at=admission.admitted_at + timedelta(minutes=1),
+        registration_mapping=(
+            StrategyAdmissionCaseMapping(
+                registration_id=admission.registration_id,
+                case_id="prospective-case-01",
+                root_event_id="prospective-root-01",
+                regime="energy-supply-shock",
+            ),
+        ),
+    )
+    assert (
+        durable.record(
+            admission,
+            registration=registration,
+            candidate_set=candidate_set,
+            proposal=proposal,
+            decision=decision,
+            triage_authority=_TriageAuthority((candidate_set, proposal, decision)),
+            assessment=assessment,
+            materiality=materiality,
+            assessment_authority=_AssessmentAuthority(assessment),
+        )
+        == admission
+    )
+    with pytest.raises(ValueError, match="empty admission denominator"):
+        durable.seal_strategy_window(
+            late_window_id,
+            sealed_at=admission.admitted_at + timedelta(minutes=2),
+        )
     assert prospective_position_snapshot_from_dict(position_snapshot.to_dict()) == position_snapshot
     assert prospective_historical_analogy_pack_from_dict(analogy_pack.to_dict()) == analogy_pack
     assert prospective_event_assessment_from_dict(assessment.to_dict()) == assessment

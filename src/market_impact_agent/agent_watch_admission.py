@@ -761,6 +761,8 @@ class WatchCallbackBinding:
     request: AgentWatchRequest
     wake: AttentionWake
     profile: WatchDelegateProfile
+    authority_watch_id: str | None = None
+    rebaseline_grant_ids: tuple[str, ...] = ()
     execution_capability: bool = False
 
     def __post_init__(self) -> None:
@@ -768,8 +770,21 @@ class WatchCallbackBinding:
             raise ValueError("Watch callback requires an accepted admission")
         if self.admission.request_id != self.request.request_id:
             raise ValueError("Watch callback request does not match admission")
-        if self.admission.watch_id != self.wake.watch_id:
-            raise ValueError("Watch callback Wake does not match admission")
+        authority_watch_id = (
+            self.wake.watch_id if self.authority_watch_id is None else self.authority_watch_id
+        )
+        if self.admission.watch_id != authority_watch_id:
+            raise ValueError("Watch callback Wake does not match admission authority")
+        if authority_watch_id == self.wake.watch_id:
+            if self.rebaseline_grant_ids:
+                raise ValueError("direct Watch callback cannot carry rebaseline grants")
+        elif not self.rebaseline_grant_ids:
+            raise ValueError("successor Watch callback requires rebaseline grant lineage")
+        if any(
+            not item.startswith("attention-watch-rebaseline-grant-")
+            for item in self.rebaseline_grant_ids
+        ):
+            raise ValueError("Watch callback rebaseline grant lineage is invalid")
         if self.admission.delegate_profile_id != self.profile.profile_id:
             raise ValueError("Watch callback profile does not match admission")
         if self.execution_capability:
@@ -1110,6 +1125,9 @@ class AgentWatchAdmissionService:
 
     def callback_bindings(self, wake: AttentionWake) -> tuple[WatchCallbackBinding, ...]:
         self._require_parent_authority_integration("callbacks")
+        authority_watch_id, rebaseline_grant_ids = self.watch_service.callback_authority_lineage(
+            wake.watch_id
+        )
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             wake_row = connection.execute(
@@ -1131,7 +1149,7 @@ class AgentWatchAdmissionService:
                 ORDER BY admitted_at, admission_id
                 """,
                 (
-                    wake.watch_id,
+                    authority_watch_id,
                     WatchAdmissionOutcome.ADMITTED.value,
                     WatchAdmissionOutcome.REUSED.value,
                 ),
@@ -1185,6 +1203,8 @@ class AgentWatchAdmissionService:
                     request=request,
                     wake=wake,
                     profile=profile,
+                    authority_watch_id=authority_watch_id,
+                    rebaseline_grant_ids=rebaseline_grant_ids,
                 )
             )
         return tuple(bindings)

@@ -90,6 +90,39 @@ An immutable, content-identified set of point-in-time Evidence Items, source art
 Pattern Pack references, and research scope made available to one Judgment Run.
 _Avoid_: Model context, live search results
 
+**Harness Authority Root**:
+One `LocalDataSnapshotStore` root with a persisted `harness_authority_id`, SQLite index, and shared
+content-addressed artifacts. Promotion-capable Run Journals, prospective windows, case terminals,
+run-set seals, and reports must resolve through this same root and serialized transaction boundary.
+An arbitrary path or newly created root is not an equivalent authority.
+_Avoid_: Database path, caller-selected store, copied artifact directory
+
+**Strategy Case Run Plan**:
+The v2 pre-run binding of strategy epoch, Registration, Event Case, regime, role, evidence lane,
+input and runtime surface hashes, universe/cost/fill model, and baseline definition/configuration.
+The same-root strategy authority derives the lane and evidence owner ID/hash from frozen Snapshot,
+modeled-readiness or sealed Trigger Admission indexes. The caller cannot provide those hashes or
+label a case Strict-PIT. It is persisted before the Run row starts and cannot be added after an
+outcome is known.
+_Avoid_: Backtest arguments, evaluation row, caller metrics
+
+**Strategy Backtest Outcome Receipt**:
+A content-identified same-root receipt written only by the configured Nautilus backtest bridge. It
+binds the Harness authority, case and candidate/baseline arm; Backtest Result, Manifest, Request,
+input and source Snapshot identities; normal capital path, actual fills with executable-side
+available liquidity, marked adverse-excursion path and costs; deterministic return, P&L, drawdown,
+CVaR95, Sharpe, Sortino, turnover and adverse excursion; and an actual doubled-fee stress run with
+the same path evidence or typed missingness. A legacy Backtest Result without this receipt remains
+replayable but cannot supply promotion measurement.
+_Avoid_: Caller return, favorable metric blob, successful Backtest Result
+
+**Strategy Case Terminal**:
+The terminal record written by actual Agent completion for every completed, failed, cancelled,
+budget-exhausted, or human-input-required planned run. It binds the Judgment when present, Run
+Manifest, and exact candidate/baseline measurement CAS paths when present. Missing measurement is
+typed inconclusive evidence, never a caller substitute.
+_Avoid_: Favorable result row, returned metric, successful process exit
+
 **Historical Evidence Manifest**:
 A content-identified provenance companion that binds one benchmark case's Evidence Pack to
 exact source versions, occurrence/publication/availability/retrieval times, latency basis,

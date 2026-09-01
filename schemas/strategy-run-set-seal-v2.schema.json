@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/strategy-run-set-seal-v2.schema.json",
+  "title": "Strategy Run Set Seal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "seal_id", "harness_authority_id", "registration_id", "sealed_at", "terminal_ids", "selected_terminal_ids", "run_set_hash"],
+  "properties": {
+    "schema_version": {"const": "market-impact.strategy-run-set-seal.v2"},
+    "seal_id": {"type": "string", "pattern": "^strategy-run-set-seal-[0-9a-f]{64}$"},
+    "harness_authority_id": {"type": "string", "pattern": "^harness-authority-[0-9a-f]{32}$"},
+    "registration_id": {"type": "string", "pattern": "^strategy-validation-registration-[0-9a-f]{64}$"},
+    "sealed_at": {"type": "string", "format": "date-time"},
+    "terminal_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^strategy-case-terminal-[0-9a-f]{64}$"}},
+    "selected_terminal_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^strategy-case-terminal-[0-9a-f]{64}$"}},
+    "run_set_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

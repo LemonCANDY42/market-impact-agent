@@ -7,6 +7,12 @@ produce artifacts; deterministic policy establishes eligibility; semantic
 approval operates only inside the hard envelope; providers own external
 capabilities and observed execution facts.
 
+`LocalDataSnapshotStore` is the concrete local Harness authority root. Its SQLite index persists
+one stable `harness_authority_id`, its content-addressed artifact directory stores the bound
+artifacts, and all promotion-capable mutations use `BEGIN IMMEDIATE`. An authoritative Run Journal,
+prospective denominator, and strategy validator share that exact root. A path-created legacy Run
+Journal, a fresh root, or artifacts copied from another root remain replayable but cannot promote.
+
 ```text
 Observation adapters (aggregated discovery + direct sources)
     -> immutable raw/normalized observation bundle
@@ -174,6 +180,23 @@ to a Judgment Run. Prospective tools must first capture and time-bind new source
 before the Agent may cite it. The sealed Judgment Artifact records the exact Provider,
 model, prompt, Skill, MCP, tool, compaction, evidence, and output identities. Replaying a
 trade consumes that artifact; it never re-runs the model inside Nautilus.
+
+Strategy validation v2 pre-binds a `StrategyCaseRunPlan` before model execution. Actual Agent
+completion alone writes the `StrategyCaseTerminal`, including its Judgment and Run Manifest hashes
+and the exact candidate/baseline measurement CAS paths when those artifacts exist. The plan's lane
+and evidence hashes are derived by the same-root authority rather than passed by the caller.
+Promotion-capable measurements reopen content-identified `StrategyBacktestOutcomeReceipt` records
+written by the configured Nautilus bridge; each receipt binds the exact result/request/manifest/input
+and source Snapshot, frozen candidate or named-baseline variant hash, strategy/target references,
+engine and full simulation configuration, capital path, fills, costs, derived risk metrics, and an
+actual doubled-fee stress run. The caller cannot label an outcome arm: the bridge receives a frozen
+variant and the measurement writer and evaluator recheck it against the Registration. An unsupported
+baseline remains typed missing and inconclusive. Legacy `BacktestResult` records have no receipt
+index and are replay-only. The strategy
+authority atomically seals the full eligible run set, selects the earliest terminal run per case,
+and evaluates from `registration_id` only. Missing measurements are inconclusive; caller outcomes,
+metrics, selectors, stores, and paths are not evaluation inputs. V1 strategy artifacts remain
+replayable evidence but are promotion-ineligible.
 
 A Decision Run Manifest is a content-identified assessment, not proof by itself that its six runs
 occurred. Before an Agent-originated Order enters durable paper admission, the Harness composition

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
+from threading import Thread
 from typing import Any, cast
 
 import pytest
@@ -20,7 +21,12 @@ from market_impact_agent.agent_watch_admission import (
     agent_delegation_context_from_dict,
     agent_watch_request_from_dict,
 )
-from market_impact_agent.attention_watch import AttentionWake, AttentionWatchService
+from market_impact_agent.attention_watch import (
+    AttentionWake,
+    AttentionWatchRebaselineResult,
+    AttentionWatchService,
+    AttentionWatchStatus,
+)
 from market_impact_agent.data_inputs import DataPITLane, DataSnapshot, LocalDataSnapshotStore
 from market_impact_agent.event_impact_triage import (
     CheckpointEligibility,
@@ -654,3 +660,229 @@ def test_triage_service_restart_reopens_parent_authority_before_recovery(
             journal=journal,
             watch_service=service.watch_service,
         )
+
+
+def test_incomplete_watch_rebaseline_is_atomic_auditable_and_restart_safe(
+    tmp_path: Path,
+) -> None:
+    store, journal, baseline, profile, service, authority = _triage_setup(tmp_path)
+    context = authority.delegation_context()
+    admitted = service.admit(
+        _triage_request(profile_id=profile.profile_id, context=context),
+        context=context,
+        initial_data_snapshot_id=baseline.snapshot_id,
+        decided_at=context.created_at + timedelta(seconds=1),
+    )
+    assert admitted.watch_id is not None
+    original_watch_id = admitted.watch_id
+    old_policy = service.watch_service.policy(original_watch_id)
+    authorized_at = old_policy.starts_at + timedelta(minutes=1)
+    collection_policy = journal.policy(old_policy.collection_policy_id)
+    replacement_collection = snapshot_for_monitoring_test(
+        store,
+        policy=collection_policy,
+        retrieved_at=authorized_at,
+        headline="Alpha safety baseline",
+        raw_record=b'{"headline":"Alpha safety baseline"}',
+    )
+    journal.record_snapshot(replacement_collection, policy=collection_policy)
+    replacement = journal.freeze_snapshot(
+        policy_id=collection_policy.policy_id,
+        not_after=authorized_at,
+        window_start=authorized_at - timedelta(seconds=collection_policy.maximum_gap_seconds),
+        frozen_at=authorized_at,
+    )
+    with service.watch_service._connect() as connection:  # pyright: ignore[reportPrivateUsage]
+        old_version_id = connection.execute(
+            "SELECT version_id FROM prospective_observation_versions ORDER BY version_id LIMIT 1"
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO attention_watch_seen_versions(watch_id, version_id)
+            VALUES (?, ?)
+            """,
+            (original_watch_id, old_version_id),
+        )
+        connection.execute(
+            """
+            UPDATE attention_watch_policies
+            SET status = ?, updated_at = ?, poll_count = 1, byte_count = 123,
+                last_error_kind = ?
+            WHERE watch_id = ?
+            """,
+            (
+                AttentionWatchStatus.BACKING_OFF.value,
+                authorized_at.isoformat().replace("+00:00", "Z"),
+                "watch_snapshot_incomplete",
+                original_watch_id,
+            ),
+        )
+
+    reason = "A proven receipt gap made the original baseline permanently incomplete."
+    restarted = AttentionWatchService(store, journal=journal)
+    results: list[AttentionWatchRebaselineResult] = []
+
+    def apply_rebaseline(watch_service: AttentionWatchService) -> None:
+        results.append(
+            watch_service.rebaseline(
+                original_watch_id,
+                replacement_reason=reason,
+                replacement_data_snapshot_id=replacement.snapshot_id,
+                authorized_at=authorized_at,
+            )
+        )
+
+    threads = tuple(
+        Thread(target=apply_rebaseline, args=(watch_service,))
+        for watch_service in (service.watch_service, restarted)
+    )
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+    assert all(not thread.is_alive() for thread in threads)
+    assert len(results) == 2
+    first, repeated = results
+
+    assert repeated == first
+    assert restarted.state(original_watch_id).status is AttentionWatchStatus.REBASELINED
+    assert first.successor_policy.expires_at == old_policy.expires_at
+    assert first.successor_policy.maximum_polls == old_policy.maximum_polls - 1
+    assert first.successor_policy.maximum_bytes == old_policy.maximum_bytes - 123
+    assert first.successor_policy.maximum_wakes == old_policy.maximum_wakes
+    assert (
+        validate_agent_contract(
+            first.successor_policy.to_dict(), "attention-watch-policy.schema.json"
+        )
+        == ()
+    )
+    assert first.successor_state.poll_count == 0
+    assert first.successor_state.byte_count == 0
+    assert first.successor_state.wake_count == 0
+    assert first.successor_state.last_data_snapshot_id == replacement.snapshot_id
+    assert restarted.pending_wakes() == ()
+    assert restarted.callback_authority_lineage(first.successor_policy.watch_id) == (
+        original_watch_id,
+        (first.grant.grant_id,),
+    )
+    with restarted._connect() as connection:  # pyright: ignore[reportPrivateUsage]
+        assert (
+            connection.execute("SELECT COUNT(*) FROM attention_watch_rebaseline_grants").fetchone()[
+                0
+            ]
+            == 1
+        )
+        old_seen = connection.execute(
+            "SELECT version_id FROM attention_watch_seen_versions WHERE watch_id = ?",
+            (original_watch_id,),
+        ).fetchall()
+        successor_seen = connection.execute(
+            "SELECT version_id FROM attention_watch_seen_versions WHERE watch_id = ?",
+            (first.successor_policy.watch_id,),
+        ).fetchall()
+    assert old_seen
+    assert successor_seen
+    assert {row[0] for row in old_seen} != {row[0] for row in successor_seen}
+    assert {row[0] for row in successor_seen} == set(
+        restarted._scope_version_ids(  # pyright: ignore[reportPrivateUsage]
+            first.successor_policy,
+            replacement,
+        )
+    )
+
+
+def test_rebaseline_requires_complete_baseline_and_successor_callback_reuses_authority(
+    tmp_path: Path,
+) -> None:
+    store, journal, baseline, profile, service, authority = _triage_setup(tmp_path)
+    context = authority.delegation_context()
+    admitted = service.admit(
+        _triage_request(profile_id=profile.profile_id, context=context),
+        context=context,
+        initial_data_snapshot_id=baseline.snapshot_id,
+        decided_at=context.created_at + timedelta(seconds=1),
+    )
+    assert admitted.watch_id is not None
+    old_policy = service.watch_service.policy(admitted.watch_id)
+    authorized_at = old_policy.starts_at + timedelta(minutes=1)
+    collection_policy = journal.policy(old_policy.collection_policy_id)
+    replacement_collection = snapshot_for_monitoring_test(
+        store,
+        policy=collection_policy,
+        retrieved_at=authorized_at,
+        headline="Alpha safety baseline",
+        raw_record=b'{"headline":"Alpha safety baseline"}',
+    )
+    journal.record_snapshot(replacement_collection, policy=collection_policy)
+    incomplete = journal.freeze_snapshot(
+        policy_id=collection_policy.policy_id,
+        not_after=authorized_at,
+        window_start=collection_policy.window_start,
+        frozen_at=authorized_at,
+    )
+    replacement = journal.freeze_snapshot(
+        policy_id=collection_policy.policy_id,
+        not_after=authorized_at,
+        window_start=authorized_at - timedelta(seconds=collection_policy.maximum_gap_seconds),
+        frozen_at=authorized_at,
+    )
+    with service.watch_service._connect() as connection:  # pyright: ignore[reportPrivateUsage]
+        connection.execute(
+            """
+            UPDATE attention_watch_policies
+            SET status = ?, updated_at = ?, last_error_kind = ?
+            WHERE watch_id = ?
+            """,
+            (
+                AttentionWatchStatus.BACKING_OFF.value,
+                authorized_at.isoformat().replace("+00:00", "Z"),
+                "watch_snapshot_incomplete",
+                admitted.watch_id,
+            ),
+        )
+
+    assert incomplete.coverage_complete is False
+    with pytest.raises(ValueError, match="complete coverage"):
+        service.watch_service.rebaseline(
+            admitted.watch_id,
+            replacement_reason="The old baseline is incomplete.",
+            replacement_data_snapshot_id=incomplete.snapshot_id,
+            authorized_at=authorized_at,
+        )
+    result = service.watch_service.rebaseline(
+        admitted.watch_id,
+        replacement_reason="The old baseline is incomplete.",
+        replacement_data_snapshot_id=replacement.snapshot_id,
+        authorized_at=authorized_at,
+    )
+    changed_at = authorized_at + timedelta(minutes=1)
+    changed = snapshot_for_monitoring_test(
+        store,
+        policy=collection_policy,
+        retrieved_at=changed_at,
+        headline="Alpha safety binding update",
+        raw_record=b'{"headline":"Alpha safety binding update"}',
+    )
+    wake_result = service.watch_service.run_due_from_snapshot(
+        result.successor_policy.watch_id,
+        now=changed_at,
+        collection_snapshot_id=changed.snapshot_id,
+    )
+    assert wake_result.wake is not None
+
+    callbacks = service.callback_bindings(wake_result.wake)
+
+    assert len(callbacks) == 1
+    assert callbacks[0].admission.admission_id == admitted.admission_id
+    assert callbacks[0].authority_watch_id == admitted.watch_id
+    assert callbacks[0].rebaseline_grant_ids == (result.grant.grant_id,)
+    assert callbacks[0].wake.watch_id == result.successor_policy.watch_id
+
+    with service.watch_service._connect() as connection:  # pyright: ignore[reportPrivateUsage]
+        connection.execute("DROP TRIGGER attention_watch_rebaseline_grants_no_delete")
+        connection.execute(
+            "DELETE FROM attention_watch_rebaseline_grants WHERE grant_id = ?",
+            (result.grant.grant_id,),
+        )
+    with pytest.raises(ValueError, match="missing accepted admission"):
+        service.callback_bindings(wake_result.wake)

@@ -4,8 +4,11 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import sqlite3
-from collections.abc import Mapping
+import uuid
+from collections.abc import Generator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -569,8 +572,37 @@ class LocalDataSnapshotStore:
         os.chmod(self.root, 0o700)
         self.artifacts = ArtifactStore(self.root / "artifacts")
         self.index_path = self.root / "index.sqlite3"
+        self._event_signing_key_path = self.root / ".harness-event-hmac.key"
+        self._initialize_event_signing_key()
         self._initialize()
         os.chmod(self.index_path, 0o600)
+
+    def _initialize_event_signing_key(self) -> None:
+        try:
+            descriptor = os.open(
+                self._event_signing_key_path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+        except FileExistsError:
+            if (
+                self._event_signing_key_path.is_symlink()
+                or not self._event_signing_key_path.is_file()
+            ):
+                raise ValueError("Harness event signing key is not a regular file") from None
+            os.chmod(self._event_signing_key_path, 0o600)
+            key = self._event_signing_key_path.read_bytes()
+            if len(key) != 32:
+                raise ValueError("Harness event signing key has an invalid length") from None
+            return
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(secrets.token_bytes(32))
+                stream.flush()
+                os.fsync(stream.fileno())
+        except Exception:
+            self._event_signing_key_path.unlink(missing_ok=True)
+            raise
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.index_path)
@@ -581,8 +613,13 @@ class LocalDataSnapshotStore:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             connection.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS harness_authority (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    authority_id TEXT NOT NULL UNIQUE
+                );
                 CREATE TABLE IF NOT EXISTS data_snapshots (
                     snapshot_id TEXT PRIMARY KEY,
                     query_id TEXT NOT NULL,
@@ -594,6 +631,40 @@ class LocalDataSnapshotStore:
                     ON data_snapshots(query_id, coverage_complete, completed_at);
                 """
             )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO harness_authority(singleton, authority_id)
+                VALUES (1, ?)
+                """,
+                (f"harness-authority-{uuid.uuid4().hex}",),
+            )
+
+    @property
+    def harness_authority_id(self) -> str:
+        """Stable identity of the concrete Harness authority rooted at this store."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT authority_id FROM harness_authority WHERE singleton = 1"
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Harness authority identity is missing")
+        return cast(str, row["authority_id"])
+
+    @contextmanager
+    def authority_transaction(self) -> Generator[sqlite3.Connection]:
+        """Serialize one dependency-closed mutation in this Harness authority root."""
+
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def put(self, snapshot: DataSnapshot) -> None:
         artifact = self.artifacts.put_json(snapshot.to_dict())

@@ -1,16 +1,19 @@
 # pyright: reportPrivateUsage=false
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_schema import validate_agent_contract
+from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.domain import (
     ApprovalMode,
     ExecutionReceipt,
@@ -22,15 +25,22 @@ from market_impact_agent.domain import (
     TradingMandate,
 )
 from market_impact_agent.ibkr_nautilus_execution import (
+    _PROVIDER_FACTORY_SEAL,
+    IBKR_NAUTILUS_PAPER_SCENARIO_RESULT_SCHEMA,
     IbkrNautilusInstrumentRoute,
+    IbkrNautilusPaperAcceptanceAuthority,
+    IbkrNautilusPaperAcceptanceRunner,
+    IbkrNautilusPaperAcceptanceVerifier,
     IbkrNautilusPaperExecutionProvider,
     IbkrNautilusPaperProviderAcceptance,
+    IbkrNautilusPaperScenarioObservation,
     NautilusPaperCancelCommand,
     NautilusPaperOrderObservation,
     NautilusPaperRuntimeSnapshot,
     NautilusPaperRuntimeStatus,
     NautilusPaperSubmitCommand,
     hash_ibkr_nautilus_instrument_routes,
+    issue_ibkr_nautilus_paper_provider_from_harness_state,
 )
 from market_impact_agent.ibkr_nautilus_paper import (
     IBKR_NAUTILUS_PAPER_PROVIDER_ID,
@@ -39,7 +49,6 @@ from market_impact_agent.ibkr_nautilus_paper import (
 from market_impact_agent.paper_execution import PaperExecutionService, PriceBasis
 from market_impact_agent.providers import (
     CancellationCapabilityRejected,
-    Capability,
     ReconciliationSnapshot,
     SubmissionCapabilityRejected,
     _issue_cancellation_capability,
@@ -71,6 +80,12 @@ ROUTES = {
     )
 }
 ROUTES_HASH = hash_ibkr_nautilus_instrument_routes(ROUTES)
+_AUTHORITY_ROOTS: list[TemporaryDirectory[str]] = []
+_AUTHORITIES: dict[str, IbkrNautilusPaperAcceptanceAuthority] = {}
+_VERIFIERS: dict[str, IbkrNautilusPaperAcceptanceVerifier] = {}
+RUNNER_ID = "fixture-harness-acceptance-runner"
+RUNNER_KEY = b"fixture-harness-acceptance-runner-key-at-least-32-bytes"
+TRUSTED_RUNNER = IbkrNautilusPaperAcceptanceRunner(RUNNER_ID, RUNNER_KEY)
 
 
 class _Runtime:
@@ -79,9 +94,21 @@ class _Runtime:
         *,
         configuration_hash: str = "1" * 64,
         account_reference_hash: str = "account-ref-" + "2" * 64,
+        acceptance_authority_id: str = TRUSTED_RUNNER.authority_id,
     ) -> None:
+        self.runtime_version = "0.2.0-candidate"
+        self.nautilus_version = "1.231.0"
+        self.nautilus_ibapi_version = "10.37.2"
         self.configuration_hash = configuration_hash
         self.account_reference_hash = account_reference_hash
+        self.acceptance_authority_id = acceptance_authority_id
+        self.time_in_force = "DAY"
+        self.session_scope_valid = True
+        self.activation_runtime_active = True
+        self.session_scope_generation = 1
+        self.session_scope_observed_at = NOW
+        self.session_scope_last_disconnection_ns = None
+        self.session_scope_ttl_seconds = 60.0
         self.submit_calls: list[NautilusPaperSubmitCommand] = []
         self.cancel_calls: list[NautilusPaperCancelCommand] = []
         self.submit_error: BaseException | None = None
@@ -92,9 +119,23 @@ class _Runtime:
             reconciled=True,
             complete=True,
             orders=(),
+            cash_complete=True,
+            positions_complete=True,
+            orders_complete=True,
+            executions_complete=True,
+            external_order_discovery_complete=True,
+            effective_client_id=0,
+            connection_generation=1,
+            cash_reconciliation_generation=1,
+            positions_reconciliation_generation=1,
+            orders_reconciliation_generation=1,
+            executions_reconciliation_generation=1,
         )
 
-    def submit(self, command: NautilusPaperSubmitCommand) -> NautilusPaperOrderObservation:
+    def submit(self, reference: object) -> NautilusPaperOrderObservation:
+        if not isinstance(reference, NautilusPaperSubmitCommand):
+            raise AssertionError(f"unexpected canonical submit reference: {reference!r}")
+        command = reference
         self.submit_calls.append(command)
         if self.submit_error is not None:
             raise self.submit_error
@@ -105,7 +146,10 @@ class _Runtime:
             observed_at=NOW,
         )
 
-    def cancel(self, command: NautilusPaperCancelCommand) -> NautilusPaperOrderObservation:
+    def cancel(self, reference: object) -> NautilusPaperOrderObservation:
+        if not isinstance(reference, NautilusPaperCancelCommand):
+            raise AssertionError(f"unexpected canonical cancel reference: {reference!r}")
+        command = reference
         self.cancel_calls.append(command)
         if self.cancel_error is not None:
             raise self.cancel_error
@@ -119,6 +163,54 @@ class _Runtime:
     def reconcile(self) -> NautilusPaperRuntimeSnapshot:
         return self.snapshot
 
+    def bind_canonical_activation(
+        self,
+        store: LocalDataSnapshotStore,
+        *,
+        acceptance_id: str,
+        head_id: str,
+    ) -> None:
+        raise AssertionError(
+            f"mechanics-only runtime cannot bind activation: {store.root}, "
+            f"{acceptance_id}, {head_id}"
+        )
+
+
+class _MechanicsOnlyExecutionProvider(IbkrNautilusPaperExecutionProvider):
+    """Synthetic trusted seam for execution-state mechanics; never activation evidence."""
+
+    def _acceptance_scope_matches_at(
+        self,
+        acceptance: IbkrNautilusPaperProviderAcceptance,
+        *,
+        now: datetime,
+    ) -> bool:
+        return (
+            acceptance.allows_risk_reduction(now)
+            and self._acceptance_verifier.authority_id == self._runtime.acceptance_authority_id
+            and self._acceptance_verifier.verify(acceptance)
+            and acceptance.configuration_hash == self._runtime.configuration_hash
+            and acceptance.account_reference_hash == self._runtime.account_reference_hash
+            and acceptance.instrument_routes_hash == self._instrument_routes_hash
+            and acceptance.runtime_version == self._runtime.runtime_version
+            and acceptance.nautilus_version == self._runtime.nautilus_version
+            and acceptance.nautilus_ibapi_version == self._runtime.nautilus_ibapi_version
+            and acceptance.time_in_force == (self._runtime.time_in_force,)
+            and self._runtime.session_scope_valid
+        )
+
+    def _dispatch_submission(
+        self,
+        command: NautilusPaperSubmitCommand,
+    ) -> NautilusPaperOrderObservation:
+        return self._runtime.submit(command)  # type: ignore[arg-type]
+
+    def _dispatch_cancellation(
+        self,
+        command: NautilusPaperCancelCommand,
+    ) -> NautilusPaperOrderObservation:
+        return self._runtime.cancel(command)  # type: ignore[arg-type]
+
 
 def _acceptance(
     *,
@@ -130,20 +222,74 @@ def _acceptance(
     markets: tuple[str, ...] = ("HK", "US"),
     order_types: tuple[str, ...] = ("limit", "market"),
     valid_until: datetime = NOW + timedelta(days=1),
+    runner_id: str = RUNNER_ID,
+    runner_key: bytes = RUNNER_KEY,
 ) -> IbkrNautilusPaperProviderAcceptance:
-    return IbkrNautilusPaperProviderAcceptance.build(
+    authority_root = TemporaryDirectory()
+    _AUTHORITY_ROOTS.append(authority_root)
+    authority = IbkrNautilusPaperAcceptanceAuthority(
+        Path(authority_root.name) / "authority.sqlite3",
+        runner_id=runner_id,
+        verification_key=runner_key,
+    )
+    runner = IbkrNautilusPaperAcceptanceRunner(runner_id, runner_key)
+    observations: list[str] = []
+    for index, scenario in enumerate(SCENARIOS):
+        evidence_root = Path(authority_root.name) / "evidence"
+        evidence_root.mkdir(exist_ok=True)
+        artifact_path = evidence_root / f"{scenario}.artifact.json"
+        result_path = evidence_root / f"{scenario}.result.json"
+        artifact_path.write_text(
+            json.dumps({"scenario": scenario, "events": [f"observed-{scenario}"]}),
+            encoding="utf-8",
+        )
+        result_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": IBKR_NAUTILUS_PAPER_SCENARIO_RESULT_SCHEMA,
+                    "scenario": scenario,
+                    "configuration_hash": configuration_hash,
+                    "account_reference_hash": account_reference_hash,
+                    "instrument_routes_hash": instrument_routes_hash,
+                    "markets": list(markets),
+                    "order_types": list(order_types),
+                    "time_in_force": ["DAY"],
+                    "nautilus_ibapi_version": "10.37.2",
+                    "effective_client_id": 0,
+                    "client_id_collision": False,
+                    "manual_order_auto_bind_observed": True,
+                    "exclusive_api_client_scope_observed": True,
+                    "passed": complete or index > 0,
+                    "observed_at": "2026-09-01T07:58:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+        observation = authority.record_scenario_evidence(
+            artifact_path=artifact_path,
+            result_path=result_path,
+            runner_seal=runner.seal_evidence(
+                artifact_path=artifact_path,
+                result_path=result_path,
+            ),
+        )
+        observations.append(observation.observation_id)
+    acceptance = authority.build_acceptance(
+        observation_ids=tuple(sorted(observations)),
         configuration_hash=configuration_hash,
         account_reference_hash=account_reference_hash,
         instrument_routes_hash=instrument_routes_hash,
         markets=markets,
         order_types=order_types,
-        accepted_scenarios=SCENARIOS,
-        evidence_hashes=("3" * 64,),
+        time_in_force=("DAY",),
+        nautilus_ibapi_version="10.37.2",
         accepted_at=NOW - timedelta(minutes=1),
         valid_until=valid_until,
-        complete=complete,
         gaps=gaps,
     )
+    _AUTHORITIES[acceptance.acceptance_id] = authority
+    _VERIFIERS[acceptance.acceptance_id] = authority.verifier()
+    return acceptance
 
 
 def _order() -> OrderIntent:
@@ -162,11 +308,15 @@ def _order() -> OrderIntent:
     )
 
 
-def _submission(order: OrderIntent | None = None):  # type: ignore[no-untyped-def]
+def _submission(  # type: ignore[no-untyped-def]
+    order: OrderIntent | None = None,
+    *,
+    submission_id: str = "submission-1",
+):
     selected = order or _order()
     return _issue_submission_capability(
         order=selected,
-        submission_id="submission-1",
+        submission_id=submission_id,
         provider_id=IBKR_NAUTILUS_PAPER_PROVIDER_ID,
         provider_version=IBKR_NAUTILUS_PAPER_PROVIDER_VERSION,
         order_hash=canonical_hash(selected.to_dict()),
@@ -198,11 +348,15 @@ def _provider(
     routes: dict[str, IbkrNautilusInstrumentRoute] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> IbkrNautilusPaperExecutionProvider:
-    provider = IbkrNautilusPaperExecutionProvider(
+    verifier_acceptance = acceptance or _acceptance()
+    verifier = _VERIFIERS[verifier_acceptance.acceptance_id]
+    provider = _MechanicsOnlyExecutionProvider(
         root / "provider.sqlite3",
         runtime=runtime,
         instrument_routes=routes or ROUTES,
         acceptance=acceptance,
+        _acceptance_verifier=verifier,
+        _factory_seal=_PROVIDER_FACTORY_SEAL,
         clock=clock or (lambda: NOW),
     )
     provider.bind_submission_validator(lambda _: True)
@@ -212,10 +366,17 @@ def _provider(
 
 def test_provider_acceptance_is_content_identified_and_schema_valid() -> None:
     acceptance = _acceptance()
+    verifier = _VERIFIERS[acceptance.acceptance_id]
 
     assert acceptance.execution_accepted
     assert acceptance.is_current(NOW)
-    assert IbkrNautilusPaperProviderAcceptance.from_dict(acceptance.to_dict()) == acceptance
+    assert (
+        IbkrNautilusPaperProviderAcceptance.from_dict(
+            acceptance.to_dict(),
+            authority=verifier,
+        )
+        == acceptance
+    )
     assert (
         validate_agent_contract(
             acceptance.to_dict(),
@@ -223,6 +384,158 @@ def test_provider_acceptance_is_content_identified_and_schema_valid() -> None:
         )
         == ()
     )
+
+
+def test_provider_acceptance_claims_safe_cancel_reconcile_new_replace() -> None:
+    acceptance = _acceptance()
+
+    assert "replace" in acceptance.accepted_scenarios
+    assert (
+        validate_agent_contract(
+            acceptance.to_dict(),
+            "ibkr-nautilus-paper-provider-acceptance.schema.json",
+        )
+        == ()
+    )
+
+
+def test_acceptance_rejects_unsealed_observation_and_unknown_evidence(tmp_path: Path) -> None:
+    with pytest.raises(TypeError, match="issued by the Harness evidence resolver"):
+        IbkrNautilusPaperScenarioObservation(
+            observation_id="fabricated",
+            scenario="submit",
+            artifact_hash="1" * 64,
+            result_hash="2" * 64,
+            runner_id=RUNNER_ID,
+            runner_seal="f" * 64,
+            configuration_hash="3" * 64,
+            account_reference_hash="account-ref-" + "4" * 64,
+            instrument_routes_hash="5" * 64,
+            markets=("US",),
+            order_types=("limit",),
+            time_in_force=("DAY",),
+            nautilus_ibapi_version="10.37.2",
+            effective_client_id=0,
+            client_id_collision=False,
+            manual_order_auto_bind_observed=True,
+            exclusive_api_client_scope_observed=True,
+            passed=True,
+            observed_at=NOW,
+            _seal=object(),
+        )
+
+    authority = IbkrNautilusPaperAcceptanceAuthority(
+        tmp_path / "authority.sqlite3",
+        runner_id=RUNNER_ID,
+        verification_key=RUNNER_KEY,
+    )
+    artifact_path = tmp_path / "locally-authored-artifact.json"
+    result_path = tmp_path / "locally-authored-result.json"
+    artifact_path.write_text('{"scenario":"submit"}', encoding="utf-8")
+    result_path.write_text("{}", encoding="utf-8")
+    with pytest.raises(PermissionError, match="trusted runner provenance"):
+        authority.record_scenario_evidence(
+            artifact_path=artifact_path,
+            result_path=result_path,
+            runner_seal="0" * 64,
+        )
+    with pytest.raises(KeyError, match="unknown scenario observation"):
+        authority.build_acceptance(
+            observation_ids=("fabricated-observation",),
+            configuration_hash="1" * 64,
+            account_reference_hash="account-ref-" + "2" * 64,
+            instrument_routes_hash=ROUTES_HASH,
+            markets=("US",),
+            order_types=("limit",),
+            time_in_force=("DAY",),
+            nautilus_ibapi_version="10.37.2",
+            accepted_at=NOW,
+            valid_until=NOW + timedelta(days=1),
+        )
+
+
+def test_acceptance_authority_rejects_tampered_payload_and_artifacts(tmp_path: Path) -> None:
+    acceptance = _acceptance()
+    authority = _AUTHORITIES[acceptance.acceptance_id]
+    payload = acceptance.to_dict()
+    payload["complete"] = False
+
+    with pytest.raises(ValueError, match="does not match durable authority"):
+        IbkrNautilusPaperProviderAcceptance.from_dict(
+            payload,
+            authority=authority.verifier(),
+        )
+
+    with authority._connect() as connection:
+        connection.execute(
+            """
+            UPDATE ibkr_nautilus_scenario_artifacts
+            SET artifact_bytes = ?
+            WHERE observation_id = (
+                SELECT observation_id
+                FROM ibkr_nautilus_acceptance_observations
+                WHERE acceptance_id = ?
+                ORDER BY scenario
+                LIMIT 1
+            )
+            """,
+            (b'{"scenario":"account_reconciliation","tampered":true}', acceptance.acceptance_id),
+        )
+
+    assert not authority.verifier().verify(acceptance)
+    provider = _provider(tmp_path, _Runtime(), acceptance=acceptance)
+    assert not provider.manifest.enabled
+    assert not provider.new_order_admission_open
+
+
+def test_provider_rejects_acceptance_without_matching_durable_authority(tmp_path: Path) -> None:
+    acceptance = _acceptance()
+    with pytest.raises(TypeError, match="unexpected keyword argument 'acceptance_verifier'"):
+        IbkrNautilusPaperExecutionProvider(
+            tmp_path / "provider.sqlite3",
+            runtime=_Runtime(),
+            instrument_routes=ROUTES,
+            acceptance=acceptance,
+            acceptance_verifier=_VERIFIERS[acceptance.acceptance_id],  # type: ignore[call-arg]
+            clock=lambda: NOW,
+        )
+
+
+def test_caller_minted_full_chain_and_matching_runtime_pin_lack_harness_activation(
+    tmp_path: Path,
+) -> None:
+    attacker = _acceptance(
+        runner_id="locally-authored-runner",
+        runner_key=b"locally-authored-runner-key-with-at-least-32-bytes",
+    )
+    assert attacker.execution_accepted
+    attacker_verifier = _VERIFIERS[attacker.acceptance_id]
+    attacker_runtime = _Runtime(acceptance_authority_id=attacker.authority_id)
+
+    attacker_root = LocalDataSnapshotStore(tmp_path / "caller-fresh-root")
+    with pytest.raises(PermissionError, match="activation head is missing"):
+        issue_ibkr_nautilus_paper_provider_from_harness_state(
+            canonical_store=attacker_root,
+            accepted_evidence_content_id=attacker.acceptance_id,
+        )
+
+    assert attacker_verifier.verify(attacker)
+    assert attacker_runtime.acceptance_authority_id == attacker.authority_id
+    closed = IbkrNautilusPaperExecutionProvider(
+        tmp_path / "provider.sqlite3",
+        runtime=attacker_runtime,
+        instrument_routes=ROUTES,
+        acceptance=attacker,
+        _acceptance_verifier=attacker_verifier,
+        _factory_seal=_PROVIDER_FACTORY_SEAL,
+        clock=lambda: NOW,
+    )
+    closed.bind_submission_validator(lambda _: True)
+    assert not closed.manifest.enabled
+    assert not closed.new_order_admission_open
+    with pytest.raises(SubmissionCapabilityRejected, match="lacks current acceptance"):
+        closed.submit(_submission())
+    assert attacker_runtime.submit_calls == []
 
 
 def test_expired_acceptance_blocks_new_submit_but_preserves_exact_scope_cancel(
@@ -291,6 +604,17 @@ def test_paper_service_restart_after_acceptance_expiry_keeps_reconcile_and_cance
         connected=True,
         reconciled=True,
         complete=True,
+        cash_complete=True,
+        positions_complete=True,
+        orders_complete=True,
+        executions_complete=True,
+        external_order_discovery_complete=True,
+        effective_client_id=0,
+        connection_generation=1,
+        cash_reconciliation_generation=1,
+        positions_reconciliation_generation=1,
+        orders_reconciliation_generation=1,
+        executions_reconciliation_generation=1,
         orders=(
             NautilusPaperOrderObservation(
                 nautilus_client_order_id=nautilus_id,
@@ -402,9 +726,18 @@ def test_incomplete_or_gapped_acceptance_cannot_enable_provider(
     acceptance: IbkrNautilusPaperProviderAcceptance,
 ) -> None:
     provider = _provider(tmp_path, _Runtime(), acceptance=acceptance)
-
     assert not provider.manifest.enabled
-    assert Capability.PAPER_EXECUTION not in provider.manifest.verified_capabilities
+    assert not provider.new_order_admission_open
+
+
+def test_invalid_runtime_session_closes_new_order_before_provider_reconcile(
+    tmp_path: Path,
+) -> None:
+    runtime = _Runtime()
+    runtime.session_scope_valid = False
+    provider = _provider(tmp_path, runtime, acceptance=_acceptance())
+    assert not provider.manifest.enabled
+    assert not provider.new_order_admission_open
 
 
 def test_submit_uses_stable_identity_and_is_idempotent_across_restart(tmp_path: Path) -> None:
@@ -457,6 +790,17 @@ def test_reconciliation_can_resolve_ambiguous_submit_as_rejected_without_broker_
         connected=True,
         reconciled=True,
         complete=True,
+        cash_complete=True,
+        positions_complete=True,
+        orders_complete=True,
+        executions_complete=True,
+        external_order_discovery_complete=True,
+        effective_client_id=0,
+        connection_generation=1,
+        cash_reconciliation_generation=1,
+        positions_reconciliation_generation=1,
+        orders_reconciliation_generation=1,
+        executions_reconciliation_generation=1,
         orders=(
             NautilusPaperOrderObservation(
                 nautilus_client_order_id=nautilus_id,
@@ -558,6 +902,17 @@ def test_reconciliation_canonicalizes_provider_fill_identity_order(tmp_path: Pat
         connected=True,
         reconciled=True,
         complete=True,
+        cash_complete=True,
+        positions_complete=True,
+        orders_complete=True,
+        executions_complete=True,
+        external_order_discovery_complete=True,
+        effective_client_id=0,
+        connection_generation=1,
+        cash_reconciliation_generation=1,
+        positions_reconciliation_generation=1,
+        orders_reconciliation_generation=1,
+        executions_reconciliation_generation=1,
         orders=(
             NautilusPaperOrderObservation(
                 nautilus_client_order_id=nautilus_id,
@@ -645,6 +1000,132 @@ def test_ambiguous_cancel_is_never_redispatched_after_restart(tmp_path: Path) ->
     assert restarted_runtime.cancel_calls == []
 
 
+def test_safe_replace_reconciles_canceled_before_dispatching_new_intent(tmp_path: Path) -> None:
+    runtime = _Runtime()
+    provider = _provider(tmp_path, runtime, acceptance=_acceptance())
+    provider.submit(_submission())
+    nautilus_id = runtime.submit_calls[0].nautilus_client_order_id
+    runtime.snapshot = NautilusPaperRuntimeSnapshot(
+        observed_at=NOW + timedelta(seconds=1),
+        connected=True,
+        reconciled=True,
+        complete=True,
+        cash_complete=True,
+        positions_complete=True,
+        orders_complete=True,
+        executions_complete=True,
+        external_order_discovery_complete=True,
+        effective_client_id=0,
+        connection_generation=1,
+        cash_reconciliation_generation=1,
+        positions_reconciliation_generation=1,
+        orders_reconciliation_generation=1,
+        executions_reconciliation_generation=1,
+        orders=(
+            NautilusPaperOrderObservation(
+                nautilus_client_order_id=nautilus_id,
+                provider_order_id="IB-42",
+                status=NautilusPaperRuntimeStatus.CANCELED,
+                observed_at=NOW + timedelta(seconds=1),
+            ),
+        ),
+    )
+    replacement_order = replace(
+        _order(),
+        client_order_id="harness-order-2",
+        signal_id="signal-2",
+        quantity=Decimal("3"),
+        limit_price=Decimal("101"),
+    )
+
+    receipt = provider.replace(
+        cancellation=_cancellation(),
+        replacement=_submission(replacement_order, submission_id="replacement-submission-1"),
+    )
+
+    assert receipt.client_order_id == "harness-order-2"
+    assert len(runtime.cancel_calls) == 1
+    assert len(runtime.submit_calls) == 2
+
+
+def test_safe_replace_never_dispatches_new_intent_before_cancel_is_final(tmp_path: Path) -> None:
+    runtime = _Runtime()
+    provider = _provider(tmp_path, runtime, acceptance=_acceptance())
+    provider.submit(_submission())
+    nautilus_id = runtime.submit_calls[0].nautilus_client_order_id
+    runtime.snapshot = replace(
+        runtime.snapshot,
+        orders=(
+            NautilusPaperOrderObservation(
+                nautilus_client_order_id=nautilus_id,
+                provider_order_id="IB-42",
+                status=NautilusPaperRuntimeStatus.PENDING_CANCEL,
+                observed_at=NOW + timedelta(seconds=1),
+            ),
+        ),
+    )
+    replacement_order = replace(
+        _order(),
+        client_order_id="harness-order-2",
+        signal_id="signal-2",
+    )
+
+    with pytest.raises(RuntimeError, match="cancellation reconciliation"):
+        provider.replace(
+            cancellation=_cancellation(),
+            replacement=_submission(replacement_order, submission_id="replacement-submission-1"),
+        )
+
+    assert len(runtime.cancel_calls) == 1
+    assert len(runtime.submit_calls) == 1
+
+
+def test_safe_replace_resumes_after_ambiguous_cancel_reconciles_terminal(
+    tmp_path: Path,
+) -> None:
+    acceptance = _acceptance()
+    first_runtime = _Runtime()
+    first = _provider(tmp_path, first_runtime, acceptance=acceptance)
+    first.submit(_submission())
+    nautilus_id = first_runtime.submit_calls[0].nautilus_client_order_id
+    first_runtime.cancel_error = TimeoutError("cancel response lost")
+    replacement_order = replace(
+        _order(),
+        client_order_id="harness-order-2",
+        signal_id="signal-2",
+    )
+    replacement = _submission(
+        replacement_order,
+        submission_id="replacement-submission-after-restart",
+    )
+
+    with pytest.raises(TimeoutError, match="cancel response lost"):
+        first.replace(cancellation=_cancellation(), replacement=replacement)
+
+    restarted_runtime = _Runtime()
+    restarted_runtime.snapshot = replace(
+        restarted_runtime.snapshot,
+        observed_at=NOW + timedelta(seconds=1),
+        orders=(
+            NautilusPaperOrderObservation(
+                nautilus_client_order_id=nautilus_id,
+                provider_order_id="IB-42",
+                status=NautilusPaperRuntimeStatus.CANCELED,
+                observed_at=NOW + timedelta(seconds=1),
+            ),
+        ),
+    )
+    restarted = _provider(tmp_path, restarted_runtime, acceptance=acceptance)
+
+    receipt = restarted.replace(cancellation=_cancellation(), replacement=replacement)
+    terminal = restarted.cancel(_cancellation())
+
+    assert receipt.client_order_id == "harness-order-2"
+    assert terminal.status.value == "canceled"
+    assert restarted_runtime.cancel_calls == []
+    assert len(restarted_runtime.submit_calls) == 1
+
+
 def test_reconciliation_classifies_external_order_and_preserves_partial_fill(
     tmp_path: Path,
 ) -> None:
@@ -657,6 +1138,17 @@ def test_reconciliation_classifies_external_order_and_preserves_partial_fill(
         connected=True,
         reconciled=True,
         complete=True,
+        cash_complete=True,
+        positions_complete=True,
+        orders_complete=True,
+        executions_complete=True,
+        external_order_discovery_complete=True,
+        effective_client_id=0,
+        connection_generation=1,
+        cash_reconciliation_generation=1,
+        positions_reconciliation_generation=1,
+        orders_reconciliation_generation=1,
+        executions_reconciliation_generation=1,
         orders=(
             NautilusPaperOrderObservation(
                 nautilus_client_order_id=nautilus_id,
@@ -677,11 +1169,11 @@ def test_reconciliation_classifies_external_order_and_preserves_partial_fill(
 
     snapshot = provider.reconcile()
 
-    assert snapshot.complete
+    assert not snapshot.complete
     assert snapshot.receipts[0].status.value == "partially_filled"
     assert snapshot.receipts[0].filled_quantity == Decimal("1")
     assert snapshot.receipts[0].fill_ids == ("fill-1",)
-    assert snapshot.gaps == ("external_nautilus_order:EXTERNAL-1",)
+    assert snapshot.gaps == ("external_nautilus_order:" + canonical_hash("EXTERNAL-1")[:12],)
 
 
 def test_complete_reconciliation_reports_missing_accepted_order(tmp_path: Path) -> None:

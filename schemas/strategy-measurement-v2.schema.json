@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/strategy-measurement-v2.schema.json",
+  "title": "Strategy Measurement v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "arm", "outcome_receipt_id", "outcome_receipt_hash", "net_return", "absolute_pnl", "portfolio_net_return", "max_drawdown", "cvar95", "sharpe", "sortino", "stressed_net_return", "turnover", "adverse_excursion", "liquidity_cost", "avoided_loss", "false_avoidance_opportunity_cost", "nonempty_execution", "missing_reasons"],
+  "properties": {
+    "schema_version": {"const": "market-impact.strategy-measurement.v2"},
+    "case_id": {"type": "string", "minLength": 1},
+    "arm": {"enum": ["candidate", "primary_baseline"]},
+    "outcome_receipt_id": {"type": "string", "pattern": "^strategy-backtest-outcome-[0-9a-f]{64}$"},
+    "outcome_receipt_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "net_return": {"$ref": "#/$defs/nullable_decimal"}, "absolute_pnl": {"$ref": "#/$defs/nullable_decimal"},
+    "portfolio_net_return": {"$ref": "#/$defs/nullable_decimal"}, "max_drawdown": {"$ref": "#/$defs/nullable_decimal"},
+    "cvar95": {"$ref": "#/$defs/nullable_decimal"}, "sharpe": {"$ref": "#/$defs/nullable_decimal"},
+    "sortino": {"$ref": "#/$defs/nullable_decimal"}, "stressed_net_return": {"$ref": "#/$defs/nullable_decimal"},
+    "turnover": {"$ref": "#/$defs/nullable_decimal"}, "adverse_excursion": {"$ref": "#/$defs/nullable_decimal"},
+    "liquidity_cost": {"$ref": "#/$defs/nullable_decimal"}, "avoided_loss": {"$ref": "#/$defs/decimal"},
+    "false_avoidance_opportunity_cost": {"$ref": "#/$defs/decimal"},
+    "nonempty_execution": {"type": "boolean"},
+    "missing_reasons": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"},
+    "nullable_decimal": {"oneOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]}
+  }
+}

@@ -1,5 +1,9 @@
 # Phase 2 Calibration Protocol
 
+> This frozen calibration lane owns its historical artifacts and diagnostics. Strategy or Skill
+> promotion is governed only by [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md);
+> this document cannot independently authorize paper, live, or an effectiveness claim.
+
 ## Status and purpose
 
 Phase 2 has completed its first pre-registered real-cohort gate and failed it. The

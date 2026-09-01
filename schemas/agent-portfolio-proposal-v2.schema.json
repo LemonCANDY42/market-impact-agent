@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/agent-portfolio-proposal-v2.schema.json",
+  "title": "Market Impact Agent Portfolio Proposal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "proposal_id", "signal_id", "signal_hash", "requested_action",
+    "instrument_id", "venue", "instrument_class", "direction", "horizon_sessions",
+    "target_gross_exposure_ratio", "rationale", "evidence_refs", "counterevidence_refs",
+    "invalidation_conditions"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.agent-portfolio-proposal.v2"},
+    "proposal_id": {"type": "string", "pattern": "^agent-portfolio-proposal-[0-9a-f]{64}$"},
+    "signal_id": {"type": "string", "minLength": 1},
+    "signal_hash": {"$ref": "#/$defs/sha256"},
+    "requested_action": {"enum": ["abstain", "observe", "hold", "open", "increase", "reduce", "close", "rotate"]},
+    "instrument_id": {"type": "string", "minLength": 1},
+    "venue": {"type": "string", "minLength": 1},
+    "instrument_class": {"enum": ["equity", "exchange_traded_fund"]},
+    "direction": {"enum": ["long", "short"]},
+    "horizon_sessions": {"type": "integer", "minimum": 1},
+    "target_gross_exposure_ratio": {"$ref": "#/$defs/nonnegative_ratio"},
+    "rationale": {"type": "string", "minLength": 1},
+    "evidence_refs": {"$ref": "#/$defs/nonempty_strings"},
+    "counterevidence_refs": {"$ref": "#/$defs/strings"},
+    "invalidation_conditions": {"$ref": "#/$defs/nonempty_strings"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonnegative_ratio": {"type": "string", "pattern": "^(?:0(?:\\.[0-9]+)?|1(?:\\.0+)?)$"},
+    "strings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "nonempty_strings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

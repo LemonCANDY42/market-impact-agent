@@ -29,6 +29,8 @@ from market_impact_agent.prospective_data import (
 
 ATTENTION_WATCH_POLICY_SCHEMA = "market-impact.attention-watch-policy.v1"
 ATTENTION_WATCH_POLICY_SCHEMA_V2 = "market-impact.attention-watch-policy.v2"
+ATTENTION_WATCH_POLICY_SCHEMA_V3 = "market-impact.attention-watch-policy.v3"
+ATTENTION_WATCH_REBASELINE_GRANT_SCHEMA = "market-impact.attention-watch-rebaseline-grant.v1"
 ATTENTION_WATCH_WAKE_SCHEMA = "market-impact.attention-watch-wake.v1"
 ATTENTION_WATCH_TRIGGER = "new_observation_version"
 
@@ -39,12 +41,14 @@ class AttentionWatchStatus(StrEnum):
     TRIGGERED = "triggered"
     EXPIRED = "expired"
     CANCELLED = "cancelled"
+    REBASELINED = "rebaselined"
 
     @property
     def terminal(self) -> bool:
         return self in {
             AttentionWatchStatus.EXPIRED,
             AttentionWatchStatus.CANCELLED,
+            AttentionWatchStatus.REBASELINED,
         }
 
 
@@ -66,11 +70,14 @@ class AttentionWatchPolicy:
     monitoring_scope: MonitoringScope | None = None
     retrieval_plan: RetrievalPlan | None = None
     query_template: RegisteredQueryTemplate | None = None
+    predecessor_watch_id: str | None = None
+    rebaseline_grant_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.schema_version not in {
             ATTENTION_WATCH_POLICY_SCHEMA,
             ATTENTION_WATCH_POLICY_SCHEMA_V2,
+            ATTENTION_WATCH_POLICY_SCHEMA_V3,
         }:
             raise ValueError("unsupported Attention Watch policy schema")
         _trimmed(self.origin_ref, "Attention Watch origin_ref")
@@ -117,6 +124,15 @@ class AttentionWatchPolicy:
                 maximum_polls=self.maximum_polls,
                 maximum_bytes=self.maximum_bytes,
             )
+        if self.schema_version == ATTENTION_WATCH_POLICY_SCHEMA_V3:
+            if self.predecessor_watch_id is None or self.rebaseline_grant_id is None:
+                raise ValueError("Attention Watch v3 requires rebaseline lineage")
+            if not self.predecessor_watch_id.startswith("attention-watch-"):
+                raise ValueError("Attention Watch predecessor ID is invalid")
+            if not self.rebaseline_grant_id.startswith("attention-watch-rebaseline-grant-"):
+                raise ValueError("Attention Watch rebaseline grant ID is invalid")
+        elif self.predecessor_watch_id is not None or self.rebaseline_grant_id is not None:
+            raise ValueError("only Attention Watch v3 may carry rebaseline lineage")
         if self.watch_id != self.expected_watch_id:
             raise ValueError("Attention Watch watch_id does not match content")
 
@@ -146,6 +162,10 @@ class AttentionWatchPolicy:
             result["retrieval_plan"] = self.retrieval_plan.to_dict()
         if self.query_template is not None:
             result["template_matcher_contract"] = self.query_template.matcher_contract_dict()
+        if self.predecessor_watch_id is not None:
+            result["predecessor_watch_id"] = self.predecessor_watch_id
+        if self.rebaseline_grant_id is not None:
+            result["rebaseline_grant_id"] = self.rebaseline_grant_id
         return result
 
     def to_dict(self) -> dict[str, object]:
@@ -168,11 +188,19 @@ class AttentionWatchPolicy:
         monitoring_scope: MonitoringScope | None = None,
         retrieval_plan: RetrievalPlan | None = None,
         query_template: RegisteredQueryTemplate | None = None,
+        predecessor_watch_id: str | None = None,
+        rebaseline_grant_id: str | None = None,
     ) -> AttentionWatchPolicy:
+        if (predecessor_watch_id is None) != (rebaseline_grant_id is None):
+            raise ValueError("Attention Watch rebaseline lineage must be complete")
         schema_version = (
-            ATTENTION_WATCH_POLICY_SCHEMA_V2
-            if monitoring_scope is not None
-            else ATTENTION_WATCH_POLICY_SCHEMA
+            ATTENTION_WATCH_POLICY_SCHEMA_V3
+            if predecessor_watch_id is not None
+            else (
+                ATTENTION_WATCH_POLICY_SCHEMA_V2
+                if monitoring_scope is not None
+                else ATTENTION_WATCH_POLICY_SCHEMA
+            )
         )
         core: dict[str, object] = {
             "schema_version": schema_version,
@@ -195,6 +223,10 @@ class AttentionWatchPolicy:
             core["retrieval_plan"] = retrieval_plan.to_dict()
         if query_template is not None:
             core["template_matcher_contract"] = query_template.matcher_contract_dict()
+        if predecessor_watch_id is not None:
+            core["predecessor_watch_id"] = predecessor_watch_id
+        if rebaseline_grant_id is not None:
+            core["rebaseline_grant_id"] = rebaseline_grant_id
         return cls(
             watch_id=f"attention-watch-{canonical_hash(core)}",
             origin_ref=origin_ref,
@@ -211,7 +243,75 @@ class AttentionWatchPolicy:
             monitoring_scope=monitoring_scope,
             retrieval_plan=retrieval_plan,
             query_template=query_template,
+            predecessor_watch_id=predecessor_watch_id,
+            rebaseline_grant_id=rebaseline_grant_id,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class AttentionWatchRebaselineGrant:
+    original_watch_id: str
+    original_watch_policy_hash: str
+    triage_parent_ref: str
+    triage_parent_authority_hash: str
+    monitoring_scope_id: str
+    retrieval_plan_id: str
+    collection_policy_id: str
+    replacement_reason: str
+    replacement_data_snapshot_id: str
+    authorized_at: datetime
+    schema_version: str = ATTENTION_WATCH_REBASELINE_GRANT_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != ATTENTION_WATCH_REBASELINE_GRANT_SCHEMA:
+            raise ValueError("unsupported Attention Watch rebaseline grant schema")
+        if not self.original_watch_id.startswith("attention-watch-"):
+            raise ValueError("rebaseline grant requires an Attention Watch ID")
+        _sha256(self.original_watch_policy_hash, "original Watch policy hash")
+        if not self.triage_parent_ref.startswith("event-impact-triage-cluster-"):
+            raise ValueError("rebaseline grant requires Triage cluster authority")
+        _sha256(self.triage_parent_authority_hash, "Triage parent authority hash")
+        if not self.monitoring_scope_id.startswith("monitoring-scope-"):
+            raise ValueError("rebaseline grant requires a Monitoring Scope ID")
+        if not self.retrieval_plan_id.startswith("retrieval-plan-"):
+            raise ValueError("rebaseline grant requires a Retrieval Plan ID")
+        if not self.collection_policy_id.startswith("prospective-collection-policy-"):
+            raise ValueError("rebaseline grant requires a Collection Policy ID")
+        _trimmed(self.replacement_reason, "rebaseline replacement reason")
+        if len(self.replacement_reason) > 2000:
+            raise ValueError("rebaseline replacement reason exceeds 2000 characters")
+        if not self.replacement_data_snapshot_id.startswith("data-snapshot-"):
+            raise ValueError("rebaseline grant requires a replacement Data Snapshot ID")
+        _strict_utc(self.authorized_at, "rebaseline authorized_at")
+
+    @property
+    def grant_id(self) -> str:
+        return f"attention-watch-rebaseline-grant-{canonical_hash(self.core_dict())}"
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "original_watch_id": self.original_watch_id,
+            "original_watch_policy_hash": self.original_watch_policy_hash,
+            "triage_parent_ref": self.triage_parent_ref,
+            "triage_parent_authority_hash": self.triage_parent_authority_hash,
+            "monitoring_scope_id": self.monitoring_scope_id,
+            "retrieval_plan_id": self.retrieval_plan_id,
+            "collection_policy_id": self.collection_policy_id,
+            "replacement_reason": self.replacement_reason,
+            "replacement_data_snapshot_id": self.replacement_data_snapshot_id,
+            "authorized_at": _timestamp(self.authorized_at),
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "grant_id": self.grant_id}
+
+
+@dataclass(frozen=True, slots=True)
+class AttentionWatchRebaselineResult:
+    grant: AttentionWatchRebaselineGrant
+    successor_policy: AttentionWatchPolicy
+    successor_state: AttentionWatchState
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,6 +511,25 @@ class AttentionWatchService:
                 );
                 CREATE INDEX IF NOT EXISTS attention_watch_pending_wakes
                     ON attention_watch_outbox(delivery_status, created_at, wake_id);
+                CREATE TABLE IF NOT EXISTS attention_watch_rebaseline_grants (
+                    grant_id TEXT PRIMARY KEY,
+                    original_watch_id TEXT NOT NULL UNIQUE
+                        REFERENCES attention_watch_policies(watch_id),
+                    successor_watch_id TEXT NOT NULL UNIQUE
+                        REFERENCES attention_watch_policies(watch_id),
+                    artifact_hash TEXT NOT NULL UNIQUE,
+                    authorized_at TEXT NOT NULL
+                );
+                CREATE TRIGGER IF NOT EXISTS attention_watch_rebaseline_grants_no_update
+                BEFORE UPDATE ON attention_watch_rebaseline_grants
+                BEGIN SELECT RAISE(
+                    ABORT, 'Attention Watch rebaseline grants are append-only'
+                ); END;
+                CREATE TRIGGER IF NOT EXISTS attention_watch_rebaseline_grants_no_delete
+                BEFORE DELETE ON attention_watch_rebaseline_grants
+                BEGIN SELECT RAISE(
+                    ABORT, 'Attention Watch rebaseline grants are append-only'
+                ); END;
                 """
             )
             columns = {
@@ -437,8 +556,17 @@ class AttentionWatchService:
         _strict_utc(created_at, "Attention Watch created_at")
         if created_at >= policy.expires_at:
             raise ValueError("cannot create an already expired Attention Watch")
+        if policy.schema_version == ATTENTION_WATCH_POLICY_SCHEMA_V3:
+            grant = self.rebaseline_grant_for_successor(policy.watch_id)
+            if grant is None:
+                raise ValueError(
+                    "Attention Watch successor can only be created by its atomic rebaseline grant"
+                )
         collection_policy = self.journal.policy(policy.collection_policy_id)
-        if policy.schema_version == ATTENTION_WATCH_POLICY_SCHEMA_V2:
+        if policy.schema_version in {
+            ATTENTION_WATCH_POLICY_SCHEMA_V2,
+            ATTENTION_WATCH_POLICY_SCHEMA_V3,
+        }:
             if (
                 policy.monitoring_scope is None
                 or policy.retrieval_plan is None
@@ -503,6 +631,255 @@ class AttentionWatchService:
                     (policy.watch_id, version_id),
                 )
         return self.state(policy.watch_id)
+
+    def rebaseline(
+        self,
+        original_watch_id: str,
+        *,
+        replacement_reason: str,
+        replacement_data_snapshot_id: str,
+        authorized_at: datetime,
+    ) -> AttentionWatchRebaselineResult:
+        """Replace one gap-poisoned Watch under one durable Harness grant.
+
+        The transaction retires the old scheduler row, records the one-time grant,
+        and creates the successor with only the original remaining allowances.  The
+        successor's seen set is seeded solely from the new complete baseline.
+        """
+
+        _strict_utc(authorized_at, "Attention Watch rebaseline authorized_at")
+        _trimmed(replacement_reason, "Attention Watch rebaseline replacement reason")
+        if len(replacement_reason) > 2000:
+            raise ValueError(
+                "Attention Watch rebaseline replacement reason exceeds 2000 characters"
+            )
+        original_policy = self.policy(original_watch_id)
+        if original_policy.schema_version not in {
+            ATTENTION_WATCH_POLICY_SCHEMA_V2,
+            ATTENTION_WATCH_POLICY_SCHEMA_V3,
+        }:
+            raise ValueError("Attention Watch rebaseline requires a scoped Watch")
+        if (
+            original_policy.monitoring_scope is None
+            or original_policy.retrieval_plan is None
+            or original_policy.query_template is None
+        ):
+            raise AssertionError("validated scoped Attention Watch bindings are missing")
+        replacement = self.store.get(replacement_data_snapshot_id)
+        self.journal.assert_watch_baseline_snapshot(replacement)
+        if replacement.query.source_policy_id != original_policy.collection_policy_id:
+            raise ValueError("replacement baseline differs from the original Collection Policy")
+        replacement_cutoff = replacement.query.parameters.get("requested_not_after")
+        if not isinstance(replacement_cutoff, str):
+            raise ValueError("Attention Watch replacement baseline cutoff is missing")
+        if _datetime(replacement_cutoff, "replacement baseline cutoff") > authorized_at:
+            raise ValueError("Attention Watch replacement baseline cannot include future receipts")
+        baseline_version_ids = self._scope_version_ids(original_policy, replacement)
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT grant_id, successor_watch_id, artifact_hash
+                FROM attention_watch_rebaseline_grants
+                WHERE original_watch_id = ?
+                """,
+                (original_watch_id,),
+            ).fetchone()
+            if existing is not None:
+                grant = attention_watch_rebaseline_grant_from_dict(
+                    self.store.artifacts.read_json(cast(str, existing["artifact_hash"]))
+                )
+                if (
+                    grant.original_watch_id != original_watch_id
+                    or grant.replacement_reason != replacement_reason
+                    or grant.replacement_data_snapshot_id != replacement_data_snapshot_id
+                    or grant.authorized_at != authorized_at
+                    or grant.grant_id != cast(str, existing["grant_id"])
+                ):
+                    raise ValueError("Attention Watch already has another rebaseline grant")
+                successor_id = cast(str, existing["successor_watch_id"])
+                successor = self._policy_in_connection(connection, successor_id)
+                self._assert_rebaseline_binding(grant, successor)
+                successor_row = connection.execute(
+                    "SELECT * FROM attention_watch_policies WHERE watch_id = ?",
+                    (successor_id,),
+                ).fetchone()
+                if successor_row is None:
+                    raise ValueError("Attention Watch rebaseline successor is missing")
+                return AttentionWatchRebaselineResult(
+                    grant=grant,
+                    successor_policy=successor,
+                    successor_state=_state_from_row(successor_row),
+                )
+
+            original_row = connection.execute(
+                "SELECT * FROM attention_watch_policies WHERE watch_id = ?",
+                (original_watch_id,),
+            ).fetchone()
+            if original_row is None:
+                raise KeyError(f"unknown Attention Watch: {original_watch_id}")
+            state = _state_from_row(original_row)
+            if (
+                state.status is not AttentionWatchStatus.BACKING_OFF
+                or state.last_error_kind != "watch_snapshot_incomplete"
+            ):
+                raise ValueError(
+                    "Attention Watch rebaseline requires a fail-closed incomplete baseline"
+                )
+            if authorized_at < state.updated_at:
+                raise ValueError("Attention Watch rebaseline predates its latest state")
+            if authorized_at >= original_policy.expires_at:
+                raise ValueError("Attention Watch cannot be rebaselined at or after expiry")
+            remaining_polls = original_policy.maximum_polls - state.poll_count
+            remaining_bytes = original_policy.maximum_bytes - state.byte_count
+            remaining_wakes = original_policy.maximum_wakes - state.wake_count
+            if min(remaining_polls, remaining_bytes, remaining_wakes) <= 0:
+                raise ValueError("Attention Watch has no remaining allowance to rebaseline")
+            original_policy_hash = cast(str, original_row["artifact_hash"])
+            owner = self._triage_owner_binding(
+                connection,
+                policy=original_policy,
+                policy_hash=original_policy_hash,
+            )
+            grant = AttentionWatchRebaselineGrant(
+                original_watch_id=original_watch_id,
+                original_watch_policy_hash=original_policy_hash,
+                triage_parent_ref=owner["parent_ref"],
+                triage_parent_authority_hash=owner["parent_authority_hash"],
+                monitoring_scope_id=original_policy.monitoring_scope.scope_id,
+                retrieval_plan_id=original_policy.retrieval_plan.plan_id,
+                collection_policy_id=original_policy.collection_policy_id,
+                replacement_reason=replacement_reason,
+                replacement_data_snapshot_id=replacement_data_snapshot_id,
+                authorized_at=authorized_at,
+            )
+            successor = AttentionWatchPolicy.build(
+                origin_ref=original_policy.origin_ref,
+                collection_policy_id=original_policy.collection_policy_id,
+                initial_data_snapshot_id=replacement_data_snapshot_id,
+                starts_at=authorized_at,
+                expires_at=original_policy.expires_at,
+                maximum_polls=remaining_polls,
+                maximum_bytes=remaining_bytes,
+                maximum_wakes=remaining_wakes,
+                cooldown_seconds=original_policy.cooldown_seconds,
+                monitoring_scope=original_policy.monitoring_scope,
+                retrieval_plan=original_policy.retrieval_plan,
+                query_template=original_policy.query_template,
+                predecessor_watch_id=original_watch_id,
+                rebaseline_grant_id=grant.grant_id,
+            )
+            grant_artifact = self.store.artifacts.put_json(grant.to_dict())
+            successor_artifact = self.store.artifacts.put_json(successor.to_dict())
+            connection.execute(
+                """
+                UPDATE attention_watch_policies
+                SET status = ?, updated_at = ?, next_due_at = ?,
+                    lease_token = NULL, lease_expires_at = NULL
+                WHERE watch_id = ?
+                """,
+                (
+                    AttentionWatchStatus.REBASELINED.value,
+                    _timestamp(authorized_at),
+                    _timestamp(authorized_at),
+                    original_watch_id,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO attention_watch_policies(
+                    watch_id, artifact_hash, collection_policy_id, status, created_at,
+                    updated_at, next_due_at, wake_allowed_at, poll_count, byte_count,
+                    wake_count, last_data_snapshot_id, last_error_kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, NULL)
+                """,
+                (
+                    successor.watch_id,
+                    successor_artifact.content_hash,
+                    successor.collection_policy_id,
+                    AttentionWatchStatus.ACTIVE.value,
+                    _timestamp(authorized_at),
+                    _timestamp(authorized_at),
+                    _timestamp(authorized_at),
+                    _timestamp(max(authorized_at, state.wake_allowed_at)),
+                    replacement_data_snapshot_id,
+                ),
+            )
+            for version_id in baseline_version_ids:
+                connection.execute(
+                    """
+                    INSERT INTO attention_watch_seen_versions(watch_id, version_id)
+                    VALUES (?, ?)
+                    """,
+                    (successor.watch_id, version_id),
+                )
+            connection.execute(
+                """
+                INSERT INTO attention_watch_rebaseline_grants(
+                    grant_id, original_watch_id, successor_watch_id, artifact_hash, authorized_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    grant.grant_id,
+                    original_watch_id,
+                    successor.watch_id,
+                    grant_artifact.content_hash,
+                    _timestamp(authorized_at),
+                ),
+            )
+            successor_row = connection.execute(
+                "SELECT * FROM attention_watch_policies WHERE watch_id = ?",
+                (successor.watch_id,),
+            ).fetchone()
+            if successor_row is None:
+                raise RuntimeError("Attention Watch rebaseline successor was not persisted")
+            return AttentionWatchRebaselineResult(
+                grant=grant,
+                successor_policy=successor,
+                successor_state=_state_from_row(successor_row),
+            )
+
+    def rebaseline_grant_for_successor(
+        self, successor_watch_id: str
+    ) -> AttentionWatchRebaselineGrant | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT grant_id, original_watch_id, artifact_hash
+                FROM attention_watch_rebaseline_grants
+                WHERE successor_watch_id = ?
+                """,
+                (successor_watch_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            grant = attention_watch_rebaseline_grant_from_dict(
+                self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
+            )
+            successor = self._policy_in_connection(connection, successor_watch_id)
+        if grant.grant_id != cast(str, row["grant_id"]) or grant.original_watch_id != cast(
+            str, row["original_watch_id"]
+        ):
+            raise ValueError("Attention Watch rebaseline grant row differs from its artifact")
+        self._assert_rebaseline_binding(grant, successor)
+        return grant
+
+    def callback_authority_lineage(self, watch_id: str) -> tuple[str, tuple[str, ...]]:
+        """Resolve a successor to its admitted Watch without minting new authority."""
+
+        current_watch_id = watch_id
+        grant_ids: list[str] = []
+        seen: set[str] = set()
+        while True:
+            if current_watch_id in seen:
+                raise ValueError("Attention Watch callback lineage contains a cycle")
+            seen.add(current_watch_id)
+            grant = self.rebaseline_grant_for_successor(current_watch_id)
+            if grant is None:
+                return current_watch_id, tuple(grant_ids)
+            grant_ids.append(grant.grant_id)
+            current_watch_id = grant.original_watch_id
 
     def policy(self, watch_id: str) -> AttentionWatchPolicy:
         with self._connect() as connection:
@@ -996,6 +1373,164 @@ class AttentionWatchService:
             ).fetchall()
         return frozenset(cast(str, row["version_id"]) for row in rows)
 
+    def _policy_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        watch_id: str,
+    ) -> AttentionWatchPolicy:
+        row = connection.execute(
+            "SELECT artifact_hash FROM attention_watch_policies WHERE watch_id = ?",
+            (watch_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown Attention Watch: {watch_id}")
+        return attention_watch_policy_from_dict(
+            self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
+        )
+
+    def _triage_owner_binding(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        policy: AttentionWatchPolicy,
+        policy_hash: str,
+    ) -> dict[str, str]:
+        current = policy
+        current_hash = policy_hash
+        seen: set[str] = set()
+        while current.predecessor_watch_id is not None:
+            if current.watch_id in seen:
+                raise ValueError("Attention Watch rebaseline lineage contains a cycle")
+            seen.add(current.watch_id)
+            row = connection.execute(
+                """
+                SELECT original_watch_id, grant_id, artifact_hash
+                FROM attention_watch_rebaseline_grants
+                WHERE successor_watch_id = ?
+                """,
+                (current.watch_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Attention Watch rebaseline lineage is missing its grant")
+            grant = attention_watch_rebaseline_grant_from_dict(
+                self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
+            )
+            if (
+                current.rebaseline_grant_id != grant.grant_id
+                or cast(str, row["grant_id"]) != grant.grant_id
+                or current.predecessor_watch_id != grant.original_watch_id
+                or cast(str, row["original_watch_id"]) != grant.original_watch_id
+                or current.collection_policy_id != grant.collection_policy_id
+                or current.monitoring_scope is None
+                or current.monitoring_scope.scope_id != grant.monitoring_scope_id
+                or current.retrieval_plan is None
+                or current.retrieval_plan.plan_id != grant.retrieval_plan_id
+            ):
+                raise ValueError("Attention Watch rebaseline lineage differs from its grant")
+            predecessor_row = connection.execute(
+                """
+                SELECT artifact_hash FROM attention_watch_policies WHERE watch_id = ?
+                """,
+                (grant.original_watch_id,),
+            ).fetchone()
+            if predecessor_row is None:
+                raise ValueError("Attention Watch rebaseline predecessor is missing")
+            if cast(str, predecessor_row["artifact_hash"]) != grant.original_watch_policy_hash:
+                raise ValueError("Attention Watch predecessor policy differs from its grant")
+            current = self._policy_in_connection(connection, grant.original_watch_id)
+            current_hash = cast(str, predecessor_row["artifact_hash"])
+
+        try:
+            rows = connection.execute(
+                """
+                SELECT artifact_hash, watch_policy_hash
+                FROM agent_watch_admissions
+                WHERE watch_id = ? AND outcome = 'admitted'
+                  AND watch_policy_hash IS NOT NULL
+                ORDER BY admitted_at, admission_id
+                """,
+                (current.watch_id,),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            raise ValueError(
+                "Attention Watch rebaseline requires Triage admission authority"
+            ) from exc
+        if len(rows) != 1:
+            raise ValueError("Attention Watch rebaseline requires one owning Triage admission")
+        row = rows[0]
+        if cast(str, row["watch_policy_hash"]) != current_hash:
+            raise ValueError("owning Triage admission differs from its Watch policy")
+        payload = _object(
+            self.store.artifacts.read_json(cast(str, row["artifact_hash"])),
+            "owning Agent Watch admission",
+        )
+        expected_scope_id = current.monitoring_scope.scope_id if current.monitoring_scope else None
+        expected_plan_id = current.retrieval_plan.plan_id if current.retrieval_plan else None
+        if (
+            payload.get("watch_id") != current.watch_id
+            or payload.get("outcome") != "admitted"
+            or payload.get("parent_agent_type") != "triage.coordinator"
+            or payload.get("parent_ref") != current.origin_ref
+            or payload.get("monitoring_scope_id") != expected_scope_id
+            or payload.get("retrieval_plan_id") != expected_plan_id
+        ):
+            raise ValueError("owning Watch admission differs from Triage scope authority")
+        parent_ref = _string(payload, "parent_ref")
+        parent_authority_hash = _string(payload, "parent_authority_hash")
+        _sha256(parent_authority_hash, "Triage parent authority hash")
+        return {
+            "parent_ref": parent_ref,
+            "parent_authority_hash": parent_authority_hash,
+        }
+
+    def _assert_rebaseline_binding(
+        self,
+        grant: AttentionWatchRebaselineGrant,
+        successor: AttentionWatchPolicy,
+    ) -> None:
+        original = self.policy(grant.original_watch_id)
+        original_state = self.state(grant.original_watch_id)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT artifact_hash FROM attention_watch_policies WHERE watch_id = ?
+                """,
+                (grant.original_watch_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Attention Watch rebaseline predecessor is missing")
+            original_policy_hash = cast(str, row["artifact_hash"])
+            owner = self._triage_owner_binding(
+                connection,
+                policy=original,
+                policy_hash=original_policy_hash,
+            )
+        if original_policy_hash != grant.original_watch_policy_hash:
+            raise ValueError("Attention Watch rebaseline grant no longer binds its predecessor")
+        replacement = self.store.get(grant.replacement_data_snapshot_id)
+        self.journal.assert_watch_baseline_snapshot(replacement)
+        if (
+            original_state.status is not AttentionWatchStatus.REBASELINED
+            or owner["parent_ref"] != grant.triage_parent_ref
+            or owner["parent_authority_hash"] != grant.triage_parent_authority_hash
+            or successor.schema_version != ATTENTION_WATCH_POLICY_SCHEMA_V3
+            or successor.predecessor_watch_id != grant.original_watch_id
+            or successor.rebaseline_grant_id != grant.grant_id
+            or successor.origin_ref != grant.triage_parent_ref
+            or successor.collection_policy_id != grant.collection_policy_id
+            or successor.initial_data_snapshot_id != grant.replacement_data_snapshot_id
+            or successor.starts_at != grant.authorized_at
+            or successor.expires_at != original.expires_at
+            or successor.monitoring_scope is None
+            or successor.monitoring_scope.scope_id != grant.monitoring_scope_id
+            or successor.retrieval_plan is None
+            or successor.retrieval_plan.plan_id != grant.retrieval_plan_id
+            or successor.maximum_polls + original_state.poll_count != original.maximum_polls
+            or successor.maximum_bytes + original_state.byte_count != original.maximum_bytes
+            or successor.maximum_wakes + original_state.wake_count != original.maximum_wakes
+        ):
+            raise ValueError("Attention Watch successor differs from its rebaseline grant")
+
     @staticmethod
     def _scope_version_ids(
         policy: AttentionWatchPolicy,
@@ -1267,7 +1802,39 @@ def attention_watch_policy_from_dict(value: object) -> AttentionWatchPolicy:
         monitoring_scope=monitoring_scope,
         retrieval_plan=retrieval_plan,
         query_template=query_template,
+        predecessor_watch_id=(
+            None
+            if payload.get("predecessor_watch_id") is None
+            else _string(payload, "predecessor_watch_id")
+        ),
+        rebaseline_grant_id=(
+            None
+            if payload.get("rebaseline_grant_id") is None
+            else _string(payload, "rebaseline_grant_id")
+        ),
     )
+
+
+def attention_watch_rebaseline_grant_from_dict(
+    value: object,
+) -> AttentionWatchRebaselineGrant:
+    payload = _object(value, "Attention Watch rebaseline grant")
+    grant = AttentionWatchRebaselineGrant(
+        original_watch_id=_string(payload, "original_watch_id"),
+        original_watch_policy_hash=_string(payload, "original_watch_policy_hash"),
+        triage_parent_ref=_string(payload, "triage_parent_ref"),
+        triage_parent_authority_hash=_string(payload, "triage_parent_authority_hash"),
+        monitoring_scope_id=_string(payload, "monitoring_scope_id"),
+        retrieval_plan_id=_string(payload, "retrieval_plan_id"),
+        collection_policy_id=_string(payload, "collection_policy_id"),
+        replacement_reason=_string(payload, "replacement_reason"),
+        replacement_data_snapshot_id=_string(payload, "replacement_data_snapshot_id"),
+        authorized_at=_datetime(_string(payload, "authorized_at"), "authorized_at"),
+        schema_version=_string(payload, "schema_version"),
+    )
+    if payload.get("grant_id") != grant.grant_id:
+        raise ValueError("Attention Watch rebaseline grant_id does not match content")
+    return grant
 
 
 def attention_wake_from_dict(value: object) -> AttentionWake:
@@ -1369,6 +1936,15 @@ def _boolean(value: Mapping[str, object], key: str) -> bool:
 def _trimmed(value: str, name: str) -> None:
     if not value or value != value.strip():
         raise ValueError(f"{name} must be a non-empty trimmed string")
+
+
+def _sha256(value: str, name: str) -> None:
+    if len(value) != 64:
+        raise ValueError(f"{name} must be a SHA-256 hex digest")
+    try:
+        int(value, 16)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a SHA-256 hex digest") from exc
 
 
 def _strict_utc(value: datetime, name: str) -> None:

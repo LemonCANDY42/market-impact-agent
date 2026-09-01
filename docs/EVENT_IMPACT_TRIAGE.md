@@ -422,8 +422,11 @@ only through a pre-reveal evaluation:
 3. score exact-event recall, event-family recall, time-authority accuracy, exposure mapping,
    `needs_review` calibration, unsupported-path rate and resource cost;
 4. run an independent countercase pass and repeat on another time or event-family block;
-5. promote the Skill only for the demonstrated domain; record misses as ontology, source, mapping,
-   timing or instruction failures rather than adding example-specific keywords.
+5. submit the limited-domain candidate and its misses to
+   [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md); only its pristine paired
+   incremental-effect and prospective gates may promote the Skill. Triage evaluation itself cannot
+   promote it. Record misses as ontology, source, mapping, timing or instruction failures rather
+   than adding example-specific keywords.
 
 The recent hidden-case miss supports three general additions—forecast probability changes,
 clinical milestones, and recall/channel/regulatory escalation—but does not establish their trading

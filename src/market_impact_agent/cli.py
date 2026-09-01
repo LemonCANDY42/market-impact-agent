@@ -221,6 +221,7 @@ from market_impact_agent.source_coverage import (
     coverage_receipt_from_dict,
     load_source_coverage_registration,
 )
+from market_impact_agent.strategy_validation import StrategyValidationAuthorityStore
 from market_impact_agent.syndication_feed import (
     SyndicationFeedProvider,
     SyndicationFeedSourceConfig,
@@ -843,6 +844,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/agent-runs"),
     )
+    strategy_evaluate_parser = agent_subparsers.add_parser(
+        "strategy-evaluate",
+        help="Evaluate one sealed strategy Registration from its Harness authority root",
+    )
+    strategy_evaluate_parser.add_argument("--state-root", required=True, type=Path)
+    strategy_evaluate_parser.add_argument("--registration-id", required=True)
     prospective_triage_parser = agent_subparsers.add_parser(
         "prospective-triage-run",
         help="Freeze and run the next receipt-ordered formal Event Impact Triage batch",
@@ -3278,6 +3285,10 @@ def _json_object_argument(value: str) -> dict[str, object]:
     return cast(dict[str, object], untyped)
 
 
+def _format_command_error(error: BaseException) -> str:
+    return f"{type(error).__name__}: {error}"
+
+
 def _fetch_public_https_document(
     url: str,
     *,
@@ -3421,7 +3432,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             result = validate_provider(args.path)
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
@@ -3429,7 +3443,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             result = validate_event(args.path)
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
@@ -3447,7 +3464,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"captured": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {
+                        "captured": False,
+                        "error": _format_command_error(cast(BaseException, exc)),
+                    }
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3483,7 +3505,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"collected": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"collected": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3500,7 +3524,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
-                json.dumps({"frozen": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"frozen": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3518,7 +3544,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"accepted": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3538,7 +3566,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"accepted": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3549,7 +3579,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = validate_prospective_diagnostic(args.registration)
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"valid": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3572,7 +3604,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"ready": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"ready": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3587,7 +3621,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"admitted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"admitted": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3614,7 +3650,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"accepted": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3641,7 +3679,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"registered": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"registered": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3658,7 +3698,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
-                json.dumps({"replaced": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"replaced": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3679,7 +3721,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3704,7 +3748,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3719,7 +3765,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
-                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"accepted": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3752,7 +3800,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3788,7 +3838,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (TypeError, ValueError) as exc:
             print(
-                json.dumps({"planned": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"planned": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3813,7 +3865,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"backed_up": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"backed_up": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3836,7 +3890,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest = verify_state_backup(args.backup)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"verified": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"verified": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3863,7 +3919,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"restored": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"restored": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3888,7 +3946,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = verify_common_crawl_archive(args.locator)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"verified": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"verified": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3903,7 +3963,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"located": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"located": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3917,7 +3979,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = verify_internet_archive(args.locator)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"verified": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"verified": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3931,7 +3995,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"located": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"located": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -3959,7 +4025,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"captured": False, "error": str(exc)}),
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
                 file=sys.stderr,
             )
             return 1
@@ -3985,7 +4051,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             bundle = validate_prediction_market_batch(args.path)
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4023,7 +4092,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"captured": False, "error": str(exc)}),
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
                 file=sys.stderr,
             )
             return 1
@@ -4048,7 +4117,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             bundle = validate_tushare_data_bundle(args.path)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4070,7 +4142,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             dataset = load_market_regime_dataset(args.dataset)
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4101,7 +4176,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             panel_path = write_regime_panel(panel)
             validated = validate_regime_panel(panel_path)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4126,7 +4204,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = evaluate_regime_dataset(dataset, panel)
             report_path = write_regime_report(result, panel)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4147,7 +4228,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             readiness = assess_regime_study_readiness(registration)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(json.dumps({"valid": True, **readiness}, indent=2, sort_keys=True))
         return 0
@@ -4168,7 +4252,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 registration_id=registration.registration_id,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4194,7 +4281,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 lineage_id=args.lineage_id,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4221,7 +4311,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 lineage_id=args.lineage_id,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4248,7 +4341,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 lineage_id=args.lineage_id,
             )
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4352,7 +4448,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "execution_capability": "none",
                 }
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"valid": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
@@ -4382,7 +4481,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             path = write_publisher_archive_recovery_report(report)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"audited": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"audited": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4421,7 +4523,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             path = write_regime_evidence_record(record)
             document_path = write_publisher_archive_research_document(snapshot)
         except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            print(json.dumps({"captured": False, "error": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"captured": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
             return 1
         print(
             json.dumps(
@@ -4449,12 +4554,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"valid": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "agent" and args.agent_command == "strategy-evaluate":
+        try:
+            report = StrategyValidationAuthorityStore(
+                LocalDataSnapshotStore(args.state_root)
+            ).evaluate(args.registration_id)
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                json.dumps(
+                    {"evaluated": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        return 0 if report.disposition.value == "accepted" else 1
     if args.command == "agent" and args.agent_command == "prospective-triage-run":
         try:
             from market_impact_agent.prospective_triage import (
@@ -4498,7 +4620,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4553,7 +4677,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4595,7 +4721,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4623,7 +4751,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4649,7 +4779,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         except ModuleNotFoundError as exc:
-            if exc.name != "mcp":
+            if cast(ModuleNotFoundError, exc).name != "mcp":
                 raise
             print(
                 json.dumps(
@@ -4673,7 +4803,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4727,7 +4859,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         except ModuleNotFoundError as exc:
-            if exc.name != "mcp":
+            if cast(ModuleNotFoundError, exc).name != "mcp":
                 raise
             print(
                 json.dumps(
@@ -4751,7 +4883,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4779,7 +4913,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         except ModuleNotFoundError as exc:
-            if exc.name != "mcp":
+            if cast(ModuleNotFoundError, exc).name != "mcp":
                 raise
             print(
                 json.dumps(
@@ -4803,7 +4937,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4828,7 +4964,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"valid": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4858,7 +4996,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         except ModuleNotFoundError as exc:
-            if exc.name != "mcp":
+            if cast(ModuleNotFoundError, exc).name != "mcp":
                 raise
             print(
                 json.dumps(
@@ -4882,7 +5020,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4914,7 +5054,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4929,7 +5071,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"valid": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4950,7 +5094,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"recorded": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"recorded": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4967,7 +5113,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"valid": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"valid": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -4985,7 +5133,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"polled": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"polled": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -5004,7 +5154,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(
-                json.dumps({"frozen": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"frozen": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -5028,7 +5180,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -5069,7 +5223,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"accepted": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"accepted": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -5101,7 +5257,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"registered": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"registered": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -5137,7 +5295,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.JSONDecodeError,
         ) as exc:
             print(
-                json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+                json.dumps(
+                    {"completed": False, "error": _format_command_error(cast(BaseException, exc))}
+                ),
                 file=sys.stderr,
             )
             return 1

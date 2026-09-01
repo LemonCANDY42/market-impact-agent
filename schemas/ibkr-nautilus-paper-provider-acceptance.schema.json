@@ -7,30 +7,43 @@
   "required": [
     "schema_version",
     "acceptance_id",
+    "authority_id",
     "provider_id",
     "provider_version",
+    "runtime_version",
+    "nautilus_version",
+    "nautilus_ibapi_version",
+    "environment",
     "configuration_hash",
     "account_reference_hash",
     "instrument_routes_hash",
     "markets",
     "order_types",
-    "accepted_scenarios",
-    "evidence_hashes",
+    "time_in_force",
+    "exclusive_api_client_scope",
+    "manual_order_auto_bind",
+    "scenario_evidence",
     "accepted_at",
     "valid_until",
     "complete",
     "gaps"
   ],
   "properties": {
-    "schema_version": {
-      "const": "market-impact.ibkr-nautilus-paper-provider-acceptance.v1"
-    },
+    "schema_version": {"const": "market-impact.ibkr-nautilus-paper-provider-acceptance.v3"},
     "acceptance_id": {
       "type": "string",
       "pattern": "^ibkr-nautilus-paper-acceptance-[0-9a-f]{64}$"
     },
+    "authority_id": {
+      "type": "string",
+      "pattern": "^ibkr-nautilus-paper-authority-[0-9a-f]{64}$"
+    },
     "provider_id": {"const": "ibkr-nautilus-paper"},
-    "provider_version": {"const": "0.1.0-candidate"},
+    "provider_version": {"const": "0.2.0-candidate"},
+    "runtime_version": {"const": "0.2.0-candidate"},
+    "nautilus_version": {"const": "1.231.0"},
+    "nautilus_ibapi_version": {"type": "string", "minLength": 1},
+    "environment": {"const": "paper"},
     "configuration_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "account_reference_hash": {
       "type": "string",
@@ -49,17 +62,42 @@
       "uniqueItems": true,
       "items": {"enum": ["market", "limit"]}
     },
-    "accepted_scenarios": {
+    "time_in_force": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1}
+      "items": {"const": "DAY"}
     },
-    "evidence_hashes": {
+    "exclusive_api_client_scope": {"type": "boolean"},
+    "manual_order_auto_bind": {"type": "boolean"},
+    "scenario_evidence": {
       "type": "array",
       "minItems": 1,
-      "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      "maxItems": 11,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenario", "evidence_hash", "passed"],
+        "properties": {
+          "scenario": {
+            "enum": [
+              "account_reconciliation",
+              "ambiguous_acknowledgement",
+              "cancel",
+              "disconnect",
+              "duplicate_fill",
+              "external_order",
+              "gateway_restart",
+              "partial_fill",
+              "process_restart",
+              "replace",
+              "submit"
+            ]
+          },
+          "evidence_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "passed": {"type": "boolean"}
+        }
+      }
     },
     "accepted_at": {"type": "string", "format": "date-time"},
     "valid_until": {"type": "string", "format": "date-time"},

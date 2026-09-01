@@ -101,6 +101,14 @@ from market_impact_agent.prospective_checkpoint_sets import (
     CheckpointRouteReconciliation,
     CheckpointToolManifest,
     ProspectiveCheckpointSnapshotSet,
+    build_checkpoint_tool_descriptors,
+    materialize_checkpoint_decision_inputs,
+)
+from market_impact_agent.prospective_decision_pipeline import (
+    FrozenProspectiveDecisionRefs,
+    ProspectiveDecisionPipeline,
+    ProspectiveDecisionPipelineStatus,
+    ProspectivePortfolioInstruction,
 )
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
@@ -118,6 +126,10 @@ from market_impact_agent.prospective_query_gate import (
     build_query_gate_evaluation_material,
     evaluate_prospective_query_gate,
 )
+from market_impact_agent.prospective_trigger_admission import (
+    ProspectiveTriggerAdmission,
+    TriggerAdmissionKind,
+)
 from market_impact_agent.providers import (
     Capability,
     MockExecutionProvider,
@@ -127,6 +139,7 @@ from market_impact_agent.providers import (
 )
 from market_impact_agent.research import EvidenceTier, TransmissionDirectness
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
+from market_impact_agent.usage_ledger import UsageLedger
 
 NOW = datetime(2026, 8, 30, 8, tzinfo=UTC)
 REGISTRATION_PATH = Path("examples/research/prospective-diagnostic-registration-v3.json")
@@ -181,6 +194,20 @@ class _DecisionRunFixtureProvider(ModelProvider):
             raw_response={"model": self._model, "message": assistant},
             latency_ms=10,
         )
+
+
+class _TriggerAuthority:
+    def __init__(self, trigger: ProspectiveTriggerAdmission) -> None:
+        self.trigger = trigger
+
+    def assert_authoritative(self, admission: ProspectiveTriggerAdmission) -> None:
+        if admission != self.trigger:
+            raise ValueError("Trigger Admission differs from durable authority")
+
+    def get(self, admission_id: str) -> ProspectiveTriggerAdmission:
+        if admission_id != self.trigger.admission_id:
+            raise KeyError(admission_id)
+        return self.trigger
 
 
 def _registration():
@@ -249,6 +276,48 @@ def _adaptive_v4_registration() -> ProspectiveDiagnosticRegistration:
     )
 
 
+def _eligible_trigger(
+    registration: ProspectiveDiagnosticRegistration,
+) -> ProspectiveTriggerAdmission:
+    core = {
+        "schema_version": "market-impact.prospective-trigger-admission.v1",
+        "kind": TriggerAdmissionKind.CHECKPOINT_ELIGIBLE.value,
+        "registration_id": registration.registration_id,
+        "checkpoint_key": "next-a-share-policy-event",
+        "candidate_set_id": "event-impact-triage-candidate-set-" + "1" * 64,
+        "proposal_id": "event-impact-triage-proposal-" + "2" * 64,
+        "triage_decision_id": "event-impact-triage-decision-" + "3" * 64,
+        "cluster_id": "event-impact-triage-cluster-" + "4" * 64,
+        "observation_version_ids": ["prospective-observation-version-" + "5" * 64],
+        "event_assessment_id": None,
+        "materiality_gate_result_id": None,
+        "preceding_materiality_gate_result_ids": [],
+        "admitted_target_ids": [],
+        "held_target_ids": [],
+        "admitted_at": (NOW - timedelta(minutes=11)).isoformat().replace("+00:00", "Z"),
+        "historical_pit_claim": False,
+        "judgment_model_calls_authorized": False,
+        "execution_capability": False,
+    }
+    return ProspectiveTriggerAdmission(
+        admission_id=f"prospective-trigger-admission-{canonical_hash(core)}",
+        kind=TriggerAdmissionKind.CHECKPOINT_ELIGIBLE,
+        registration_id=registration.registration_id,
+        checkpoint_key="next-a-share-policy-event",
+        candidate_set_id="event-impact-triage-candidate-set-" + "1" * 64,
+        proposal_id="event-impact-triage-proposal-" + "2" * 64,
+        triage_decision_id="event-impact-triage-decision-" + "3" * 64,
+        cluster_id="event-impact-triage-cluster-" + "4" * 64,
+        observation_version_ids=("prospective-observation-version-" + "5" * 64,),
+        event_assessment_id=None,
+        materiality_gate_result_id=None,
+        preceding_materiality_gate_result_ids=(),
+        admitted_target_ids=(),
+        held_target_ids=(),
+        admitted_at=NOW - timedelta(minutes=11),
+    )
+
+
 def _execution_plan(
     registration: ProspectiveDiagnosticRegistration | None = None,
 ) -> ProspectiveExecutionPlan:
@@ -300,7 +369,13 @@ def _decision_proposal(
     )
 
 
-def _write_decision_skill(root: Path, *, name: str, instructions: str) -> None:
+def _write_decision_skill(
+    root: Path,
+    *,
+    name: str,
+    instructions: str,
+    allowed_tools: tuple[str, ...] = (),
+) -> None:
     directory = root / name
     directory.mkdir(parents=True)
     instructions_path = directory / "SKILL.md"
@@ -316,7 +391,7 @@ def _write_decision_skill(root: Path, *, name: str, instructions: str) -> None:
         "required_capabilities": [],
         "dependencies": [],
         "conflicts": [],
-        "allowed_tools": [],
+        "allowed_tools": list(allowed_tools),
         "allowed_mcp_servers": [],
     }
     manifest["manifest_hash"] = canonical_hash(manifest)
@@ -326,13 +401,19 @@ def _write_decision_skill(root: Path, *, name: str, instructions: str) -> None:
 def _authoritative_run_fixture(
     root: Path,
     pack: EvidencePack,
+    *,
+    registration: ProspectiveDiagnosticRegistration | None = None,
 ) -> tuple[
     dict[str, tuple[AgentRunResult, ...]],
     ProspectiveExecutionPlan,
     dict[str, AgentEngine],
 ]:
-    registration = _registration()
-    profile = load_model_provider_profile(MODEL_PROFILE_PATH)
+    registration = _registration() if registration is None else registration
+    profile = load_model_provider_profile(
+        CPA_MODEL_PROFILE_PATH
+        if registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+        else MODEL_PROFILE_PATH
+    )
     votes = {
         registration.paired_arms[0]: (
             ("510500.XSHG", CandidateDirection.DOWN),
@@ -429,6 +510,9 @@ def _evaluated_gate_fixture(
     root: Path,
     *,
     execution_plan: ProspectiveExecutionPlan | None = None,
+    registration: ProspectiveDiagnosticRegistration | None = None,
+    trigger_admission: ProspectiveTriggerAdmission | None = None,
+    trigger_authority: _TriggerAuthority | None = None,
 ) -> tuple[
     EvidencePack,
     ProspectiveQueryGateResult,
@@ -436,7 +520,7 @@ def _evaluated_gate_fixture(
     tuple[dict[str, object], ...],
     LocalDataSnapshotStore,
 ]:
-    registration = _registration()
+    registration = _registration() if registration is None else registration
     checkpoint = registration.checkpoint("next-a-share-policy-event")
     barrier_at = NOW - timedelta(minutes=10)
     received_at = barrier_at
@@ -558,8 +642,13 @@ def _evaluated_gate_fixture(
         )
         for capability in sorted(REQUIRED_DIAGNOSTIC_CAPABILITIES, key=lambda item: item.value)
     )
+    snapshot_set_schema = (
+        "market-impact.prospective-checkpoint-snapshot-set.v5"
+        if registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+        else "market-impact.prospective-checkpoint-snapshot-set.v4"
+    )
     snapshot_set_core = {
-        "schema_version": "market-impact.prospective-checkpoint-snapshot-set.v4",
+        "schema_version": snapshot_set_schema,
         "registration_id": registration.registration_id,
         "checkpoint_key": checkpoint.checkpoint_key,
         "barrier_at": barrier_at.isoformat().replace("+00:00", "Z"),
@@ -571,6 +660,8 @@ def _evaluated_gate_fixture(
         "execution_capability": False,
         "capability_gaps": list(capability_gaps),
     }
+    if trigger_admission is not None:
+        snapshot_set_core["trigger_admission_id"] = trigger_admission.admission_id
     snapshot_set = ProspectiveCheckpointSnapshotSet(
         snapshot_set_id=(
             f"prospective-checkpoint-snapshot-set-{canonical_hash(snapshot_set_core)}"
@@ -583,6 +674,10 @@ def _evaluated_gate_fixture(
         authorized_snapshot_ids=(snapshot.snapshot_id,),
         complete=False,
         capability_gaps=capability_gaps,
+        trigger_admission_id=(
+            None if trigger_admission is None else trigger_admission.admission_id
+        ),
+        schema_version=snapshot_set_schema,
     )
     decision_input = project_checkpoint_observation(
         checkpoint_snapshot_set_id=snapshot_set.snapshot_set_id,
@@ -615,7 +710,7 @@ def _evaluated_gate_fixture(
         pattern_packs=(),
         allowed_targets=("510300.XSHG", "510500.XSHG"),
     )
-    plan = _execution_plan() if execution_plan is None else execution_plan
+    plan = _execution_plan(registration) if execution_plan is None else execution_plan
     gate = evaluate_prospective_query_gate(
         registration=registration,
         snapshot_set=snapshot_set,
@@ -626,8 +721,115 @@ def _evaluated_gate_fixture(
         model_profile_id=registration.model_profile_id,
         model_cost_limit_usd=Decimal("5.00"),
         evaluated_at=barrier_at + timedelta(minutes=2),
+        trigger_admission=trigger_admission,
+        trigger_admission_authority=trigger_authority,
     )
     return evidence_pack, gate, snapshot_set, (decision_input,), store
+
+
+def _pipeline_runtime_fixture(
+    root: Path,
+    *,
+    registration: ProspectiveDiagnosticRegistration,
+    evidence_pack: EvidencePack,
+    snapshot_set: ProspectiveCheckpointSnapshotSet,
+    snapshot_store: LocalDataSnapshotStore,
+) -> tuple[dict[str, AgentEngine], ProspectiveExecutionPlan, dict[str, tuple[str, ...]]]:
+    profile = load_model_provider_profile(CPA_MODEL_PROFILE_PATH)
+    decision_inputs = materialize_checkpoint_decision_inputs(
+        snapshot_set,
+        store=snapshot_store,
+    )
+    descriptors = build_checkpoint_tool_descriptors(
+        snapshot_set,
+        store=snapshot_store,
+        frozen_input=snapshot_set.frozen_input,
+        authorized_decision_input_ids=frozenset(
+            cast(str, item["record_id"]) for item in decision_inputs
+        ),
+        required_capability="market.read",
+    )
+    access = ToolAccessContext(
+        allowed_capabilities=frozenset({"market.read"}),
+        allowed_side_effects=frozenset(item.side_effect for item in descriptors),
+        allowed_tools=frozenset(item.name for item in descriptors),
+    )
+    engines: dict[str, AgentEngine] = {}
+    bindings: list[PairedArmExecutionBinding] = []
+    selected_skills: dict[str, tuple[str, ...]] = {}
+    for arm in registration.paired_arms:
+        arm_root = root / arm
+        skill_root = arm_root / "skills"
+        _write_decision_skill(
+            skill_root,
+            name="decision-core",
+            instructions="Assess the frozen evidence and abstain when it is insufficient.",
+            allowed_tools=tuple(item.name for item in descriptors),
+        )
+        _write_decision_skill(
+            skill_root,
+            name="routed-methods",
+            instructions="Apply the registered routed research method to the same evidence.",
+        )
+        proposals = (
+            _decision_proposal(
+                evidence_pack,
+                target=("510300.XSHG" if "plus" in arm else "510500.XSHG"),
+                direction=CandidateDirection.UP,
+            ),
+            _decision_proposal(
+                evidence_pack,
+                target=("510300.XSHG" if "plus" in arm else "510500.XSHG"),
+                direction=CandidateDirection.UP,
+            ),
+        )
+        artifact_store = ArtifactStore(arm_root / "artifacts")
+        tool_registry = ToolRegistry(artifact_store)
+        for descriptor in descriptors:
+            tool_registry.register(descriptor)
+        engine = AgentEngine(
+            provider=_DecisionRunFixtureProvider(
+                provider_id=profile.provider_id,
+                model=profile.model,
+                proposals=proposals,
+            ),
+            config=profile.runtime_config(),
+            artifact_store=artifact_store,
+            journal=RunJournal(arm_root / "run.sqlite3"),
+            tool_registry=tool_registry,
+            skill_registry=SkillRegistry(skill_root),
+            clock=lambda: NOW - timedelta(minutes=5),
+        )
+        skills = (
+            ("decision-core", "routed-methods")
+            if arm == registration.paired_arms[1]
+            else ("decision-core",)
+        )
+        request = AgentRunRequest(
+            run_id="binding-fixture",
+            evidence_pack=evidence_pack,
+            research_instruction="Assess this prospective checkpoint.",
+            selected_skills=skills,
+            tool_access=access,
+        )
+        engines[arm] = engine
+        selected_skills[arm] = skills
+        bindings.append(
+            PairedArmExecutionBinding(
+                arm=arm,
+                execution_binding=engine.execution_binding(
+                    request,
+                    runtime_ref="market-impact-agent-runtime-v1",
+                ),
+            )
+        )
+    plan = ProspectiveExecutionPlan.build(
+        registration=registration,
+        model_profile_alias=registration.model_profile_id,
+        model_profile=profile,
+        arm_bindings=tuple(bindings),
+    )
+    return engines, plan, selected_skills
 
 
 def _pack() -> EvidencePack:
@@ -1269,27 +1471,39 @@ def test_reused_judgment_or_binding_mismatch_forces_abstention() -> None:
     assert any("run_predates_query_gate" in item for item in predating_manifest.blockers)
 
 
+@pytest.mark.parametrize("trigger_bound", [False, True])
 def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
     tmp_path: Path,
+    trigger_bound: bool,
 ) -> None:
+    registration = _adaptive_v4_registration() if trigger_bound else _registration()
+    trigger = _eligible_trigger(registration) if trigger_bound else None
+    trigger_authority = None if trigger is None else _TriggerAuthority(trigger)
     seed_pack, _seed_gate, _seed_set, _seed_inputs, _seed_store = _evaluated_gate_fixture(
-        tmp_path / "seed"
+        tmp_path / "seed",
+        registration=registration,
+        trigger_admission=trigger,
+        trigger_authority=trigger_authority,
     )
     runs, plan, authorities = _authoritative_run_fixture(
         tmp_path / "agent-runtime",
         seed_pack,
+        registration=registration,
     )
     pack, gate, snapshot_set, decision_inputs, snapshot_store = _evaluated_gate_fixture(
         tmp_path / "admission-material",
         execution_plan=plan,
+        registration=registration,
+        trigger_admission=trigger,
+        trigger_authority=trigger_authority,
     )
     assert pack == seed_pack
     manifest = build_decision_run_manifest(
-        registration=_registration(),
+        registration=registration,
         query_gate=gate,
         evidence_pack=pack,
         execution_plan=plan,
-        paired_runs=_paired_runs(runs),
+        paired_runs=_paired_runs(runs, registration=registration),
         created_at=NOW - timedelta(minutes=6),
     )
     treatment_judgments = {
@@ -1433,7 +1647,9 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
     main_clock = [service_now]
     main_account_state = [account_state]
 
-    def service() -> PaperExecutionService:
+    def service(
+        trigger_authority_override: _TriggerAuthority | None = trigger_authority,
+    ) -> PaperExecutionService:
         return PaperExecutionService(
             root,
             provider=MockExecutionProvider(provider_path, clock=lambda: main_clock[0]),
@@ -1446,6 +1662,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
             instrument_rule_sets={rule_set.rule_set_id: rule_set},
             order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+            trigger_admission_authority=trigger_authority_override,
         )
 
     def admit_with(target_service: PaperExecutionService):
@@ -1455,18 +1672,19 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     forged_sizing_core = sizing_decision.core_dict()
@@ -1499,25 +1717,29 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         price_basis=price_basis,
         created_at=NOW - timedelta(minutes=3),
     )
-    with pytest.raises(ValueError, match="not deterministically evaluated"):
+    with pytest.raises(
+        ValueError,
+        match=r"not deterministically evaluated|model profile differs",
+    ):
         service().admit_decision(
             forged_order,
             forged_sizing_admission,
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=forged_sizing,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     without_account_authority = PaperExecutionService(
@@ -1534,6 +1756,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     with pytest.raises(PermissionError, match="Account State authority"):
         without_account_authority.admit_decision(
@@ -1542,18 +1765,19 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     strict_freshness_service = PaperExecutionService(
@@ -1572,6 +1796,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     with pytest.raises(ValueError, match="Position Snapshot is not a trusted projection"):
         admit_with(strict_freshness_service)
@@ -1590,6 +1815,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         account_state_source=lambda: account_state,
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     with pytest.raises(PermissionError, match="Instrument Master identity"):
         without_instrument_identity.admit_decision(
@@ -1598,18 +1824,19 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     wrong_instrument_identity = PaperExecutionService(
@@ -1627,6 +1854,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "equity")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     with pytest.raises(ValueError, match="differs from Instrument Master"):
         wrong_instrument_identity.admit_decision(
@@ -1635,18 +1863,19 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     without_sizing_authority = PaperExecutionService(
@@ -1662,6 +1891,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         account_state_snapshots={account_state.snapshot_id: account_state},
         account_state_source=lambda: account_state,
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+        trigger_admission_authority=trigger_authority,
     )
     with pytest.raises(PermissionError, match="sizing rule or policy authority"):
         without_sizing_authority.admit_decision(
@@ -1670,40 +1900,45 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     forged_gate = _gate(pack, plan)
-    with pytest.raises(ValueError, match="not deterministically evaluated"):
+    with pytest.raises(
+        ValueError,
+        match=r"not deterministically evaluated|model profile differs",
+    ):
         service().admit_decision(
             order,
             admission,
             manifest=manifest,
             query_gate=forged_gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     without_authority = PaperExecutionService(
@@ -1720,6 +1955,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     setattr(without_authority, "agent_run_authorities", authorities)  # noqa: B010
     with pytest.raises(PermissionError, match="Agent run authority"):
@@ -1729,30 +1965,51 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
             manifest=manifest,
             query_gate=gate,
             evidence_pack=pack,
-            registration=_registration(),
+            registration=registration,
             snapshot_set=snapshot_set,
             decision_inputs=decision_inputs,
             snapshot_store=snapshot_store,
             execution_plan=plan,
             signal=signal,
-            paired_runs=_paired_runs(runs),
+            paired_runs=_paired_runs(runs, registration=registration),
             authorized_view=authorized_view,
             position_snapshot=position_snapshot,
             portfolio_decision=portfolio_decision,
             sizing_decision=sizing_decision,
             price_basis=price_basis,
+            trigger_admission=trigger,
         )
 
     record = admit_with(service())
     assert record.approval_state is ApprovalState.PENDING_APPROVAL
     assert record.agent_admission_hash == canonical_hash(admission.to_dict())
     assert service().get(order.client_order_id) == record
+    if trigger_bound:
+        with pytest.raises(
+            PermissionError,
+            match="restart lacks prospective Trigger Admission authority",
+        ):
+            service(None).get(order.client_order_id)
+        assert trigger is not None
+        forged_core = trigger.core_dict()
+        forged_core["candidate_set_id"] = "event-impact-triage-candidate-set-" + "9" * 64
+        forged_trigger = replace(
+            trigger,
+            admission_id=f"prospective-trigger-admission-{canonical_hash(forged_core)}",
+            candidate_set_id=cast(str, forged_core["candidate_set_id"]),
+        )
+        with pytest.raises(
+            ValueError,
+            match="Trigger Admission differs from durable authority",
+        ):
+            service(_TriggerAuthority(forged_trigger)).get(order.client_order_id)
 
     evaluation_material = build_query_gate_evaluation_material(
-        registration=_registration(),
+        registration=registration,
         snapshot_set=snapshot_set,
         decision_inputs=decision_inputs,
         snapshot_store=snapshot_store,
+        trigger_admission=trigger,
     )
     service().artifacts.get(
         gate.evaluation_material_hash,
@@ -1844,6 +2101,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     assert admit_with(legacy_service).approval_state is ApprovalState.PENDING_APPROVAL
     legacy_admission = prepare_decision_admission(
@@ -1884,6 +2142,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     assert admit_with(stale_service).approval_state is ApprovalState.PENDING_APPROVAL
     stale_clock[0] += timedelta(seconds=1)
@@ -1930,6 +2189,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     assert admit_with(dispatch_service).approval_state is ApprovalState.PENDING_APPROVAL
     assert (
@@ -1968,6 +2228,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     assert admit_with(race_service).approval_state is ApprovalState.PENDING_APPROVAL
     assert (
@@ -2008,6 +2269,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     assert admit_with(source_error_service).approval_state is ApprovalState.PENDING_APPROVAL
     assert (
@@ -2048,6 +2310,7 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
         instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
         instrument_rule_sets={rule_set.rule_set_id: rule_set},
         order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+        trigger_admission_authority=trigger_authority,
     )
     assert admit_with(validator_race_service).approval_state is ApprovalState.PENDING_APPROVAL
     assert (
@@ -2063,3 +2326,192 @@ def test_decision_admission_is_the_exact_restart_safe_mock_outbox_gate(
     assert validator_rejected.outbox_state is OutboxState.EXPIRED
     assert validator_race_provider.reconcile().receipts == ()
     assert validator_race_service.execution_blocked is False
+
+
+def test_one_shot_pipeline_replays_four_runs_and_mock_admission_idempotently(
+    tmp_path: Path,
+) -> None:
+    registration = _adaptive_v4_registration()
+    trigger = _eligible_trigger(registration)
+    trigger_authority = _TriggerAuthority(trigger)
+    pack, _unused_gate, snapshot_set, _inputs, snapshot_store = _evaluated_gate_fixture(
+        tmp_path / "inputs",
+        registration=registration,
+        trigger_admission=trigger,
+        trigger_authority=trigger_authority,
+    )
+    engines, plan, selected_skills = _pipeline_runtime_fixture(
+        tmp_path / "runtime",
+        registration=registration,
+        evidence_pack=pack,
+        snapshot_set=snapshot_set,
+        snapshot_store=snapshot_store,
+    )
+    frozen = ArtifactStore(tmp_path / "frozen")
+    refs = FrozenProspectiveDecisionRefs(
+        registration_hash=frozen.put_json(registration.to_dict()).content_hash,
+        checkpoint_snapshot_set_hash=frozen.put_json(snapshot_set.to_dict()).content_hash,
+        evidence_pack_hash=frozen.put_json(pack.to_dict()).content_hash,
+        execution_plan_hash=frozen.put_json(plan.to_dict()).content_hash,
+        trigger_admission_id=trigger.admission_id,
+    )
+    account_provider = ProviderManifest(
+        schema_version="market-impact.provider-manifest.v1",
+        provider_id="fixture-account",
+        provider_version="1",
+        transport=ProviderTransport.NATIVE,
+        environments=frozenset({TradingEnvironment.PAPER}),
+        declared_capabilities=frozenset({Capability.ACCOUNT}),
+        verified_capabilities=frozenset({Capability.ACCOUNT}),
+        markets=("XSHG",),
+        order_types=(),
+        supports_streaming=False,
+        supports_reconciliation=True,
+        enabled=True,
+        trust_tier=TrustTier.PAPER_VALIDATED,
+    )
+    account_state = capture_account_state_snapshot(
+        provider=account_provider,
+        account_reference="pipeline-paper-account",
+        account_reference_key=b"pipeline-account-reference-key-32b",
+        environment=TradingEnvironment.PAPER,
+        as_of=NOW - timedelta(minutes=7),
+        reconciled_at=NOW - timedelta(minutes=7),
+        reconciliation_reference="pipeline-account-reconciliation",
+        cash=(CashBalance(currency="CNY", available=Decimal("50000"), settled=Decimal("50000")),),
+        positions=(),
+        open_orders=(),
+        recent_fills=(),
+        recent_fills_since=NOW - timedelta(days=1),
+    )
+    mandate = TradingMandate(
+        mandate_id="pipeline-paper-manual-v1",
+        account_id=account_state.account_reference_hash,
+        environment=TradingEnvironment.PAPER,
+        approval_mode=ApprovalMode.MANUAL_EACH,
+        valid_from=NOW - timedelta(days=1),
+        expires_at=NOW + timedelta(days=1),
+        allowed_instruments=frozenset({"510300.XSHG"}),
+        allowed_sides=frozenset({Side.BUY}),
+        max_order_notional=Decimal("10000"),
+    )
+    price_basis = PriceBasis(
+        instrument_id="510300.XSHG",
+        currency="CNY",
+        unit="per_share",
+        basis_kind="raw_reference_quote",
+        price=Decimal("4"),
+        source_id="mock-price",
+        source_version="1",
+        observed_at=NOW - timedelta(minutes=6),
+        valid_until=NOW + timedelta(minutes=1),
+    )
+    rule_set = load_exchange_instrument_rule_set(
+        Path(__file__).parents[1]
+        / "examples"
+        / "research"
+        / "a-share-exchange-instrument-rules-v1.json"
+    )
+    sizing_policy = OrderSizingPolicy(
+        max_available_cash_fraction=Decimal("0.20"),
+        reduction_fraction=Decimal("0.50"),
+    )
+    paper_root = tmp_path / "paper"
+    provider_path = tmp_path / "mock-provider.sqlite3"
+
+    def paper_service() -> PaperExecutionService:
+        return PaperExecutionService(
+            paper_root,
+            provider=MockExecutionProvider(provider_path, clock=lambda: NOW - timedelta(minutes=3)),
+            mandate=mandate,
+            price_source=lambda _order: price_basis,
+            clock=lambda: NOW - timedelta(minutes=3),
+            agent_run_authorities={
+                plan.arm_binding(arm).binding_hash: engines[arm] for arm in registration.paired_arms
+            },
+            account_state_snapshots={account_state.snapshot_id: account_state},
+            account_state_source=lambda: account_state,
+            instrument_identities={"510300.XSHG": ("XSHG", "exchange_traded_fund")},
+            instrument_rule_sets={rule_set.rule_set_id: rule_set},
+            order_sizing_policies={sizing_policy.policy_id: sizing_policy},
+            trigger_admission_authority=trigger_authority,
+        )
+
+    times = iter(
+        (
+            NOW - timedelta(minutes=6),
+            NOW - timedelta(minutes=4),
+            NOW - timedelta(minutes=4),
+        )
+    )
+    pipeline = ProspectiveDecisionPipeline(
+        frozen_artifacts=frozen,
+        snapshot_store=snapshot_store,
+        trigger_store=trigger_authority,
+        engines=engines,
+        usage_ledger=UsageLedger(tmp_path / "usage.sqlite3"),
+        paper_service=paper_service(),
+        account_state=account_state,
+        instrument_rule_set=rule_set,
+        sizing_policy=sizing_policy,
+        price_basis=price_basis,
+        clock=lambda: next(times),
+    )
+    instruction = ProspectivePortfolioInstruction(
+        requested_action=PortfolioAction.OPEN,
+        venue="XSHG",
+        instrument_class="exchange_traded_fund",
+        order_kind=OrderKind.MARKET,
+        signal_valid_for=timedelta(minutes=30),
+        order_valid_for=timedelta(minutes=20),
+    )
+    first = asyncio.run(
+        pipeline.run(
+            refs=refs,
+            selected_skills=selected_skills,
+            research_instruction="Assess this prospective checkpoint.",
+            model_cost_limit_usd=Decimal("5.00"),
+            portfolio=instruction,
+        )
+    )
+    assert first.status is ProspectiveDecisionPipelineStatus.PENDING_MANUAL_APPROVAL
+    assert first.manifest is not None
+    assert first.manifest.replicates_executed_per_arm == 2
+    assert len(first.paired_runs) == 4
+    assert first.paper_record is not None
+    assert first.paper_record.approval_state is ApprovalState.PENDING_APPROVAL
+    assert first.reconciliation is not None and first.reconciliation.complete
+
+    replay_times = iter(
+        (
+            NOW - timedelta(minutes=6),
+            NOW - timedelta(minutes=4),
+            NOW - timedelta(minutes=4),
+        )
+    )
+    replay = ProspectiveDecisionPipeline(
+        frozen_artifacts=frozen,
+        snapshot_store=snapshot_store,
+        trigger_store=trigger_authority,
+        engines=engines,
+        usage_ledger=UsageLedger(tmp_path / "usage.sqlite3"),
+        paper_service=paper_service(),
+        account_state=account_state,
+        instrument_rule_set=rule_set,
+        sizing_policy=sizing_policy,
+        price_basis=price_basis,
+        clock=lambda: next(replay_times),
+    )
+    second = asyncio.run(
+        replay.run(
+            refs=refs,
+            selected_skills=selected_skills,
+            research_instruction="Assess this prospective checkpoint.",
+            model_cost_limit_usd=Decimal("5.00"),
+            portfolio=instruction,
+        )
+    )
+    assert second.manifest == first.manifest
+    assert second.order == first.order
+    assert second.paper_record == first.paper_record
+    assert len(UsageLedger(tmp_path / "usage.sqlite3").records()) == 4

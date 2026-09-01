@@ -22,7 +22,8 @@
     "schema_version": {
       "enum": [
         "market-impact.attention-watch-policy.v1",
-        "market-impact.attention-watch-policy.v2"
+        "market-impact.attention-watch-policy.v2",
+        "market-impact.attention-watch-policy.v3"
       ]
     },
     "watch_id": {"type": "string", "pattern": "^attention-watch-[0-9a-f]{64}$"},
@@ -51,6 +52,14 @@
     },
     "template_matcher_contract": {
       "$ref": "#/$defs/template_matcher_contract"
+    },
+    "predecessor_watch_id": {
+      "type": "string",
+      "pattern": "^attention-watch-[0-9a-f]{64}$"
+    },
+    "rebaseline_grant_id": {
+      "type": "string",
+      "pattern": "^attention-watch-rebaseline-grant-[0-9a-f]{64}$"
     }
   },
   "allOf": [
@@ -66,7 +75,9 @@
           "anyOf": [
             {"required": ["monitoring_scope"]},
             {"required": ["retrieval_plan"]},
-            {"required": ["template_matcher_contract"]}
+            {"required": ["template_matcher_contract"]},
+            {"required": ["predecessor_watch_id"]},
+            {"required": ["rebaseline_grant_id"]}
           ]
         }
       }
@@ -79,6 +90,29 @@
       },
       "then": {
         "required": ["monitoring_scope", "retrieval_plan", "template_matcher_contract"],
+        "not": {
+          "anyOf": [
+            {"required": ["event_cluster_key"]},
+            {"required": ["predecessor_watch_id"]},
+            {"required": ["rebaseline_grant_id"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "market-impact.attention-watch-policy.v3"}
+        }
+      },
+      "then": {
+        "required": [
+          "monitoring_scope",
+          "retrieval_plan",
+          "template_matcher_contract",
+          "predecessor_watch_id",
+          "rebaseline_grant_id"
+        ],
         "not": {"required": ["event_cluster_key"]}
       }
     }

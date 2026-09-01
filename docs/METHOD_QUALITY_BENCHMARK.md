@@ -1,5 +1,9 @@
 # Method Quality Benchmark
 
+> Method Quality owns its frozen benchmark and diagnostic artifacts. The only current strategy or
+> Skill promotion authority is [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md);
+> favorable benchmark output alone grants no execution or promotion authority.
+
 ## Status and claim boundary
 
 The v2 method-quality protocol supersedes v1 before a retrospective holdout corpus or any outcome

@@ -81,7 +81,11 @@ def test_wheel_packages_every_registered_agent_schema() -> None:
         "decision-admission.schema.json",
         "decision-admission-v2.schema.json",
         "portfolio-decision.schema.json",
+        "agent-portfolio-proposal-v2.schema.json",
+        "portfolio-decision-v2.schema.json",
+        "portfolio-exposure-view-v2.schema.json",
         "order-sizing-decision.schema.json",
+        "order-sizing-decision-v2.schema.json",
         "event-transmission.schema.json",
         "backtest-request.schema.json",
         "backtest-result.schema.json",
@@ -149,6 +153,8 @@ def test_wheel_packages_every_registered_agent_schema() -> None:
         "judgment-skill-trace.schema.json",
         "judgment-evaluation-band-specification.schema.json",
         "judgment-evaluation-result.schema.json",
+        "strategy-validation-registration.schema.json",
+        "strategy-validation-report.schema.json",
     ],
 )
 def test_schema_is_valid(schema_name: str) -> None:

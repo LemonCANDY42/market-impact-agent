@@ -26,6 +26,7 @@ from market_impact_agent.agent_engine import (
     AgentEngine,
     AgentRunRequest,
     CancellationToken,
+    compose_authoritative_agent_engine,
 )
 from market_impact_agent.agent_runtime import (
     ContextCompactor,
@@ -45,6 +46,7 @@ from market_impact_agent.agent_runtime import (
     ToolRegistry,
     ToolSideEffect,
 )
+from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.mcp_runtime import McpServerSnapshot
 from market_impact_agent.research import EvidenceTier, TransmissionDirectness
@@ -583,6 +585,90 @@ def test_agent_engine_completes_tool_loop_and_freezes_auditable_judgment(tmp_pat
     )
 
 
+def test_authoritative_agent_engine_writes_root_authenticated_events(tmp_path: Path) -> None:
+    provider = FixtureProvider([final_turn(proposal(), 1)])
+    fixture = make_engine(tmp_path / "fixture", provider, handler_calls=[])
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    engine = compose_authoritative_agent_engine(
+        store=store,
+        provider=provider,
+        config=fixture.config,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+
+    result = asyncio.run(engine.run(request("root-authenticated-run")))
+
+    assert result.status is RunStatus.COMPLETED
+    events = RunJournal.authoritative(store).events("root-authenticated-run")
+    assert [event.event_type for event in events] == [
+        "run.started",
+        "model.turn.completed",
+        "judgment.validated",
+    ]
+    with sqlite3.connect(store.index_path) as connection:
+        rows = connection.execute(
+            "SELECT signer_authority_id, privileged_signature FROM events ORDER BY sequence"
+        ).fetchall()
+    assert all(row[0] == store.harness_authority_id and len(str(row[1])) == 64 for row in rows)
+
+
+def test_authoritative_journal_exposes_no_privileged_writer_or_signer(tmp_path: Path) -> None:
+    provider = FixtureProvider([final_turn(proposal(), 1)])
+    fixture = make_engine(tmp_path / "fixture", provider, handler_calls=[])
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    journal = RunJournal.authoritative(store)
+
+    assert not hasattr(journal, "append_privileged")
+    assert not hasattr(journal, "event_signer_for_agent_engine")
+    assert not hasattr(journal, "_event_signer_for_agent_engine")
+    assert not hasattr(store, "event_signer")
+    assert not hasattr(store, "privileged_event_sink")
+
+    uncomposed = AgentEngine(
+        provider=provider,
+        config=fixture.config,
+        artifact_store=store.artifacts,
+        journal=journal,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+    with pytest.raises(PermissionError, match="Harness composition root"):
+        asyncio.run(uncomposed.run(request("uncomposed-authoritative-run")))
+
+
+def test_authoritative_agent_engine_signs_pre_model_failure_terminal(tmp_path: Path) -> None:
+    provider = FixtureProvider([])
+    fixture = make_engine(tmp_path / "fixture", provider, handler_calls=[])
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    engine = compose_authoritative_agent_engine(
+        store=store,
+        provider=provider,
+        config=fixture.config,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+
+    result = asyncio.run(engine.run(request("signed-pre-model-failure")))
+
+    assert result.status is RunStatus.FAILED
+    events = RunJournal.authoritative(store).events("signed-pre-model-failure")
+    assert [event.event_type for event in events] == ["run.started", "run.failed"]
+    assert events[-1].payload["status"] == RunStatus.FAILED.value
+    replay = compose_authoritative_agent_engine(
+        store=store,
+        provider=FixtureProvider([]),
+        config=fixture.config,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+    assert asyncio.run(replay.run(request("signed-pre-model-failure"))).status is RunStatus.FAILED
+
+
 def test_agent_engine_reopens_authoritative_completed_run_state(tmp_path: Path) -> None:
     run_request = request()
     engine = make_engine(
@@ -674,7 +760,7 @@ def test_terminal_replay_rejects_another_valid_judgment_artifact(tmp_path: Path)
         )
 
     replay = make_engine(root, FixtureProvider([]), handler_calls=[])
-    with pytest.raises(ValueError, match="run_id"):
+    with pytest.raises(ValueError, match="authoritative Agent run"):
         asyncio.run(replay.run(request("terminal-first")))
 
 
@@ -718,7 +804,7 @@ def test_terminal_replay_rejects_valid_artifact_with_wrong_journal_tail(
         )
 
     replay = make_engine(root, FixtureProvider([]), handler_calls=[])
-    with pytest.raises(ValueError, match="journal tail"):
+    with pytest.raises(ValueError, match="authoritative Agent run"):
         asyncio.run(replay.run(request("terminal-journal")))
 
 
@@ -738,7 +824,7 @@ def test_terminal_replay_rejects_another_run_error_artifact(tmp_path: Path) -> N
         )
 
     replay = make_engine(root, FixtureProvider([]), handler_calls=[])
-    with pytest.raises(ValueError, match="run record"):
+    with pytest.raises(ValueError, match="authoritative Agent run"):
         asyncio.run(replay.run(request("failed-first")))
 
 
@@ -936,7 +1022,12 @@ def test_budget_cancel_malformed_output_and_secret_exfiltration_fail_closed(
     )
     budget_result = asyncio.run(budget_engine.run(request("budget-run")))
     assert budget_result.status is RunStatus.BUDGET_EXHAUSTED
+    assert budget_result.metrics is not None
+    assert budget_result.metrics.tool_calls == 2
     assert calls == []
+    budget_replay = asyncio.run(budget_engine.run(request("budget-run")))
+    assert budget_replay.status is RunStatus.BUDGET_EXHAUSTED
+    assert budget_replay.metrics == budget_result.metrics
 
     token = CancellationToken()
     token.cancel()

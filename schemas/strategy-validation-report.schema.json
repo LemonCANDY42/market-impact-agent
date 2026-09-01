@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/strategy-validation-report.schema.json",
+  "title": "Market Impact Strategy Validation Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "report_id", "registration_id", "registration_hash", "program",
+    "disposition", "evidence_lane", "independent_case_count", "nonempty_execution_count",
+    "regime_count", "candidate_mean_case_return", "mean_excess_return",
+    "paired_interval_lower", "maximum_single_event_share", "outcomes_hash",
+    "authority_bindings_hash", "prospective_cohort_seal_hash",
+    "portfolio_metrics_hash", "portfolio_metrics",
+    "downside_failure_case_ids", "gate_results", "reasons", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.strategy-validation-report.v1"},
+    "report_id": {"type": "string", "pattern": "^strategy-validation-report-[0-9a-f]{64}$"},
+    "registration_id": {"type": "string", "pattern": "^strategy-validation-registration-[0-9a-f]{64}$"},
+    "registration_hash": {"$ref": "#/$defs/sha256"},
+    "program": {"enum": ["historical_strict", "prospective_confirmation"]},
+    "disposition": {"enum": ["accepted", "rejected", "inconclusive"]},
+    "evidence_lane": {"enum": ["strict_pit", "prospective_actual_receipt"]},
+    "independent_case_count": {"type": "integer", "minimum": 0},
+    "nonempty_execution_count": {"type": "integer", "minimum": 0},
+    "regime_count": {"type": "integer", "minimum": 0},
+    "candidate_mean_case_return": {"$ref": "#/$defs/optional_decimal"},
+    "mean_excess_return": {"$ref": "#/$defs/optional_decimal"},
+    "paired_interval_lower": {"$ref": "#/$defs/optional_decimal"},
+    "maximum_single_event_share": {"$ref": "#/$defs/optional_decimal"},
+    "outcomes_hash": {"$ref": "#/$defs/sha256"},
+    "authority_bindings_hash": {"$ref": "#/$defs/sha256"},
+    "prospective_cohort_seal_hash": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "portfolio_metrics_hash": {"$ref": "#/$defs/sha256"},
+    "portfolio_metrics": {"$ref": "#/$defs/portfolio_metrics"},
+    "downside_failure_case_ids": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "gate_results": {"$ref": "#/$defs/gate_results"},
+    "reasons": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "execution_capability": {"const": "none"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"program": {"const": "historical_strict"}}},
+      "then": {"properties": {"prospective_cohort_seal_hash": {"const": null}}}
+    },
+    {
+      "if": {"properties": {"program": {"const": "prospective_confirmation"}}},
+      "then": {"properties": {"prospective_cohort_seal_hash": {"$ref": "#/$defs/sha256"}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "disposition": {"const": "accepted"},
+          "program": {"const": "historical_strict"}
+        },
+        "required": ["disposition", "program"]
+      },
+      "then": {
+        "properties": {
+          "evidence_lane": {"const": "strict_pit"},
+          "independent_case_count": {"const": 24},
+          "regime_count": {"type": "integer", "minimum": 6}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "disposition": {"const": "accepted"},
+          "program": {"const": "prospective_confirmation"}
+        },
+        "required": ["disposition", "program"]
+      },
+      "then": {
+        "properties": {
+          "evidence_lane": {"const": "prospective_actual_receipt"},
+          "independent_case_count": {"type": "integer", "minimum": 30},
+          "nonempty_execution_count": {"type": "integer", "minimum": 20},
+          "regime_count": {"type": "integer", "minimum": 4}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"disposition": {"const": "accepted"}}, "required": ["disposition"]},
+      "then": {
+        "properties": {
+          "candidate_mean_case_return": {"$ref": "#/$defs/positive_decimal"},
+          "mean_excess_return": {"$ref": "#/$defs/positive_decimal"},
+          "paired_interval_lower": {"$ref": "#/$defs/positive_decimal"},
+          "maximum_single_event_share": {"$ref": "#/$defs/maximum_event_share"},
+          "portfolio_metrics": {
+            "properties": {
+              "candidate_net_return": {"$ref": "#/$defs/positive_decimal"},
+              "candidate_stressed_net_return": {"$ref": "#/$defs/positive_decimal"}
+            }
+          },
+          "downside_failure_case_ids": {"maxItems": 0},
+          "gate_results": {"const": {
+            "complete_denominator": true,
+            "evidence_authority_passed": true,
+            "prospective_denominator_complete": true,
+            "regime_coverage": true,
+            "minimum_nonempty_executions": true,
+            "candidate_after_cost_return_positive": true,
+            "primary_baseline_beaten_with_confidence": true,
+            "stressed_cost_return_positive": true,
+            "maximum_drawdown_passed": true,
+            "cvar_passed": true,
+            "sharpe_passed": true,
+            "sortino_passed": true,
+            "downside_loss_passed": true,
+            "event_concentration_passed": true,
+            "leave_one_event_passed": true,
+            "leave_one_regime_passed": true
+          }},
+          "reasons": {"maxItems": 0},
+          "execution_capability": {"const": "none"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "positive_decimal": {
+      "type": "string",
+      "pattern": "^(?:0\\.[0-9]*[1-9][0-9]*|[1-9][0-9]*(?:\\.[0-9]+)?)$"
+    },
+    "maximum_event_share": {
+      "type": "string",
+      "pattern": "^0(?:\\.(?:[01][0-9]*|20*))?$"
+    },
+    "optional_decimal": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/decimal"}]
+    },
+    "portfolio_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "candidate_net_return", "primary_baseline_net_return",
+        "candidate_max_drawdown", "primary_baseline_max_drawdown",
+        "candidate_cvar95", "primary_baseline_cvar95",
+        "candidate_sharpe", "primary_baseline_sharpe",
+        "candidate_sortino", "primary_baseline_sortino",
+        "candidate_stressed_net_return", "primary_baseline_stressed_net_return",
+        "candidate_turnover", "primary_baseline_turnover",
+        "candidate_adverse_excursion", "primary_baseline_adverse_excursion",
+        "candidate_liquidity_utilization", "primary_baseline_liquidity_utilization",
+        "avoided_loss", "false_avoidance_opportunity_cost"
+      ],
+      "properties": {
+        "candidate_net_return": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_net_return": {"$ref": "#/$defs/decimal"},
+        "candidate_max_drawdown": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_max_drawdown": {"$ref": "#/$defs/decimal"},
+        "candidate_cvar95": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_cvar95": {"$ref": "#/$defs/decimal"},
+        "candidate_sharpe": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_sharpe": {"$ref": "#/$defs/decimal"},
+        "candidate_sortino": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_sortino": {"$ref": "#/$defs/decimal"},
+        "candidate_stressed_net_return": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_stressed_net_return": {"$ref": "#/$defs/decimal"},
+        "candidate_turnover": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_turnover": {"$ref": "#/$defs/decimal"},
+        "candidate_adverse_excursion": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_adverse_excursion": {"$ref": "#/$defs/decimal"},
+        "candidate_liquidity_utilization": {"$ref": "#/$defs/decimal"},
+        "primary_baseline_liquidity_utilization": {"$ref": "#/$defs/decimal"},
+        "avoided_loss": {"$ref": "#/$defs/decimal"},
+        "false_avoidance_opportunity_cost": {"$ref": "#/$defs/decimal"}
+      }
+    },
+    "gate_results": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "complete_denominator", "evidence_authority_passed",
+        "prospective_denominator_complete", "regime_coverage",
+        "minimum_nonempty_executions", "candidate_after_cost_return_positive",
+        "primary_baseline_beaten_with_confidence", "stressed_cost_return_positive",
+        "maximum_drawdown_passed", "cvar_passed", "sharpe_passed", "sortino_passed",
+        "downside_loss_passed", "event_concentration_passed", "leave_one_event_passed",
+        "leave_one_regime_passed"
+      ],
+      "properties": {
+        "complete_denominator": {"type": "boolean"},
+        "evidence_authority_passed": {"type": "boolean"},
+        "prospective_denominator_complete": {"type": "boolean"},
+        "regime_coverage": {"type": "boolean"},
+        "minimum_nonempty_executions": {"type": "boolean"},
+        "candidate_after_cost_return_positive": {"type": "boolean"},
+        "primary_baseline_beaten_with_confidence": {"type": "boolean"},
+        "stressed_cost_return_positive": {"type": "boolean"},
+        "maximum_drawdown_passed": {"type": "boolean"},
+        "cvar_passed": {"type": "boolean"},
+        "sharpe_passed": {"type": "boolean"},
+        "sortino_passed": {"type": "boolean"},
+        "downside_loss_passed": {"type": "boolean"},
+        "event_concentration_passed": {"type": "boolean"},
+        "leave_one_event_passed": {"type": "boolean"},
+        "leave_one_regime_passed": {"type": "boolean"}
+      }
+    }
+  }
+}

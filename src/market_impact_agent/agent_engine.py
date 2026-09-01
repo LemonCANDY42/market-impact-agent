@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import math
+import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import (
@@ -14,6 +17,7 @@ from market_impact_agent.agent_contracts import (
     JudgmentArtifact,
     JudgmentProposal,
     canonical_hash,
+    canonical_json_bytes,
     judgment_artifact_from_dict,
     judgment_proposal_from_dict,
 )
@@ -46,6 +50,12 @@ from market_impact_agent.runtime_store import (
     RunRecord,
     RunStatus,
     RuntimeEvent,
+    _privileged_event_signing_bytes,  # pyright: ignore[reportPrivateUsage]
+)
+from market_impact_agent.strategy_validation import (
+    StrategyCaseRunPlan,
+    start_strategy_case_run,
+    write_strategy_case_terminal,
 )
 
 HARD_RESEARCH_POLICY = """Market Impact Agent Harness policy v1:
@@ -78,6 +88,7 @@ class AgentRunRequest:
     selected_skills: tuple[str, ...]
     tool_access: ToolAccessContext
     mcp_server_ids: tuple[str, ...] = ()
+    strategy_case_plan: StrategyCaseRunPlan | None = None
 
     def __post_init__(self) -> None:
         if not self.run_id or self.run_id != self.run_id.strip():
@@ -204,6 +215,359 @@ class CompletedAgentRunAuthority(Protocol):
     ) -> None: ...
 
 
+def reopen_authoritative_agent_terminal(
+    *,
+    journal: RunJournal,
+    artifact_store: ArtifactStore,
+    run_id: str,
+    status: RunStatus,
+    finished_at: datetime,
+    terminal_artifact_hash: str,
+) -> JudgmentArtifact | None:
+    """Reopen the terminal artifact against the concrete Agent Journal owner."""
+
+    require_aware(finished_at, "Agent terminal finished_at")
+    record = journal.get_run(run_id)
+    if record.status not in {RunStatus.RUNNING, status}:
+        raise ValueError("Agent terminal status differs from the authoritative Run Record")
+    if record.status is status and (
+        record.terminal_artifact_id != terminal_artifact_hash or record.updated_at != finished_at
+    ):
+        raise ValueError("Agent terminal differs from the authoritative Run Record")
+    value = artifact_store.read_json(terminal_artifact_hash)
+    events = journal.events(run_id)
+    if not events:
+        raise ValueError("Agent terminal has no authoritative Run Journal events")
+    started_event = events[0]
+    if (
+        started_event.event_id != f"{run_id}.started"
+        or started_event.event_type != "run.started"
+        or started_event.observed_at != record.created_at
+        or started_event.payload
+        != {
+            "config_hash": record.config_hash,
+            "provider_id": started_event.payload.get("provider_id"),
+            "model": started_event.payload.get("model"),
+            "strategy_plan_artifact_hash": record.strategy_plan_artifact_hash,
+        }
+        or not isinstance(started_event.payload.get("provider_id"), str)
+        or not isinstance(started_event.payload.get("model"), str)
+        or sum(event.event_type == "run.started" for event in events) != 1
+    ):
+        raise ValueError("Agent run-start event differs from its authoritative bindings")
+    journal_hash = events[-1].event_hash
+    if status is not RunStatus.COMPLETED:
+        if not isinstance(value, dict):
+            raise TypeError("terminal error artifact must be an object")
+        payload = cast(dict[str, object], value)
+        if set(payload) != {
+            "schema_version",
+            "run_id",
+            "status",
+            "journal_hash",
+            "finished_at",
+            "error_class",
+            "message",
+            "metrics",
+        }:
+            raise ValueError("terminal error artifact does not match its closed contract")
+        terminal_event = events[-1]
+        if (
+            terminal_event.event_id != f"{run_id}.terminal.failed"
+            or terminal_event.event_type != "run.failed"
+            or terminal_event.observed_at != finished_at
+            or set(terminal_event.payload)
+            != {"status", "finished_at", "error_class", "message", "metrics"}
+        ):
+            raise ValueError("Agent failure has no matching signed terminal event")
+        if sum(event.event_type == "run.failed" for event in events) != 1 or any(
+            event.event_type == "judgment.validated" for event in events
+        ):
+            raise ValueError("Agent failure Journal has an invalid terminal event chain")
+        if (
+            payload.get("schema_version") != "market-impact.agent-run-error.v1"
+            or payload.get("run_id") != run_id
+            or payload.get("status") != status.value
+            or payload.get("journal_hash") != journal_hash
+            or payload.get("finished_at")
+            != finished_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        ):
+            raise ValueError("terminal error artifact differs from the authoritative Agent run")
+        if not all(
+            isinstance(payload.get(name), str) and bool(payload[name])
+            for name in ("error_class", "message")
+        ) or not isinstance(payload.get("metrics"), dict):
+            raise ValueError("terminal error artifact fields are invalid")
+        if terminal_event.payload != {
+            "status": payload["status"],
+            "finished_at": payload["finished_at"],
+            "error_class": payload["error_class"],
+            "message": payload["message"],
+            "metrics": payload["metrics"],
+        }:
+            raise ValueError("terminal error artifact differs from its signed terminal event")
+        reconstructed = _reconstruct_run_metrics(
+            events=events,
+            artifact_store=artifact_store,
+            run_id=run_id,
+            provider_id=cast(str, started_event.payload["provider_id"]),
+            model=cast(str, started_event.payload["model"]),
+            require_completed_turn=False,
+            enforce_provider_identity=False,
+        )
+        if payload["metrics"] != reconstructed:
+            raise ValueError("terminal error metrics differ from the authoritative Agent Journal")
+        return None
+
+    judgment = judgment_artifact_from_dict(value)
+    if (
+        judgment.run_id != run_id
+        or judgment.started_at != record.created_at
+        or judgment.finished_at != finished_at
+        or judgment.journal_hash != journal_hash
+    ):
+        raise ValueError("Judgment Artifact differs from the authoritative Agent run")
+    validation_event = events[-1]
+    if any(event.event_type == "run.failed" for event in events):
+        raise ValueError("completed Judgment follows a failure terminal event")
+    if (
+        validation_event.event_id != f"{run_id}.proposal.validated"
+        or validation_event.event_type != "judgment.validated"
+        or validation_event.event_hash != judgment.journal_hash
+    ):
+        raise ValueError("Judgment Artifact is not bound to the final validation event")
+    validation_payload = validation_event.payload
+    if set(validation_payload) != {
+        "proposal_hash",
+        "transcript_hash",
+        "metrics_hash",
+        "metrics",
+    }:
+        raise ValueError("Judgment validation event has an unexpected contract")
+    if validation_payload.get("proposal_hash") != canonical_hash(judgment.proposal.to_dict()):
+        raise ValueError("Judgment proposal differs from the validation event")
+    if validation_payload.get("transcript_hash") != judgment.transcript_hash:
+        raise ValueError("Judgment transcript differs from the validation event")
+    transcript = artifact_store.read_json(judgment.transcript_hash)
+    if not isinstance(transcript, list):
+        raise TypeError("Judgment transcript artifact must be an array")
+    metrics_value = validation_payload.get("metrics")
+    metrics_hash = validation_payload.get("metrics_hash")
+    if not isinstance(metrics_value, dict) or not isinstance(metrics_hash, str):
+        raise ValueError("Judgment metrics differ from the validation event")
+    metrics = cast(dict[str, object], metrics_value)
+    reconstructed_metrics = _reconstruct_run_metrics(
+        events=events,
+        artifact_store=artifact_store,
+        run_id=run_id,
+        provider_id=judgment.provider_id,
+        model=judgment.model,
+    )
+    if (
+        metrics != reconstructed_metrics
+        or metrics_hash != canonical_hash(reconstructed_metrics)
+        or artifact_store.read_json(metrics_hash) != reconstructed_metrics
+    ):
+        raise ValueError("Judgment metrics differ from the validation event")
+    turns = tuple(event for event in events if event.event_type == "model.turn.completed")
+    if not turns:
+        raise ValueError("completed Judgment has no authoritative model turn")
+    final_turn = turns[-1].payload
+    if set(final_turn) != {
+        "response_id",
+        "model",
+        "assistant_artifact_hash",
+        "raw_response_artifact_hash",
+        "tool_calls",
+        "finish_reason",
+        "usage",
+        "latency_ms",
+        "attempts",
+        "estimated_cost_microusd",
+        "provider_id",
+        "tool_surface_hash",
+        "tool_manifest_hashes",
+        "mcp_binding_hashes",
+        "context_before_turn_hash",
+    }:
+        raise ValueError("final model turn has an unexpected contract")
+    if (
+        final_turn.get("model") != judgment.model
+        or final_turn.get("tool_calls") != []
+        or final_turn.get("raw_response_artifact_hash") != judgment.raw_response_hash
+        or final_turn.get("tool_surface_hash") != judgment.tool_surface_hash
+        or final_turn.get("tool_manifest_hashes") != list(judgment.tool_manifest_hashes)
+        or final_turn.get("mcp_binding_hashes") != list(judgment.mcp_server_hashes)
+    ):
+        raise ValueError("Judgment Artifact differs from the final model turn")
+    raw_response = artifact_store.read_json(judgment.raw_response_hash)
+    assistant_hash = final_turn.get("assistant_artifact_hash")
+    if not isinstance(raw_response, dict) or not isinstance(assistant_hash, str):
+        raise TypeError("final model turn artifacts must be objects")
+    assistant_value = artifact_store.read_json(assistant_hash)
+    if not isinstance(assistant_value, dict):
+        raise TypeError("final model assistant artifact must be an object")
+    assistant = cast(dict[str, object], assistant_value)
+    content = assistant.get("content")
+    if not isinstance(content, str) or not content.strip() or content != content.strip():
+        raise ValueError("final model turn has no canonical Judgment proposal")
+    try:
+        proposal_value = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("final model turn has invalid Judgment proposal JSON") from exc
+    if judgment_proposal_from_dict(proposal_value) != judgment.proposal:
+        raise ValueError("Judgment proposal differs from the final model turn")
+    context_before_hash = final_turn.get("context_before_turn_hash")
+    if not isinstance(context_before_hash, str):
+        raise TypeError("final model turn has no context artifact identity")
+    context_before = artifact_store.read_json(context_before_hash)
+    if not isinstance(context_before, list) or not context_before:
+        raise ValueError("completed Judgment has no authoritative pre-turn context")
+    context_entries = _validated_context_entries(cast(list[object], context_before))
+    if not {"policy", "task"} <= {cast(str, entry["kind"]) for entry in context_entries}:
+        raise ValueError("completed Judgment transcript lacks pinned Agent context")
+    turn_number = len(turns)
+    expected_assistant_entry = {
+        "entry_id": f"{run_id}.assistant.{turn_number}",
+        "role": "assistant",
+        "kind": "turn",
+        "content": content,
+        "pinned": False,
+        "untrusted": False,
+        "artifact_hash": canonical_hash(assistant),
+        "tool_call_id": None,
+        "provider_fields": {
+            key: item for key, item in assistant.items() if key not in {"role", "content"}
+        },
+    }
+    expected_transcript = [*context_entries, expected_assistant_entry]
+    if transcript != expected_transcript:
+        raise ValueError("Judgment transcript differs from ordered Agent Journal context")
+    return judgment
+
+
+def _reconstruct_run_metrics(
+    *,
+    events: tuple[RuntimeEvent, ...],
+    artifact_store: ArtifactStore,
+    run_id: str,
+    provider_id: str,
+    model: str,
+    require_completed_turn: bool = True,
+    enforce_provider_identity: bool = True,
+) -> dict[str, object]:
+    turns = 0
+    tool_calls_requested = 0
+    completed_tool_events = 0
+    input_tokens = 0
+    output_tokens = 0
+    result_bytes = 0
+    latency_ms = 0.0
+    provider_attempts = 0
+    estimated_cost_microusd = 0
+    allowed_types = {
+        "run.started",
+        "run.failed",
+        "model.turn.completed",
+        "tool.call.completed",
+        "model.turn.failed",
+        "context.checkpointed",
+        "judgment.contract_correction",
+        "judgment.validated",
+    }
+    for event in events:
+        if event.event_type not in allowed_types:
+            raise ValueError("completed Agent Journal contains an unsupported event type")
+        if event.event_type == "model.turn.completed":
+            turns += 1
+            if event.event_id != f"{run_id}.turn.{turns}":
+                raise ValueError("completed model turns are not canonically ordered")
+            payload = event.payload
+            if enforce_provider_identity and (
+                payload.get("provider_id") != provider_id or payload.get("model") != model
+            ):
+                raise ValueError("completed model turn Provider identity drifted")
+            usage = payload.get("usage")
+            if not isinstance(usage, dict):
+                raise TypeError("completed model turn usage must be an object")
+            typed_usage = cast(dict[str, object], usage)
+            turn_input = _payload_integer(typed_usage, "input_tokens")
+            turn_output = _payload_integer(typed_usage, "output_tokens")
+            if turn_input + turn_output == 0:
+                raise ValueError("completed model turn cannot report zero token usage")
+            raw_hash = _payload_string(payload, "raw_response_artifact_hash")
+            assistant_hash = _payload_string(payload, "assistant_artifact_hash")
+            context_hash = _payload_string(payload, "context_before_turn_hash")
+            for artifact_hash in (raw_hash, assistant_hash, context_hash):
+                artifact_store.read_json(artifact_hash)
+            raw_calls = payload.get("tool_calls")
+            if not isinstance(raw_calls, list):
+                raise TypeError("completed model turn tool_calls must be an array")
+            tool_calls_requested += len(cast(list[object], raw_calls))
+            input_tokens += turn_input
+            output_tokens += turn_output
+            latency_ms += _payload_number(payload, "latency_ms")
+            provider_attempts += _payload_integer(payload, "attempts")
+            estimated_cost_microusd += _payload_integer(payload, "estimated_cost_microusd")
+        elif event.event_type == "tool.call.completed":
+            if turns == 0:
+                raise ValueError("tool completion precedes every completed model turn")
+            completed_tool_events += 1
+            result_hash = _payload_string(event.payload, "result_artifact_hash")
+            media_type = _payload_string(event.payload, "result_media_type")
+            stored = artifact_store.get(result_hash, media_type=media_type)
+            size = _payload_integer(event.payload, "result_size_bytes")
+            if stored.size_bytes != size:
+                raise ValueError("tool result size differs from the Agent Journal")
+            result_bytes += size
+        elif event.event_type == "model.turn.failed":
+            provider_attempts += _payload_integer(event.payload, "attempts")
+    if require_completed_turn and turns == 0:
+        raise ValueError("completed Judgment has no authoritative model turn")
+    if completed_tool_events > tool_calls_requested:
+        raise ValueError("Agent Journal completes more tool calls than the model requested")
+    if require_completed_turn and completed_tool_events != tool_calls_requested:
+        raise ValueError("completed Agent Journal tool-call totals are incomplete")
+    return {
+        "turns": turns,
+        "tool_calls": tool_calls_requested,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "result_bytes": result_bytes,
+        "latency_ms": latency_ms,
+        "provider_attempts": provider_attempts,
+        "estimated_cost_microusd": estimated_cost_microusd,
+    }
+
+
+def _validated_context_entries(value: list[object]) -> list[dict[str, object]]:
+    expected_keys = {
+        "entry_id",
+        "role",
+        "kind",
+        "content",
+        "pinned",
+        "untrusted",
+        "artifact_hash",
+        "tool_call_id",
+        "provider_fields",
+    }
+    entries: list[dict[str, object]] = []
+    identities: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise TypeError("Agent context transcript entries must be objects")
+        entry = cast(dict[str, object], item)
+        if set(entry) != expected_keys or not isinstance(entry.get("entry_id"), str):
+            raise ValueError("Agent context transcript entry has an unexpected contract")
+        entry_id = cast(str, entry["entry_id"])
+        if entry_id in identities:
+            raise ValueError("Agent context transcript entry identities must be unique")
+        identities.add(entry_id)
+        entries.append(entry)
+    return entries
+
+
 class CancellationToken:
     def __init__(self) -> None:
         self._event = asyncio.Event()
@@ -251,6 +615,133 @@ class _MutableMetrics:
         )
 
 
+class _PrivilegedEventSink:
+    """Root-authenticated event writer held only by a composed AgentEngine."""
+
+    __slots__ = ("_authority_id", "_journal", "_sign")
+
+    def __init__(
+        self,
+        *,
+        journal: RunJournal,
+        authority_id: str,
+        signer: Callable[[bytes], str],
+    ) -> None:
+        self._journal = journal
+        self._authority_id = authority_id
+        self._sign = signer
+
+    def append(
+        self,
+        *,
+        run_id: str,
+        event_id: str,
+        event_type: str,
+        observed_at: datetime,
+        payload: dict[str, object],
+    ) -> RuntimeEvent:
+        require_aware(observed_at, "observed_at")
+        payload_json = canonical_json_bytes(payload).decode()
+        payload_hash = sha256(payload_json.encode()).hexdigest()
+        observed = observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        connection = sqlite3.connect(self._journal.path)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = FULL")
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            run = connection.execute(
+                "SELECT status FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if run is None:
+                raise KeyError(f"unknown run_id: {run_id}")
+            if run["status"] != RunStatus.RUNNING.value:
+                raise ValueError("cannot append to a terminal run")
+            existing = connection.execute(
+                "SELECT run_id, event_type, payload_hash FROM events WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["run_id"] != run_id
+                    or existing["event_type"] != event_type
+                    or existing["payload_hash"] != payload_hash
+                ):
+                    raise ValueError("event_id already exists with different content")
+                connection.commit()
+                event = self._journal.event(event_id)
+                if event is None:
+                    raise RuntimeError("existing privileged event could not be read back")
+                return event
+            previous = connection.execute(
+                "SELECT event_hash FROM events WHERE run_id = ? ORDER BY sequence DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            previous_hash = None if previous is None else cast(str, previous["event_hash"])
+            next_row = connection.execute(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence FROM events"
+            ).fetchone()
+            if next_row is None:
+                raise RuntimeError("Run Journal could not allocate an event sequence")
+            sequence = cast(int, next_row["next_sequence"])
+            event_core = {
+                "run_id": run_id,
+                "event_id": event_id,
+                "event_type": event_type,
+                "observed_at": observed,
+                "payload_hash": payload_hash,
+                "previous_hash": previous_hash,
+            }
+            event_hash = sha256(canonical_json_bytes(event_core)).hexdigest()
+            signing_bytes = _privileged_event_signing_bytes(
+                harness_authority_id=self._authority_id,
+                sequence=sequence,
+                run_id=run_id,
+                event_id=event_id,
+                event_type=event_type,
+                observed_at=observed,
+                payload=payload,
+                previous_hash=previous_hash,
+            )
+            signature = self._sign(signing_bytes)
+            connection.execute(
+                """
+                INSERT INTO events(
+                    sequence, run_id, event_id, event_type, observed_at, payload_json,
+                    payload_hash, previous_hash, event_hash,
+                    signer_authority_id, privileged_signature
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    sequence,
+                    run_id,
+                    event_id,
+                    event_type,
+                    observed,
+                    payload_json,
+                    payload_hash,
+                    previous_hash,
+                    event_hash,
+                    self._authority_id,
+                    signature,
+                ),
+            )
+            connection.execute(
+                "UPDATE runs SET updated_at = ? WHERE run_id = ?", (observed, run_id)
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        event = self._journal.event(event_id)
+        if event is None:
+            raise RuntimeError("appended privileged event could not be read back")
+        return event
+
+
 class AgentEngine:
     def __init__(
         self,
@@ -273,6 +764,7 @@ class AgentEngine:
         self.config = config
         self.artifact_store = artifact_store
         self.journal = journal
+        self._privileged_event_sink: _PrivilegedEventSink | None = None
         self.tool_registry = tool_registry
         self.skill_registry = skill_registry
         self.token_counter = token_counter or Utf8TokenEstimator()
@@ -430,6 +922,10 @@ class AgentEngine:
         *,
         cancellation: CancellationToken | None = None,
     ) -> AgentRunResult:
+        if self.journal.promotion_eligible and self._privileged_event_sink is None:
+            raise PermissionError(
+                "authoritative AgentEngine must be created by the Harness composition root"
+            )
         token = cancellation or CancellationToken()
         loaded_skills = self.skill_registry.load(
             request.selected_skills,
@@ -456,16 +952,49 @@ class AgentEngine:
                 "tool_access": _access_dict(request.tool_access),
                 "context_estimator_id": self.token_counter.counter_id,
                 "compactor_id": self.compactor.compactor_id,
+                "strategy_case_plan": (
+                    None
+                    if request.strategy_case_plan is None
+                    else request.strategy_case_plan.to_dict()
+                ),
             }
         )
         started_at = self._now()
-        record = self.journal.start_run(
-            run_id=request.run_id,
-            config_hash=run_spec_hash,
-            created_at=started_at,
-        )
+        if request.strategy_case_plan is not None:
+            self._validate_strategy_case_plan(
+                request,
+                prompt_hash=prompt_hash,
+                surface=surface,
+                loaded_skills=loaded_skills,
+            )
+            record = start_strategy_case_run(
+                journal=self.journal,
+                artifact_store=self.artifact_store,
+                run_id=request.run_id,
+                plan=request.strategy_case_plan,
+                config_hash=run_spec_hash,
+                created_at=started_at,
+            )
+        else:
+            record = self.journal.start_run(
+                run_id=request.run_id,
+                config_hash=run_spec_hash,
+                created_at=started_at,
+            )
         if record.status.terminal:
             return self._terminal_result(record, surface=surface)
+        self._append_privileged_event(
+            run_id=request.run_id,
+            event_id=f"{request.run_id}.started",
+            event_type="run.started",
+            observed_at=record.created_at,
+            payload={
+                "config_hash": record.config_hash,
+                "provider_id": self.config.provider_id,
+                "model": self.config.model,
+                "strategy_plan_artifact_hash": record.strategy_plan_artifact_hash,
+            },
+        )
         metrics = _MutableMetrics()
         try:
             return await self._run_with_control(
@@ -571,7 +1100,7 @@ class AgentEngine:
                 raise _BudgetExceeded(str(exc)) from exc
             if checkpoint is not None:
                 artifact = self.artifact_store.put_json(checkpoint.to_dict())
-                self.journal.append(
+                self._append_privileged_event(
                     run_id=request.run_id,
                     event_id=f"{request.run_id}.checkpoint.{checkpoint_number}",
                     event_type="context.checkpointed",
@@ -615,7 +1144,13 @@ class AgentEngine:
                 )
                 self._assert_no_secret(turn.raw_response)
                 turn = _sanitized_turn(turn, self.secret_values)
-                self._store_turn(request.run_id, turn_number, turn, surface=surface)
+                self._store_turn(
+                    request.run_id,
+                    turn_number,
+                    turn,
+                    surface=surface,
+                    context_before_turn=ledger.entries,
+                )
             else:
                 turn = self._load_turn(existing, surface=surface)
             self._record_turn_metrics(metrics, turn)
@@ -657,7 +1192,7 @@ class AgentEngine:
                     error=exc,
                 )
                 ledger.append(correction)
-                self.journal.append(
+                self._append_privileged_event(
                     run_id=request.run_id,
                     event_id=(f"{request.run_id}.contract-correction.{contract_corrections}"),
                     event_type="judgment.contract_correction",
@@ -674,7 +1209,7 @@ class AgentEngine:
                 [_context_entry_dict(entry) for entry in ledger.entries]
             )
             metrics_artifact = self.artifact_store.put_json(metrics.freeze().to_dict())
-            proposal_event = self.journal.append(
+            proposal_event = self._append_privileged_event(
                 run_id=request.run_id,
                 event_id=f"{request.run_id}.proposal.validated",
                 event_type="judgment.validated",
@@ -708,6 +1243,15 @@ class AgentEngine:
                 proposal=proposal,
             )
             terminal = self.artifact_store.put_json(judgment.to_dict())
+            write_strategy_case_terminal(
+                journal=self.journal,
+                artifact_store=self.artifact_store,
+                run_id=request.run_id,
+                status=RunStatus.COMPLETED,
+                finished_at=finished_at,
+                run_terminal_artifact_hash=terminal.content_hash,
+                judgment_artifact_hash=terminal.content_hash,
+            )
             self.journal.finish(
                 run_id=request.run_id,
                 status=RunStatus.COMPLETED,
@@ -725,6 +1269,31 @@ class AgentEngine:
             )
         raise _BudgetExceeded("run exhausted its model-turn budget")
 
+    def _append_privileged_event(
+        self,
+        *,
+        run_id: str,
+        event_id: str,
+        event_type: str,
+        observed_at: datetime,
+        payload: dict[str, object],
+    ) -> RuntimeEvent:
+        if self._privileged_event_sink is None:
+            return self.journal.append(
+                run_id=run_id,
+                event_id=event_id,
+                event_type=event_type,
+                observed_at=observed_at,
+                payload=payload,
+            )
+        return self._privileged_event_sink.append(
+            run_id=run_id,
+            event_id=event_id,
+            event_type=event_type,
+            observed_at=observed_at,
+            payload=payload,
+        )
+
     def _store_turn(
         self,
         run_id: str,
@@ -732,16 +1301,21 @@ class AgentEngine:
         turn: ModelTurn,
         *,
         surface: _ExecutionSurface,
+        context_before_turn: tuple[ContextEntry, ...],
     ) -> RuntimeEvent:
         assistant_artifact = self.artifact_store.put_json(turn.assistant_message)
         raw_artifact = self.artifact_store.put_json(turn.raw_response)
-        return self.journal.append(
+        context_artifact = self.artifact_store.put_json(
+            [_context_entry_dict(entry) for entry in context_before_turn]
+        )
+        return self._append_privileged_event(
             run_id=run_id,
             event_id=f"{run_id}.turn.{turn_number}",
             event_type="model.turn.completed",
             observed_at=self._now(),
             payload={
                 "response_id": turn.response_id,
+                "provider_id": self.config.provider_id,
                 "model": turn.model,
                 "assistant_artifact_hash": assistant_artifact.content_hash,
                 "raw_response_artifact_hash": raw_artifact.content_hash,
@@ -750,9 +1324,11 @@ class AgentEngine:
                 "usage": turn.usage.to_dict(),
                 "latency_ms": turn.latency_ms,
                 "attempts": turn.attempts,
+                "estimated_cost_microusd": self.config.pricing.estimate_microusd(turn.usage),
                 "tool_surface_hash": surface.tool_surface_hash,
                 "tool_manifest_hashes": list(surface.tool_manifest_hashes),
                 "mcp_binding_hashes": list(surface.mcp_binding_hashes),
+                "context_before_turn_hash": context_artifact.content_hash,
             },
         )
 
@@ -834,7 +1410,7 @@ class AgentEngine:
                 untrusted=True,
                 redacted=True,
             )
-        self.journal.append(
+        self._append_privileged_event(
             run_id=run_id,
             event_id=event_id,
             event_type="tool.call.completed",
@@ -919,6 +1495,38 @@ class AgentEngine:
         if not requested_servers <= skill_servers:
             raise PermissionError("Agent run requested an MCP server outside Skill allowlists")
 
+    def _validate_strategy_case_plan(
+        self,
+        request: AgentRunRequest,
+        *,
+        prompt_hash: str,
+        surface: _ExecutionSurface,
+        loaded_skills: tuple[LoadedSkill, ...],
+    ) -> None:
+        plan = request.strategy_case_plan
+        if plan is None:
+            return
+        expected = (
+            request.run_id,
+            self.journal.harness_authority_id,
+            self.config.config_hash,
+            prompt_hash,
+            canonical_hash([item.manifest.manifest_hash for item in loaded_skills]),
+            canonical_hash(list(surface.tool_manifest_hashes)),
+            canonical_hash(request.evidence_pack.to_dict()),
+        )
+        actual = (
+            plan.run_id,
+            plan.harness_authority_id,
+            plan.model_profile_hash,
+            plan.prompt_hash,
+            plan.skill_catalog_hash,
+            plan.tool_manifest_hash,
+            plan.input_hash,
+        )
+        if actual != expected:
+            raise ValueError("strategy run plan differs from the actual frozen Agent surface")
+
     def _execution_surface(self, request: AgentRunRequest) -> _ExecutionSurface:
         missing = sorted(set(request.mcp_server_ids) - set(self._mcp_snapshots))
         if missing:
@@ -961,7 +1569,7 @@ class AgentEngine:
             and failed_attempts > 0
         ):
             metrics.provider_attempts += failed_attempts
-            self.journal.append(
+            self._append_privileged_event(
                 run_id=run_id,
                 event_id=f"{run_id}.model-failure.{metrics.turns + 1}",
                 event_type="model.turn.failed",
@@ -969,17 +1577,41 @@ class AgentEngine:
                 payload={"attempts": failed_attempts},
             )
         frozen_metrics = metrics.freeze()
+        error_class = type(error).__name__
+        message = self._redacted_message(str(error)) or error_class
+        terminal_event = self._append_privileged_event(
+            run_id=run_id,
+            event_id=f"{run_id}.terminal.failed",
+            event_type="run.failed",
+            observed_at=finished_at,
+            payload={
+                "status": status.value,
+                "finished_at": finished_at.isoformat().replace("+00:00", "Z"),
+                "error_class": error_class,
+                "message": message,
+                "metrics": frozen_metrics.to_dict(),
+            },
+        )
         payload = {
             "schema_version": "market-impact.agent-run-error.v1",
             "run_id": run_id,
             "status": status.value,
-            "journal_hash": self.journal.journal_hash(run_id),
+            "journal_hash": terminal_event.event_hash,
             "finished_at": finished_at.isoformat().replace("+00:00", "Z"),
-            "error_class": type(error).__name__,
-            "message": self._redacted_message(str(error)) or type(error).__name__,
+            "error_class": error_class,
+            "message": message,
             "metrics": frozen_metrics.to_dict(),
         }
         artifact = self.artifact_store.put_json(payload)
+        write_strategy_case_terminal(
+            journal=self.journal,
+            artifact_store=self.artifact_store,
+            run_id=run_id,
+            status=status,
+            finished_at=finished_at,
+            run_terminal_artifact_hash=artifact.content_hash,
+            judgment_artifact_hash=None,
+        )
         record = self.journal.finish(
             run_id=run_id,
             status=status,
@@ -1003,11 +1635,21 @@ class AgentEngine:
     ) -> AgentRunResult:
         if record.terminal_artifact_id is None:
             raise ValueError("terminal run is missing its terminal artifact identity")
+        authoritative_judgment = reopen_authoritative_agent_terminal(
+            journal=self.journal,
+            artifact_store=self.artifact_store,
+            run_id=record.run_id,
+            status=record.status,
+            finished_at=record.updated_at,
+            terminal_artifact_hash=record.terminal_artifact_id,
+        )
         journal_hash = self.journal.journal_hash(record.run_id)
         payload = self.artifact_store.read_json(record.terminal_artifact_id)
         metrics = self._metrics_from_journal(record.run_id)
         if record.status is RunStatus.COMPLETED:
-            judgment = judgment_artifact_from_dict(payload)
+            if authoritative_judgment is None:
+                raise ValueError("completed run has no authoritative Judgment")
+            judgment = authoritative_judgment
             if judgment.run_id != record.run_id:
                 raise ValueError("terminal judgment run_id does not match the run record")
             if judgment.journal_hash != journal_hash:
@@ -1118,8 +1760,11 @@ class AgentEngine:
                 metrics.latency_ms += _payload_number(event.payload, "latency_ms")
                 metrics.provider_attempts += _payload_integer(event.payload, "attempts")
                 metrics.estimated_cost_microusd += self.config.pricing.estimate_microusd(turn_usage)
+                raw_calls = event.payload.get("tool_calls")
+                if not isinstance(raw_calls, list):
+                    raise TypeError("stored model turn tool_calls must be an array")
+                metrics.tool_calls += len(cast(list[object], raw_calls))
             elif event.event_type == "tool.call.completed":
-                metrics.tool_calls += 1
                 size = event.payload.get("result_size_bytes", 0)
                 if isinstance(size, bool) or not isinstance(size, int) or size < 0:
                     raise ValueError("stored tool result_size_bytes is invalid")
@@ -1189,6 +1834,58 @@ class AgentEngine:
         value = self._clock()
         require_aware(value, "AgentEngine clock")
         return value.astimezone(UTC)
+
+
+def compose_authoritative_agent_engine(
+    *,
+    store: object,
+    provider: ModelProvider,
+    config: RuntimeConfig,
+    tool_registry: ToolRegistry,
+    skill_registry: SkillRegistry,
+    token_counter: TokenCounter | None = None,
+    compactor: ContextCompactor | None = None,
+    secret_values: tuple[str, ...] = (),
+    mcp_snapshots: tuple[McpServerSnapshot, ...] = (),
+    clock: Callable[[], datetime] | None = None,
+) -> AgentEngine:
+    """Harness composition root for an authority-bound AgentEngine."""
+
+    from market_impact_agent.data_inputs import LocalDataSnapshotStore
+
+    if type(store) is not LocalDataSnapshotStore:
+        raise TypeError("authoritative AgentEngine requires a LocalDataSnapshotStore")
+    authority_store = store
+    key_path = authority_store.root / ".harness-event-hmac.key"
+    if key_path.is_symlink() or not key_path.is_file():
+        raise ValueError("authoritative AgentEngine event key is unavailable")
+    key = key_path.read_bytes()
+    if len(key) != 32:
+        raise ValueError("authoritative AgentEngine event key has an invalid length")
+
+    def sign_event(payload: bytes) -> str:
+        return hmac.new(key, payload, sha256).hexdigest()
+
+    journal = RunJournal.authoritative(authority_store)
+    engine = AgentEngine(
+        provider=provider,
+        config=config,
+        artifact_store=authority_store.artifacts,
+        journal=journal,
+        tool_registry=tool_registry,
+        skill_registry=skill_registry,
+        token_counter=token_counter,
+        compactor=compactor,
+        secret_values=secret_values,
+        mcp_snapshots=mcp_snapshots,
+        clock=clock,
+    )
+    engine._privileged_event_sink = _PrivilegedEventSink(  # pyright: ignore[reportPrivateUsage]
+        journal=journal,
+        authority_id=authority_store.harness_authority_id,
+        signer=sign_event,
+    )
+    return engine
 
 
 def _build_prompt_entries(

@@ -722,8 +722,27 @@ does not manufacture a receipt gap. A Harness-owned consumer can read `pending_w
 install a scheduler, keep a model resident, dispatch an Agent, promote Evidence, or submit an order.
 Adaptive cadence and corroboration/materiality/contradiction triggers remain later Watch gates.
 If a real receipt gap occurs, later polls remain append-only and cannot make the affected aggregate
-complete; an operator must explicitly approve a new complete baseline/policy before wake eligibility
-resumes.
+complete. Wake eligibility resumes only through `AttentionWatchService.rebaseline`: the Harness
+records one content-identified, one-time grant that binds the gap-poisoned Watch and immutable policy
+hash, original Triage parent and authority hash, Monitoring Scope, Retrieval Plan, Collection Policy,
+operator reason, new complete Journal-frozen Data Snapshot, and the UTC Harness clock. An incomplete,
+future-cutoff, wrong-policy, non-Triage, non-gap-poisoned, expired, or exhausted replacement fails
+closed.
+
+The grant transaction terminalizes the old Watch as `rebaselined`, preserves its policy, counters,
+seen versions, error and outbox rows for audit, and creates exactly one content-identified v3
+successor. The successor keeps the original absolute expiry, scope, route, cadence and cooldown; its
+maximum poll/byte/wake values are only the old Watch's remaining allowances, so replacement grants no
+new duration or budget. Its counters and Snapshot lineage restart at zero and at the new baseline,
+and its seen set contains only versions matched in that baseline. The transaction never creates a
+Wake. The unique old/successor/grant bindings, `BEGIN IMMEDIATE` serialization and append-only grant
+row make identical retry, supervisor race and process restart converge on the same successor; a
+second or conflicting grant is rejected.
+
+A successor Wake resolves its callback through this durable grant chain to the original accepted
+Agent Watch admission. The Harness reopens the exact successor/grant/predecessor binding and the
+original Triage authority rather than minting or copying an Admission, so the original branch, depth
+and callback-cost constraints remain authoritative. Missing or damaged lineage fails closed.
 
 ### Scoped local-first retrieval
 

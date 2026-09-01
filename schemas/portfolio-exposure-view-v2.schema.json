@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/portfolio-exposure-view-v2.schema.json",
+  "title": "Market Impact Portfolio Exposure View v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "exposure_view_id", "authorized_decision_view_id",
+    "authorized_decision_view_hash", "position_snapshot_id", "position_snapshot_hash",
+    "raw_mark_set_hash", "execution_ledger_snapshot_hash", "reconciliation_ledger_snapshot_hash",
+    "currency", "marked_positions", "current_gross_exposure", "current_net_exposure",
+    "daily_turnover_used", "daily_submissions_used", "active_kill_reasons", "observed_at",
+    "valid_until"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.portfolio-exposure-view.v2"},
+    "exposure_view_id": {"type": "string", "pattern": "^portfolio-exposure-view-[0-9a-f]{64}$"},
+    "authorized_decision_view_id": {"type": "string", "pattern": "^authorized-decision-view-[0-9a-f]{64}$"},
+    "authorized_decision_view_hash": {"$ref": "#/$defs/sha256"},
+    "position_snapshot_id": {"type": "string", "pattern": "^position-snapshot-[0-9a-f]{64}$"},
+    "position_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "raw_mark_set_hash": {"$ref": "#/$defs/sha256"},
+    "execution_ledger_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "reconciliation_ledger_snapshot_hash": {"$ref": "#/$defs/sha256"},
+    "currency": {"const": "USD"},
+    "marked_positions": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/marked_position"}},
+    "current_gross_exposure": {"$ref": "#/$defs/nonnegative_decimal"},
+    "current_net_exposure": {"$ref": "#/$defs/decimal"},
+    "daily_turnover_used": {"$ref": "#/$defs/nonnegative_decimal"},
+    "daily_submissions_used": {"type": "integer", "minimum": 0},
+    "active_kill_reasons": {"type": "array", "uniqueItems": true, "items": {"enum": ["daily_loss_threshold_exceeded", "incomplete_order_coverage", "provider_loss", "reconciliation_difference", "stale_account_snapshot", "strategy_peak_drawdown_threshold_exceeded", "unknown_ack"]}},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "nonnegative_decimal": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+    "marked_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instrument_id", "venue", "instrument_class", "side", "quantity", "raw_price", "raw_price_basis_hash"],
+      "properties": {
+        "instrument_id": {"type": "string", "minLength": 1},
+        "venue": {"type": "string", "minLength": 1},
+        "instrument_class": {"enum": ["equity", "exchange_traded_fund"]},
+        "side": {"enum": ["buy", "sell"]},
+        "quantity": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "raw_price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "raw_price_basis_hash": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/modeled-pit-readiness-checkpoint.schema.json",
+  "title": "Harness-owned Modeled-PIT Readiness Checkpoint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "checkpoint_id", "registration_id", "checkpoint_snapshot_set_id",
+    "market_universe_view_id", "trigger_admission_id", "event_assessment_id",
+    "checkpoint_key", "cutoff_at", "path", "new_fact_record_ids", "prior_expectation",
+    "target_state", "hedge_readiness", "judgment_blockers", "judgment_information_gaps",
+    "intent_blockers", "judgment_ready", "intent_ready", "historical_pit_claim",
+    "model_call_authorized", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.modeled-pit-readiness-checkpoint.v1"},
+    "checkpoint_id": {"type": "string", "pattern": "^modeled-pit-readiness-checkpoint-[0-9a-f]{64}$"},
+    "registration_id": {"type": "string", "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"},
+    "checkpoint_snapshot_set_id": {"type": "string", "pattern": "^prospective-checkpoint-snapshot-set-[0-9a-f]{64}$"},
+    "market_universe_view_id": {"type": "string", "pattern": "^checkpoint-market-universe-view-[0-9a-f]{64}$"},
+    "trigger_admission_id": {"type": "string", "pattern": "^prospective-trigger-admission-[0-9a-f]{64}$"},
+    "event_assessment_id": {"type": "string", "pattern": "^prospective-event-assessment-[0-9a-f]{64}$"},
+    "checkpoint_key": {"$ref": "#/$defs/nonempty"},
+    "cutoff_at": {"type": "string", "format": "date-time"},
+    "path": {"$ref": "#/$defs/path"},
+    "new_fact_record_ids": {
+      "type": "array", "uniqueItems": true,
+      "items": {"$ref": "#/$defs/record_id"}
+    },
+    "prior_expectation": {"$ref": "#/$defs/prior_expectation"},
+    "target_state": {"$ref": "#/$defs/target_state"},
+    "hedge_readiness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "reason_code"],
+      "properties": {
+        "status": {"const": "unavailable"},
+        "reason_code": {"const": "portfolio_exposure_mapping_not_registered"}
+      }
+    },
+    "judgment_blockers": {"$ref": "#/$defs/judgment_blockers"},
+    "judgment_information_gaps": {"$ref": "#/$defs/information_gaps"},
+    "intent_blockers": {"$ref": "#/$defs/intent_blockers"},
+    "judgment_ready": {"type": "boolean"},
+    "intent_ready": {"const": false},
+    "historical_pit_claim": {"const": false},
+    "model_call_authorized": {"const": false},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "nonempty": {"type": "string", "minLength": 1},
+    "nullable_nonempty": {"type": ["string", "null"], "minLength": 1},
+    "record_id": {"type": "string", "pattern": "^checkpoint-decision-input-[0-9a-f]{64}$"},
+    "path": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "target_id", "venue", "instrument_class", "channels", "causal_steps",
+        "evidence_version_ids", "horizon_sessions"
+      ],
+      "properties": {
+        "target_id": {"$ref": "#/$defs/nonempty"},
+        "venue": {"enum": ["XSHG", "XSHE"]},
+        "instrument_class": {"enum": ["equity", "exchange_traded_fund"]},
+        "channels": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/nonempty"}},
+        "causal_steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/nonempty"}},
+        "evidence_version_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^prospective-observation-version-[0-9a-f]{64}$"}},
+        "horizon_sessions": {"type": "integer", "minimum": 1}
+      }
+    },
+    "prior_expectation": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "record_ids"],
+          "properties": {
+            "kind": {"const": "observation"},
+            "record_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/record_id"}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "reason_code"],
+          "properties": {
+            "kind": {"const": "unknown"},
+            "reason_code": {"enum": ["no_registered_source"]}
+          }
+        }
+      ]
+    },
+    "target_state": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "target_id", "venue", "instrument_class", "mapping_status", "research_eligible",
+        "decision_time_tradability", "suspension_status", "raw_price_record_id",
+        "raw_price_trade_date", "raw_price_session_close_at", "raw_price_available_at",
+        "raw_price_execution_eligible"
+      ],
+      "properties": {
+        "target_id": {"$ref": "#/$defs/nonempty"},
+        "venue": {"enum": ["XSHG", "XSHE"]},
+        "instrument_class": {"enum": ["equity", "exchange_traded_fund"]},
+        "mapping_status": {"enum": ["then_effective", "unavailable"]},
+        "research_eligible": {"type": "boolean"},
+        "decision_time_tradability": {"enum": ["unverified", "ineligible"]},
+        "suspension_status": {"const": "unknown"},
+        "raw_price_record_id": {"oneOf": [{"$ref": "#/$defs/record_id"}, {"type": "null"}]},
+        "raw_price_trade_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "raw_price_session_close_at": {"type": ["string", "null"], "format": "date-time"},
+        "raw_price_available_at": {"type": ["string", "null"], "format": "date-time"},
+        "raw_price_execution_eligible": {"const": false}
+      }
+    },
+    "judgment_blockers": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": [
+        "checkpoint_snapshot_set_incomplete", "event_fact_missing", "prior_expectation_required",
+        "target_mapping_unavailable", "target_research_ineligible"
+      ]}
+    },
+    "information_gaps": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": [
+        "current_tradability_unknown", "hedge_mapping_unavailable", "prior_expectation_unknown",
+        "suspension_status_unknown"
+      ]}
+    },
+    "intent_blockers": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"enum": [
+        "checkpoint_snapshot_set_incomplete", "current_tradability_unverified",
+        "event_fact_missing", "executable_raw_price_unavailable", "prior_expectation_required",
+        "suspension_status_unverified", "target_mapping_unavailable", "target_research_ineligible"
+      ]}
+    }
+  }
+}

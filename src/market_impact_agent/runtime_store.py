@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import fcntl
+import hmac
 import json
 import os
 import re
 import sqlite3
 import tempfile
 import threading
-from contextlib import suppress
+from collections.abc import Generator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -79,10 +81,25 @@ class RunRecord:
     created_at: datetime
     updated_at: datetime
     terminal_artifact_id: str | None
+    harness_authority_id: str | None = None
+    strategy_plan_artifact_hash: str | None = None
 
 
 _PROCESS_CLAIMS_GUARD = threading.Lock()
 _PROCESS_CLAIMS: set[str] = set()
+_AUTHORITATIVE_JOURNAL_TOKEN = object()
+_PRIVILEGED_EVENT_TYPES = frozenset(
+    {
+        "run.started",
+        "run.failed",
+        "model.turn.completed",
+        "tool.call.completed",
+        "model.turn.failed",
+        "context.checkpointed",
+        "judgment.contract_correction",
+        "judgment.validated",
+    }
+)
 
 
 class RunClaim:
@@ -174,12 +191,76 @@ class ArtifactStore:
 
 
 class RunJournal:
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        harness_authority_id: str | None = None,
+        _authority_token: object | None = None,
+        _event_hmac_key: bytes | None = None,
+    ) -> None:
+        if (harness_authority_id is not None or _event_hmac_key is not None) and (
+            _authority_token is not _AUTHORITATIVE_JOURNAL_TOKEN
+        ):
+            raise ValueError(
+                "authoritative Run Journal identity can only come from "
+                "RunJournal.authoritative(store)"
+            )
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(path.parent, 0o700)
         self.path = path.resolve()
+        self.harness_authority_id = harness_authority_id
+        self._event_hmac_key = _event_hmac_key
+        if self._event_hmac_key is not None and len(self._event_hmac_key) != 32:
+            raise ValueError("authoritative Run Journal event key has an invalid length")
         self._initialize()
         os.chmod(self.path, 0o600)
+
+    @classmethod
+    def authoritative(cls, store: object) -> RunJournal:
+        """Open the Run Journal inside one concrete LocalDataSnapshotStore root."""
+
+        from market_impact_agent.data_inputs import LocalDataSnapshotStore
+
+        if type(store) is not LocalDataSnapshotStore:
+            raise TypeError("authoritative Run Journal requires a LocalDataSnapshotStore")
+        path = getattr(store, "index_path", None)
+        authority_id = getattr(store, "harness_authority_id", None)
+        key_path = getattr(store, "_event_signing_key_path", None)
+        if (
+            not isinstance(path, Path)
+            or not isinstance(authority_id, str)
+            or not isinstance(key_path, Path)
+            or key_path.is_symlink()
+            or not key_path.is_file()
+        ):
+            raise TypeError("authoritative Run Journal requires a LocalDataSnapshotStore")
+        key = key_path.read_bytes()
+        return cls(
+            path,
+            harness_authority_id=authority_id,
+            _authority_token=_AUTHORITATIVE_JOURNAL_TOKEN,
+            _event_hmac_key=key,
+        )
+
+    @property
+    def promotion_eligible(self) -> bool:
+        return self.harness_authority_id is not None
+
+    @contextmanager
+    def authority_transaction(self) -> Generator[sqlite3.Connection]:
+        if not self.promotion_eligible:
+            raise ValueError("legacy path Run Journal has no Harness authority transaction")
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path)
@@ -199,7 +280,9 @@ class RunJournal:
                     config_hash TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    terminal_artifact_id TEXT
+                    terminal_artifact_id TEXT,
+                    harness_authority_id TEXT,
+                    strategy_plan_artifact_hash TEXT
                 );
                 CREATE TABLE IF NOT EXISTS events (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,12 +293,28 @@ class RunJournal:
                     payload_json TEXT NOT NULL,
                     payload_hash TEXT NOT NULL,
                     previous_hash TEXT,
-                    event_hash TEXT NOT NULL UNIQUE
+                    event_hash TEXT NOT NULL UNIQUE,
+                    signer_authority_id TEXT,
+                    privileged_signature TEXT
                 );
                 CREATE INDEX IF NOT EXISTS events_run_sequence
                     ON events(run_id, sequence);
                 """
             )
+            columns = {
+                cast(str, row["name"]) for row in connection.execute("PRAGMA table_info(runs)")
+            }
+            if "harness_authority_id" not in columns:
+                connection.execute("ALTER TABLE runs ADD COLUMN harness_authority_id TEXT")
+            if "strategy_plan_artifact_hash" not in columns:
+                connection.execute("ALTER TABLE runs ADD COLUMN strategy_plan_artifact_hash TEXT")
+            event_columns = {
+                cast(str, row["name"]) for row in connection.execute("PRAGMA table_info(events)")
+            }
+            if "signer_authority_id" not in event_columns:
+                connection.execute("ALTER TABLE events ADD COLUMN signer_authority_id TEXT")
+            if "privileged_signature" not in event_columns:
+                connection.execute("ALTER TABLE events ADD COLUMN privileged_signature TEXT")
 
     def try_claim_run(self, run_id: str) -> RunClaim | None:
         """Return exclusive process ownership, or None when another caller owns the run."""
@@ -251,9 +350,14 @@ class RunJournal:
         run_id: str,
         config_hash: str,
         created_at: datetime,
+        strategy_plan_artifact_hash: str | None = None,
     ) -> RunRecord:
         _identifier(run_id, "run_id")
         _sha256(config_hash, "config_hash")
+        if strategy_plan_artifact_hash is not None:
+            _sha256(strategy_plan_artifact_hash, "strategy_plan_artifact_hash")
+            if not self.promotion_eligible:
+                raise ValueError("legacy path Run Journal cannot start promotion-eligible runs")
         require_aware(created_at, "created_at")
         timestamp = _timestamp(created_at)
         resumed = False
@@ -265,15 +369,29 @@ class RunJournal:
                 record = _run_record(existing)
                 if record.config_hash != config_hash:
                     raise ValueError("existing run_id has a different configuration")
+                if (
+                    record.harness_authority_id != self.harness_authority_id
+                    or record.strategy_plan_artifact_hash != strategy_plan_artifact_hash
+                ):
+                    raise ValueError("existing run_id has a different authority binding")
                 resumed = True
             else:
                 connection.execute(
                     """
                     INSERT INTO runs(
-                        run_id, status, config_hash, created_at, updated_at, terminal_artifact_id
-                    ) VALUES (?, ?, ?, ?, ?, NULL)
+                        run_id, status, config_hash, created_at, updated_at, terminal_artifact_id,
+                        harness_authority_id, strategy_plan_artifact_hash
+                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
                     """,
-                    (run_id, RunStatus.RUNNING.value, config_hash, timestamp, timestamp),
+                    (
+                        run_id,
+                        RunStatus.RUNNING.value,
+                        config_hash,
+                        timestamp,
+                        timestamp,
+                        self.harness_authority_id,
+                        strategy_plan_artifact_hash,
+                    ),
                 )
         if resumed:
             self.events(run_id)
@@ -318,10 +436,16 @@ class RunJournal:
         payload_hash = sha256(payload_json.encode()).hexdigest()
         with self._connect() as connection:
             run = connection.execute(
-                "SELECT status FROM runs WHERE run_id = ?", (run_id,)
+                "SELECT status, strategy_plan_artifact_hash FROM runs WHERE run_id = ?", (run_id,)
             ).fetchone()
             if run is None:
                 raise KeyError(f"unknown run_id: {run_id}")
+            if run["strategy_plan_artifact_hash"] is not None or (
+                self.promotion_eligible and event_type in _PRIVILEGED_EVENT_TYPES
+            ):
+                raise PermissionError(
+                    "privileged Run Journal events require a root-authenticated signer"
+                )
             if run["status"] != RunStatus.RUNNING.value:
                 raise ValueError("cannot append to a terminal run")
             existing = connection.execute(
@@ -357,8 +481,9 @@ class RunJournal:
                 """
                 INSERT INTO events(
                     run_id, event_id, event_type, observed_at, payload_json,
-                    payload_hash, previous_hash, event_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    payload_hash, previous_hash, event_hash,
+                    signer_authority_id, privileged_signature
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
                 """,
                 (
                     run_id,
@@ -387,16 +512,50 @@ class RunJournal:
 
     def events(self, run_id: str) -> tuple[RuntimeEvent, ...]:
         with self._connect() as connection:
+            run = connection.execute(
+                "SELECT strategy_plan_artifact_hash FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if run is None:
+                raise KeyError(f"unknown run_id: {run_id}")
             rows = connection.execute(
                 "SELECT * FROM events WHERE run_id = ? ORDER BY sequence", (run_id,)
             ).fetchall()
-        events = tuple(_verified_event(row) for row in rows)
+        events_list: list[RuntimeEvent] = []
+        for row in rows:
+            event = _verified_event(row)
+            if run["strategy_plan_artifact_hash"] is not None or (
+                self.promotion_eligible and event.event_type in _PRIVILEGED_EVENT_TYPES
+            ):
+                self._verify_privileged_event(row, event)
+            events_list.append(event)
+        events = tuple(events_list)
         previous_hash: str | None = None
         for event in events:
             if event.previous_hash != previous_hash:
                 raise ValueError("run journal hash chain is invalid")
             previous_hash = event.event_hash
         return events
+
+    def _verify_privileged_event(self, row: sqlite3.Row, event: RuntimeEvent) -> None:
+        if self._event_hmac_key is None or self.harness_authority_id is None:
+            raise ValueError("privileged Run Journal event has no root verifier")
+        authority_id = row["signer_authority_id"]
+        signature = row["privileged_signature"]
+        if authority_id != self.harness_authority_id or not isinstance(signature, str):
+            raise ValueError("privileged Run Journal event has no matching root signature")
+        signing_bytes = _privileged_event_signing_bytes(
+            harness_authority_id=self.harness_authority_id,
+            sequence=event.sequence,
+            run_id=event.run_id,
+            event_id=event.event_id,
+            event_type=event.event_type,
+            observed_at=_timestamp(event.observed_at),
+            payload=event.payload,
+            previous_hash=event.previous_hash,
+        )
+        expected = hmac.new(self._event_hmac_key, signing_bytes, sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError("privileged Run Journal event signature is invalid")
 
     def event(self, event_id: str) -> RuntimeEvent | None:
         with self._connect() as connection:
@@ -458,6 +617,34 @@ def _run_record(row: sqlite3.Row) -> RunRecord:
         created_at=_parse_timestamp(cast(str, row["created_at"])),
         updated_at=_parse_timestamp(cast(str, row["updated_at"])),
         terminal_artifact_id=cast(str | None, row["terminal_artifact_id"]),
+        harness_authority_id=cast(str | None, row["harness_authority_id"]),
+        strategy_plan_artifact_hash=cast(str | None, row["strategy_plan_artifact_hash"]),
+    )
+
+
+def _privileged_event_signing_bytes(
+    *,
+    harness_authority_id: str,
+    sequence: int,
+    run_id: str,
+    event_id: str,
+    event_type: str,
+    observed_at: str,
+    payload: dict[str, object],
+    previous_hash: str | None,
+) -> bytes:
+    return canonical_json_bytes(
+        {
+            "schema_version": "market-impact.privileged-runtime-event-signature.v1",
+            "harness_authority_id": harness_authority_id,
+            "sequence": sequence,
+            "run_id": run_id,
+            "event_id": event_id,
+            "event_type": event_type,
+            "observed_at": observed_at,
+            "payload": payload,
+            "previous_hash": previous_hash,
+        }
     )
 
 

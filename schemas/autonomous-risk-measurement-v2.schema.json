@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/autonomous-risk-measurement-v2.schema.json",
+  "title": "Autonomous Paper Risk Measurement v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "measurement_id",
+    "mandate_id",
+    "account_reference_hash",
+    "daily_pnl",
+    "strategy_peak_drawdown",
+    "source_snapshot_hash",
+    "observed_at",
+    "valid_until"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.autonomous-risk-measurement.v2"},
+    "measurement_id": {"type": "string", "pattern": "^autonomous-risk-measurement-[0-9a-f]{64}$"},
+    "mandate_id": {"type": "string", "minLength": 1},
+    "account_reference_hash": {"type": "string", "pattern": "^account-ref-[0-9a-f]{64}$"},
+    "daily_pnl": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "strategy_peak_drawdown": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+    "source_snapshot_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"}
+  }
+}

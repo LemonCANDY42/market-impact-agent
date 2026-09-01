@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/strategy-validation-registration.schema.json",
+  "title": "Market Impact Strategy Validation Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "registration_id", "strategy_epoch_id", "program",
+    "model_profile_hash", "prompt_hash", "skill_catalog_hash", "tool_manifest_hash",
+    "universe_hash", "cost_model_hash", "fill_model_hash", "candidate_variant", "primary_baseline_id",
+    "baseline_definitions", "development_selection_evidence_hash", "run_selection_policy",
+    "portfolio_aggregation_policy", "portfolio_case_ordering", "portfolio_starting_capital",
+    "portfolio_maximum_simultaneous_positions",
+    "case_definitions",
+    "prospective_cohort_id", "prospective_cohort_seal_hash",
+    "created_at", "paired_critical_value", "maximum_drawdown_ratio",
+    "maximum_cvar_ratio", "maximum_downside_loss_ratio", "maximum_single_event_share",
+    "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.strategy-validation-registration.v1"},
+    "registration_id": {"type": "string", "pattern": "^strategy-validation-registration-[0-9a-f]{64}$"},
+    "strategy_epoch_id": {"$ref": "#/$defs/stable_id"},
+    "program": {"enum": ["historical_strict", "prospective_confirmation"]},
+    "model_profile_hash": {"$ref": "#/$defs/sha256"},
+    "prompt_hash": {"$ref": "#/$defs/sha256"},
+    "skill_catalog_hash": {"$ref": "#/$defs/sha256"},
+    "tool_manifest_hash": {"$ref": "#/$defs/sha256"},
+    "universe_hash": {"$ref": "#/$defs/sha256"},
+    "cost_model_hash": {"$ref": "#/$defs/sha256"},
+    "fill_model_hash": {"$ref": "#/$defs/sha256"},
+    "candidate_variant": {"$ref": "#/$defs/strategy_variant"},
+    "primary_baseline_id": {"$ref": "#/$defs/stable_id"},
+    "baseline_definitions": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/baseline_definition"}
+    },
+    "development_selection_evidence_hash": {"$ref": "#/$defs/sha256"},
+    "run_selection_policy": {"const": "earliest_complete_run_per_case_v1"},
+    "portfolio_aggregation_policy": {"const": "equal_weight_active_cases_v1"},
+    "portfolio_case_ordering": {"const": "root_event_id_then_case_id_v1"},
+    "portfolio_starting_capital": {"const": "1000000"},
+    "portfolio_maximum_simultaneous_positions": {"const": 32},
+    "case_definitions": {
+      "type": "array", "uniqueItems": true,
+      "items": {"$ref": "#/$defs/case_definition"}
+    },
+    "prospective_cohort_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^prospective-validation-cohort-[0-9a-f]{64}$"}
+      ]
+    },
+    "prospective_cohort_seal_hash": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "paired_critical_value": {"const": "1.714"},
+    "maximum_drawdown_ratio": {"const": "0.80"},
+    "maximum_cvar_ratio": {"const": "0.85"},
+    "maximum_downside_loss_ratio": {"const": "0.50"},
+    "maximum_single_event_share": {"const": "0.20"},
+    "execution_capability": {"const": "none"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"program": {"const": "historical_strict"}}},
+      "then": {"properties": {
+        "case_definitions": {
+          "minItems": 32, "maxItems": 32,
+          "allOf": [
+            {"contains": {"properties": {"role": {"const": "development"}}}, "minContains": 8, "maxContains": 8},
+            {"contains": {"properties": {"role": {"const": "historical_holdout"}}}, "minContains": 24, "maxContains": 24}
+          ]
+        },
+        "prospective_cohort_id": {"const": null},
+        "prospective_cohort_seal_hash": {"const": null}
+      }}
+    },
+    {
+      "if": {"properties": {"program": {"const": "prospective_confirmation"}}},
+      "then": {"properties": {
+        "case_definitions": {
+          "minItems": 38,
+          "allOf": [
+            {"contains": {"properties": {"role": {"const": "development"}}}, "minContains": 8, "maxContains": 8},
+            {"contains": {"properties": {"role": {"const": "prospective_confirmation"}}}, "minContains": 30}
+          ]
+        },
+        "prospective_cohort_id": {"type": "string", "pattern": "^prospective-validation-cohort-[0-9a-f]{64}$"},
+        "prospective_cohort_seal_hash": {"$ref": "#/$defs/sha256"}
+      }}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stable_id": {"type": "string", "minLength": 1, "pattern": "^\\S(?:.*\\S)?$"},
+    "baseline_definition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["baseline_id", "definition_hash", "configuration_hash", "variant"],
+      "properties": {
+        "baseline_id": {"$ref": "#/$defs/stable_id"},
+        "definition_hash": {"$ref": "#/$defs/sha256"},
+        "configuration_hash": {"$ref": "#/$defs/sha256"},
+        "variant": {"$ref": "#/$defs/strategy_variant"}
+      }
+    },
+    "strategy_variant": {
+      "type": "object", "additionalProperties": false,
+      "required": ["strategy_variant_hash", "arm", "baseline_id", "strategy_ref", "target_selection_ref", "request_template", "simulation"],
+      "properties": {
+        "strategy_variant_hash": {"$ref": "#/$defs/sha256"},
+        "arm": {"enum": ["candidate", "primary_baseline"]},
+        "baseline_id": {"type": ["string", "null"], "minLength": 1},
+        "strategy_ref": {"$ref": "#/$defs/stable_id"},
+        "target_selection_ref": {"$ref": "#/$defs/stable_id"},
+        "request_template": {
+          "type": "object", "additionalProperties": false,
+          "required": ["market", "instrument_ids", "horizons_sessions", "signal_side"],
+          "properties": {
+            "market": {"$ref": "#/$defs/stable_id"},
+            "instrument_ids": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"$ref": "#/$defs/stable_id"}
+            },
+            "horizons_sessions": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"type": "integer", "minimum": 1}
+            },
+            "signal_side": {"enum": ["buy", "sell"]}
+          }
+        },
+        "simulation": {"$ref": "#/$defs/simulation"}
+      }
+    },
+    "simulation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["data_granularity", "book_type", "fill_model", "fee_model", "venue_ruleset", "base_currency", "starting_cash", "random_seed"],
+      "properties": {
+        "data_granularity": {"$ref": "#/$defs/stable_id"},
+        "book_type": {"$ref": "#/$defs/stable_id"},
+        "fill_model": {"$ref": "#/$defs/stable_id"},
+        "fee_model": {"$ref": "#/$defs/stable_id"},
+        "venue_ruleset": {"$ref": "#/$defs/stable_id"},
+        "base_currency": {"$ref": "#/$defs/stable_id"},
+        "starting_cash": {"type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"},
+        "random_seed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "case_definition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["case_id", "root_event_id", "regime", "role"],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/stable_id"},
+        "root_event_id": {"$ref": "#/$defs/stable_id"},
+        "regime": {"$ref": "#/$defs/stable_id"},
+        "role": {"enum": ["development", "historical_holdout", "prospective_confirmation"]},
+        "source_snapshot_id": {"type": ["string", "null"], "minLength": 1},
+        "evidence_binding_ref": {"type": ["string", "null"], "minLength": 1}
+      }
+    }
+  }
+}

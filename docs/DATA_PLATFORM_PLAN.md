@@ -1045,6 +1045,18 @@ artifacts, and Journal-recomputed metrics before accepting the immutable copy. A
 reconstructed from the exact agreeing treatment Judgments and must cover the entire Order lifetime. Runs must start after Query Gate
 evaluation, while Signal and Order creation must not predate the resulting consensus Manifest.
 
+The Harness one-shot composition root reopens the v4 registration, v5 Snapshot Set, Evidence Pack,
+Execution Plan, exact Trigger Admission and underlying Data Snapshots from their owning CAS/store
+before evaluating Query Gate. A failed gate returns before an Agent Run is created. Eligible runs
+use deterministic paired Run identities, append terminal metrics to the Usage Ledger and stop after
+two complete pairs only when both arms agree; otherwise they execute the complete third pair.
+Abstention and no-action Portfolio Decisions terminate without an Order Intent. Only treatment
+consensus can reach the existing Authorized Decision View, deterministic sizing and
+`manual_each` durable mock-paper admission. Paper restart replay reopens and re-authorizes the exact
+Trigger from Query Gate evaluation material; a missing or differing Trigger authority fails closed.
+Replaying the same root reuses sealed Runs, Usage rows and paper admission without a new model or
+Provider-order call.
+
 **Blocked by:** PDI-31.
 
 **Stage exit — Query Gate:** determine whether structural blockers were removed and whether the Agent

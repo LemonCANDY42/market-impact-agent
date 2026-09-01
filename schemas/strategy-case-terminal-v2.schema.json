@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/strategy-case-terminal-v2.schema.json",
+  "title": "Strategy Case Terminal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "terminal_id", "harness_authority_id", "plan_id", "plan_hash", "run_id", "run_status", "started_at", "finished_at", "judgment_artifact_hash", "run_manifest_hash", "candidate_measurement_artifact_hash", "candidate_measurement_artifact_path", "baseline_measurement_artifact_hash", "baseline_measurement_artifact_path"],
+  "properties": {
+    "schema_version": {"const": "market-impact.strategy-case-terminal.v2"},
+    "terminal_id": {"type": "string", "pattern": "^strategy-case-terminal-[0-9a-f]{64}$"},
+    "harness_authority_id": {"type": "string", "pattern": "^harness-authority-[0-9a-f]{32}$"},
+    "plan_id": {"type": "string", "pattern": "^strategy-case-run-plan-[0-9a-f]{64}$"},
+    "plan_hash": {"$ref": "#/$defs/sha256"}, "run_id": {"type": "string", "minLength": 1},
+    "run_status": {"enum": ["completed", "failed", "cancelled", "budget_exhausted", "human_input_required"]},
+    "started_at": {"type": "string", "format": "date-time"}, "finished_at": {"type": "string", "format": "date-time"},
+    "judgment_artifact_hash": {"$ref": "#/$defs/nullable_sha256"}, "run_manifest_hash": {"$ref": "#/$defs/sha256"},
+    "candidate_measurement_artifact_hash": {"$ref": "#/$defs/nullable_sha256"},
+    "candidate_measurement_artifact_path": {"type": ["string", "null"]},
+    "baseline_measurement_artifact_hash": {"$ref": "#/$defs/nullable_sha256"},
+    "baseline_measurement_artifact_path": {"type": ["string", "null"]}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "nullable_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}}
+}

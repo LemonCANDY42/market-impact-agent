@@ -1,5 +1,10 @@
 # Skill discovery, governance, trace, and evaluation
 
+> This document owns Skill classification, lineage, conflict review, trace, and lifecycle state.
+> Incremental-effect promotion must also pass
+> [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md); a trace or governance review
+> by itself is not effectiveness evidence.
+
 ## Purpose
 
 This lane turns broad outcome-opened historical research into auditable, non-executable Skill

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/order-sizing-decision-v2.schema.json",
+  "title": "Market Impact Order Sizing Decision v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "decision_id", "portfolio_decision_id", "portfolio_decision_hash",
+    "trading_mandate_hash", "exposure_view_id", "exposure_view_hash",
+    "instrument_rule_set_id", "instrument_rule_set_hash", "price_basis_hashes", "legs", "outcome", "blockers",
+    "decided_at", "execution_capability"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.order-sizing-decision.v2"},
+    "decision_id": {"type": "string", "pattern": "^order-sizing-decision-v2-[0-9a-f]{64}$"},
+    "portfolio_decision_id": {"type": "string", "pattern": "^portfolio-decision-v2-[0-9a-f]{64}$"},
+    "portfolio_decision_hash": {"$ref": "#/$defs/sha256"},
+    "trading_mandate_hash": {"$ref": "#/$defs/sha256"},
+    "exposure_view_id": {"type": "string", "pattern": "^portfolio-exposure-view-[0-9a-f]{64}$"},
+    "exposure_view_hash": {"$ref": "#/$defs/sha256"},
+    "instrument_rule_set_id": {"type": "string", "pattern": "^exchange-instrument-rule-set-[0-9a-f]{64}$"},
+    "instrument_rule_set_hash": {"$ref": "#/$defs/sha256"},
+    "price_basis_hashes": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}},
+    "legs": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"$ref": "#/$defs/leg"}},
+    "outcome": {"enum": ["rejected", "ready"]},
+    "blockers": {"$ref": "#/$defs/strings"},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "execution_capability": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "strings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "instrument_id", "price_basis_hash", "side", "target_notional", "current_signed_notional", "delta_notional", "quantity", "outcome", "blockers"],
+      "properties": {
+        "role": {"enum": ["primary", "rotation_source", "rotation_destination"]},
+        "instrument_id": {"type": "string", "minLength": 1},
+        "price_basis_hash": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "side": {"oneOf": [{"type": "null"}, {"enum": ["buy", "sell"]}]},
+        "target_notional": {"$ref": "#/$defs/decimal"},
+        "current_signed_notional": {"$ref": "#/$defs/decimal"},
+        "delta_notional": {"$ref": "#/$defs/decimal"},
+        "quantity": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"}]},
+        "outcome": {"enum": ["rejected", "ready"]},
+        "blockers": {"$ref": "#/$defs/strings"}
+      }
+    }
+  }
+}

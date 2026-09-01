@@ -8,8 +8,9 @@ import json
 import warnings
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from hashlib import sha256
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -30,16 +31,33 @@ from nautilus_trader.trading.strategy import Strategy
 from pandas.errors import Pandas4Warning  # pyright: ignore[reportMissingTypeStubs]
 
 from market_impact_agent.backtests import (
+    _NAUTILUS_OUTCOME_PRODUCER_TOKEN,  # pyright: ignore[reportPrivateUsage]
     BacktestInputHash,
     BacktestMetric,
     BacktestRequest,
     BacktestResult,
     BacktestRunManifest,
     BacktestRunStatus,
+    StrategyAdverseExcursionPoint,
+    StrategyBacktestArm,
+    StrategyBacktestCost,
+    StrategyBacktestFill,
+    StrategyBacktestMissingMetric,
+    StrategyBacktestOutcomeMissing,
+    StrategyBacktestOutcomeReceipt,
+    StrategyBacktestVariant,
+    StrategyCapitalPoint,
+    _record_strategy_backtest_outcome,  # pyright: ignore[reportPrivateUsage]
+    backtest_result_to_dict,
     canonical_backtest_request_hash,
     canonical_backtest_result_hash,
+    strategy_backtest_cost_model_hash,
+    strategy_backtest_fill_model_hash,
+    strategy_backtest_universe_hash,
 )
+from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.domain import Side, require_aware
+from market_impact_agent.runtime_store import ArtifactStore
 
 _ENGINE_NAME = "nautilus_trader"
 _ENGINE_VERSION = "1.231.0"
@@ -50,7 +68,9 @@ _SUPPORTED_BOOK_TYPE = "top_of_book"
 _SUPPORTED_FILL_MODEL = "next_executable_open_one_tick_slippage.v1"
 _SUPPORTED_FEE_MODEL = "a_share_fixture_fee.v1"
 _SUPPORTED_VENUE_RULESET = "xshg_cash_equity_fixture.v1"
-_SUPPORTED_STRATEGY = "event-impact-hold.v1"
+_EVENT_IMPACT_HOLD_STRATEGY = "event-impact-hold.v1"
+_CASH_NO_ACTION_STRATEGY = "cash-no-action.v1"
+_SUPPORTED_STRATEGIES = frozenset({_EVENT_IMPACT_HOLD_STRATEGY, _CASH_NO_ACTION_STRATEGY})
 _TIMESTAMP_UTCNOW_WARNING = (
     r"^Timestamp\.utcnow is deprecated and will be removed in a future version\. "
     r"Use Timestamp\.now\('UTC'\) instead\.$"
@@ -103,6 +123,13 @@ class NautilusReplayContract:
     exact_start_at: datetime | None
     exact_end_at: datetime | None
     target_selection_ref: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ExecutedHorizon:
+    metrics: tuple[BacktestMetric, ...]
+    fills: tuple[OrderFilled, ...]
+    bars: tuple[AShareDailyBar, ...]
 
 
 _SYNTHETIC_REPLAY_CONTRACT = NautilusReplayContract(
@@ -230,23 +257,189 @@ class _EventImpactHoldStrategy(Strategy):
 
 
 class NautilusBacktestBridge:
-    def __init__(self, snapshot_path: Path) -> None:
+    def __init__(
+        self,
+        snapshot_path: Path,
+        *,
+        snapshot_store: LocalDataSnapshotStore | None = None,
+        artifact_store: ArtifactStore | None = None,
+    ) -> None:
         self._snapshot = load_a_share_daily_bar_snapshot(snapshot_path)
         self._contract = replace(
             _SYNTHETIC_REPLAY_CONTRACT,
             input_hashes=(BacktestInputHash("snapshot", self._snapshot.content_hash),),
         )
+        self._snapshot_store = snapshot_store
+        self._artifact_store = artifact_store
+        self._configure_authority(snapshot_path.read_bytes())
 
     @classmethod
     def from_snapshot(
         cls,
         snapshot: AShareDailyBarSnapshot,
         contract: NautilusReplayContract,
+        *,
+        snapshot_store: LocalDataSnapshotStore | None = None,
+        artifact_store: ArtifactStore | None = None,
     ) -> NautilusBacktestBridge:
         instance = cls.__new__(cls)
         instance._snapshot = snapshot
         instance._contract = contract
+        instance._snapshot_store = snapshot_store
+        instance._artifact_store = artifact_store
+        instance._configure_authority(None)
         return instance
+
+    def _configure_authority(self, raw_snapshot: bytes | None) -> None:
+        if self._snapshot_store is None and self._artifact_store is None:
+            return
+        if type(self._snapshot_store) is not LocalDataSnapshotStore:
+            raise TypeError("authoritative backtests require the concrete Harness Snapshot store")
+        assert self._snapshot_store is not None
+        if self._artifact_store is None:
+            self._artifact_store = self._snapshot_store.artifacts
+        if type(self._artifact_store) is not ArtifactStore:
+            raise TypeError("authoritative backtests require the concrete Artifact store")
+        if self._artifact_store.root != self._snapshot_store.artifacts.root:
+            raise ValueError("backtest Snapshot and Artifact stores must share one Harness root")
+        if raw_snapshot is not None:
+            stored = self._artifact_store.put_bytes(
+                raw_snapshot, media_type="application/octet-stream"
+            )
+            if stored.content_hash != self._snapshot.content_hash:
+                raise ValueError("stored Nautilus input differs from its content hash")
+
+    def run_strategy_outcome(
+        self,
+        request: BacktestRequest,
+        *,
+        case_id: str,
+        variant: StrategyBacktestVariant,
+    ) -> StrategyBacktestOutcomeReceipt | StrategyBacktestOutcomeMissing:
+        """Execute and persist the promotion-capable, same-root outcome path."""
+
+        if self._snapshot_store is None or self._artifact_store is None:
+            raise PermissionError(
+                "strategy outcome receipts require canonical Snapshot and Artifact stores"
+            )
+        if len(request.horizons_sessions) != 1:
+            raise ValueError("strategy outcome receipts require exactly one holding horizon")
+        if not variant.matches_request(request):
+            raise ValueError("backtest request differs from its frozen strategy variant")
+        if request.strategy_ref not in _SUPPORTED_STRATEGIES:
+            return StrategyBacktestOutcomeMissing(
+                case_id=case_id,
+                arm=variant.arm,
+                strategy_variant_hash=variant.strategy_variant_hash,
+                reason=f"unsupported_strategy_ref:{request.strategy_ref}",
+            )
+        source = self._snapshot_store.get(request.data_snapshot_id)
+        if not source.coverage_complete:
+            raise ValueError("strategy outcome source Snapshot must be coverage-complete")
+        source_artifact = self._artifact_store.put_json(source.to_dict())
+        raw_input_hashes = {item.value for item in self._contract.input_hashes}
+        if not any(item.raw_content_hash in raw_input_hashes for item in source.observations):
+            raise ValueError(
+                "strategy outcome source Snapshot does not bind the Nautilus input artifact"
+            )
+        manifest = self._manifest(request)
+        if manifest.engine_config_hash != self._engine_config_hash(request):
+            raise ValueError("backtest manifest differs from the frozen engine configuration")
+        self._validate_request(request)
+        executed = self._run_horizon(request, request.horizons_sessions[0])
+        result = _result(
+            manifest=manifest,
+            status=BacktestRunStatus.COMPLETED,
+            metrics=executed.metrics,
+            artifact_refs=(self._snapshot_artifact_ref(),),
+            failure_reasons=(),
+        )
+        result_artifact = self._artifact_store.put_json(backtest_result_to_dict(result))
+        stress_artifact_hash: str | None = None
+        stressed_net_return: Decimal | None = None
+        missing: list[StrategyBacktestMissingMetric] = []
+        try:
+            stressed = self._run_horizon(
+                request,
+                request.horizons_sessions[0],
+                fee_multiplier=Decimal(2),
+            )
+            stressed_outcome = _derive_strategy_outcome(
+                request=request,
+                executed=stressed,
+                stressed_net_return=None,
+                stress_artifact_hash=None,
+                missing=[],
+            )
+            stressed_net_return = Decimal(cast(str, stressed_outcome["portfolio_net_return"]))
+            stress_payload = {
+                "schema_version": "market-impact.strategy-backtest-stress-evidence.v1",
+                "stress_kind": "doubled_fee_actual_nautilus_run",
+                "request_hash": manifest.request_hash,
+                "engine_config_hash": self._engine_config_hash(request, fee_multiplier=Decimal(2)),
+                "net_return": str(stressed_net_return),
+                "capital_path": stressed_outcome["capital_path"],
+                "fills": [
+                    _fill_from_event(item, stressed.bars).to_dict() for item in stressed.fills
+                ],
+                "adverse_excursion_path": stressed_outcome["adverse_excursion_path"],
+            }
+            stress_artifact_hash = self._artifact_store.put_json(stress_payload).content_hash
+        except Exception as exc:
+            missing.append(
+                StrategyBacktestMissingMetric(
+                    "stressed_net_return", f"stress_run_failed:{type(exc).__name__}"
+                )
+            )
+        outcome = _derive_strategy_outcome(
+            request=request,
+            executed=executed,
+            stressed_net_return=stressed_net_return,
+            stress_artifact_hash=stress_artifact_hash,
+            missing=missing,
+        )
+        manifest_payload = cast(dict[str, object], backtest_result_to_dict(result)["manifest"])
+        values: dict[str, object] = {
+            "schema_version": "market-impact.strategy-backtest-outcome.v1",
+            "harness_authority_id": self._snapshot_store.harness_authority_id,
+            "case_id": case_id,
+            "arm": variant.arm.value,
+            "strategy_variant_hash": variant.strategy_variant_hash,
+            "strategy_ref": request.strategy_ref,
+            "target_selection_ref": request.target_selection_ref,
+            "engine_config_hash": manifest.engine_config_hash,
+            "simulation": {
+                "data_granularity": request.simulation.data_granularity,
+                "book_type": request.simulation.book_type,
+                "fill_model": request.simulation.fill_model,
+                "fee_model": request.simulation.fee_model,
+                "venue_ruleset": request.simulation.venue_ruleset,
+                "base_currency": request.simulation.base_currency,
+                "starting_cash": _decimal_text(request.simulation.starting_cash),
+                "random_seed": request.simulation.random_seed,
+            },
+            "result_hash": result.result_hash,
+            "result_artifact_hash": result_artifact.content_hash,
+            "manifest_hash": _canonical_sha256(manifest_payload),
+            "request_hash": manifest.request_hash,
+            "input_hashes": [
+                {"name": item.name, "value": item.value} for item in manifest.input_hashes
+            ],
+            "source_snapshot_id": source.snapshot_id,
+            "source_snapshot_artifact_hash": source_artifact.content_hash,
+            "universe_hash": strategy_backtest_universe_hash(request.instrument_ids),
+            "cost_model_hash": strategy_backtest_cost_model_hash(request.simulation),
+            "fill_model_hash": strategy_backtest_fill_model_hash(request.simulation),
+            **outcome,
+        }
+        receipt = _strategy_receipt_from_values(values)
+        _record_strategy_backtest_outcome(
+            store=self._snapshot_store,
+            receipt=receipt,
+            result=result,
+            producer_token=_NAUTILUS_OUTCOME_PRODUCER_TOKEN,
+        )
+        return receipt
 
     def run(self, request: BacktestRequest) -> BacktestResult:
         manifest = self._manifest(request)
@@ -289,8 +482,14 @@ class NautilusBacktestBridge:
     def _validate_request(self, request: BacktestRequest) -> None:
         expected = {
             "market": (request.market, "CN"),
-            "data_snapshot_id": (request.data_snapshot_id, self._snapshot.snapshot_id),
-            "strategy_ref": (request.strategy_ref, _SUPPORTED_STRATEGY),
+            "data_snapshot_id": (
+                request.data_snapshot_id,
+                (
+                    self._snapshot.snapshot_id
+                    if self._snapshot_store is None
+                    else request.data_snapshot_id
+                ),
+            ),
             "data_granularity": (
                 request.simulation.data_granularity,
                 self._contract.data_granularity,
@@ -313,6 +512,8 @@ class NautilusBacktestBridge:
                 f"unsupported NautilusTrader version: expected {_ENGINE_VERSION}, "
                 f"got {nautilus_trader.__version__}"
             )
+        if request.strategy_ref not in _SUPPORTED_STRATEGIES:
+            raise ValueError(f"unsupported strategy_ref: {request.strategy_ref}")
         if request.instrument_ids != (self._snapshot.instrument_id,):
             raise ValueError("the first replay supports exactly the snapshot instrument")
         for name, actual, wanted in (
@@ -327,8 +528,12 @@ class NautilusBacktestBridge:
             and request.target_selection_ref != self._contract.target_selection_ref
         ):
             raise ValueError("request target_selection_ref does not match the integration fixture")
-        _entry_order_side(request.signal.side, self._contract.venue_ruleset)
         bars = self._selected_bars(request)
+        if request.strategy_ref == _CASH_NO_ACTION_STRATEGY:
+            if len(bars) < 2:
+                raise ValueError("cash-no-action replay requires at least two capital timestamps")
+            return
+        _entry_order_side(request.signal.side, self._contract.venue_ruleset)
         required_sessions = max(request.horizons_sessions) + 1
         executable_buys = [
             bar
@@ -345,7 +550,7 @@ class NautilusBacktestBridge:
         multiple_horizons = len(request.horizons_sessions) > 1
         metrics: list[BacktestMetric] = []
         for horizon_sessions in request.horizons_sessions:
-            horizon_metrics = self._run_horizon(request, horizon_sessions)
+            horizon_metrics = self._run_horizon(request, horizon_sessions).metrics
             metrics.extend(
                 BacktestMetric(
                     name=(
@@ -364,9 +569,13 @@ class NautilusBacktestBridge:
         self,
         request: BacktestRequest,
         horizon_sessions: int,
-    ) -> tuple[BacktestMetric, ...]:
+        *,
+        fee_multiplier: Decimal = Decimal(1),
+    ) -> _ExecutedHorizon:
         snapshot = self._snapshot
         bars = self._selected_bars(request)
+        if request.strategy_ref == _CASH_NO_ACTION_STRATEGY:
+            return _ExecutedHorizon(metrics=_cash_metrics(), fills=(), bars=bars)
         currency = Currency.from_str(snapshot.currency)
         instrument_id = InstrumentId.from_str(request.signal.instrument_id)
         venue = instrument_id.venue
@@ -407,9 +616,9 @@ class NautilusBacktestBridge:
                     random_seed=request.simulation.random_seed,
                 ),
                 fee_model=AShareFixtureFeeModel(
-                    commission_rate=snapshot.commission_rate,
-                    minimum_commission=snapshot.minimum_commission,
-                    sell_stamp_tax_rate=snapshot.sell_stamp_tax_rate,
+                    commission_rate=snapshot.commission_rate * fee_multiplier,
+                    minimum_commission=snapshot.minimum_commission * fee_multiplier,
+                    sell_stamp_tax_rate=snapshot.sell_stamp_tax_rate * fee_multiplier,
                 ),
                 bar_execution=True,
                 allow_cash_borrowing=False,
@@ -432,7 +641,11 @@ class NautilusBacktestBridge:
         finally:
             engine.dispose()
 
-        return _metrics_from_strategy(strategy)
+        return _ExecutedHorizon(
+            metrics=_metrics_from_strategy(strategy),
+            fills=tuple(strategy.fills),
+            bars=bars,
+        )
 
     def _selected_bars(self, request: BacktestRequest) -> tuple[AShareDailyBar, ...]:
         return tuple(
@@ -441,7 +654,9 @@ class NautilusBacktestBridge:
             if bar.session_open_at >= request.start_at and bar.session_close_at <= request.end_at
         )
 
-    def _engine_config_hash(self, request: BacktestRequest) -> str:
+    def _engine_config_hash(
+        self, request: BacktestRequest, *, fee_multiplier: Decimal = Decimal(1)
+    ) -> str:
         return _canonical_sha256(
             {
                 "allow_cash_borrowing": False,
@@ -461,8 +676,10 @@ class NautilusBacktestBridge:
                 "sell_stamp_tax_rate": str(self._snapshot.sell_stamp_tax_rate),
                 "slippage_ticks": self._snapshot.slippage_ticks,
                 "snapshot_hash": self._snapshot.content_hash,
+                "strategy_ref": request.strategy_ref,
                 "strategy_side": request.signal.side.value,
                 "venue_ruleset": request.simulation.venue_ruleset,
+                **({"fee_multiplier": str(fee_multiplier)} if fee_multiplier != Decimal(1) else {}),
             }
         )
 
@@ -644,6 +861,350 @@ def _metrics_from_strategy(
         BacktestMetric("order_count", Decimal(2), "orders"),
         BacktestMetric("quantity", quantity, "shares"),
     )
+
+
+def _cash_metrics() -> tuple[BacktestMetric, ...]:
+    return (
+        BacktestMetric("net_pnl", Decimal(0), "CNY"),
+        BacktestMetric("net_return", Decimal(0), "ratio"),
+        BacktestMetric("order_count", Decimal(0), "orders"),
+    )
+
+
+def _fill_from_event(event: OrderFilled, bars: tuple[AShareDailyBar, ...]) -> StrategyBacktestFill:
+    filled_at = datetime.fromtimestamp(event.ts_event / 1_000_000_000, tz=UTC)
+    bar = next((item for item in bars if item.session_open_at == filled_at), None)
+    available_liquidity = None
+    if bar is not None:
+        available_liquidity = Decimal(
+            bar.open_ask_quantity if event.order_side is OrderSide.BUY else bar.open_bid_quantity
+        )
+    return StrategyBacktestFill(
+        side="buy" if event.order_side is OrderSide.BUY else "sell",
+        filled_at=filled_at,
+        quantity=event.last_qty.as_decimal(),
+        price=event.last_px.as_decimal(),
+        commission=event.commission.as_decimal(),
+        available_liquidity_quantity=available_liquidity,
+    )
+
+
+def _metric_value(metrics: tuple[BacktestMetric, ...], name: str) -> Decimal:
+    try:
+        return next(item.value for item in metrics if item.name == name)
+    except StopIteration as exc:
+        raise ValueError(f"Nautilus outcome is missing metric {name}") from exc
+
+
+def _derive_strategy_outcome(
+    *,
+    request: BacktestRequest,
+    executed: _ExecutedHorizon,
+    stressed_net_return: Decimal | None,
+    stress_artifact_hash: str | None,
+    missing: list[StrategyBacktestMissingMetric],
+) -> dict[str, object]:
+    if request.strategy_ref == _CASH_NO_ACTION_STRATEGY:
+        starting_cash = request.simulation.starting_cash
+        capital_path = (
+            StrategyCapitalPoint(request.start_at, starting_cash),
+            StrategyCapitalPoint(request.end_at, starting_cash),
+        )
+        adverse_excursion_path = (
+            StrategyAdverseExcursionPoint(request.start_at, Decimal(0)),
+            StrategyAdverseExcursionPoint(request.end_at, Decimal(0)),
+        )
+        return {
+            "capital_path": [item.to_dict() for item in capital_path],
+            "adverse_excursion_path": [item.to_dict() for item in adverse_excursion_path],
+            "fills": [],
+            "costs": [],
+            "net_return": "0",
+            "net_pnl": "0",
+            "portfolio_net_return": "0",
+            "max_drawdown": "0",
+            "cvar95": "0",
+            "sharpe": "0",
+            "sortino": "0",
+            "turnover": "0",
+            "adverse_excursion": "0",
+            "liquidity_cost": "0",
+            "stressed_net_return": (
+                None if stressed_net_return is None else _decimal_text(stressed_net_return)
+            ),
+            "stress_evidence_artifact_hash": stress_artifact_hash,
+            "missing_metrics": [
+                item.to_dict() for item in sorted(missing, key=lambda item: item.name)
+            ],
+        }
+    fills = tuple(_fill_from_event(item, executed.bars) for item in executed.fills)
+    entry, exit_fill = fills
+    starting_cash = request.simulation.starting_cash
+    cash_after_entry = starting_cash - entry.quantity * entry.price - entry.commission
+    capital: list[StrategyCapitalPoint] = [
+        StrategyCapitalPoint(request.start_at, starting_cash),
+        StrategyCapitalPoint(
+            entry.filled_at,
+            cash_after_entry + entry.quantity * entry.price,
+        ),
+    ]
+    holding_bars = tuple(
+        bar
+        for bar in executed.bars
+        if entry.filled_at <= bar.session_close_at < exit_fill.filled_at
+    )
+    capital.extend(
+        StrategyCapitalPoint(
+            bar.session_close_at,
+            cash_after_entry + entry.quantity * bar.close,
+        )
+        for bar in holding_bars
+    )
+    final_cash = cash_after_entry + exit_fill.quantity * exit_fill.price - exit_fill.commission
+    capital.append(StrategyCapitalPoint(exit_fill.filled_at, final_cash))
+    capital_path = tuple(sorted(set(capital), key=lambda item: item.observed_at))
+    step_returns = tuple(
+        (current.equity - previous.equity) / previous.equity
+        for previous, current in pairwise(capital_path)
+    )
+    max_drawdown = _max_drawdown(capital_path)
+    cvar95 = _cvar95(step_returns)
+    sharpe = _sharpe(step_returns)
+    sortino = _sortino(step_returns)
+    for name, value, reason in (
+        ("max_drawdown", max_drawdown, "capital_path_too_short"),
+        ("cvar95", cvar95, "return_path_too_short"),
+        ("sharpe", sharpe, "return_variance_unavailable"),
+        ("sortino", sortino, "downside_deviation_unavailable"),
+    ):
+        if value is None:
+            missing.append(StrategyBacktestMissingMetric(name, reason))
+    commission = sum((item.commission for item in fills), Decimal(0))
+    slippage = _adverse_slippage_cost(fills, executed.bars)
+    costs = tuple(
+        sorted(
+            (
+                StrategyBacktestCost("commission", commission, request.simulation.base_currency),
+                StrategyBacktestCost(
+                    "modeled_adverse_slippage", slippage, request.simulation.base_currency
+                ),
+            ),
+            key=lambda item: item.name,
+        )
+    )
+    adverse_by_time = {
+        request.start_at: Decimal(0),
+        entry.filled_at: Decimal(0),
+        **{
+            bar.session_close_at: max(Decimal(0), (entry.price - bar.low) / entry.price)
+            for bar in executed.bars
+            if entry.filled_at <= bar.session_open_at < exit_fill.filled_at
+        },
+        exit_fill.filled_at: max(Decimal(0), (entry.price - exit_fill.price) / entry.price),
+    }
+    adverse_excursion_path = tuple(
+        StrategyAdverseExcursionPoint(observed_at, adverse_by_time[observed_at])
+        for observed_at in sorted(adverse_by_time)
+    )
+    adverse_excursion = max(item.adverse_excursion for item in adverse_excursion_path)
+    net_pnl = _metric_value(executed.metrics, "net_pnl")
+    return {
+        "capital_path": [item.to_dict() for item in capital_path],
+        "adverse_excursion_path": [item.to_dict() for item in adverse_excursion_path],
+        "fills": [item.to_dict() for item in fills],
+        "costs": [item.to_dict() for item in costs],
+        "net_return": _decimal_text(_metric_value(executed.metrics, "net_return")),
+        "net_pnl": _decimal_text(net_pnl),
+        "portfolio_net_return": _decimal_text(net_pnl / starting_cash),
+        "max_drawdown": None if max_drawdown is None else _decimal_text(max_drawdown),
+        "cvar95": None if cvar95 is None else _decimal_text(cvar95),
+        "sharpe": None if sharpe is None else _decimal_text(sharpe),
+        "sortino": None if sortino is None else _decimal_text(sortino),
+        "turnover": _decimal_text(
+            sum((item.quantity * item.price for item in fills), Decimal(0)) / starting_cash
+        ),
+        "adverse_excursion": _decimal_text(adverse_excursion),
+        "liquidity_cost": _decimal_text(commission + slippage),
+        "stressed_net_return": (
+            None if stressed_net_return is None else _decimal_text(stressed_net_return)
+        ),
+        "stress_evidence_artifact_hash": stress_artifact_hash,
+        "missing_metrics": [item.to_dict() for item in sorted(missing, key=lambda item: item.name)],
+    }
+
+
+def _max_drawdown(capital_path: tuple[StrategyCapitalPoint, ...]) -> Decimal | None:
+    if len(capital_path) < 2:
+        return None
+    peak = capital_path[0].equity
+    result = Decimal(0)
+    for point in capital_path[1:]:
+        peak = max(peak, point.equity)
+        result = max(result, (peak - point.equity) / peak)
+    return result
+
+
+def _cvar95(returns: tuple[Decimal, ...]) -> Decimal | None:
+    if not returns:
+        return None
+    tail_count = max(1, (len(returns) + 19) // 20)
+    losses = sorted((-item for item in returns), reverse=True)[:tail_count]
+    return max(Decimal(0), sum(losses, Decimal(0)) / Decimal(tail_count))
+
+
+def _sharpe(returns: tuple[Decimal, ...]) -> Decimal | None:
+    if len(returns) < 2:
+        return None
+    with localcontext() as context:
+        context.prec = 50
+        count = Decimal(len(returns))
+        mean = sum(returns, Decimal(0)) / count
+        variance = sum(((item - mean) ** 2 for item in returns), Decimal(0)) / Decimal(
+            len(returns) - 1
+        )
+        if variance == 0:
+            return None
+        return mean / variance.sqrt() * Decimal(252).sqrt()
+
+
+def _sortino(returns: tuple[Decimal, ...]) -> Decimal | None:
+    if not returns:
+        return None
+    downside = tuple(min(item, Decimal(0)) for item in returns)
+    with localcontext() as context:
+        context.prec = 50
+        downside_deviation = (
+            sum((item * item for item in downside), Decimal(0)) / Decimal(len(downside))
+        ).sqrt()
+        if downside_deviation == 0:
+            return None
+        mean = sum(returns, Decimal(0)) / Decimal(len(returns))
+        return mean / downside_deviation * Decimal(252).sqrt()
+
+
+def _adverse_slippage_cost(
+    fills: tuple[StrategyBacktestFill, ...], bars: tuple[AShareDailyBar, ...]
+) -> Decimal:
+    total = Decimal(0)
+    for fill in fills:
+        bar = next(
+            (item for item in bars if item.session_open_at == fill.filled_at),
+            None,
+        )
+        if bar is None:
+            continue
+        adverse = fill.price - bar.open if fill.side == "buy" else bar.open - fill.price
+        total += max(Decimal(0), adverse) * fill.quantity
+    return total
+
+
+def _strategy_receipt_from_values(values: dict[str, object]) -> StrategyBacktestOutcomeReceipt:
+    receipt_id = f"strategy-backtest-outcome-{_canonical_sha256(values)}"
+    return StrategyBacktestOutcomeReceipt(
+        receipt_id=receipt_id,
+        harness_authority_id=cast(str, values["harness_authority_id"]),
+        case_id=cast(str, values["case_id"]),
+        arm=StrategyBacktestArm(cast(str, values["arm"])),
+        strategy_variant_hash=cast(str, values["strategy_variant_hash"]),
+        strategy_ref=cast(str, values["strategy_ref"]),
+        target_selection_ref=cast(str, values["target_selection_ref"]),
+        engine_config_hash=cast(str, values["engine_config_hash"]),
+        simulation_data_granularity=cast(
+            str, cast(dict[str, object], values["simulation"])["data_granularity"]
+        ),
+        simulation_book_type=cast(str, cast(dict[str, object], values["simulation"])["book_type"]),
+        simulation_fill_model=cast(
+            str, cast(dict[str, object], values["simulation"])["fill_model"]
+        ),
+        simulation_fee_model=cast(str, cast(dict[str, object], values["simulation"])["fee_model"]),
+        simulation_venue_ruleset=cast(
+            str, cast(dict[str, object], values["simulation"])["venue_ruleset"]
+        ),
+        simulation_base_currency=cast(
+            str, cast(dict[str, object], values["simulation"])["base_currency"]
+        ),
+        simulation_starting_cash=Decimal(
+            cast(str, cast(dict[str, object], values["simulation"])["starting_cash"])
+        ),
+        simulation_random_seed=cast(
+            int, cast(dict[str, object], values["simulation"])["random_seed"]
+        ),
+        result_hash=cast(str, values["result_hash"]),
+        result_artifact_hash=cast(str, values["result_artifact_hash"]),
+        manifest_hash=cast(str, values["manifest_hash"]),
+        request_hash=cast(str, values["request_hash"]),
+        input_hashes=tuple(
+            BacktestInputHash(cast(str, item["name"]), cast(str, item["value"]))
+            for item in cast(list[dict[str, object]], values["input_hashes"])
+        ),
+        source_snapshot_id=cast(str, values["source_snapshot_id"]),
+        source_snapshot_artifact_hash=cast(str, values["source_snapshot_artifact_hash"]),
+        universe_hash=cast(str, values["universe_hash"]),
+        cost_model_hash=cast(str, values["cost_model_hash"]),
+        fill_model_hash=cast(str, values["fill_model_hash"]),
+        capital_path=tuple(
+            StrategyCapitalPoint(
+                datetime.fromisoformat(cast(str, item["observed_at"]).replace("Z", "+00:00")),
+                Decimal(cast(str, item["equity"])),
+            )
+            for item in cast(list[dict[str, object]], values["capital_path"])
+        ),
+        adverse_excursion_path=tuple(
+            StrategyAdverseExcursionPoint(
+                datetime.fromisoformat(cast(str, item["observed_at"]).replace("Z", "+00:00")),
+                Decimal(cast(str, item["adverse_excursion"])),
+            )
+            for item in cast(list[dict[str, object]], values["adverse_excursion_path"])
+        ),
+        fills=tuple(
+            StrategyBacktestFill(
+                side=cast(str, item["side"]),
+                filled_at=datetime.fromisoformat(
+                    cast(str, item["filled_at"]).replace("Z", "+00:00")
+                ),
+                quantity=Decimal(cast(str, item["quantity"])),
+                price=Decimal(cast(str, item["price"])),
+                commission=Decimal(cast(str, item["commission"])),
+                available_liquidity_quantity=_decimal_or_none(item["available_liquidity_quantity"]),
+            )
+            for item in cast(list[dict[str, object]], values["fills"])
+        ),
+        costs=tuple(
+            StrategyBacktestCost(
+                cast(str, item["name"]),
+                Decimal(cast(str, item["amount"])),
+                cast(str, item["currency"]),
+            )
+            for item in cast(list[dict[str, object]], values["costs"])
+        ),
+        net_return=Decimal(cast(str, values["net_return"])),
+        net_pnl=Decimal(cast(str, values["net_pnl"])),
+        portfolio_net_return=Decimal(cast(str, values["portfolio_net_return"])),
+        max_drawdown=_decimal_or_none(values["max_drawdown"]),
+        cvar95=_decimal_or_none(values["cvar95"]),
+        sharpe=_decimal_or_none(values["sharpe"]),
+        sortino=_decimal_or_none(values["sortino"]),
+        turnover=Decimal(cast(str, values["turnover"])),
+        adverse_excursion=Decimal(cast(str, values["adverse_excursion"])),
+        liquidity_cost=Decimal(cast(str, values["liquidity_cost"])),
+        stressed_net_return=_decimal_or_none(values["stressed_net_return"]),
+        stress_evidence_artifact_hash=cast(str | None, values["stress_evidence_artifact_hash"]),
+        missing_metrics=tuple(
+            StrategyBacktestMissingMetric(cast(str, item["name"]), cast(str, item["reason"]))
+            for item in cast(list[dict[str, object]], values["missing_metrics"])
+        ),
+    )
+
+
+def _decimal_or_none(value: object) -> Decimal | None:
+    return None if value is None else Decimal(cast(str, value))
+
+
+def _decimal_text(value: Decimal) -> str:
+    normalized = value.normalize()
+    if normalized == 0:
+        return "0"
+    return format(normalized, "f")
 
 
 def _result(

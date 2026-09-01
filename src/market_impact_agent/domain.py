@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
@@ -174,6 +174,143 @@ class TradingMandate:
             "allowed_instruments": sorted(self.allowed_instruments),
             "allowed_sides": sorted(item.value for item in self.allowed_sides),
             "max_order_notional": str(self.max_order_notional),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TradingMandateV2:
+    """Paper mandate with portfolio-level risk and activity limits.
+
+    This is additive to ``TradingMandate`` so persisted v1 mandates retain their
+    exact replay contract.  The gross-risk budget is the sole denominator for
+    an Agent-proposed target exposure ratio; account NAV is never inferred.
+    """
+
+    mandate_id: str
+    account_id: str
+    harness_authority_id: str
+    environment: TradingEnvironment
+    approval_mode: ApprovalMode
+    valid_from: datetime
+    valid_until: datetime
+    allowed_instruments: frozenset[str]
+    allowed_instrument_classes: frozenset[str]
+    allowed_sides: frozenset[Side]
+    currency: str
+    gross_exposure_limit: Decimal
+    minimum_net_exposure: Decimal
+    maximum_net_exposure: Decimal
+    maximum_position_count: int
+    maximum_single_position_fraction: Decimal
+    daily_turnover_limit: Decimal
+    daily_submission_limit: int
+    daily_loss_kill_threshold: Decimal
+    strategy_peak_drawdown_kill_threshold: Decimal
+    kill_on_unknown_ack: bool = True
+    kill_on_stale_account_snapshot: bool = True
+    kill_on_incomplete_order_coverage: bool = True
+    kill_on_reconciliation_difference: bool = True
+    kill_on_provider_loss: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.harness_authority_id.startswith("harness-authority-"):
+            raise ValueError("Trading Mandate v2 requires a Harness authority identity")
+        require_aware(self.valid_from, "valid_from")
+        require_aware(self.valid_until, "valid_until")
+        if self.valid_until <= self.valid_from:
+            raise ValueError("valid_until must be after valid_from")
+        if self.valid_until - self.valid_from > timedelta(days=1):
+            raise ValueError("Trading Mandate v2 validity cannot exceed one day")
+        if self.environment is not TradingEnvironment.PAPER:
+            raise ValueError("Trading Mandate v2 is paper-only")
+        if not self.allowed_instruments:
+            raise ValueError("allowed_instruments must not be empty")
+        if not self.allowed_sides:
+            raise ValueError("allowed_sides must not be empty")
+        if not self.allowed_instrument_classes or not self.allowed_instrument_classes <= {
+            "cash_equity",
+            "unlevered_exchange_traded_fund",
+        }:
+            raise ValueError("Trading Mandate v2 allows only unlevered cash equity or ETF classes")
+        if not self.currency or self.currency != self.currency.strip():
+            raise ValueError("currency must be non-empty trimmed text")
+        if self.currency != "USD":
+            raise ValueError("Trading Mandate v2 currently accepts USD only")
+        for value, name in (
+            (self.gross_exposure_limit, "gross_exposure_limit"),
+            (self.daily_turnover_limit, "daily_turnover_limit"),
+            (self.daily_loss_kill_threshold, "daily_loss_kill_threshold"),
+            (
+                self.strategy_peak_drawdown_kill_threshold,
+                "strategy_peak_drawdown_kill_threshold",
+            ),
+        ):
+            if not value.is_finite() or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+        for value, name in (
+            (self.minimum_net_exposure, "minimum_net_exposure"),
+            (self.maximum_net_exposure, "maximum_net_exposure"),
+        ):
+            if not value.is_finite():
+                raise ValueError(f"{name} must be finite")
+        if self.minimum_net_exposure > self.maximum_net_exposure:
+            raise ValueError("net exposure band is inverted")
+        if (
+            abs(self.minimum_net_exposure) > self.gross_exposure_limit
+            or abs(self.maximum_net_exposure) > self.gross_exposure_limit
+        ):
+            raise ValueError("net exposure band cannot exceed gross exposure limit")
+        if self.maximum_position_count <= 0:
+            raise ValueError("maximum_position_count must be positive")
+        if (
+            not self.maximum_single_position_fraction.is_finite()
+            or self.maximum_single_position_fraction <= 0
+            or self.maximum_single_position_fraction > 1
+        ):
+            raise ValueError("maximum_single_position_fraction must be in (0, 1]")
+        if self.daily_submission_limit <= 0:
+            raise ValueError("daily_submission_limit must be positive")
+        if not all(
+            (
+                self.kill_on_unknown_ack,
+                self.kill_on_stale_account_snapshot,
+                self.kill_on_incomplete_order_coverage,
+                self.kill_on_reconciliation_difference,
+                self.kill_on_provider_loss,
+            )
+        ):
+            raise ValueError("Trading Mandate v2 kill predicates cannot be disabled")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.trading-mandate.v2",
+            "mandate_id": self.mandate_id,
+            "account_id": self.account_id,
+            "harness_authority_id": self.harness_authority_id,
+            "environment": self.environment.value,
+            "approval_mode": self.approval_mode.value,
+            "valid_from": _timestamp(self.valid_from),
+            "valid_until": _timestamp(self.valid_until),
+            "allowed_instruments": sorted(self.allowed_instruments),
+            "allowed_instrument_classes": sorted(self.allowed_instrument_classes),
+            "allowed_sides": sorted(item.value for item in self.allowed_sides),
+            "currency": self.currency,
+            "gross_exposure_limit": str(self.gross_exposure_limit),
+            "minimum_net_exposure": str(self.minimum_net_exposure),
+            "maximum_net_exposure": str(self.maximum_net_exposure),
+            "maximum_position_count": self.maximum_position_count,
+            "maximum_single_position_fraction": str(self.maximum_single_position_fraction),
+            "daily_turnover_limit": str(self.daily_turnover_limit),
+            "daily_submission_limit": self.daily_submission_limit,
+            "daily_loss_kill_threshold": str(self.daily_loss_kill_threshold),
+            "strategy_peak_drawdown_kill_threshold": str(
+                self.strategy_peak_drawdown_kill_threshold
+            ),
+            "kill_on_unknown_ack": self.kill_on_unknown_ack,
+            "kill_on_stale_account_snapshot": self.kill_on_stale_account_snapshot,
+            "kill_on_incomplete_order_coverage": self.kill_on_incomplete_order_coverage,
+            "kill_on_reconciliation_difference": self.kill_on_reconciliation_difference,
+            "kill_on_provider_loss": self.kill_on_provider_loss,
         }
 
 

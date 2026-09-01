@@ -30,6 +30,7 @@ PROSPECTIVE_HISTORICAL_ANALOGY_PACK_SCHEMA = "market-impact.prospective-historic
 PROSPECTIVE_EVENT_ASSESSMENT_SCHEMA = "market-impact.prospective-event-assessment.v1"
 PROSPECTIVE_MATERIALITY_GATE_SCHEMA = "market-impact.prospective-materiality-gate-result.v1"
 PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA = "market-impact.prospective-trigger-admission.v1"
+STRATEGY_WINDOW_SEAL_SCHEMA = "market-impact.strategy-window-seal.v2"
 
 
 class HistoricalAnalogyMode(StrEnum):
@@ -47,6 +48,52 @@ class MaterialityDisposition(StrEnum):
 class TriggerAdmissionKind(StrEnum):
     CHECKPOINT_ELIGIBLE = "checkpoint_eligible"
     MATERIAL_EVENT = "material_event"
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyAdmissionCaseMapping:
+    registration_id: str
+    case_id: str
+    root_event_id: str
+    regime: str
+
+    def __post_init__(self) -> None:
+        for name in ("registration_id", "case_id", "root_event_id", "regime"):
+            value = getattr(self, name)
+            if not value or value != value.strip():
+                raise ValueError(f"strategy admission mapping {name} is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyWindowSeal:
+    seal_id: str
+    harness_authority_id: str
+    window_id: str
+    strategy_epoch_id: str
+    sealed_at: datetime
+    last_sequence: int
+    journal_head_hash: str
+    admission_ids: tuple[str, ...]
+    stale: bool = False
+    schema_version: str = STRATEGY_WINDOW_SEAL_SCHEMA
+
+    @property
+    def seal_hash(self) -> str:
+        return canonical_hash(self.to_dict())
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "seal_id": self.seal_id,
+            "harness_authority_id": self.harness_authority_id,
+            "window_id": self.window_id,
+            "strategy_epoch_id": self.strategy_epoch_id,
+            "sealed_at": _timestamp(self.sealed_at),
+            "last_sequence": self.last_sequence,
+            "journal_head_hash": self.journal_head_hash,
+            "admission_ids": list(self.admission_ids),
+            "stale": self.stale,
+        }
 
 
 class CompletedTriageDecisionAuthority(Protocol):
@@ -827,6 +874,7 @@ class ProspectiveTriggerAdmissionStore:
                 )
                 """
             )
+            self._initialize_strategy_windows(connection)
             columns = {
                 cast(str, row["name"])
                 for row in connection.execute("PRAGMA table_info(prospective_trigger_admissions)")
@@ -1080,7 +1128,309 @@ class ProspectiveTriggerAdmissionStore:
                     _timestamp(admission.admitted_at),
                 ),
             )
+            self._append_matching_strategy_windows(connection, admission, artifact.content_hash)
         return admission
+
+    def open_strategy_window(
+        self,
+        *,
+        strategy_epoch_id: str,
+        qualification_policy_hash: str,
+        opened_at: datetime,
+        cutoff_at: datetime,
+        registration_mapping: tuple[StrategyAdmissionCaseMapping, ...],
+    ) -> str:
+        if not strategy_epoch_id or strategy_epoch_id != strategy_epoch_id.strip():
+            raise ValueError("strategy_epoch_id must be a stable identifier")
+        _sha256(qualification_policy_hash, "qualification_policy_hash")
+        _strict_utc(opened_at, "strategy window opened_at")
+        _strict_utc(cutoff_at, "strategy window cutoff_at")
+        if opened_at >= cutoff_at:
+            raise ValueError("strategy window must open before its cutoff")
+        if not registration_mapping:
+            raise ValueError("strategy window requires a registration mapping")
+        registration_mapping = tuple(
+            sorted(registration_mapping, key=lambda item: item.registration_id)
+        )
+        registration_ids = tuple(item.registration_id for item in registration_mapping)
+        case_ids = tuple(item.case_id for item in registration_mapping)
+        root_ids = tuple(item.root_event_id for item in registration_mapping)
+        if len(set(registration_ids)) != len(registration_ids):
+            raise ValueError("strategy window registrations must be unique")
+        if len(set(case_ids)) != len(case_ids) or len(set(root_ids)) != len(root_ids):
+            raise ValueError("strategy window cases and root events must be unique")
+        core = {
+            "harness_authority_id": self.store.harness_authority_id,
+            "strategy_epoch_id": strategy_epoch_id,
+            "qualification_policy_hash": qualification_policy_hash,
+            "opened_at": _timestamp(opened_at),
+            "cutoff_at": _timestamp(cutoff_at),
+            "registration_mapping": [
+                {
+                    "registration_id": item.registration_id,
+                    "case_id": item.case_id,
+                    "root_event_id": item.root_event_id,
+                    "regime": item.regime,
+                }
+                for item in registration_mapping
+            ],
+        }
+        window_id = f"strategy-window-{canonical_hash(core)}"
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO strategy_windows_v2(
+                    window_id, harness_authority_id, strategy_epoch_id,
+                    qualification_policy_hash, opened_at, cutoff_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    window_id,
+                    self.store.harness_authority_id,
+                    strategy_epoch_id,
+                    qualification_policy_hash,
+                    _timestamp(opened_at),
+                    _timestamp(cutoff_at),
+                ),
+            )
+            for item in registration_mapping:
+                connection.execute(
+                    "INSERT OR IGNORE INTO strategy_window_mappings_v2 VALUES (?, ?, ?, ?, ?)",
+                    (
+                        window_id,
+                        item.registration_id,
+                        item.case_id,
+                        item.root_event_id,
+                        item.regime,
+                    ),
+                )
+        return window_id
+
+    def seal_strategy_window(self, window_id: str, *, sealed_at: datetime) -> StrategyWindowSeal:
+        _strict_utc(sealed_at, "strategy window sealed_at")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            window = connection.execute(
+                "SELECT * FROM strategy_windows_v2 WHERE window_id = ?", (window_id,)
+            ).fetchone()
+            if window is None:
+                raise KeyError(f"unknown strategy window: {window_id}")
+            cutoff = _datetime(window["cutoff_at"], "strategy window cutoff")
+            if sealed_at < cutoff:
+                raise ValueError("strategy window cannot seal before cutoff")
+            existing = connection.execute(
+                "SELECT artifact_hash, stale FROM strategy_window_seals_v2 WHERE window_id = ?",
+                (window_id,),
+            ).fetchone()
+            if existing is not None and not cast(int, existing["stale"]):
+                return self._strategy_window_seal(cast(str, existing["artifact_hash"]), stale=False)
+            rows = connection.execute(
+                """
+                SELECT sequence, admission_id, event_hash FROM strategy_window_events_v2
+                WHERE window_id = ? ORDER BY sequence
+                """,
+                (window_id,),
+            ).fetchall()
+            if not rows:
+                raise ValueError("strategy window cannot seal an empty admission denominator")
+            last_sequence = 0 if not rows else cast(int, rows[-1]["sequence"])
+            head = canonical_hash([]) if not rows else cast(str, rows[-1]["event_hash"])
+            admission_ids = tuple(cast(str, row["admission_id"]) for row in rows)
+            values: dict[str, object] = {
+                "schema_version": STRATEGY_WINDOW_SEAL_SCHEMA,
+                "harness_authority_id": self.store.harness_authority_id,
+                "window_id": window_id,
+                "strategy_epoch_id": cast(str, window["strategy_epoch_id"]),
+                "sealed_at": _timestamp(sealed_at),
+                "last_sequence": last_sequence,
+                "journal_head_hash": head,
+                "admission_ids": list(admission_ids),
+                "stale": False,
+            }
+            seal = StrategyWindowSeal(
+                seal_id=f"strategy-window-seal-{canonical_hash(values)}",
+                harness_authority_id=self.store.harness_authority_id,
+                window_id=window_id,
+                strategy_epoch_id=cast(str, window["strategy_epoch_id"]),
+                sealed_at=sealed_at,
+                last_sequence=last_sequence,
+                journal_head_hash=head,
+                admission_ids=admission_ids,
+            )
+            artifact = self.store.artifacts.put_json(seal.to_dict())
+            connection.execute(
+                """
+                INSERT INTO strategy_window_seals_v2(
+                    window_id, strategy_epoch_id, seal_id, artifact_hash,
+                    sealed_at, last_sequence, journal_head_hash, stale
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                ON CONFLICT(window_id) DO UPDATE SET
+                    seal_id=excluded.seal_id, artifact_hash=excluded.artifact_hash,
+                    sealed_at=excluded.sealed_at, last_sequence=excluded.last_sequence,
+                    journal_head_hash=excluded.journal_head_hash, stale=0
+                """,
+                (
+                    window_id,
+                    seal.strategy_epoch_id,
+                    seal.seal_id,
+                    artifact.content_hash,
+                    _timestamp(sealed_at),
+                    last_sequence,
+                    head,
+                ),
+            )
+        return seal
+
+    @staticmethod
+    def _initialize_strategy_windows(connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_windows_v2 (
+                window_id TEXT PRIMARY KEY,
+                harness_authority_id TEXT NOT NULL,
+                strategy_epoch_id TEXT NOT NULL,
+                qualification_policy_hash TEXT NOT NULL,
+                opened_at TEXT NOT NULL,
+                cutoff_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS strategy_window_mappings_v2 (
+                window_id TEXT NOT NULL,
+                registration_id TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                root_event_id TEXT NOT NULL,
+                regime TEXT NOT NULL,
+                PRIMARY KEY(window_id, registration_id),
+                UNIQUE(window_id, case_id),
+                UNIQUE(window_id, root_event_id)
+            );
+            CREATE TABLE IF NOT EXISTS strategy_window_events_v2 (
+                window_id TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                admission_id TEXT NOT NULL,
+                admission_hash TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                root_event_id TEXT NOT NULL,
+                regime TEXT NOT NULL,
+                admitted_at TEXT NOT NULL,
+                previous_hash TEXT,
+                event_hash TEXT NOT NULL,
+                PRIMARY KEY(window_id, sequence),
+                UNIQUE(window_id, admission_id),
+                UNIQUE(window_id, case_id),
+                UNIQUE(window_id, root_event_id)
+            );
+            CREATE TABLE IF NOT EXISTS strategy_window_seals_v2 (
+                window_id TEXT PRIMARY KEY,
+                strategy_epoch_id TEXT NOT NULL,
+                seal_id TEXT NOT NULL,
+                artifact_hash TEXT NOT NULL,
+                sealed_at TEXT NOT NULL,
+                last_sequence INTEGER NOT NULL,
+                journal_head_hash TEXT NOT NULL,
+                stale INTEGER NOT NULL
+            );
+            """
+        )
+
+    def _append_matching_strategy_windows(
+        self,
+        connection: sqlite3.Connection,
+        admission: ProspectiveTriggerAdmission,
+        artifact_hash: str,
+    ) -> None:
+        rows = connection.execute(
+            """
+            SELECT window.window_id FROM strategy_windows_v2 AS window
+            JOIN strategy_window_mappings_v2 AS mapping USING (window_id)
+            WHERE mapping.registration_id = ?
+              AND ? >= window.opened_at AND ? <= window.cutoff_at
+            """,
+            (
+                admission.registration_id,
+                _timestamp(admission.admitted_at),
+                _timestamp(admission.admitted_at),
+            ),
+        ).fetchall()
+        for row in rows:
+            self._append_strategy_window_event(
+                connection, cast(str, row["window_id"]), admission, artifact_hash
+            )
+
+    def _append_strategy_window_event(
+        self,
+        connection: sqlite3.Connection,
+        window_id: str,
+        admission: ProspectiveTriggerAdmission,
+        artifact_hash: str,
+    ) -> None:
+        existing = connection.execute(
+            "SELECT admission_hash FROM strategy_window_events_v2 "
+            "WHERE window_id = ? AND admission_id = ?",
+            (window_id, admission.admission_id),
+        ).fetchone()
+        if existing is not None:
+            if existing["admission_hash"] != artifact_hash:
+                raise ValueError("strategy window admission conflicts with append-only history")
+            return
+        mapping = connection.execute(
+            "SELECT * FROM strategy_window_mappings_v2 WHERE window_id = ? AND registration_id = ?",
+            (window_id, admission.registration_id),
+        ).fetchone()
+        if mapping is None:
+            return
+        tail = connection.execute(
+            "SELECT sequence, event_hash FROM strategy_window_events_v2 "
+            "WHERE window_id = ? ORDER BY sequence DESC LIMIT 1",
+            (window_id,),
+        ).fetchone()
+        sequence = 1 if tail is None else cast(int, tail["sequence"]) + 1
+        previous_hash = None if tail is None else cast(str, tail["event_hash"])
+        core = {
+            "window_id": window_id,
+            "sequence": sequence,
+            "admission_id": admission.admission_id,
+            "admission_hash": artifact_hash,
+            "case_id": cast(str, mapping["case_id"]),
+            "root_event_id": cast(str, mapping["root_event_id"]),
+            "regime": cast(str, mapping["regime"]),
+            "admitted_at": _timestamp(admission.admitted_at),
+            "previous_hash": previous_hash,
+        }
+        event_hash = canonical_hash(core)
+        connection.execute(
+            "INSERT INTO strategy_window_events_v2 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                window_id,
+                sequence,
+                admission.admission_id,
+                artifact_hash,
+                mapping["case_id"],
+                mapping["root_event_id"],
+                mapping["regime"],
+                _timestamp(admission.admitted_at),
+                previous_hash,
+                event_hash,
+            ),
+        )
+        connection.execute(
+            "UPDATE strategy_window_seals_v2 SET stale = 1 WHERE window_id = ?",
+            (window_id,),
+        )
+
+    def _strategy_window_seal(self, artifact_hash: str, *, stale: bool) -> StrategyWindowSeal:
+        payload = _object(self.store.artifacts.read_json(artifact_hash), "strategy window seal")
+        return StrategyWindowSeal(
+            seal_id=_string(payload, "seal_id"),
+            harness_authority_id=_string(payload, "harness_authority_id"),
+            window_id=_string(payload, "window_id"),
+            strategy_epoch_id=_string(payload, "strategy_epoch_id"),
+            sealed_at=_datetime(payload["sealed_at"], "strategy window sealed_at"),
+            last_sequence=_integer(payload["last_sequence"], "strategy window last_sequence"),
+            journal_head_hash=_string(payload, "journal_head_hash"),
+            admission_ids=_string_tuple(payload["admission_ids"], "strategy window admission_ids"),
+            stale=stale,
+        )
 
     def get(self, admission_id: str) -> ProspectiveTriggerAdmission:
         with self._connect() as connection:

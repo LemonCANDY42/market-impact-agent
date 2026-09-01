@@ -35,7 +35,9 @@ from market_impact_agent.ibkr_account_read import (
 )
 
 IBKR_NAUTILUS_PAPER_PROVIDER_ID = "ibkr-nautilus-paper"
-IBKR_NAUTILUS_PAPER_PROVIDER_VERSION = "0.1.0-candidate"
+IBKR_NAUTILUS_PAPER_PROVIDER_VERSION = "0.2.0-candidate"
+IBKR_NAUTILUS_PAPER_RUNTIME_VERSION = "0.2.0-candidate"
+IBKR_NAUTILUS_VERSION = "1.231.0"
 IBKR_NAUTILUS_PAPER_READINESS_SCHEMA = "market-impact.ibkr-nautilus-paper-readiness.v1"
 _BRIDGE_READINESS_BLOCKERS = frozenset(
     {

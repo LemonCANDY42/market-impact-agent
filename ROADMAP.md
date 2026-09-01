@@ -43,6 +43,9 @@ The shortest accepted path to Agent-directed paper operation is:
 
 The engineering and first-evidence target is compressed into one bounded two-week program. This
 does not rename two weeks of observations as long-run alpha evidence or authorize real capital.
+`docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md` is the single strategy/Skill promotion authority for this
+program. Phase 2, Method Quality, regime and prospective registrations keep their immutable evidence
+roles but cannot independently promote a strategy.
 
 - **Days 1-3 — unblock decisions.** Permit v11 single-run operational Triage for new batches and
   reuse EventAssessment plus the deterministic Materiality Gate as the only in-scope target
@@ -84,6 +87,24 @@ The day-14 report separately states engineering completion, historical Strict-PI
 historical Modeled-PIT evidence and prospective paper evidence. Live plumbing may be complete and
 remain `disabled`; enabling any real-capital Provider still requires explicit authorization plus its
 own mandate, limits, credential isolation, kill-switch and reconciliation acceptance.
+
+### Implementation checkpoint — 2026-09-02
+
+The Harness now has the additive mechanics needed to run this convergence program: one
+root-bound Agent-effectiveness authority and common-capital evaluator; composition-root-owned
+Modeled-PIT readiness inputs; the prospective Trigger-to-Judgment-to-v2-Portfolio/Sizing-to-durable
+Mock path; an autonomous Paper mandate/risk/kill/reconciliation owner; and a pinned
+Nautilus-to-IBKR Paper runtime candidate. These are engineering capabilities, not evidence that a
+strategy is effective or that the broker Provider is accepted.
+
+The evidence gates remain open. Strict historical PIT remains `0/18`; no three-case improved
+Modeled-PIT pilot or 24-case frozen holdout has yet produced an effectiveness result. The current
+prospective route has four Earnings candidates but only two of four checkpoint families operational;
+the frozen Earnings model run has no Provider attempt because its exact registered CPA credential is
+not available to that runtime. No genuine Trigger has therefore completed PDI-30 through PDI-32 or
+created an Agent-directed Mock order. The concrete IBKR runtime has not performed a real Paper
+submit, cancel, replace-by-cancel-and-resubmit, restart/fault, or Provider Acceptance canary;
+production activation remains closed. Live remains disabled.
 
 The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
 incremental: read-only reconciled account/position context, then deterministic portfolio/sizing

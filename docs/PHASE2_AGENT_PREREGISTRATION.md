@@ -1,5 +1,9 @@
 # Prospective Agent Phase 2 Preregistration
 
+> This frozen preregistration remains authoritative for its own cohort and stopping rules. Broader
+> strategy or Skill promotion is governed only by
+> [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md).
+
 ## Status
 
 The first materially new study after the failed v2 cohort is registered but has not begun
