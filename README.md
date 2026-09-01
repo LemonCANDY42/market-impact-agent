@@ -339,16 +339,18 @@ The bootstrap implements:
 - prediction-market capture and offline bundle-validation commands; all three Observation
   Providers remain disabled and unverified.
 
-Planned integrations are documented but **not claimed as working**:
+Execution integrations are documented but **not claimed as accepted**:
 
-- a separately validated Nautilus-to-IBKR paper Provider;
+- an `ibkr-nautilus-paper` candidate whose mutation-free local Paper Gateway readiness probe is
+  accepted, while submit/cancel/replace and broker recovery remain unaccepted;
 - an external-process VeighNa bridge for future A-share gateways;
 - HTTP/gRPC execution-provider transports.
 
 NautilusTrader is the selected default engine foundation and behavioral reference. The
 Harness uses it through an engine-neutral backtest bridge; later execution Providers still
 pass through the same policy, approval, and audit boundary. Version `1.231.0` is an
-optional, exact dependency and grants backtest capability only.
+optional, exact dependency. Its accepted capabilities are the bounded backtest bridge and the
+mutation-free IBKR Paper readiness probe only; it grants no order-execution capability.
 
 The first official token-backed local Tushare capture and validation completed on 2026-08-25
 for `600028.SH`, using 2019-09-18 as-of metadata and a 2019-09-19..2019-10-10 daily window.

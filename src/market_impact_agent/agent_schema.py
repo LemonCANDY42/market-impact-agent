@@ -84,6 +84,7 @@ AGENT_SCHEMA_FILES = (
     "provider-reconciliation-snapshot.schema.json",
     "execution-reconciliation.schema.json",
     "execution-reconciliation-v2.schema.json",
+    "ibkr-nautilus-paper-readiness-report.schema.json",
     "pattern-pack.schema.json",
     "evidence-pack.schema.json",
     "judgment-proposal.schema.json",

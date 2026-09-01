@@ -124,6 +124,7 @@ packages = ["src/market_impact_agent"]
 "schemas/provider-reconciliation-snapshot.schema.json" = "market_impact_agent/schemas/provider-reconciliation-snapshot.schema.json"
 "schemas/execution-reconciliation.schema.json" = "market_impact_agent/schemas/execution-reconciliation.schema.json"
 "schemas/execution-reconciliation-v2.schema.json" = "market_impact_agent/schemas/execution-reconciliation-v2.schema.json"
+"schemas/ibkr-nautilus-paper-readiness-report.schema.json" = "market_impact_agent/schemas/ibkr-nautilus-paper-readiness-report.schema.json"
 "schemas/backtest-request.schema.json" = "market_impact_agent/schemas/backtest-request.schema.json"
 "schemas/backtest-result.schema.json" = "market_impact_agent/schemas/backtest-result.schema.json"
 "schemas/phase2-calibration-gate-result.schema.json" = "market_impact_agent/schemas/phase2-calibration-gate-result.schema.json"

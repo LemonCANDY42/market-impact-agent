@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -15,6 +16,7 @@ from ibapi.order_state import OrderState
 
 from market_impact_agent.ibkr_account_read import (
     IbkrPaperAccountReader,
+    IbkrPaperAccountReadReport,
     _IbkrAccountCollector,
     capture_ibkr_paper_account_snapshot,
 )
@@ -183,3 +185,66 @@ def test_account_capture_rejects_substituted_reader() -> None:
             reader=cast(IbkrPaperAccountReader, object()),
             account_reference_key=b"fixture-ibkr-reference-key-material",
         )
+
+
+def test_reader_rejects_message_loop_failure_after_barriers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    at = datetime(2026, 9, 1, 8, tzinfo=UTC)
+
+    class _FailingCollector:
+        def __init__(self, **_: object) -> None:
+            self.api_ready = threading.Event()
+            self.ready = threading.Event()
+            self.complete = threading.Event()
+            self.api_ready.set()
+            self.ready.set()
+            self.complete.set()
+
+        def connect(self, *_: object) -> None:
+            pass
+
+        def isConnected(self) -> bool:
+            return True
+
+        def run(self) -> None:
+            raise TypeError("fixture transport failure")
+
+        def reqManagedAccts(self) -> None:
+            pass
+
+        def request_snapshot(self) -> None:
+            pass
+
+        def report(self) -> IbkrPaperAccountReadReport:
+            return IbkrPaperAccountReadReport(
+                account_reference="DU-fixture-private-account",
+                as_of=at,
+                reconciled_at=at,
+                gateway_server_version=188,
+                gateway_timezone="Asia/Shanghai",
+                account_barrier_complete=True,
+                account_summary_barrier_complete=True,
+                open_order_barrier_complete=True,
+                execution_barrier_complete=True,
+                cash=(),
+                positions=(),
+                open_orders=(),
+                recent_fills=(),
+                recent_fills_since=at,
+                reconciliation_gaps=(),
+            )
+
+        def stop_snapshot(self) -> None:
+            pass
+
+        def close_transport(self) -> None:
+            pass
+
+    from market_impact_agent import ibkr_account_read
+
+    monkeypatch.setattr(ibkr_account_read, "_IbkrAccountCollector", _FailingCollector)
+    reader = IbkrPaperAccountReader(clock=lambda: at)
+    with pytest.raises(RuntimeError, match="message loop failed") as exc_info:
+        reader.read(reference_key=b"fixture-ibkr-reference-key-material")
+    assert isinstance(exc_info.value.__cause__, TypeError)

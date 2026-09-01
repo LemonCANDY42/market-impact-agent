@@ -1215,11 +1215,20 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
   - [ ] Exercise explicit close and multi-leg rotate lifecycle through the accepted operations, and
     add durable approval inbox/notifications plus reconciliation escalation before any autonomous
     mode. Deposits, withdrawals, credentials and account administration remain out of scope.
-- Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
+- [ ] Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
   engine and official IB adapter; create a direct IBKR execution Provider only if that path cannot
   pass lifecycle and reconciliation acceptance. The optional pinned Nautilus IB dependency also
   supplies the official IB Python API used by the narrower accepted read-only account adapter; that
   adapter is not an execution-engine substitution or execution acceptance.
+  - [x] Complete one real mutation-free readiness run through the pinned Nautilus execution client.
+    The run used the local Paper Gateway, completed Nautilus connection, execution reconciliation
+    and portfolio initialization, loaded no Strategy, and matched the direct reader's account,
+    open-order and open-position counts. Its content-identified report stays in ignored private
+    state. The explicit manual-TWS-order coverage gap keeps exposure increase closed.
+  - [ ] Implement the long-lived Harness operation bridge and exact Instrument Master translation,
+    then accept submit, cancel, replace, partial/duplicate fill, ambiguous acknowledgement,
+    disconnect, Gateway/process restart, external-order classification and full account
+    reconciliation. No real Paper mutation occurs without the exact `manual_each` approval.
 - Add a Harness-owned Provider Acceptance artifact before advertising external paper capability. It
   must bind the exact adapter/dependency/configuration/environment/account scope and the accepted
   ambiguity, restart, fault, and account-level reconciliation evidence; a Provider manifest cannot

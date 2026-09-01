@@ -120,8 +120,21 @@ class IbkrPaperAccountReader:
         collector.connect(self._host, self._port, self._client_id)
         if not collector.isConnected():
             raise ConnectionError("IBKR Gateway rejected the local API connection")
-        thread = threading.Thread(target=collector.run, name="ibkr-account-read", daemon=True)
+        message_loop_errors: list[BaseException] = []
+
+        def run_message_loop() -> None:
+            try:
+                collector.run()
+            except BaseException as exc:
+                message_loop_errors.append(exc)
+
+        thread = threading.Thread(
+            target=run_message_loop,
+            name="ibkr-account-read",
+            daemon=True,
+        )
         thread.start()
+        report: IbkrPaperAccountReadReport | None = None
         try:
             if not collector.api_ready.wait(self._timeout_seconds):
                 raise TimeoutError("IBKR Gateway API session did not become ready before timeout")
@@ -131,13 +144,16 @@ class IbkrPaperAccountReader:
             collector.request_snapshot()
             if not collector.complete.wait(self._timeout_seconds):
                 raise TimeoutError("IBKR account reconciliation barriers did not complete in time")
-            return collector.report()
+            report = collector.report()
         finally:
             collector.stop_snapshot()
             collector.close_transport()
             thread.join(timeout=2.0)
             if thread.is_alive():
                 raise RuntimeError("IBKR account message loop did not stop after disconnect")
+        if message_loop_errors:
+            raise RuntimeError("IBKR account message loop failed") from message_loop_errors[0]
+        return report
 
 
 def capture_ibkr_paper_account_snapshot(
@@ -264,15 +280,17 @@ class _IbkrAccountCollector(EWrapper, EClient):
         self.complete = threading.Event()
 
     def close_transport(self) -> None:
-        """Stop both official ibapi threads; close() alone does not wake recv on macOS."""
+        """Stop both official ibapi threads without clearing decode state before queue drain."""
 
         reader_thread = self.reader
         connection = self.conn
         raw_socket = None if connection is None else connection.socket
+        self.setConnState(EClient.DISCONNECTED)
         if raw_socket is not None:
             with suppress(OSError):
                 raw_socket.shutdown(socket.SHUT_RDWR)
-        self.disconnect()
+        if connection is not None:
+            connection.disconnect()
         if reader_thread is not None and reader_thread is not threading.current_thread():
             reader_thread.join(timeout=2.0)
             if reader_thread.is_alive():

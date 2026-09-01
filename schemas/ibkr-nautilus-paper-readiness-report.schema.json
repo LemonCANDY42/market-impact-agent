@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/ibkr-nautilus-paper-readiness-report.schema.json",
+  "title": "IBKR Nautilus Paper Readiness Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "provider_id",
+    "provider_version",
+    "nautilus_version",
+    "nautilus_ibapi_version",
+    "account_reference_hash",
+    "gateway_server_version",
+    "gateway_timezone",
+    "gateway_host",
+    "gateway_port",
+    "account_reader_client_id",
+    "nautilus_client_id",
+    "source_account_barriers_complete",
+    "nautilus_connected",
+    "nautilus_reconciled",
+    "portfolio_initialized",
+    "account_section_count",
+    "open_order_count",
+    "open_position_count",
+    "strategy_count",
+    "read_only_accepted",
+    "exposure_increase_ready",
+    "observed_at",
+    "gaps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.ibkr-nautilus-paper-readiness.v1"
+    },
+    "report_id": {
+      "type": "string",
+      "pattern": "^ibkr-nautilus-paper-readiness-[0-9a-f]{64}$"
+    },
+    "provider_id": {
+      "const": "ibkr-nautilus-paper"
+    },
+    "provider_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nautilus_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nautilus_ibapi_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "account_reference_hash": {
+      "type": "string",
+      "pattern": "^account-ref-[0-9a-f]{64}$"
+    },
+    "gateway_server_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "gateway_timezone": {
+      "type": "string",
+      "minLength": 1
+    },
+    "gateway_host": {
+      "enum": ["127.0.0.1", "localhost", "::1"]
+    },
+    "gateway_port": {
+      "const": 4002
+    },
+    "account_reader_client_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nautilus_client_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_account_barriers_complete": {
+      "type": "boolean"
+    },
+    "nautilus_connected": {
+      "type": "boolean"
+    },
+    "nautilus_reconciled": {
+      "type": "boolean"
+    },
+    "portfolio_initialized": {
+      "type": "boolean"
+    },
+    "account_section_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "open_order_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "open_position_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "strategy_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "read_only_accepted": {
+      "type": "boolean"
+    },
+    "exposure_increase_ready": {
+      "type": "boolean"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  }
+}

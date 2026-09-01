@@ -137,6 +137,12 @@ therefore retains `manual_tws_open_orders_not_observed`, remains usable for posi
 blocks every order mutation, including an apparently risk-reducing sell: an unseen manual order may
 already close or reverse the position. Exact amounts, identifiers and artifacts remain in ignored
 private state.
+The separate `ibkr-nautilus-paper` candidate probe has also completed one real mutation-free local
+run through pinned NautilusTrader `1.231.0` and the official IB adapter. It waits until Nautilus has
+connected, reconciled execution state, initialized its portfolio and started a zero-Strategy Trader,
+then compares its account/open-order/open-position counts with the direct reader. That proves the
+selected engine can observe the same bounded Paper account state; it neither removes the manual-TWS
+coverage gap nor exercises an order command. The report and logs remain in ignored private state.
 The Authorized Decision View recomputes freshness at its own cutoff instead of copying an earlier
 readiness result, rejects exposure-increase readiness whenever any account observation gap remains,
 and mints the read tool only for the exact content-identified Position Snapshot it names. A
@@ -216,7 +222,8 @@ success never establishes broker order, fill, position or cash state.
    escalation remain open. Wake remains separately gated.
 5. **IBKR paper execution.** Implement and independently accept `ibkr-nautilus-paper` for submit,
    cancel, replace, fill, ambiguous acknowledgement, restart and complete account reconciliation.
-   The accepted read-only account adapter and mock evidence cannot satisfy this gate.
+   The accepted direct account read, mutation-free Nautilus readiness probe and mock evidence cannot
+   satisfy this gate.
 6. **Live.** Require explicit authorization, versioned live mandate and limits, credential
    isolation, tested kill switch and separate live Provider Acceptance.
 

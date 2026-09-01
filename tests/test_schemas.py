@@ -102,6 +102,7 @@ def test_wheel_packages_every_registered_agent_schema() -> None:
         "provider-reconciliation-snapshot.schema.json",
         "execution-reconciliation.schema.json",
         "execution-reconciliation-v2.schema.json",
+        "ibkr-nautilus-paper-readiness-report.schema.json",
         "provider-manifest.schema.json",
         "signal-intent.schema.json",
         "research-method-catalog.schema.json",
