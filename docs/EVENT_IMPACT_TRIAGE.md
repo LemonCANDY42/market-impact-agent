@@ -536,8 +536,18 @@ change. Generic risk appetite, sentiment, discount-rate and possible-future-oppo
 are explicitly insufficient on their own. A plausible event missing one named observable goes to
 Attention Watch; routine closes, auctions, calendars, scheduled statistics, requests, meetings or
 plans without a supplied surprise, enacted term, named project, procurement, financing, production
-commitment or other realized change are archived. This is scripted contract acceptance only; v10
-still requires a new sealed pristine batch before it can create a Triage Decision.
+commitment or other realized change are archived. Its completed pristine comparison was terminal:
+12 versions; baseline had 7 unsupported routes, 5/12 exact routes and 8,494 microusd, while treatment
+had 6 unsupported routes, 6/12 exact routes and 8,363 microusd. Total authoritative usage was 14,391
+input / 11,648 output Tokens and 16,857 microusd. The gate failed and created no Decision.
+
+V11 is the smallest scope-binding follow-up. It keeps the one-coordinator graph and unchanged
+four-field positional route output, and retains v10's evidence-bounded fact/transmission and
+Watch/archive rules. Its sole input addition is a closed projection of the registered checkpoint's
+`eligibility_rule`, `exclusion_rules`, `target_venues`, and `allowed_instrument_classes`. Those
+fields constrain routing; the coordinator cannot invent cross-market target links. It creates no
+target map, new authority, state or entity. V2-v10 remain immutable replay dialects, and v11 needs a
+new sealed pristine comparison.
 
 The failure localizes the remaining ingress problem: an LLM can invent a generic path from almost
 any market print or foreign-policy fact to risk appetite, discount rates or future policy. The fix
@@ -572,7 +582,7 @@ parent authority is real.
 Still required for real acceptance:
 
 - preserve the closed material-ingress authority boundary: the ordinary path rejects
-  comparison-governed v9/v10 before
+  comparison-governed v9-v11 before
   any Provider call, and failed-batch terminalization may exclude actual-receipt versions only after
   reopening the append-only Comparison Registration and Report plus both exact Run/Usage authorities.
   Recovery after Report or terminal commit is local-only, uses the first durable identity and time,
@@ -580,7 +590,7 @@ Still required for real acceptance:
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
   ingress roles, and the current Position Snapshot remains identity-only;
-- one new pristine batch for v10; v8 and v9 remain terminal negative
+- one new pristine batch for v11; v8-v10 remain terminal negative
   evidence and cannot be recycled as blind acceptance data;
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,
   unsupported transmission paths and resource use;

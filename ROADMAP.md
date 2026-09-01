@@ -11,18 +11,21 @@ The shortest accepted path to Agent-directed paper operation is:
    append-only misses, receipts or replacement history. Collection health is supporting
    infrastructure, not the current experiment blocker;
 1. preserve the closed Triage authority boundaries before consuming another actual-receipt version:
-   comparison-governed material-ingress v9/v10 is rejected by the ordinary run path before any
+   comparison-governed material-ingress v9-v11 is rejected by the ordinary run path before any
    Provider call, and
    failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
    and Usage. Agent Watch admission remains globally fail-closed until a named concrete parent
    Run/Decision owner can derive its evidence, subject and matcher projection; a caller context or
    self-hashed artifact is not authority;
-2. use the frozen v10 material-ingress rule that incorporates v9's real counterexample: retain
+2. use the frozen v11 material-ingress rule: retain v10's evidence-bounded fact/transmission and
+   Watch/archive behavior while projecting the registered checkpoint eligibility/exclusion, venue and
+   instrument-class bounds into the sole coordinator input. Those bounds constrain routing and forbid
+   invented cross-market target links. Retain
    broad discovery, archive routine context without a stated surprise, send plausible but unresolved
    relevance with one named observable to Attention Watch, and require both a new causal fact and a
    concrete evidence-bounded transmission variable for EventAssessment. Its scripted mechanics are
-   accepted; run it once on a new sealed
-   pristine batch; do not retune or rerun the exposed v8/v9 batches. A pass must produce a formal
+   accepted; run it once on a new sealed pristine batch; do not retune or rerun the exposed v8-v10
+   batches. A pass must produce a formal
    Triage Decision and either select the first rule-eligible event or route one supported material
    event onward; a failure is terminal and should trigger an input/task-definition review rather than
    another local prompt dialect;
@@ -584,8 +587,17 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       transmission variable already changed or committed to change. Generic risk appetite,
       sentiment, discount-rate and possible-future-opportunity stories are insufficient alone;
       plausible relevance missing one named observable goes to Watch. Scripted runtime, parser,
-      replay, cost and ordinary-path fail-closed acceptance are complete.
-    - [ ] Freeze sealed labels for a new actual-receipt v10 Candidate Set and run one same-contract
+      replay, cost and ordinary-path fail-closed acceptance are complete. Its completed pristine
+      comparison terminalized 12 versions: baseline had 7 unsupported routes, 5/12 exact routes and
+      8,494 microusd; treatment had 6 unsupported routes, 6/12 exact routes and 8,363 microusd. The
+      authoritative total was 14,391 input / 11,648 output Tokens and 16,857 microusd. The gate
+      failed and created no Decision.
+    - [x] Add v11 as the minimal registered-scope binding. It preserves v10's one coordinator call,
+      positional output and evidence-bounded fact/transmission plus Watch/archive rules, while its
+      closed input projection carries only the checkpoint eligibility/exclusion rules, target venues
+      and allowed instrument classes. These fields constrain routing and forbid invented cross-market
+      target links; no new authority, state or entity is introduced.
+    - [ ] Freeze sealed labels for a new actual-receipt v11 Candidate Set and run one same-contract
       pristine comparison. Zero must-catch misses and zero unsupported material routes are required;
       failure remains terminal and does not trigger another prompt-only revision.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness

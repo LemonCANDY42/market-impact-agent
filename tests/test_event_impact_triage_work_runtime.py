@@ -54,6 +54,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V8,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
@@ -69,6 +70,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v8,
     build_event_impact_triage_work_execution_plan_v9,
     build_event_impact_triage_work_execution_plan_v10,
+    build_event_impact_triage_work_execution_plan_v11,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -170,7 +172,7 @@ class ScriptedWorkProvider(ModelProvider):
         typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6", "-v7", "-v8", "-v8m"))
         ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6", "-v7", "-v8", "-v8m"))
         phase_input = cast(dict[str, object], task["phase_input"])
-        if prompt_template_id.endswith(("-v9", "-v10")):
+        if prompt_template_id.endswith(("-v9", "-v10", "-v11")):
             atoms = cast(list[dict[str, object]], phase_input["atoms"])
             return {
                 "routes": [
@@ -346,7 +348,7 @@ class MaterialWatchProvider(ScriptedWorkProvider):
 
 class MixedMaterialIngressProvider(ScriptedWorkProvider):
     def _output(self, task: dict[str, object]) -> dict[str, object]:
-        if not str(task["prompt_template_id"]).endswith(("-v9", "-v10")):
+        if not str(task["prompt_template_id"]).endswith(("-v9", "-v10", "-v11")):
             return super()._output(task)
         atoms = cast(list[dict[str, object]], cast(dict[str, object], task["phase_input"])["atoms"])
         fixtures = (
@@ -1009,6 +1011,7 @@ def _runtime(
         "v8": build_event_impact_triage_work_execution_plan_v8,
         "v9": build_event_impact_triage_work_execution_plan_v9,
         "v10": build_event_impact_triage_work_execution_plan_v10,
+        "v11": build_event_impact_triage_work_execution_plan_v11,
     }[dialect]
     plan = builder(
         candidate_set=candidate_set,
@@ -2817,6 +2820,7 @@ def test_v8_direct_checkpoint_keeps_model_eligibility_classification(tmp_path: P
     [
         ("v9", EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9),
         ("v10", EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10),
+        ("v11", EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11),
     ],
 )
 def test_material_ingress_uses_one_positional_call_and_derives_downstream_artifacts(
@@ -2846,6 +2850,10 @@ def test_material_ingress_uses_one_positional_call_and_derives_downstream_artifa
         system_policy = str(provider.requests[0][0]["content"])
         assert "supplied content itself" in system_policy
         assert "Generic risk appetite" in system_policy
+    if dialect == "v11":
+        system_policy = str(provider.requests[0][0]["content"])
+        assert "checkpoint rule constrains routing" in system_policy
+        assert "Do not invent cross-market target links" in system_policy
     assert {item.phase for item in result.members} == {TriageWorkPhase.MAP}
     assert result.partition is not None
     assert result.proposal is not None
@@ -2862,12 +2870,33 @@ def test_material_ingress_uses_one_positional_call_and_derives_downstream_artifa
     request = json.loads(str(provider.requests[0][-1]["content"]))
     assert request["required_output"]["contract_version"] == dialect
     phase_input = cast(dict[str, object], request["phase_input"])
-    assert set(phase_input) == {"work_unit_ordinal", "atoms"}
+    expected_input_fields = {"work_unit_ordinal", "atoms"}
+    if dialect == "v11":
+        expected_input_fields.add("checkpoint_rule")
+    assert set(phase_input) == expected_input_fields
     assert all(
         set(item) == {"normalized_payload", "license_scope", "instruction_boundary"}
         for item in cast(list[dict[str, object]], phase_input["atoms"])
     )
     assert "atom_id" not in canonical_json_bytes(request["required_output"]).decode()
+    if dialect == "v11":
+        checkpoint_rule = cast(dict[str, object], phase_input["checkpoint_rule"])
+        assert checkpoint_rule == {
+            "eligibility_rule": registration.checkpoint(
+                "next-material-a-share-event"
+            ).eligibility_rule,
+            "exclusion_rules": list(
+                registration.checkpoint("next-material-a-share-event").exclusion_rules
+            ),
+            "target_venues": list(
+                registration.checkpoint("next-material-a-share-event").target_venues
+            ),
+            "allowed_instrument_classes": list(
+                registration.checkpoint("next-material-a-share-event").allowed_instrument_classes
+            ),
+        }
+        output_contract = cast(dict[str, object], request["required_output"])
+        assert output_contract["required_fields"] == ["routes"]
     assert event_impact_triage_work_execution_plan_from_dict(plan.to_dict()) == plan
     assert not validate_agent_contract(
         plan.to_dict(), "event-impact-triage-work-execution-plan.schema.json"

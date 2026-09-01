@@ -48,6 +48,7 @@ from market_impact_agent.event_impact_triage_work_format_recovery import (
 from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunner,
@@ -55,6 +56,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v8,
     build_event_impact_triage_work_execution_plan_v9,
     build_event_impact_triage_work_execution_plan_v10,
+    build_event_impact_triage_work_execution_plan_v11,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -962,7 +964,7 @@ def prepare_next_prospective_triage_work(
         ),
     )
     profile = load_builtin_model_provider_profile(registration.model_profile_id)
-    plan = build_event_impact_triage_work_execution_plan_v10(
+    plan = build_event_impact_triage_work_execution_plan_v11(
         candidate_set=candidate_set,
         work_manifest=manifest,
         registration=registration,
@@ -1200,6 +1202,7 @@ async def run_prepared_prospective_triage_work(
     if prepared.plan.schema_version in {
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
     }:
         raise ValueError(
             "prospective material ingress is comparison-governed; use the comparison run"
@@ -1307,6 +1310,9 @@ async def run_prepared_prospective_triage_comparison(
         ),
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10: (
             build_event_impact_triage_work_execution_plan_v10
+        ),
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11: (
+            build_event_impact_triage_work_execution_plan_v11
         ),
     }.get(prepared.plan.schema_version, build_event_impact_triage_work_execution_plan_v8)
     baseline_plan = plan_builder(

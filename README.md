@@ -126,7 +126,7 @@ The bootstrap implements:
   evidence against doing full exposure and adversarial analysis at ingress, not against the events.
   A zero-Provider authority replay later terminalized all 29 versions and released the active head;
   it did not create a Triage Decision or change the old Run/Usage records.
-  New material-event batches use v10: one coordinator call per bounded Work Unit returns only
+  V10 retained one coordinator call per bounded Work Unit and returns only
   archive/Watch/EventAssessment, one changed fact and either one transmission or one unresolved
   observable. V10 also requires the supplied item itself to support both a realized or committed
   new causal fact and a concrete transmission variable; generic risk-appetite or possible-future-
@@ -142,8 +142,15 @@ The bootstrap implements:
   The Harness therefore terminalized the batch, released the active head and granted no Decision,
   Query Gate, Judgment or execution authority. Its 18,900 microusd cost and failed gate remain
   immutable evidence against the current overly broad `plausible transmission` wording, not
-  against broad discovery or follow-up Watches. V10 scripted mechanics are accepted; a new sealed
-  pristine batch remains required before it can create a Triage Decision.
+  against broad discovery or follow-up Watches. The completed v10 pristine comparison was terminal:
+  12 versions; baseline had 7 unsupported routes, 5/12 exact routes and 8,494 microusd; treatment
+  had 6 unsupported routes, 6/12 exact routes and 8,363 microusd. The authoritative total was 14,391
+  input / 11,648 output Tokens and 16,857 microusd; the failed comparison created no Decision. New
+  material-event batches use v11. It preserves v10's one-call graph and four-field positional output,
+  but adds a closed registered checkpoint-rule projection with eligibility/exclusion rules, target
+  venues and allowed instrument classes. Those fields constrain routing; the model cannot invent
+  cross-market target links. A new sealed v11 pristine comparison remains required before it can
+  create a Triage Decision.
   The prospective repair also journals
   each physical attempt with a
   correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized

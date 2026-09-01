@@ -40,6 +40,7 @@ from market_impact_agent.event_impact_triage_work_evaluation import (
     evaluate_event_impact_triage_work_comparison,
 )
 from market_impact_agent.event_impact_triage_work_runtime import (
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunEvidence,
     EventImpactTriageWorkRunner,
@@ -240,6 +241,8 @@ def _outcome(
 
 def _workflow_fixture(
     tmp_path: Path,
+    *,
+    dialect: str = "v9",
 ) -> tuple[
     PreparedProspectiveTriageWork,
     EventImpactTriageWorkRunner,
@@ -252,7 +255,7 @@ def _workflow_fixture(
         tmp_path / "baseline",
         arm=TriageComparisonArm.BASELINE,
         count=2,
-        dialect="v9",
+        dialect=dialect,
         registration=registration,
         checkpoint_key="next-material-a-share-event",
     )
@@ -260,7 +263,7 @@ def _workflow_fixture(
         tmp_path / "treatment",
         arm=TriageComparisonArm.TREATMENT,
         count=2,
-        dialect="v9",
+        dialect=dialect,
         registration=registration,
         checkpoint_key="next-material-a-share-event",
     )
@@ -330,6 +333,11 @@ def _patch_workflow_runners(
         "build_event_impact_triage_work_execution_plan_v9",
         frozen_baseline_plan,
     )
+    monkeypatch.setattr(
+        prospective_triage,
+        "build_event_impact_triage_work_execution_plan_v11",
+        frozen_baseline_plan,
+    )
 
     def build_runner(*, prepared: PreparedProspectiveTriageWork, **_kwargs: object):
         return (
@@ -349,6 +357,46 @@ def _patch_workflow_runners(
         "EventImpactTriageWorkComparisonStore",
         comparison_store,
     )
+
+
+def test_v11_comparison_rebuilds_a_same_version_baseline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (
+        prepared,
+        baseline_runner,
+        baseline_provider,
+        treatment_runner,
+        treatment_provider,
+    ) = _workflow_fixture(tmp_path, dialect="v11")
+    _patch_workflow_runners(
+        monkeypatch,
+        baseline_runner=baseline_runner,
+        treatment_runner=treatment_runner,
+    )
+    run_root = tmp_path / "workflow"
+    state_root = tmp_path / "state"
+    ProspectiveTriageActiveBatchStore(run_root).install(prepared, expected_epoch_revision=0)
+
+    summary = asyncio.run(
+        run_prepared_prospective_triage_comparison(
+            prepared=prepared,
+            registration=treatment_runner.registration,
+            label_set=_labels(prepared.candidate_set),
+            state_root=state_root,
+            run_root=run_root,
+            skill_root=tmp_path / "skills",
+            baseline_provider=baseline_provider,
+            treatment_provider=treatment_provider,
+        )
+    )
+
+    assert prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11
+    assert baseline_runner.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11
+    assert summary["baseline_plan_id"] == baseline_runner.plan.plan_id
+    assert summary["treatment_plan_id"] == prepared.plan.plan_id
+    assert summary["status"] == "completed"
 
 
 def _rehash_report(

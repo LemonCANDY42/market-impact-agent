@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.market-impact-agent.local/event-impact-triage-work-execution-plan.schema.json",
-  "title": "Market Impact Event Impact Triage Work Execution Plan v2-v10",
+  "title": "Market Impact Event Impact Triage Work Execution Plan v2-v11",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -44,7 +44,8 @@
         "market-impact.event-impact-triage-work-execution-plan.v7",
         "market-impact.event-impact-triage-work-execution-plan.v8",
         "market-impact.event-impact-triage-work-execution-plan.v9",
-        "market-impact.event-impact-triage-work-execution-plan.v10"
+        "market-impact.event-impact-triage-work-execution-plan.v10",
+        "market-impact.event-impact-triage-work-execution-plan.v11"
       ]
     },
     "plan_id": {

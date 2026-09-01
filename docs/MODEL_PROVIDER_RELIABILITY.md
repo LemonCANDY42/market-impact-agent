@@ -89,7 +89,7 @@ request, creates no new Usage, leaves the failed source Usage charged, and canno
 tokens or another recovery. This format path is distinct from Provider retry, circuit and Replacement
 Grant authority.
 
-Material-ingress v9 and v10 preserve the same dispatch, ambiguity, parser, Usage and restart
+Material-ingress v9-v11 preserve the same dispatch, ambiguity, parser, Usage and restart
 evidence but have only one model phase: one coordinator request per bounded Work Unit. Partition and
 classify are
 deterministic Harness derivations, so they cannot create extra Provider ambiguity or receive separate
@@ -105,7 +105,9 @@ and check a Provider immediately before a new dispatch. A factory or availabilit
 pre-dispatch boundary appends a `provider.preparation.failed` diagnostic with generation
 `not_started`, retry disposition `safe` and zero Provider attempts. It leaves the Run nonterminal and
 creates no Usage record, returns control once, and may be re-probed only by a later invocation; it is
-never converted into an ambiguous dispatch or silently retried in place.
+never converted into an ambiguous dispatch or silently retried in place. V11 adds only a closed
+registered checkpoint-rule projection to that existing coordinator request; it does not create
+another Provider phase, retry path, budget, state owner or authority.
 
 The real Grant was consumed for the ambiguous classify member above. Its replacement completed and
 the v4 graph advanced to 39 completed logical members. A later classify member then failed normally
