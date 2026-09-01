@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/cancellation-approval.schema.json",
+  "title": "Market Impact Cancellation Approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cancellation_request_hash", "decision", "actor_kind", "actor_ref", "decided_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.cancellation-approval.v1"},
+    "cancellation_request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision": {"enum": ["approve", "reject"]},
+    "actor_kind": {"const": "human"},
+    "actor_ref": {"type": "string", "minLength": 1},
+    "decided_at": {"type": "string", "format": "date-time"}
+  }
+}

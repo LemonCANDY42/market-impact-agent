@@ -63,6 +63,19 @@ Reconciliation returns an identified snapshot with observation time, completenes
 and explicit gaps; a bare receipt list cannot prove that a missing order is absent. An MCP tool
 can be the invocation surface, but it does not replace these requirements.
 
+Cancel is an independently accepted optional operation. The Harness issues a sealed cancellation
+capability only after binding the exact reconciled provider order, content-identified request,
+manual approval, Provider identity/version and one durable attempt lease. Submission authority is
+bound to the same Provider identity/version; changing the configured adapter cannot inherit an old
+order merely because client/provider order strings collide. A Provider that rejects cancellation
+authority before any mutation may return `CancellationCapabilityRejected`; any transport or
+Provider exception without that proof is `unknown` and is never retried automatically. A
+cancellation command receipt cannot establish terminal state. The next globally complete Provider
+reconciliation must explicitly identify the same provider order as canceled. Replace is
+deliberately absent from the Provider port: the Harness models it as an atomic durable cancellation
+link followed, after cancellation reconciliation, by a newly admitted Order Intent with a new
+client identity.
+
 ## Capability trust
 
 `declared_capabilities` describe what an adapter claims. `verified_capabilities` describe
@@ -86,8 +99,10 @@ Paper validation never upgrades a provider to live validation.
 
 - `mock-execution` is the only enabled implementation in the bootstrap. It is paper-only,
   declares no account capability, and can retain its order truth in a separate SQLite file so
-  crash/ambiguous-submit/reconciliation tests cross a real restart boundary. This is a local
-  contract test double, not an accepted paper venue.
+  crash/ambiguous-submit/cancel/reconciliation tests cross a real restart boundary. The Harness
+  now accepts its provider-neutral submit, cancel, replace-as-cancel-plus-new-intent and kill-switch
+  lifecycle, including ambiguous cancellation resolution. This is a local contract test double,
+  not an accepted paper venue.
 - `NautilusBacktestBridge` is the accepted reference implementation of the engine-neutral
   backtest port for the bounded synthetic XSHG cash-equity fixture. A separate versioned
   modeled-open adapter can feed it from any fully validated `600028.SH`/SSE bundle matching
@@ -160,3 +175,11 @@ A Provider must reject a failed sealed-capability validation before any external
 report the typed `SubmissionCapabilityRejected` outcome. The Harness can then expire the durable
 claim because non-submission is known. Transport or Provider exceptions without that guarantee stay
 `unknown` and require reconciliation.
+
+The same rule applies to cancel. The kill switch prevents new submission claims but deliberately
+keeps exact cancel and reconciliation paths available; clearing requires a new complete
+reconciliation whose v2 artifact and durable run bind the kill generation sampled before the
+Provider call. It never implies that the Provider canceled all open orders. Every complete run also
+rechecks all durable accepted open orders; a later missing or contradictory order blocks the gate.
+Restart with any such order fails closed until a fresh reconciliation, and an unbound legacy order
+is never silently assigned to the currently configured Provider.

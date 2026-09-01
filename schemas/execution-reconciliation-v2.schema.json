@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/execution-reconciliation-v2.schema.json",
+  "title": "Market Impact Execution Reconciliation v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "provider_id", "provider_snapshot_hash", "kill_generation", "complete", "gaps", "observed_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.execution-reconciliation.v2"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "provider_snapshot_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "kill_generation": {"type": "integer", "minimum": 0},
+    "complete": {"type": "boolean"},
+    "gaps": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "observed_at": {"type": "string", "format": "date-time"}
+  }
+}

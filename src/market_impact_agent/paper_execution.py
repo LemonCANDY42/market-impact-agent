@@ -48,6 +48,7 @@ from market_impact_agent.decision_admission import (
 from market_impact_agent.domain import (
     ApprovalMode,
     ExecutionReceipt,
+    ExecutionStatus,
     HardPolicyOutcome,
     OrderIntent,
     SignalIntent,
@@ -81,10 +82,15 @@ from market_impact_agent.prospective_query_gate import (
     evaluate_prospective_query_gate,
 )
 from market_impact_agent.providers import (
+    CancelExecutionProvider,
+    CancellationCapability,
+    CancellationCapabilityRejected,
+    CancellationCommandReceipt,
     Capability,
     ExecutionProvider,
     SubmissionCapability,
     SubmissionCapabilityRejected,
+    _issue_cancellation_capability,  # pyright: ignore[reportPrivateUsage]
     _issue_submission_capability,  # pyright: ignore[reportPrivateUsage]
 )
 from market_impact_agent.runtime_store import ArtifactStore, runtime_event_from_dict
@@ -103,6 +109,17 @@ class OutboxState(StrEnum):
     SUBMITTING = "submitting"
     UNKNOWN = "unknown"
     ACCEPTED = "accepted"
+    RECONCILED = "reconciled"
+    EXPIRED = "expired"
+
+
+class CancellationState(StrEnum):
+    PENDING_APPROVAL = "pending_approval"
+    REJECTED = "rejected"
+    QUEUED = "queued"
+    CANCELING = "canceling"
+    UNKNOWN = "unknown"
+    ACKNOWLEDGED = "acknowledged"
     RECONCILED = "reconciled"
     EXPIRED = "expired"
 
@@ -176,6 +193,29 @@ class ReconciliationRun:
     complete: bool
     gaps: tuple[str, ...]
     observed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class PaperCancellationRecord:
+    cancellation_id: str
+    client_order_id: str
+    provider_order_id: str
+    provider_id: str
+    provider_version: str
+    request_hash: str
+    approval_hash: str | None
+    state: CancellationState
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class PaperReplacementRecord:
+    replacement_id: str
+    canceled_client_order_id: str
+    cancellation_id: str
+    replacement_order_hash: str
+    admitted_client_order_id: str | None
+    created_at: datetime
 
 
 class PaperExecutionService:
@@ -255,6 +295,8 @@ class PaperExecutionService:
         os.chmod(self.database_path, 0o600)
         self._block_for_unreconciled_state()
         self.provider.bind_submission_validator(self._validate_submission_capability)
+        if isinstance(self.provider, CancelExecutionProvider):
+            self.provider.bind_cancellation_validator(self._validate_cancellation_capability)
 
     @property
     def execution_blocked(self) -> bool:
@@ -262,9 +304,92 @@ class PaperExecutionService:
             row = connection.execute(
                 "SELECT blocked FROM paper_execution_gate WHERE singleton = 1"
             ).fetchone()
+            kill_row = connection.execute(
+                "SELECT active FROM paper_kill_switch WHERE singleton = 1"
+            ).fetchone()
         if row is None:
             raise RuntimeError("paper execution gate is missing")
-        return bool(row["blocked"])
+        if kill_row is None:
+            raise RuntimeError("paper kill switch is missing")
+        return bool(row["blocked"]) or bool(kill_row["active"])
+
+    @property
+    def kill_switch_active(self) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT active FROM paper_kill_switch WHERE singleton = 1"
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("paper kill switch is missing")
+        return bool(row["active"])
+
+    def activate_kill_switch(self, *, actor_ref: str, reason: str) -> None:
+        changed_at = self.clock()
+        require_aware(changed_at, "now")
+        for name, value in (("actor_ref", actor_ref), ("reason", reason)):
+            if not value or value != value.strip():
+                raise ValueError(f"{name} must be a non-empty trimmed string")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                UPDATE paper_kill_switch
+                SET active = 1, reason = ?, actor_ref = ?,
+                    generation = generation + 1, updated_at = ?
+                WHERE singleton = 1
+                """,
+                (reason, actor_ref, _timestamp(changed_at)),
+            )
+            connection.commit()
+
+    def clear_kill_switch(self, *, actor_ref: str) -> None:
+        changed_at = self.clock()
+        require_aware(changed_at, "now")
+        if not actor_ref or actor_ref != actor_ref.strip():
+            raise ValueError("actor_ref must be a non-empty trimmed string")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            gate = connection.execute(
+                "SELECT blocked FROM paper_execution_gate WHERE singleton = 1"
+            ).fetchone()
+            if gate is None:
+                raise RuntimeError("paper execution gate is missing")
+            if bool(gate["blocked"]):
+                raise PermissionError("kill switch cannot clear before complete reconciliation")
+            kill = connection.execute(
+                """
+                SELECT active, generation
+                FROM paper_kill_switch WHERE singleton = 1
+                """
+            ).fetchone()
+            if kill is None:
+                raise RuntimeError("paper kill switch is missing")
+            if not bool(kill["active"]):
+                connection.commit()
+                return
+            current_generation = cast(int, kill["generation"])
+            post_activation = connection.execute(
+                """
+                SELECT 1 FROM paper_reconciliation_runs
+                WHERE complete = 1 AND kill_generation = ?
+                LIMIT 1
+                """,
+                (current_generation,),
+            ).fetchone()
+            if post_activation is None:
+                raise PermissionError(
+                    "kill switch requires a new complete reconciliation before clearing"
+                )
+            connection.execute(
+                """
+                UPDATE paper_kill_switch
+                SET active = 0, reason = NULL, actor_ref = ?,
+                    updated_at = ?
+                WHERE singleton = 1
+                """,
+                (actor_ref, _timestamp(changed_at)),
+            )
+            connection.commit()
 
     def admit(self, order: OrderIntent) -> PaperIntentRecord:
         return self._admit(
@@ -645,9 +770,13 @@ class PaperExecutionService:
                     mandate_hash, price_basis_hash,
                     policy_evaluation_hash, approval_hash, approval_state,
                     outbox_state, provider_order_id, provider_status, fill_status,
+                    provider_id, provider_version,
                     order_expires_at, mandate_expires_at, price_valid_until, lease_token,
                     lease_expires_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL, NULL, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?,
+                    ?, ?, ?, NULL, NULL, ?, ?
+                )
                 """,
                 (
                     order.client_order_id,
@@ -659,6 +788,8 @@ class PaperExecutionService:
                     approval_hash,
                     approval_state.value,
                     outbox_state.value if outbox_state is not None else None,
+                    self.provider.manifest.provider_id,
+                    self.provider.manifest.provider_version,
                     _timestamp(order.expires_at),
                     _timestamp(self.mandate.expires_at),
                     _timestamp(basis.valid_until),
@@ -695,9 +826,12 @@ class PaperExecutionService:
         if row is None:
             raise KeyError(client_order_id)
         self._validate_binding_artifacts(row)
-        account_state_current = not approve or self._agent_account_state_is_current(
-            row,
-            evaluated_at=decided_at,
+        authority_current = not approve or (
+            self._provider_binding_matches(row)
+            and self._agent_account_state_is_current(
+                row,
+                evaluated_at=decided_at,
+            )
         )
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -717,7 +851,7 @@ class PaperExecutionService:
                 decided_at >= _datetime(cast(str, row["order_expires_at"]))
                 or decided_at >= _datetime(cast(str, row["mandate_expires_at"]))
                 or decided_at >= _datetime(cast(str, row["price_valid_until"]))
-                or not account_state_current
+                or not authority_current
             ):
                 connection.execute(
                     """
@@ -765,6 +899,483 @@ class PaperExecutionService:
             connection.commit()
         return self.get(client_order_id)
 
+    def request_cancel(
+        self,
+        client_order_id: str,
+        *,
+        cancellation_id: str,
+        reason: str,
+    ) -> PaperCancellationRecord:
+        requested_at = self.clock()
+        require_aware(requested_at, "now")
+        for name, value in (
+            ("client_order_id", client_order_id),
+            ("cancellation_id", cancellation_id),
+            ("reason", reason),
+        ):
+            if not value or value != value.strip():
+                raise ValueError(f"{name} must be a non-empty trimmed string")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            intent = connection.execute(
+                "SELECT * FROM paper_intents WHERE client_order_id = ?",
+                (client_order_id,),
+            ).fetchone()
+            if intent is None:
+                raise KeyError(client_order_id)
+            provider_order_id = cast(str | None, intent["provider_order_id"])
+            if provider_order_id is None:
+                raise PermissionError("cancel requires one reconciled open provider order")
+            request_artifact = self.artifacts.put_json(
+                self._cancellation_request_payload(
+                    client_order_id=client_order_id,
+                    provider_order_id=provider_order_id,
+                    cancellation_id=cancellation_id,
+                    reason=reason,
+                    requested_at=requested_at,
+                )
+            )
+            row = self._request_cancel_locked(
+                connection,
+                client_order_id=client_order_id,
+                cancellation_id=cancellation_id,
+                reason=reason,
+                requested_at=requested_at,
+                request_hash=request_artifact.content_hash,
+            )
+            connection.commit()
+        return _cancellation_record(row)
+
+    def _cancellation_request_payload(
+        self,
+        *,
+        client_order_id: str,
+        provider_order_id: str,
+        cancellation_id: str,
+        reason: str,
+        requested_at: datetime,
+    ) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.cancellation-request.v1",
+            "cancellation_id": cancellation_id,
+            "client_order_id": client_order_id,
+            "provider_order_id": provider_order_id,
+            "provider_id": self.provider.manifest.provider_id,
+            "provider_version": self.provider.manifest.provider_version,
+            "reason": reason,
+            "requested_at": _timestamp(requested_at),
+        }
+
+    def _request_cancel_locked(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        client_order_id: str,
+        cancellation_id: str,
+        reason: str,
+        requested_at: datetime,
+        request_hash: str,
+    ) -> sqlite3.Row:
+        intent = connection.execute(
+            "SELECT * FROM paper_intents WHERE client_order_id = ?",
+            (client_order_id,),
+        ).fetchone()
+        if intent is None:
+            raise KeyError(client_order_id)
+        self._validate_binding_artifacts(intent)
+        provider_order_id = cast(str | None, intent["provider_order_id"])
+        existing = connection.execute(
+            "SELECT * FROM paper_cancellations WHERE cancellation_id = ?",
+            (cancellation_id,),
+        ).fetchone()
+        if existing is not None:
+            existing_request = _json_object(
+                self.artifacts.read_json(cast(str, existing["request_hash"])),
+                "Cancellation Request artifact",
+            )
+            if (
+                cast(str, existing["client_order_id"]) != client_order_id
+                or provider_order_id is None
+                or cast(str, existing["provider_order_id"]) != provider_order_id
+                or cast(str | None, existing["provider_id"])
+                != cast(str | None, intent["provider_id"])
+                or cast(str | None, existing["provider_version"])
+                != cast(str | None, intent["provider_version"])
+                or _json_string(existing_request, "reason") != reason
+            ):
+                raise ValueError("cancellation_id already binds different content")
+            return existing
+        if not isinstance(self.provider, CancelExecutionProvider):
+            raise PermissionError("execution Provider has no accepted cancel operation")
+        if not self._provider_binding_matches(intent):
+            raise PermissionError("open order is bound to another execution Provider")
+        if (
+            OutboxState(cast(str, intent["outbox_state"])) is not OutboxState.RECONCILED
+            or provider_order_id is None
+            or cast(str | None, intent["provider_status"]) != ExecutionStatus.ACCEPTED.value
+        ):
+            raise PermissionError("cancel requires one reconciled open provider order")
+        duplicate = connection.execute(
+            """
+            SELECT cancellation_id FROM paper_cancellations
+            WHERE client_order_id = ? AND state IN (?, ?, ?, ?, ?)
+            LIMIT 1
+            """,
+            (
+                client_order_id,
+                CancellationState.PENDING_APPROVAL.value,
+                CancellationState.QUEUED.value,
+                CancellationState.CANCELING.value,
+                CancellationState.UNKNOWN.value,
+                CancellationState.ACKNOWLEDGED.value,
+            ),
+        ).fetchone()
+        if duplicate is not None:
+            raise PermissionError("order already has a non-terminal cancellation")
+        gate = connection.execute(
+            "SELECT blocked FROM paper_execution_gate WHERE singleton = 1"
+        ).fetchone()
+        if gate is None:
+            raise RuntimeError("paper execution gate is missing")
+        if bool(gate["blocked"]):
+            raise PermissionError("cancel request requires a reconciled execution state")
+        connection.execute(
+            """
+            INSERT INTO paper_cancellations (
+                cancellation_id, client_order_id, provider_order_id,
+                provider_id, provider_version, request_hash,
+                approval_hash, state, lease_token, lease_expires_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, ?)
+            """,
+            (
+                cancellation_id,
+                client_order_id,
+                provider_order_id,
+                self.provider.manifest.provider_id,
+                self.provider.manifest.provider_version,
+                request_hash,
+                CancellationState.PENDING_APPROVAL.value,
+                _timestamp(requested_at),
+                _timestamp(requested_at),
+            ),
+        )
+        row = connection.execute(
+            "SELECT * FROM paper_cancellations WHERE cancellation_id = ?",
+            (cancellation_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("paper cancellation disappeared after insertion")
+        return row
+
+    def decide_cancellation(
+        self,
+        cancellation_id: str,
+        *,
+        approve: bool,
+        actor_ref: str,
+    ) -> PaperCancellationRecord:
+        decided_at = self.clock()
+        require_aware(decided_at, "now")
+        if not actor_ref or actor_ref != actor_ref.strip():
+            raise ValueError("actor_ref must be a non-empty trimmed string")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM paper_cancellations WHERE cancellation_id = ?",
+                (cancellation_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(cancellation_id)
+            if CancellationState(cast(str, row["state"])) is not CancellationState.PENDING_APPROVAL:
+                raise ValueError("cancellation is not pending manual approval")
+            if approve and not self._provider_binding_matches(row):
+                connection.execute(
+                    """
+                    UPDATE paper_cancellations
+                    SET state = ?, updated_at = ?
+                    WHERE cancellation_id = ?
+                    """,
+                    (
+                        CancellationState.EXPIRED.value,
+                        _timestamp(decided_at),
+                        cancellation_id,
+                    ),
+                )
+                connection.commit()
+                return self.get_cancellation(cancellation_id)
+            approval_artifact = self.artifacts.put_json(
+                {
+                    "schema_version": "market-impact.cancellation-approval.v1",
+                    "cancellation_request_hash": cast(str, row["request_hash"]),
+                    "decision": "approve" if approve else "reject",
+                    "actor_kind": "human",
+                    "actor_ref": actor_ref,
+                    "decided_at": _timestamp(decided_at),
+                }
+            )
+            state = CancellationState.QUEUED if approve else CancellationState.REJECTED
+            connection.execute(
+                """
+                UPDATE paper_cancellations
+                SET approval_hash = ?, state = ?, updated_at = ?
+                WHERE cancellation_id = ?
+                """,
+                (
+                    approval_artifact.content_hash,
+                    state.value,
+                    _timestamp(decided_at),
+                    cancellation_id,
+                ),
+            )
+            connection.commit()
+        return self.get_cancellation(cancellation_id)
+
+    def dispatch_next_cancellation(self) -> PaperCancellationRecord | None:
+        current = self.clock()
+        require_aware(current, "now")
+        self._recover_expired_cancellation_leases(current)
+        claimed = self._claim_next_cancellation(current)
+        if claimed is None:
+            return None
+        row, attempt_id = claimed
+        capability = _issue_cancellation_capability(
+            client_order_id=cast(str, row["client_order_id"]),
+            provider_order_id=cast(str, row["provider_order_id"]),
+            cancellation_id=cast(str, row["cancellation_id"]),
+            attempt_id=attempt_id,
+            provider_id=cast(str, row["provider_id"]),
+            provider_version=cast(str, row["provider_version"]),
+            request_hash=cast(str, row["request_hash"]),
+            approval_hash=cast(str, row["approval_hash"]),
+        )
+        provider = self.provider
+        if not isinstance(provider, CancelExecutionProvider):
+            self._expire_cancellation_before_provider(
+                row,
+                attempt_id=attempt_id,
+                expired_at=current,
+                error_kind="provider_cancel_capability_unavailable",
+            )
+            return self.get_cancellation(capability.cancellation_id)
+        try:
+            receipt = provider.cancel(capability)
+            _validate_cancellation_receipt(receipt, capability)
+        except CancellationCapabilityRejected:
+            rejected_at = self.clock()
+            require_aware(rejected_at, "now")
+            self._expire_cancellation_before_provider(
+                row,
+                attempt_id=attempt_id,
+                expired_at=rejected_at,
+                error_kind="provider_rejected_cancellation_capability",
+            )
+            return self.get_cancellation(capability.cancellation_id)
+        except Exception as error:
+            self._finish_ambiguous_cancellation(
+                capability.cancellation_id,
+                attempt_id=attempt_id,
+                observed_at=current,
+                error_kind=type(error).__name__,
+            )
+            return self.get_cancellation(capability.cancellation_id)
+        receipt_artifact = self.artifacts.put_json(_cancellation_receipt_dict(receipt))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute(
+                """
+                UPDATE paper_cancellations
+                SET state = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+                WHERE cancellation_id = ? AND state = ? AND lease_token = ?
+                """,
+                (
+                    CancellationState.ACKNOWLEDGED.value,
+                    _timestamp(current),
+                    capability.cancellation_id,
+                    CancellationState.CANCELING.value,
+                    attempt_id,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("paper cancellation lease was lost")
+            connection.execute(
+                """
+                UPDATE paper_cancellation_attempts
+                SET status = 'acknowledged', receipt_hash = ?, finished_at = ?
+                WHERE attempt_id = ?
+                """,
+                (receipt_artifact.content_hash, _timestamp(current), attempt_id),
+            )
+            self._set_gate(connection, True, "reconciliation_required", current)
+            connection.commit()
+        return self.get_cancellation(capability.cancellation_id)
+
+    def get_cancellation(self, cancellation_id: str) -> PaperCancellationRecord:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_cancellations WHERE cancellation_id = ?",
+                (cancellation_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(cancellation_id)
+        self.artifacts.get(cast(str, row["request_hash"]), media_type="application/json")
+        approval_hash = cast(str | None, row["approval_hash"])
+        if approval_hash is not None:
+            self.artifacts.get(approval_hash, media_type="application/json")
+        return _cancellation_record(row)
+
+    def request_replace(
+        self,
+        client_order_id: str,
+        replacement_order: OrderIntent,
+        *,
+        replacement_id: str,
+        cancellation_id: str,
+        reason: str,
+    ) -> PaperReplacementRecord:
+        requested_at = self.clock()
+        require_aware(requested_at, "now")
+        for name, value in (
+            ("replacement_id", replacement_id),
+            ("cancellation_id", cancellation_id),
+            ("reason", reason),
+        ):
+            if not value or value != value.strip():
+                raise ValueError(f"{name} must be a non-empty trimmed string")
+        replacement_artifact = self.artifacts.put_json(_order_dict(replacement_order))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            original = connection.execute(
+                "SELECT * FROM paper_intents WHERE client_order_id = ?",
+                (client_order_id,),
+            ).fetchone()
+            if original is None:
+                raise KeyError(client_order_id)
+            original_order = _order_from_dict(
+                self.artifacts.read_json(cast(str, original["order_hash"]))
+            )
+            if replacement_order.client_order_id == client_order_id:
+                raise ValueError("replacement requires a new client_order_id")
+            if (
+                replacement_order.account_id != original_order.account_id
+                or replacement_order.environment is not original_order.environment
+                or replacement_order.instrument_id != original_order.instrument_id
+                or replacement_order.side is not original_order.side
+                or replacement_order.signal_id != original_order.signal_id
+            ):
+                raise ValueError(
+                    "replacement may change only identity, time, quantity, kind, and price"
+                )
+            existing = connection.execute(
+                "SELECT * FROM paper_replacements WHERE replacement_id = ?",
+                (replacement_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    cast(str, existing["canceled_client_order_id"]) != client_order_id
+                    or cast(str, existing["cancellation_id"]) != cancellation_id
+                    or cast(str, existing["replacement_order_hash"])
+                    != replacement_artifact.content_hash
+                ):
+                    raise ValueError("replacement_id already binds different content")
+                connection.commit()
+                return _replacement_record(existing)
+            provider_order_id = cast(str | None, original["provider_order_id"])
+            if provider_order_id is None:
+                raise PermissionError("replacement requires one reconciled open provider order")
+            request_artifact = self.artifacts.put_json(
+                self._cancellation_request_payload(
+                    client_order_id=client_order_id,
+                    provider_order_id=provider_order_id,
+                    cancellation_id=cancellation_id,
+                    reason=reason,
+                    requested_at=requested_at,
+                )
+            )
+            self._request_cancel_locked(
+                connection,
+                client_order_id=client_order_id,
+                cancellation_id=cancellation_id,
+                reason=reason,
+                requested_at=requested_at,
+                request_hash=request_artifact.content_hash,
+            )
+            linked = connection.execute(
+                "SELECT replacement_id FROM paper_replacements WHERE cancellation_id = ?",
+                (cancellation_id,),
+            ).fetchone()
+            if linked is not None:
+                raise ValueError("cancellation already binds another replacement")
+            connection.execute(
+                """
+                INSERT INTO paper_replacements (
+                    replacement_id, canceled_client_order_id, cancellation_id,
+                    replacement_order_hash, admitted_client_order_id, created_at
+                ) VALUES (?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    replacement_id,
+                    client_order_id,
+                    cancellation_id,
+                    replacement_artifact.content_hash,
+                    _timestamp(requested_at),
+                ),
+            )
+            connection.commit()
+        return self.get_replacement(replacement_id)
+
+    def replacement_order(self, replacement_id: str) -> OrderIntent:
+        record = self.get_replacement(replacement_id)
+        return _order_from_dict(self.artifacts.read_json(record.replacement_order_hash))
+
+    def admit_replacement(self, replacement_id: str) -> PaperIntentRecord:
+        replacement = self.get_replacement(replacement_id)
+        cancellation = self.get_cancellation(replacement.cancellation_id)
+        if cancellation.state is not CancellationState.RECONCILED:
+            raise PermissionError("replacement cannot admit before cancellation reconciliation")
+        original = self.get(replacement.canceled_client_order_id)
+        if original.provider_status != ExecutionStatus.CANCELED.value:
+            raise PermissionError("replacement target is not reconciled canceled")
+        if original.agent_admission_hash is not None:
+            raise PermissionError(
+                "Agent-directed replacement requires a fresh Decision Admission for the new intent"
+            )
+        order = self.replacement_order(replacement_id)
+        admitted = self.admit(order)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT admitted_client_order_id FROM paper_replacements WHERE replacement_id = ?",
+                (replacement_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(replacement_id)
+            existing = cast(str | None, row["admitted_client_order_id"])
+            if existing is not None and existing != admitted.client_order_id:
+                raise ValueError("replacement already admitted a different Order Intent")
+            connection.execute(
+                """
+                UPDATE paper_replacements
+                SET admitted_client_order_id = ? WHERE replacement_id = ?
+                """,
+                (admitted.client_order_id, replacement_id),
+            )
+            connection.commit()
+        return admitted
+
+    def get_replacement(self, replacement_id: str) -> PaperReplacementRecord:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_replacements WHERE replacement_id = ?",
+                (replacement_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(replacement_id)
+        self.artifacts.get(
+            cast(str, row["replacement_order_hash"]),
+            media_type="application/json",
+        )
+        return _replacement_record(row)
+
     def dispatch_next(self) -> PaperIntentRecord | None:
         current = self.clock()
         require_aware(current, "now")
@@ -799,6 +1410,8 @@ class PaperExecutionService:
         capability = _issue_submission_capability(
             order=_order_from_dict(self.artifacts.read_json(cast(str, row["order_hash"]))),
             submission_id=submission_id,
+            provider_id=cast(str, row["provider_id"]),
+            provider_version=cast(str, row["provider_version"]),
             order_hash=cast(str, row["order_hash"]),
             mandate_hash=cast(str, row["mandate_hash"]),
             price_basis_hash=cast(str, row["price_basis_hash"]),
@@ -872,6 +1485,14 @@ class PaperExecutionService:
         current = self.clock()
         require_aware(current, "now")
         self._recover_expired_leases(current)
+        self._recover_expired_cancellation_leases(current)
+        with self._connect() as connection:
+            kill = connection.execute(
+                "SELECT generation FROM paper_kill_switch WHERE singleton = 1"
+            ).fetchone()
+        if kill is None:
+            raise RuntimeError("paper kill switch is missing")
+        kill_generation = cast(int, kill["generation"])
         snapshot = self.provider.reconcile()
         receipts: dict[str, ExecutionReceipt] = {}
         gaps = list(snapshot.gaps)
@@ -892,24 +1513,54 @@ class PaperExecutionService:
             if provider_matches:
                 for external_id in sorted(receipts.keys() - known_ids):
                     gaps.append(f"external_provider_order:{external_id}")
+            cancellation_rows = connection.execute(
+                """
+                SELECT c.cancellation_id, c.client_order_id, c.provider_order_id,
+                       c.provider_id, c.provider_version, c.state,
+                       MAX(a.started_at) AS started_at
+                FROM paper_cancellations AS c
+                LEFT JOIN paper_cancellation_attempts AS a
+                    ON a.cancellation_id = c.cancellation_id
+                WHERE c.state IN (?, ?, ?)
+                GROUP BY c.cancellation_id, c.client_order_id, c.provider_order_id,
+                         c.provider_id, c.provider_version, c.state
+                """,
+                (
+                    CancellationState.CANCELING.value,
+                    CancellationState.UNKNOWN.value,
+                    CancellationState.ACKNOWLEDGED.value,
+                ),
+            ).fetchall()
+            cancellation_target_ids = {
+                cast(str, row["client_order_id"]) for row in cancellation_rows
+            }
             rows = connection.execute(
                 """
-                SELECT i.client_order_id, i.outbox_state, MAX(a.started_at) AS started_at
+                SELECT i.client_order_id, i.outbox_state, i.provider_order_id,
+                       i.provider_status, i.provider_id, i.provider_version,
+                       MAX(a.started_at) AS started_at
                 FROM paper_intents AS i
                 LEFT JOIN paper_submission_attempts AS a
                     ON a.client_order_id = i.client_order_id
                 WHERE i.outbox_state IN (?, ?, ?)
-                GROUP BY i.client_order_id, i.outbox_state
+                   OR (i.outbox_state = ? AND i.provider_status = ?)
+                GROUP BY i.client_order_id, i.outbox_state, i.provider_order_id,
+                         i.provider_status, i.provider_id, i.provider_version
                 """,
                 (
                     OutboxState.SUBMITTING.value,
                     OutboxState.UNKNOWN.value,
                     OutboxState.ACCEPTED.value,
+                    OutboxState.RECONCILED.value,
+                    ExecutionStatus.ACCEPTED.value,
                 ),
             ).fetchall()
             for row in rows:
                 client_order_id = cast(str, row["client_order_id"])
                 if not provider_matches:
+                    continue
+                if not self._provider_binding_matches(row):
+                    gaps.append(f"intent_provider_binding_mismatch:{client_order_id}")
                     continue
                 started_at_value = cast(str | None, row["started_at"])
                 if started_at_value is None:
@@ -919,11 +1570,35 @@ class PaperExecutionService:
                     gaps.append(f"stale_provider_snapshot:{client_order_id}")
                     continue
                 receipt = receipts.get(client_order_id)
+                outbox_state = OutboxState(cast(str, row["outbox_state"]))
+                expected_provider_order_id = cast(str | None, row["provider_order_id"])
+                if receipt is not None and (
+                    expected_provider_order_id is not None
+                    and receipt.provider_order_id != expected_provider_order_id
+                ):
+                    gaps.append(f"provider_order_identity_mismatch:{client_order_id}")
+                    continue
+                if outbox_state is OutboxState.RECONCILED:
+                    if receipt is None:
+                        if snapshot.complete:
+                            gaps.append(f"reconciled_open_order_missing:{client_order_id}")
+                        continue
+                    if receipt.status is ExecutionStatus.UNKNOWN:
+                        gaps.append(f"provider_order_unknown:{client_order_id}")
+                    elif (
+                        receipt.status is not ExecutionStatus.ACCEPTED
+                        and client_order_id not in cancellation_target_ids
+                    ):
+                        gaps.append(f"unexpected_provider_status:{client_order_id}")
+                    continue
                 if receipt is not None:
+                    if receipt.status is ExecutionStatus.UNKNOWN:
+                        gaps.append(f"provider_order_unknown:{client_order_id}")
+                        continue
                     provider_order_id = receipt.provider_order_id
                     provider_status = receipt.status.value
                 elif snapshot.complete:
-                    if OutboxState(cast(str, row["outbox_state"])) is OutboxState.ACCEPTED:
+                    if outbox_state is OutboxState.ACCEPTED:
                         gaps.append(f"acknowledged_order_missing:{client_order_id}")
                         continue
                     provider_order_id = None
@@ -945,8 +1620,58 @@ class PaperExecutionService:
                         client_order_id,
                     ),
                 )
+            confirmed_cancellations: list[tuple[str, str]] = []
+            for cancellation in cancellation_rows:
+                cancellation_id = cast(str, cancellation["cancellation_id"])
+                client_order_id = cast(str, cancellation["client_order_id"])
+                if not provider_matches:
+                    continue
+                if not self._provider_binding_matches(cancellation):
+                    gaps.append(f"cancellation_provider_binding_mismatch:{cancellation_id}")
+                    continue
+                started_at_value = cast(str | None, cancellation["started_at"])
+                if started_at_value is None:
+                    gaps.append(f"cancellation_attempt_missing:{cancellation_id}")
+                    continue
+                if snapshot.observed_at < _datetime(started_at_value):
+                    gaps.append(f"stale_cancellation_snapshot:{cancellation_id}")
+                    continue
+                receipt = receipts.get(client_order_id)
+                if receipt is None:
+                    if snapshot.complete:
+                        gaps.append(f"cancellation_target_missing:{cancellation_id}")
+                    continue
+                if receipt.provider_order_id != cast(str, cancellation["provider_order_id"]):
+                    gaps.append(f"cancellation_provider_order_mismatch:{cancellation_id}")
+                    continue
+                if receipt.status is not ExecutionStatus.CANCELED:
+                    gaps.append(f"cancellation_not_confirmed:{cancellation_id}")
+                    continue
+                confirmed_cancellations.append((cancellation_id, client_order_id))
             unique_gaps = tuple(sorted(set(gaps)))
             complete = snapshot.complete and not unique_gaps
+            if complete:
+                for cancellation_id, client_order_id in confirmed_cancellations:
+                    connection.execute(
+                        """
+                        UPDATE paper_cancellations
+                        SET state = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+                        WHERE cancellation_id = ?
+                        """,
+                        (
+                            CancellationState.RECONCILED.value,
+                            _timestamp(current),
+                            cancellation_id,
+                        ),
+                    )
+                    connection.execute(
+                        """
+                        UPDATE paper_intents
+                        SET provider_status = ?, updated_at = ?
+                        WHERE client_order_id = ?
+                        """,
+                        (ExecutionStatus.CANCELED.value, _timestamp(current), client_order_id),
+                    )
             self._set_gate(
                 connection,
                 not complete,
@@ -954,9 +1679,10 @@ class PaperExecutionService:
                 current,
             )
             run_payload = {
-                "schema_version": "market-impact.execution-reconciliation.v1",
+                "schema_version": "market-impact.execution-reconciliation.v2",
                 "provider_id": self.provider.manifest.provider_id,
                 "provider_snapshot_hash": snapshot_artifact.content_hash,
+                "kill_generation": kill_generation,
                 "complete": complete,
                 "gaps": list(unique_gaps),
                 "observed_at": _timestamp(current),
@@ -965,13 +1691,14 @@ class PaperExecutionService:
             connection.execute(
                 """
                 INSERT INTO paper_reconciliation_runs (
-                    reconciliation_hash, complete, gaps_json, observed_at
-                ) VALUES (?, ?, ?, ?)
+                    reconciliation_hash, complete, gaps_json, kill_generation, observed_at
+                ) VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     run_artifact.content_hash,
                     int(complete),
                     "\n".join(unique_gaps),
+                    kill_generation,
                     _timestamp(current),
                 ),
             )
@@ -1002,6 +1729,8 @@ class PaperExecutionService:
         mandate_hash: str,
         agent_admission_hash: str | None,
     ) -> PaperIntentRecord:
+        if not self._provider_binding_matches(row):
+            raise PermissionError("client_order_id is bound to another execution Provider")
         if cast(str, row["order_hash"]) != order_hash:
             raise ValueError("client_order_id already binds different content")
         if cast(str, row["mandate_hash"]) != mandate_hash:
@@ -1023,6 +1752,12 @@ class PaperExecutionService:
                 (capability.order.client_order_id,),
             ).fetchone()
         if row is None:
+            return False
+        if (
+            not self._provider_binding_matches(row)
+            or capability.provider_id != self.provider.manifest.provider_id
+            or capability.provider_version != self.provider.manifest.provider_version
+        ):
             return False
         approval_hash = cast(str | None, row["approval_hash"])
         lease_expires_at = cast(str | None, row["lease_expires_at"])
@@ -1054,6 +1789,65 @@ class PaperExecutionService:
             self._validate_binding_artifacts(row)
             if not self._submission_authorities_are_current(row, evaluated_at=now):
                 return False
+        except (KeyError, OSError, TypeError, ValueError):
+            return False
+        return True
+
+    def _provider_binding_matches(self, row: sqlite3.Row) -> bool:
+        return (
+            cast(str | None, row["provider_id"]) == self.provider.manifest.provider_id
+            and cast(str | None, row["provider_version"]) == self.provider.manifest.provider_version
+        )
+
+    def _validate_cancellation_capability(
+        self,
+        capability: CancellationCapability,
+    ) -> bool:
+        now = self.clock()
+        require_aware(now, "now")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_cancellations WHERE cancellation_id = ?",
+                (capability.cancellation_id,),
+            ).fetchone()
+            intent = connection.execute(
+                "SELECT * FROM paper_intents WHERE client_order_id = ?",
+                (capability.client_order_id,),
+            ).fetchone()
+        if row is None or intent is None:
+            return False
+        if (
+            not self._provider_binding_matches(row)
+            or not self._provider_binding_matches(intent)
+            or capability.provider_id != self.provider.manifest.provider_id
+            or capability.provider_version != self.provider.manifest.provider_version
+        ):
+            return False
+        lease_expires_at = cast(str | None, row["lease_expires_at"])
+        approval_hash = cast(str | None, row["approval_hash"])
+        if (
+            CancellationState(cast(str, row["state"])) is not CancellationState.CANCELING
+            or cast(str | None, row["lease_token"]) != capability.attempt_id
+        ):
+            return False
+        lease_token = cast(str | None, row["lease_token"])
+        if (
+            lease_token is None
+            or lease_expires_at is None
+            or now >= _datetime(lease_expires_at)
+            or approval_hash is None
+            or cast(str, row["client_order_id"]) != capability.client_order_id
+            or cast(str, row["provider_order_id"]) != capability.provider_order_id
+            or cast(str, row["request_hash"]) != capability.request_hash
+            or approval_hash != capability.approval_hash
+            or cast(str | None, intent["provider_order_id"]) != capability.provider_order_id
+            or cast(str | None, intent["provider_status"]) != "accepted"
+            or OutboxState(cast(str, intent["outbox_state"])) is not OutboxState.RECONCILED
+        ):
+            return False
+        try:
+            self.artifacts.get(capability.request_hash, media_type="application/json")
+            self.artifacts.get(capability.approval_hash, media_type="application/json")
         except (KeyError, OSError, TypeError, ValueError):
             return False
         return True
@@ -1713,6 +2507,8 @@ class PaperExecutionService:
                     provider_order_id TEXT,
                     provider_status TEXT,
                     fill_status TEXT,
+                    provider_id TEXT NOT NULL,
+                    provider_version TEXT NOT NULL,
                     order_expires_at TEXT NOT NULL,
                     mandate_expires_at TEXT NOT NULL,
                     price_valid_until TEXT NOT NULL,
@@ -1741,7 +2537,42 @@ class PaperExecutionService:
                     reconciliation_hash TEXT PRIMARY KEY,
                     complete INTEGER NOT NULL,
                     gaps_json TEXT NOT NULL,
+                    kill_generation INTEGER NOT NULL,
                     observed_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS paper_cancellations (
+                    cancellation_id TEXT PRIMARY KEY,
+                    client_order_id TEXT NOT NULL REFERENCES paper_intents(client_order_id),
+                    provider_order_id TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    provider_version TEXT NOT NULL,
+                    request_hash TEXT NOT NULL,
+                    approval_hash TEXT,
+                    state TEXT NOT NULL,
+                    lease_token TEXT,
+                    lease_expires_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS paper_cancellation_attempts (
+                    attempt_id TEXT PRIMARY KEY,
+                    cancellation_id TEXT NOT NULL
+                        REFERENCES paper_cancellations(cancellation_id),
+                    status TEXT NOT NULL,
+                    receipt_hash TEXT,
+                    error_kind TEXT,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS paper_replacements (
+                    replacement_id TEXT PRIMARY KEY,
+                    canceled_client_order_id TEXT NOT NULL
+                        REFERENCES paper_intents(client_order_id),
+                    cancellation_id TEXT NOT NULL UNIQUE
+                        REFERENCES paper_cancellations(cancellation_id),
+                    replacement_order_hash TEXT NOT NULL,
+                    admitted_client_order_id TEXT,
+                    created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS paper_execution_gate (
                     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -1749,9 +2580,20 @@ class PaperExecutionService:
                     reason TEXT,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS paper_kill_switch (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    active INTEGER NOT NULL,
+                    reason TEXT,
+                    actor_ref TEXT,
+                    generation INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 INSERT OR IGNORE INTO paper_execution_gate (
                     singleton, blocked, reason, updated_at
                 ) VALUES (1, 0, NULL, '1970-01-01T00:00:00Z');
+                INSERT OR IGNORE INTO paper_kill_switch (
+                    singleton, active, reason, actor_ref, generation, updated_at
+                ) VALUES (1, 0, NULL, NULL, 0, '1970-01-01T00:00:00Z');
                 """
             )
             columns = {
@@ -1760,6 +2602,41 @@ class PaperExecutionService:
             }
             if "agent_admission_hash" not in columns:
                 connection.execute("ALTER TABLE paper_intents ADD COLUMN agent_admission_hash TEXT")
+            if "provider_id" not in columns:
+                connection.execute("ALTER TABLE paper_intents ADD COLUMN provider_id TEXT")
+            if "provider_version" not in columns:
+                connection.execute("ALTER TABLE paper_intents ADD COLUMN provider_version TEXT")
+            cancellation_columns = {
+                cast(str, row["name"])
+                for row in connection.execute("PRAGMA table_info(paper_cancellations)").fetchall()
+            }
+            if "provider_id" not in cancellation_columns:
+                connection.execute("ALTER TABLE paper_cancellations ADD COLUMN provider_id TEXT")
+            if "provider_version" not in cancellation_columns:
+                connection.execute(
+                    "ALTER TABLE paper_cancellations ADD COLUMN provider_version TEXT"
+                )
+            reconciliation_columns = {
+                cast(str, row["name"])
+                for row in connection.execute(
+                    "PRAGMA table_info(paper_reconciliation_runs)"
+                ).fetchall()
+            }
+            if "kill_generation" not in reconciliation_columns:
+                connection.execute(
+                    """
+                    ALTER TABLE paper_reconciliation_runs
+                    ADD COLUMN kill_generation INTEGER
+                    """
+                )
+            kill_columns = {
+                cast(str, row["name"])
+                for row in connection.execute("PRAGMA table_info(paper_kill_switch)").fetchall()
+            }
+            if "generation" not in kill_columns:
+                connection.execute(
+                    "ALTER TABLE paper_kill_switch ADD COLUMN generation INTEGER NOT NULL DEFAULT 0"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=30)
@@ -1777,15 +2654,30 @@ class PaperExecutionService:
                 """
                 SELECT 1 FROM paper_intents
                 WHERE outbox_state IN (?, ?, ?)
+                   OR (outbox_state = ? AND provider_status = ?)
                 LIMIT 1
                 """,
                 (
                     OutboxState.SUBMITTING.value,
                     OutboxState.UNKNOWN.value,
                     OutboxState.ACCEPTED.value,
+                    OutboxState.RECONCILED.value,
+                    ExecutionStatus.ACCEPTED.value,
                 ),
             ).fetchone()
-            if row is not None:
+            cancellation = connection.execute(
+                """
+                SELECT 1 FROM paper_cancellations
+                WHERE state IN (?, ?, ?)
+                LIMIT 1
+                """,
+                (
+                    CancellationState.CANCELING.value,
+                    CancellationState.UNKNOWN.value,
+                    CancellationState.ACKNOWLEDGED.value,
+                ),
+            ).fetchone()
+            if row is not None or cancellation is not None:
                 self._set_gate(connection, True, "reconciliation_required", now)
                 connection.commit()
 
@@ -1811,7 +2703,27 @@ class PaperExecutionService:
             if gate is None:
                 connection.rollback()
                 raise RuntimeError("paper execution gate is missing")
-            if bool(gate["blocked"]):
+            kill = connection.execute(
+                "SELECT active FROM paper_kill_switch WHERE singleton = 1"
+            ).fetchone()
+            if kill is None:
+                connection.rollback()
+                raise RuntimeError("paper kill switch is missing")
+            pending_cancellation = connection.execute(
+                """
+                SELECT 1 FROM paper_cancellations
+                WHERE state IN (?, ?, ?, ?, ?)
+                LIMIT 1
+                """,
+                (
+                    CancellationState.PENDING_APPROVAL.value,
+                    CancellationState.QUEUED.value,
+                    CancellationState.CANCELING.value,
+                    CancellationState.UNKNOWN.value,
+                    CancellationState.ACKNOWLEDGED.value,
+                ),
+            ).fetchone()
+            if bool(gate["blocked"]) or bool(kill["active"]) or pending_cancellation is not None:
                 connection.commit()
                 return None
             row = connection.execute(
@@ -1831,6 +2743,22 @@ class PaperExecutionService:
                 return None
             self._validate_binding_artifacts(row)
             client_order_id = cast(str, row["client_order_id"])
+            if not self._provider_binding_matches(row):
+                connection.execute(
+                    """
+                    UPDATE paper_intents
+                    SET outbox_state = ?, updated_at = ?
+                    WHERE client_order_id = ? AND outbox_state = ?
+                    """,
+                    (
+                        OutboxState.EXPIRED.value,
+                        _timestamp(now),
+                        client_order_id,
+                        OutboxState.QUEUED.value,
+                    ),
+                )
+                connection.commit()
+                return None
             if not self._submission_authorities_are_current(
                 row,
                 evaluated_at=now,
@@ -1884,6 +2812,205 @@ class PaperExecutionService:
         if claimed is None:
             raise RuntimeError("claimed paper intent disappeared")
         return claimed, submission_id
+
+    def _claim_next_cancellation(self, now: datetime) -> tuple[sqlite3.Row, str] | None:
+        with self._connect() as connection:
+            candidate = connection.execute(
+                """
+                SELECT * FROM paper_cancellations
+                WHERE state = ?
+                ORDER BY created_at, cancellation_id
+                LIMIT 1
+                """,
+                (CancellationState.QUEUED.value,),
+            ).fetchone()
+        if candidate is None:
+            return None
+        self.get_cancellation(cast(str, candidate["cancellation_id"]))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            gate = connection.execute(
+                "SELECT blocked FROM paper_execution_gate WHERE singleton = 1"
+            ).fetchone()
+            if gate is None:
+                raise RuntimeError("paper execution gate is missing")
+            if bool(gate["blocked"]):
+                connection.commit()
+                return None
+            row = connection.execute(
+                """
+                SELECT * FROM paper_cancellations
+                WHERE state = ?
+                ORDER BY created_at, cancellation_id
+                LIMIT 1
+                """,
+                (CancellationState.QUEUED.value,),
+            ).fetchone()
+            if row is None or row["cancellation_id"] != candidate["cancellation_id"]:
+                connection.commit()
+                return None
+            if not self._provider_binding_matches(row):
+                connection.execute(
+                    """
+                    UPDATE paper_cancellations
+                    SET state = ?, updated_at = ?
+                    WHERE cancellation_id = ? AND state = ?
+                    """,
+                    (
+                        CancellationState.EXPIRED.value,
+                        _timestamp(now),
+                        cast(str, row["cancellation_id"]),
+                        CancellationState.QUEUED.value,
+                    ),
+                )
+                connection.commit()
+                return None
+            attempt_id = uuid.uuid4().hex
+            connection.execute(
+                """
+                UPDATE paper_cancellations
+                SET state = ?, lease_token = ?, lease_expires_at = ?, updated_at = ?
+                WHERE cancellation_id = ? AND state = ?
+                """,
+                (
+                    CancellationState.CANCELING.value,
+                    attempt_id,
+                    _timestamp(now + timedelta(seconds=self.lease_timeout_seconds)),
+                    _timestamp(now),
+                    cast(str, row["cancellation_id"]),
+                    CancellationState.QUEUED.value,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO paper_cancellation_attempts (
+                    attempt_id, cancellation_id, status, receipt_hash,
+                    error_kind, started_at, finished_at
+                ) VALUES (?, ?, 'canceling', NULL, NULL, ?, NULL)
+                """,
+                (attempt_id, cast(str, row["cancellation_id"]), _timestamp(now)),
+            )
+            self._set_gate(connection, True, "cancellation_in_flight", now)
+            connection.commit()
+            claimed = connection.execute(
+                "SELECT * FROM paper_cancellations WHERE cancellation_id = ?",
+                (cast(str, row["cancellation_id"]),),
+            ).fetchone()
+        if claimed is None:
+            raise RuntimeError("claimed paper cancellation disappeared")
+        return claimed, attempt_id
+
+    def _expire_cancellation_before_provider(
+        self,
+        row: sqlite3.Row,
+        *,
+        attempt_id: str,
+        expired_at: datetime,
+        error_kind: str,
+    ) -> None:
+        cancellation_id = cast(str, row["cancellation_id"])
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute(
+                """
+                UPDATE paper_cancellations
+                SET state = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+                WHERE cancellation_id = ? AND state = ? AND lease_token = ?
+                """,
+                (
+                    CancellationState.EXPIRED.value,
+                    _timestamp(expired_at),
+                    cancellation_id,
+                    CancellationState.CANCELING.value,
+                    attempt_id,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("paper cancellation lease was lost before Provider call")
+            connection.execute(
+                """
+                UPDATE paper_cancellation_attempts
+                SET status = 'expired_before_provider', error_kind = ?, finished_at = ?
+                WHERE attempt_id = ?
+                """,
+                (error_kind, _timestamp(expired_at), attempt_id),
+            )
+            self._set_gate(connection, False, None, expired_at)
+            connection.commit()
+
+    def _finish_ambiguous_cancellation(
+        self,
+        cancellation_id: str,
+        *,
+        attempt_id: str,
+        observed_at: datetime,
+        error_kind: str,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute(
+                """
+                UPDATE paper_cancellations
+                SET state = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+                WHERE cancellation_id = ? AND state = ? AND lease_token = ?
+                """,
+                (
+                    CancellationState.UNKNOWN.value,
+                    _timestamp(observed_at),
+                    cancellation_id,
+                    CancellationState.CANCELING.value,
+                    attempt_id,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("paper cancellation lease was lost after Provider call")
+            connection.execute(
+                """
+                UPDATE paper_cancellation_attempts
+                SET status = 'unknown', error_kind = ?, finished_at = ?
+                WHERE attempt_id = ?
+                """,
+                (error_kind, _timestamp(observed_at), attempt_id),
+            )
+            self._set_gate(connection, True, "ambiguous_cancellation", observed_at)
+            connection.commit()
+
+    def _recover_expired_cancellation_leases(self, now: datetime) -> None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                """
+                SELECT cancellation_id, lease_token FROM paper_cancellations
+                WHERE state = ? AND lease_expires_at <= ?
+                """,
+                (CancellationState.CANCELING.value, _timestamp(now)),
+            ).fetchall()
+            for row in rows:
+                cancellation_id = cast(str, row["cancellation_id"])
+                attempt_id = cast(str, row["lease_token"])
+                connection.execute(
+                    """
+                    UPDATE paper_cancellations
+                    SET state = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+                    WHERE cancellation_id = ?
+                    """,
+                    (
+                        CancellationState.UNKNOWN.value,
+                        _timestamp(now),
+                        cancellation_id,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE paper_cancellation_attempts
+                    SET status = 'unknown', error_kind = 'lease_expired', finished_at = ?
+                    WHERE attempt_id = ?
+                    """,
+                    (_timestamp(now), attempt_id),
+                )
+            if rows:
+                self._set_gate(connection, True, "ambiguous_cancellation", now)
+            connection.commit()
 
     def _expire_claim_before_submit(
         self,
@@ -2080,6 +3207,31 @@ def _record(row: sqlite3.Row) -> PaperIntentRecord:
     )
 
 
+def _cancellation_record(row: sqlite3.Row) -> PaperCancellationRecord:
+    return PaperCancellationRecord(
+        cancellation_id=cast(str, row["cancellation_id"]),
+        client_order_id=cast(str, row["client_order_id"]),
+        provider_order_id=cast(str, row["provider_order_id"]),
+        provider_id=cast(str, row["provider_id"]),
+        provider_version=cast(str, row["provider_version"]),
+        request_hash=cast(str, row["request_hash"]),
+        approval_hash=cast(str | None, row["approval_hash"]),
+        state=CancellationState(cast(str, row["state"])),
+        updated_at=_datetime(cast(str, row["updated_at"])),
+    )
+
+
+def _replacement_record(row: sqlite3.Row) -> PaperReplacementRecord:
+    return PaperReplacementRecord(
+        replacement_id=cast(str, row["replacement_id"]),
+        canceled_client_order_id=cast(str, row["canceled_client_order_id"]),
+        cancellation_id=cast(str, row["cancellation_id"]),
+        replacement_order_hash=cast(str, row["replacement_order_hash"]),
+        admitted_client_order_id=cast(str | None, row["admitted_client_order_id"]),
+        created_at=_datetime(cast(str, row["created_at"])),
+    )
+
+
 def _order_dict(order: OrderIntent) -> dict[str, object]:
     return order.to_dict()
 
@@ -2155,6 +3307,29 @@ def _receipt_dict(receipt: ExecutionReceipt) -> dict[str, object]:
         "status": receipt.status.value,
         "observed_at": _timestamp(receipt.observed_at),
     }
+
+
+def _cancellation_receipt_dict(receipt: CancellationCommandReceipt) -> dict[str, object]:
+    return {
+        "schema_version": "market-impact.cancellation-command-receipt.v1",
+        "client_order_id": receipt.client_order_id,
+        "provider_order_id": receipt.provider_order_id,
+        "cancellation_id": receipt.cancellation_id,
+        "status": receipt.status.value,
+        "observed_at": _timestamp(receipt.observed_at),
+    }
+
+
+def _validate_cancellation_receipt(
+    receipt: CancellationCommandReceipt,
+    capability: CancellationCapability,
+) -> None:
+    if (
+        receipt.client_order_id != capability.client_order_id
+        or receipt.provider_order_id != capability.provider_order_id
+        or receipt.cancellation_id != capability.cancellation_id
+    ):
+        raise ValueError("Provider cancellation receipt identity mismatch")
 
 
 def _timestamp(value: datetime) -> str:

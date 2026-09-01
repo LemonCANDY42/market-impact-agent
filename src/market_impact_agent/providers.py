@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.domain import (
@@ -215,6 +215,7 @@ def _string_array(
 
 
 _SUBMISSION_SEAL = object()
+_CANCELLATION_SEAL = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +224,8 @@ class SubmissionCapability:
 
     order: OrderIntent
     submission_id: str
+    provider_id: str
+    provider_version: str
     order_hash: str
     mandate_hash: str
     price_basis_hash: str
@@ -239,6 +242,8 @@ def _issue_submission_capability(  # pyright: ignore[reportUnusedFunction]
     *,
     order: OrderIntent,
     submission_id: str,
+    provider_id: str,
+    provider_version: str,
     order_hash: str,
     mandate_hash: str,
     price_basis_hash: str,
@@ -247,8 +252,13 @@ def _issue_submission_capability(  # pyright: ignore[reportUnusedFunction]
 ) -> SubmissionCapability:
     """Issue an exact-binding capability from trusted harness composition code."""
 
-    if not submission_id or submission_id != submission_id.strip():
-        raise ValueError("submission_id must be non-empty")
+    for name, value in (
+        ("submission_id", submission_id),
+        ("provider_id", provider_id),
+        ("provider_version", provider_version),
+    ):
+        if not value or value != value.strip():
+            raise ValueError(f"{name} must be non-empty")
     hashes = (
         order_hash,
         mandate_hash,
@@ -261,6 +271,8 @@ def _issue_submission_capability(  # pyright: ignore[reportUnusedFunction]
     return SubmissionCapability(
         order=order,
         submission_id=submission_id,
+        provider_id=provider_id,
+        provider_version=provider_version,
         order_hash=order_hash,
         mandate_hash=mandate_hash,
         price_basis_hash=price_basis_hash,
@@ -379,6 +391,92 @@ class SubmissionCapabilityRejected(PermissionError):
     """The Provider rejected Harness authority before any external mutation."""
 
 
+class CancellationCommandStatus(StrEnum):
+    DISPATCHED = "dispatched"
+    CANCELED = "canceled"
+
+
+@dataclass(frozen=True, slots=True)
+class CancellationCommandReceipt:
+    client_order_id: str
+    provider_order_id: str
+    cancellation_id: str
+    status: CancellationCommandStatus
+    observed_at: datetime
+
+    def __post_init__(self) -> None:
+        require_aware(self.observed_at, "observed_at")
+
+
+@dataclass(frozen=True, slots=True)
+class CancellationCapability:
+    """A cancel command issued only for one approved durable Harness operation."""
+
+    client_order_id: str
+    provider_order_id: str
+    cancellation_id: str
+    attempt_id: str
+    provider_id: str
+    provider_version: str
+    request_hash: str
+    approval_hash: str
+    _seal: object
+
+    def __post_init__(self) -> None:
+        if self._seal is not _CANCELLATION_SEAL:
+            raise TypeError("cancellation capability must be issued by the execution harness")
+
+
+def _issue_cancellation_capability(  # pyright: ignore[reportUnusedFunction]
+    *,
+    client_order_id: str,
+    provider_order_id: str,
+    cancellation_id: str,
+    attempt_id: str,
+    provider_id: str,
+    provider_version: str,
+    request_hash: str,
+    approval_hash: str,
+) -> CancellationCapability:
+    for name, value in (
+        ("client_order_id", client_order_id),
+        ("provider_order_id", provider_order_id),
+        ("cancellation_id", cancellation_id),
+        ("attempt_id", attempt_id),
+        ("provider_id", provider_id),
+        ("provider_version", provider_version),
+    ):
+        if not value or value != value.strip():
+            raise ValueError(f"{name} must be non-empty")
+    if any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in (request_hash, approval_hash)):
+        raise ValueError("cancellation capability bindings must be SHA-256 hashes")
+    return CancellationCapability(
+        client_order_id=client_order_id,
+        provider_order_id=provider_order_id,
+        cancellation_id=cancellation_id,
+        attempt_id=attempt_id,
+        provider_id=provider_id,
+        provider_version=provider_version,
+        request_hash=request_hash,
+        approval_hash=approval_hash,
+        _seal=_CANCELLATION_SEAL,
+    )
+
+
+class CancellationCapabilityRejected(PermissionError):
+    """The Provider proved that no cancel command was sent."""
+
+
+@runtime_checkable
+class CancelExecutionProvider(Protocol):
+    def cancel(self, capability: CancellationCapability) -> CancellationCommandReceipt: ...
+
+    def bind_cancellation_validator(
+        self,
+        validator: Callable[[CancellationCapability], bool],
+    ) -> None: ...
+
+
 class MockExecutionProvider:
     """An idempotent paper-only provider used to verify the harness boundary."""
 
@@ -391,6 +489,7 @@ class MockExecutionProvider:
         self._receipts: dict[str, ExecutionReceipt] = {}
         self._order_hashes: dict[str, str] = {}
         self._submission_validator: Callable[[SubmissionCapability], bool] | None = None
+        self._cancellation_validator: Callable[[CancellationCapability], bool] | None = None
         self._state_path = state_path.resolve() if state_path is not None else None
         self._clock = clock or (lambda: datetime.now(UTC))
         if self._state_path is not None:
@@ -434,6 +533,11 @@ class MockExecutionProvider:
             raise SubmissionCapabilityRejected(
                 "provider submission is not bound to an active durable outbox lease"
             )
+        if (
+            capability.provider_id != self.manifest.provider_id
+            or capability.provider_version != self.manifest.provider_version
+        ):
+            raise SubmissionCapabilityRejected("submission capability targets another Provider")
         order = capability.order
         if order.environment is not TradingEnvironment.PAPER:
             raise ValueError("mock execution accepts paper orders only")
@@ -480,12 +584,51 @@ class MockExecutionProvider:
             receipts=receipts,
         )
 
+    def cancel(self, capability: object) -> CancellationCommandReceipt:
+        if not isinstance(capability, CancellationCapability):
+            raise TypeError("provider cancellation requires a harness-issued capability")
+        if self._cancellation_validator is None or not self._cancellation_validator(capability):
+            raise CancellationCapabilityRejected(
+                "provider cancellation is not bound to an active durable outbox lease"
+            )
+        if (
+            capability.provider_id != self.manifest.provider_id
+            or capability.provider_version != self.manifest.provider_version
+        ):
+            raise CancellationCapabilityRejected("cancellation capability targets another Provider")
+        if self._state_path is not None:
+            return self._cancel_durable(capability)
+        receipt = self._receipts.get(capability.client_order_id)
+        if receipt is None or receipt.provider_order_id != capability.provider_order_id:
+            raise ValueError("mock provider cancellation target is not known")
+        canceled = ExecutionReceipt(
+            client_order_id=receipt.client_order_id,
+            provider_order_id=receipt.provider_order_id,
+            status=ExecutionStatus.CANCELED,
+            observed_at=self._clock(),
+        )
+        self._receipts[capability.client_order_id] = canceled
+        return CancellationCommandReceipt(
+            client_order_id=capability.client_order_id,
+            provider_order_id=capability.provider_order_id,
+            cancellation_id=capability.cancellation_id,
+            status=CancellationCommandStatus.CANCELED,
+            observed_at=canceled.observed_at,
+        )
+
     def bind_submission_validator(
         self,
         validator: Callable[[SubmissionCapability], bool],
     ) -> None:
         if self._submission_validator is None:
             self._submission_validator = validator
+
+    def bind_cancellation_validator(
+        self,
+        validator: Callable[[CancellationCapability], bool],
+    ) -> None:
+        if self._cancellation_validator is None:
+            self._cancellation_validator = validator
 
     def _submit_durable(self, capability: SubmissionCapability) -> ExecutionReceipt:
         order = capability.order
@@ -529,6 +672,49 @@ class MockExecutionProvider:
                 ),
             )
             return receipt
+
+    def _cancel_durable(
+        self,
+        capability: CancellationCapability,
+    ) -> CancellationCommandReceipt:
+        observed_at = self._clock()
+        require_aware(observed_at, "observed_at")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT * FROM mock_execution_receipts WHERE client_order_id = ?",
+                (capability.client_order_id,),
+            ).fetchone()
+            if (
+                existing is None
+                or cast(str, existing["provider_order_id"]) != capability.provider_order_id
+            ):
+                raise ValueError("mock provider cancellation target is not known")
+            current_status = ExecutionStatus(cast(str, existing["status"]))
+            if current_status not in {ExecutionStatus.ACCEPTED, ExecutionStatus.CANCELED}:
+                raise ValueError("mock provider cancellation target is not cancelable")
+            if current_status is ExecutionStatus.ACCEPTED:
+                connection.execute(
+                    """
+                    UPDATE mock_execution_receipts
+                    SET status = ?, observed_at = ?
+                    WHERE client_order_id = ?
+                    """,
+                    (
+                        ExecutionStatus.CANCELED.value,
+                        observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                        capability.client_order_id,
+                    ),
+                )
+            else:
+                observed_at = _provider_datetime(cast(str, existing["observed_at"]))
+        return CancellationCommandReceipt(
+            client_order_id=capability.client_order_id,
+            provider_order_id=capability.provider_order_id,
+            cancellation_id=capability.cancellation_id,
+            status=CancellationCommandStatus.CANCELED,
+            observed_at=observed_at,
+        )
 
     def _connect(self) -> sqlite3.Connection:
         if self._state_path is None:

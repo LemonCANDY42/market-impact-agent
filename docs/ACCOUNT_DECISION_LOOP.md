@@ -161,10 +161,28 @@ account-state validity. Legacy Decision Admission v1 is replay-only and cannot m
 Close quantities also obey the applicable lot rule; the Harness does not silently submit a
 nonconforming full-position quantity.
 
-Submit, cancel and replace each have stable request identity, durable outbox state and an
-`unknown` outcome for ambiguous transport. No ambiguous operation is retried automatically.
-Reconciliation, rather than transport success, establishes broker order, fill, position and cash
-state.
+Submit and cancel each have stable request identity, a durable attempt lease and an `unknown`
+outcome for ambiguous transport. No ambiguous operation is retried automatically. A replacement is
+never an in-place mutation: it durably links one exact cancellation to a new Order Intent identity,
+and that new intent cannot be admitted until complete reconciliation proves the old provider order
+canceled. An Agent-directed replacement additionally requires a fresh Decision Admission for the
+new quantity, price and account state.
+
+Cancellation uses an optional Provider port and a sealed Harness capability bound to the exact
+request, manual approval, Provider identity/version, provider order and current durable attempt. A
+Provider command receipt is only acknowledgement; a globally complete reconciliation must
+explicitly report `canceled` before the Harness marks either the cancellation or original order
+terminal. Pending cancellation work has priority over new submissions. Every later complete
+reconciliation also rechecks each durable accepted open order rather than treating its first
+reconciliation as permanent truth.
+
+The durable kill switch blocks every new submission claim while leaving exact cancellation and
+reconciliation available. It does not silently mass-cancel orders, and it cannot be cleared until a
+new complete reconciliation has occurred after activation. Reconciliation v2 binds the kill-switch
+generation observed before the Provider snapshot call, so a pre-activation snapshot cannot race and
+clear a later kill. Restart with any durable accepted open order also blocks new execution until a
+fresh reconciliation, including legacy rows that cannot prove their Provider binding. Transport
+success never establishes broker order, fill, position or cash state.
 
 ## Delivery gates
 
@@ -186,11 +204,16 @@ state.
    reduction, non-lot close rejection, hold, rotate rejection, adjusted-price rejection and the
    complete manual approval→mock accepted→reconciliation path pass locally. This is still synthetic
    account/mock execution acceptance, not external broker-paper evidence.
-3. **Operation lifecycle.** Extend the provider-neutral execution port and outbox for cancel and
-   replace, complete reconciliation, restart and fault injection. Replacement is cancel plus a new
-   intent, never mutation of an admitted order.
-4. **Operational control.** Add durable approval inbox/notifications, kill switch and reconciliation
-   escalation. Wake remains separately gated.
+3. **Operation lifecycle.** Complete for the Provider-neutral mock boundary. Cancel has exact manual
+   approval, sealed capability, durable attempt state, restart recovery, ambiguous-ACK handling and
+   reconciliation-established terminal state. Replace is cancel plus a new intent and cannot submit
+   before the old order is reconciled canceled; cancellation creation and replacement linkage share
+   one SQLite transaction. This does not accept an external Provider or yet
+   prove close/rotate portfolio behavior against a broker.
+4. **Operational control.** The durable kill switch is complete for the mock boundary: it blocks new
+   submissions, preserves cancel/reconciliation, survives restart and requires a post-activation
+   complete reconciliation before clearing. Durable approval inbox/notifications and reconciliation
+   escalation remain open. Wake remains separately gated.
 5. **IBKR paper execution.** Implement and independently accept `ibkr-nautilus-paper` for submit,
    cancel, replace, fill, ambiguous acknowledgement, restart and complete account reconciliation.
    The accepted read-only account adapter and mock evidence cannot satisfy this gate.

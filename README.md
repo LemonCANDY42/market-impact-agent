@@ -265,7 +265,9 @@ The bootstrap implements:
   risk alert but cannot authorize exposure increase. Complete read-only Account State/Position
   contracts and one bounded real IB Gateway Paper account-read path are accepted. The current
   nonzero client cannot prove absence of manually submitted TWS orders, so that explicit gap blocks
-  mutation. Submit/cancel/replace and external broker-paper Provider acceptance remain absent;
+  mutation. The provider-neutral mock now has sealed, durable cancel, replace-as-cancel-plus-new-
+  intent and kill-switch semantics with ambiguous-outcome reconciliation; external broker-paper
+  Provider acceptance remains absent;
 - strict JSON/schema codecs for the engine-neutral Backtest Request and Result, with Run
   Manifest adapter identity and named input hashes;
 - a pinned optional NautilusTrader `1.231.0` bridge with one deterministic synthetic

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LemonCANDY42/market-impact-agent/schemas/cancellation-request.schema.json",
+  "title": "Market Impact Cancellation Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cancellation_id", "client_order_id", "provider_order_id", "provider_id", "provider_version", "reason", "requested_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.cancellation-request.v1"},
+    "cancellation_id": {"type": "string", "minLength": 1},
+    "client_order_id": {"type": "string", "minLength": 1},
+    "provider_order_id": {"type": "string", "minLength": 1},
+    "provider_id": {"type": "string", "minLength": 1},
+    "provider_version": {"type": "string", "minLength": 1},
+    "reason": {"type": "string", "minLength": 1},
+    "requested_at": {"type": "string", "format": "date-time"}
+  }
+}

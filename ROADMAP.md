@@ -1200,9 +1200,20 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
     accepted path completes `manual_each` approval, mock submission, accepted-without-fill and full
     reconciliation. This is provider-neutral mock acceptance only; the current real IB read gap
     still blocks exposure increase.
-  - [ ] Add idempotent cancel and replace-as-cancel-plus-new-intent with unknown-state recovery, then
-    exercise explicit close and multi-leg rotate lifecycle through those operations.
-  - [ ] Add durable approval/notification controls and a tested kill switch before any autonomous
+  - [x] Add idempotent cancel and replace-as-cancel-plus-new-intent with durable manual approval,
+    sealed current-lease capabilities, no automatic retry after ambiguous transport, restart-safe
+    globally complete reconciliation, exact Provider identity/version and canceled-order proof.
+    Replacement cannot admit its new identity before the old order is reconciled canceled; its
+    cancellation and replacement link commit atomically, and Agent-directed replacement requires a
+    fresh Decision Admission. Pending cancels outrank new exposure. Later complete reconciliation
+    continues to verify every durable accepted open order; restart with any such order blocks new
+    execution until a fresh reconciliation, and legacy unbound orders remain fail-closed.
+  - [x] Add a durable tested kill switch for the Provider-neutral mock boundary. It blocks new
+    submits, preserves exact cancel/reconciliation, survives restart and requires a new complete
+    reconciliation whose v2 run binds the post-activation kill generation before clearing; a
+    pre-activation Provider snapshot cannot satisfy it. It is not implicit mass cancellation.
+  - [ ] Exercise explicit close and multi-leg rotate lifecycle through the accepted operations, and
+    add durable approval inbox/notifications plus reconciliation escalation before any autonomous
     mode. Deposits, withdrawals, credentials and account administration remain out of scope.
 - Add an independently registered `ibkr-nautilus-paper` Provider over the pinned Nautilus
   engine and official IB adapter; create a direct IBKR execution Provider only if that path cannot
