@@ -176,9 +176,16 @@ The bootstrap implements:
   Materiality before a later one can enter. Durable admission reopens the authoritative Triage
   history and requires a completed EventAssessment authority; an earlier unresolved review or direct
   eligible candidate cannot be forgotten when Triage work is split across batches. Snapshot Set and
-  Query Gate reopen the durable Trigger Admission. The real EventAssessment model
-  authority, optional portfolio/history specialist binding, completed real comparison arms and passing
-  blind semantic results remain open acceptance work. At 2026-08-31 05:50 UTC, all four admitted v4
+  Query Gate reopen the durable Trigger Admission. The real EventAssessment model authority is now
+  implemented and has completed the first ready material-event evaluation. Its content-identified
+  actual-receipt Exposure Candidate View bound 422 cutoff-visible A-share/ETF candidates; the model
+  found no defensible target path, so the run completed as `watch` after one Provider attempt instead
+  of being mislabeled a technical failure. The final post-review run used 27,847 input / 2,424 output
+  Tokens and 8,479 microusd; a credential-free replay reproduced the exact terminal with one
+  reconciled Usage record and no Provider access. It created no Trigger Admission, Judgment or
+  execution authority. Path-bearing replay/Materiality has scripted acceptance; a real admitted path, optional
+  portfolio/history specialist binding, completed real comparison arms and passing blind semantic
+  results remain open acceptance work. At 2026-08-31 05:50 UTC, all four admitted v4
   checkpoints had operational trigger routes: policy had 210 and material-event had 119
   post-admission versions awaiting formal Triage, while NBS and Earnings were waiting for a later
   post-admission release. The two Earnings successor Jobs recovered from Journal backoff without a

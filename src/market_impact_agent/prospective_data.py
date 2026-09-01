@@ -788,6 +788,53 @@ class ProspectiveDataJournal:
             for row in rows
         )
 
+    def observations_as_of(
+        self,
+        *,
+        capability: ObservationCapability,
+        not_after: datetime,
+        maximum_versions: int = 10_000,
+    ) -> tuple[tuple[ProspectiveObservationVersionRef, SourceObservation], ...]:
+        """Reopen actual-receipt versions for one capability at a historical cutoff."""
+
+        _strict_utc(not_after, "prospective observation as-of cutoff")
+        if maximum_versions < 1:
+            raise ValueError("prospective observation as-of maximum must be positive")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT version_id, first_available_at, provider_id, provider_version,
+                       upstream_source, observation_json
+                FROM prospective_observation_versions
+                WHERE capability = ? AND first_available_at <= ?
+                ORDER BY first_available_at, version_id
+                LIMIT ?
+                """,
+                (capability.value, _timestamp(not_after), maximum_versions + 1),
+            ).fetchall()
+        if len(rows) > maximum_versions:
+            raise ValueError("prospective observation as-of result exceeds its bound")
+        results: list[tuple[ProspectiveObservationVersionRef, SourceObservation]] = []
+        for row in rows:
+            ref = ProspectiveObservationVersionRef(
+                version_id=cast(str, row["version_id"]),
+                first_available_at=_datetime(
+                    cast(str, row["first_available_at"]), "first_available_at"
+                ),
+                provider_id=cast(str, row["provider_id"]),
+                provider_version=cast(str, row["provider_version"]),
+                upstream_source=cast(str, row["upstream_source"]),
+            )
+            observation = _observation_from_json(cast(str, row["observation_json"]))
+            if (
+                prospective_observation_version_id(observation) != ref.version_id
+                or observation.capability is not capability
+                or ref.first_available_at > not_after
+            ):
+                raise ValueError("prospective observation as-of index differs from its content")
+            results.append((ref, observation))
+        return tuple(results)
+
     def freeze_version_selection_snapshot(
         self,
         *,

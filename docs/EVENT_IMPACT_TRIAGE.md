@@ -102,6 +102,23 @@ ready-time-ordered history for the entire route epoch and the completed EventAss
 Snapshot Set and Query Gate must in turn reopen that durable admission; self-consistent caller-created
 IDs are insufficient.
 
+The concrete PDI-29G runtime now performs one bounded no-tool model call per ready-time-ordered
+EventAssessment cluster. Before dispatch, the Harness reopens exposure observations actually received
+by the Triage Decision cutoff and freezes an `ExposureCandidateView`. An exact issuer/ETF reference
+narrows the mapping; otherwise a bounded catalog lets the model discover a supported target without
+inventing one. The prompt receives compact labels while the terminal artifact retains the full private
+Observation Version provenance. Output targets must exactly match the frozen view. A valid no-path
+response is a completed `watch` business outcome and remains non-admitting; transport ambiguity,
+invalid JSON/semantics and authority mismatch remain run failures. Only a path-bearing completed run
+can create the canonical EventAssessment projection and enter deterministic Materiality.
+Provider construction is lazy: terminal replay and Usage reconciliation do not require credentials or
+touch the Provider. A preparation failure before dispatch leaves the same Run safely resumable; an
+OPEN circuit can recover only through a successful safe availability probe. Any durable dispatch with
+no terminal response is instead recorded as an unknown Provider outcome with nonzero attempt usage and
+cannot be retried automatically. The orchestration reserves a complete bounded EventAssessment unit
+against the registration's aggregate cost before dispatch, so an over-cap run cannot become completed
+assessment authority or Trigger Admission.
+
 ## Model adapters and bounded specialist Agents
 
 The semantic judgment belongs inside the project runtime, not to an external Codex operator. The
@@ -598,8 +615,9 @@ Still required for real acceptance:
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
   ingress roles, and the current Position Snapshot remains identity-only;
-- the concrete PDI-29G EventAssessment model authority and its existing deterministic Materiality
-  Gate; v8-v11 terminal comparison versions remain negative evidence and cannot be recycled;
+- one real path-bearing PDI-29G EventAssessment that passes deterministic Materiality; the concrete
+  runtime/authority and a real completed no-path Watch are accepted, while v8-v11 terminal comparison
+  versions remain negative evidence and cannot be recycled;
 - ongoing observation of false positives, misses, `needs_review`, routing, unsupported transmission
   paths and resource use as operational quality evidence;
 - a real selected event passed through PDI-30 and Query Gate.

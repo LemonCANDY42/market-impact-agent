@@ -289,6 +289,21 @@ def test_journal_deduplicates_versions_but_retains_every_actual_receipt(
     assert refs[0].first_available_at == FIRST_RECEIPT
     assert refs[0].provider_id == _source().provider_id
 
+    visible = journal.observations_as_of(
+        capability=ObservationCapability.EVENT_REVELATION,
+        not_after=FIRST_RECEIPT,
+    )
+    assert len(visible) == 1
+    assert visible[0][0] == refs[0]
+    assert visible[0][1].normalized_payload["headline"] == "Policy decision"
+    assert (
+        journal.observations_as_of(
+            capability=ObservationCapability.EVENT_REVELATION,
+            not_after=FIRST_RECEIPT - timedelta(microseconds=1),
+        )
+        == ()
+    )
+
 
 def test_changed_record_content_creates_an_append_only_revision(tmp_path: Path) -> None:
     store = LocalDataSnapshotStore(tmp_path / "state")

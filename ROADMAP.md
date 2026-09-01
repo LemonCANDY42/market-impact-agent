@@ -142,9 +142,9 @@ PDI-29G and PDI-40 parent/scheduler acceptance remain separate gates.
 
 Provider resolution remains lazy for new Work only. Factory or availability failure before dispatch
 is recorded as a zero-attempt `not_started` preparation failure, leaves the Run nonterminal, returns
-once without an in-invocation retry, and can be probed again on a later invocation. It cannot create
-ambiguous transport evidence or a Usage record, while completed local recovery never touches the
-Provider.
+once without an in-invocation retry, and can be probed again on a later invocation. An OPEN circuit
+can close only after that explicit safe availability probe succeeds. It cannot create ambiguous
+transport evidence or a Usage record, while completed local recovery never touches the Provider.
 
 ## Phase 0 — Auditable skeleton
 
@@ -667,10 +667,27 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     checkpoint. Snapshot Set and Query Gate require that durable Trigger Admission authority.
     Absence of optional Position/Analogy inputs degrades rather than blocks. This is
     contract/mechanical acceptance, not a real material-event Judgment or alpha result.
-  - [ ] `PDI-29G` Bind the prospective EventAssessment model adapter/run journal as the concrete
-    completed-assessment authority, then run the current material-event candidates in ready-time
-    order. Until this exists, the material path remains fail-closed even when a caller can construct
-    schema-valid assessment content.
+  - [x] `PDI-29G` Bind the prospective EventAssessment model adapter/run journal as the concrete
+    completed-assessment authority and run the current material-event candidates in ready-time order.
+    The bounded no-tool runtime freezes the exact Triage Decision, Skill manifests, CPA profile,
+    prompt, actual-receipt Exposure Candidate View and Usage Ledger record. The Harness accepts only
+    targets present in that content-identified view and reopens the terminal run before Materiality or
+    Trigger Admission. A first real run correctly refused to invent a target when no exposure view was
+    supplied; the corrected view reopens only exposure observations actually received by the Decision
+    cutoff and exposes a compact 422-target catalog while retaining full private provenance. The next
+    runtime version fixed a distinct state-model error: a well-formed no-path result is now one
+    completed `watch` evaluation, not a Provider failure. Post-review runtime v3 additionally makes
+    Provider construction lazy across terminal replay, recovers the terminal-Journal/Usage crash gap,
+    reserves one complete unit of aggregate budget before dispatch, admits OPEN-circuit recovery only
+    through a safe availability probe, and records an interrupted durable dispatch as an unknown
+    Provider outcome with nonzero attempt usage. The final real acceptance consumed one Provider
+    attempt, 27,847 input / 2,424 output Tokens and 8,479 microusd. A credential-free replay returned
+    the exact same terminal result with one reconciled Usage record and a healthy Provider circuit. It
+    created no EventAssessment path, Trigger Admission, Judgment or execution authority, and stopped
+    before later route candidates because the earlier Watch remains unresolved. The three superseded
+    real runs remain immutable negative evidence; across all four PDI-29G calls usage was 85,820 input
+    / 6,288 output Tokens and 24,712 microusd. Scripted acceptance separately proves a path-bearing
+    completed run, deterministic Materiality, exact replay and target-boundary rejection.
 - [ ] `PDI-30` Assemble one prospective Event Envelope/Evidence Pack and frozen tools from the
   information actually observed, with every optional gap retained.
   - [x] Freeze the no-authority route plan

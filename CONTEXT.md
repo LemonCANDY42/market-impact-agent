@@ -379,6 +379,19 @@ Position Snapshot/Historical Analogy Pack identities. It does not become a secon
 authority and cannot promote historical evidence lanes.
 _Avoid_: Duplicate EventAssessment authority, sentiment score, Signal
 
+**Exposure Candidate View**:
+A content-identified, cutoff-bound projection of actual-receipt instrument and exposure observations
+available to one prospective EventAssessment. The model receives compact target labels; the Harness
+retains exact Observation Version provenance and rejects every target outside the view. An exact
+issuer/ETF match may narrow the view; otherwise a bounded catalog preserves discovery without
+granting trade-universe or execution authority. A well-formed evaluation that cannot establish a
+defensible target path completes as `watch`; Provider/parse/authority failures remain technical run
+failures. Provider construction is lazy across exact terminal replay. Pre-dispatch preparation can
+resume under the same Run after a successful safe health probe; post-dispatch uncertainty is terminal
+and no-retry. Completed authority requires exact terminal Journal/Usage reconciliation and one full
+bounded unit of aggregate cost reserved before dispatch.
+_Avoid_: Model-invented target, current universe substituted for the decision cutoff, no-path error
+
 **Prospective Materiality Gate Result**:
 A deterministic Harness check over one Prospective EventAssessment Projection. It admits only cited,
 in-scope target/path/horizon combinations and records absent optional position or analogy context as

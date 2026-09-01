@@ -872,6 +872,27 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(".market-impact/event-impact-triage/current"),
     )
     prospective_triage_parser.add_argument("--prepare-only", action="store_true")
+    prospective_assessment_parser = agent_subparsers.add_parser(
+        "prospective-event-assessment-run",
+        help="Assess one completed Triage Candidate Set and admit its first material event",
+    )
+    prospective_assessment_parser.add_argument("--registration", required=True, type=Path)
+    prospective_assessment_parser.add_argument("--candidate-set-id", required=True)
+    prospective_assessment_parser.add_argument(
+        "--skill-root",
+        type=Path,
+        default=_default_agent_skill_root(),
+    )
+    prospective_assessment_parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=Path(".market-impact/data-inputs"),
+    )
+    prospective_assessment_parser.add_argument(
+        "--run-root",
+        type=Path,
+        default=Path(".market-impact/event-assessments/current"),
+    )
     prospective_triage_compare_parser = agent_subparsers.add_parser(
         "prospective-triage-compare-run",
         help="Run one frozen pristine-blind baseline/treatment triage comparison",
@@ -3210,6 +3231,40 @@ def _fetch_public_https_document(
     return final_url, body
 
 
+def _run_prospective_event_assessment_command(args: argparse.Namespace) -> int:
+    try:
+        from market_impact_agent.prospective_event_assessment import (
+            run_prospective_event_assessment,
+        )
+
+        registration = load_prospective_diagnostic_registration(args.registration)
+        outcome = asyncio.run(
+            run_prospective_event_assessment(
+                registration=registration,
+                candidate_set_id=args.candidate_set_id,
+                state_root=args.state_root,
+                run_root=args.run_root,
+                skill_root=args.skill_root,
+            )
+        )
+        assessment_summary = outcome.summary()
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        print(
+            json.dumps({"completed": False, "error": f"{type(exc).__name__}: {exc}"}),
+            file=sys.stderr,
+        )
+        return 1
+    print(json.dumps(assessment_summary, indent=2, sort_keys=True))
+    return 0 if outcome.status is RunStatus.COMPLETED else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
@@ -4304,6 +4359,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.prepare_only:
             return 0
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
+    if args.command == "agent" and args.agent_command == "prospective-event-assessment-run":
+        return _run_prospective_event_assessment_command(args)
     if args.command == "agent" and args.agent_command == "prospective-triage-compare-run":
         try:
             from market_impact_agent.event_impact_triage_evaluation import (
