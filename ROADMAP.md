@@ -10,8 +10,9 @@ The shortest accepted path to Agent-directed paper operation is:
 0. keep the admitted v5 registration/v6 route epoch and supervisor healthy without resetting its
    append-only misses, receipts or replacement history. Collection health is supporting
    infrastructure, not the current experiment blocker;
-1. preserve the closed Triage authority boundaries: comparison-governed material-ingress v9-v11 is
-   rejected by the ordinary run path before any Provider call, and
+1. preserve the closed Triage authority boundaries: comparison-governed material-ingress v9/v10 is
+   rejected by the ordinary run path before any Provider call, while v11 may run only for a new
+   non-comparison-bound actual-receipt batch; and
    failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
    and Usage. Agent Watch admission remains globally fail-closed until a named concrete parent
    Run/Decision owner can derive its evidence, subject and matcher projection; a caller context or
@@ -20,12 +21,11 @@ The shortest accepted path to Agent-directed paper operation is:
    registered eligibility/exclusion rules, target venues and instrument classes is necessary but not
    sufficient: baseline over-routed Watch and treatment promoted five out-of-scope Hong Kong issuer
    earnings to EventAssessment;
-3. review the smallest deterministic in-scope target-evidence boundary before another model batch.
-   Broad discovery and anchored Watch remain open, but EventAssessment must cite a supplied or
-   Harness-resolved target whose venue/class is inside the registered scope; an unresolved target may
-   request one bounded Watch/retrieval step and cannot silently widen the trading universe;
-4. only after that boundary passes a new sealed comparison, create one exact Trigger Admission:
-   either the checkpoint-selected Triage cluster, or a canonical
+3. run new v11 actual-receipt batches as broad, single-call-per-Work-Unit Triage. Archive, Watch and
+   EventAssessment are cost/quality dispositions only; none establishes target scope or grants a
+   Trigger Admission;
+4. complete PDI-29G and create one exact Trigger Admission: either the checkpoint-selected Triage
+   cluster, or a canonical
    EventAssessment projection whose cited target/path passes the deterministic Materiality Gate;
 5. for that admission, freeze the internally verifiable Snapshot Set, explicit optional gaps,
    Prospective Evidence Lineage, tools, and Query Gate;
@@ -44,10 +44,11 @@ The shortest accepted path to Agent-directed paper operation is:
 The engineering and first-evidence target is compressed into one bounded two-week program. This
 does not rename two weeks of observations as long-run alpha evidence or authorize real capital.
 
-- **Days 1-3 — unblock decisions.** Accept one minimal in-scope target-evidence boundary and one
-  new blind comparison, while allowing already-registered direct policy, earnings and macro
-  checkpoints to proceed independently. A failed broad-event comparison degrades that entrance to
-  archive/Watch and does not restart prompt tuning or block direct checkpoints.
+- **Days 1-3 — unblock decisions.** Permit v11 single-run operational Triage for new batches and
+  reuse EventAssessment plus the deterministic Materiality Gate as the only in-scope target
+  authority, while allowing already-registered direct policy, earnings and macro checkpoints to
+  proceed independently. No new ingress prompt dialect, target authority or blind comparison is
+  required.
 - **Days 1-7 — backtest/live parity.** Reuse one cutoff-bound Authorized Decision View, Agent
   runtime, Judgment, Signal, portfolio-policy, sizing, Intent and hard-policy path across historical,
   paper and live environments. Freeze Run identity and reuse the persisted response on replay; only
@@ -134,9 +135,10 @@ reinstalled as a new active head. Caller-consistent stubs, authority subclasses,
 changes and both crash windows are explicit regression cases. A self-issued Agent Watch parent
 projection remained circular, so that issuer was
 removed: offers, admission lookup, callbacks and restart activation now all fail closed until a
-concrete parent authority is integrated. These repairs authorize neither another real batch nor a
-Watch scheduler. The v10 and v11 pristine comparisons are now terminal negative evidence; the
-in-scope target-evidence review and PDI-40 parent/scheduler acceptance remain separate gates.
+concrete parent authority is integrated. These repairs authorize neither a Watch scheduler nor
+reinterpreting an old terminal batch. The v10 and v11 pristine comparisons remain immutable negative
+precision evidence; v11 operational use applies only to new, non-comparison-bound batches, while
+PDI-29G and PDI-40 parent/scheduler acceptance remain separate gates.
 
 Provider resolution remains lazy for new Work only. Factory or availability failure before dispatch
 is recorded as a zero-attempt `not_started` preparation failure, leaves the Run nonterminal, returns
@@ -636,11 +638,11 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       scored 6/12 exact routes and satisfied all four Watch labels. Total authoritative usage was
       13,626 input / 19,447 output Tokens and 26,062 microusd. The failed gate released the active
       head and created no Decision or downstream authority.
-    - [ ] Define and accept the smallest in-scope target-evidence boundary before another semantic
-      batch. EventAssessment must bind a supplied or Harness-resolved target to the registered
-      venue/class; missing target evidence may become a bounded anchored Watch or archive, never an
-      invented cross-market link. Reuse the existing Monitoring Scope/Retrieval Resolution and
-      Materiality Gate owners rather than adding another generic state machine.
+    - [x] Reject a duplicate target-evidence authority at ingress. New, non-comparison-bound v11
+      batches may run once and persist a Triage Decision; v9/v10, comparison-bound candidates and
+      terminal versions remain fail-closed. EventAssessment must bind concrete target paths and the
+      existing Materiality Gate mechanically enforces registered venue/class/horizon before Trigger
+      Admission. Unsupported ingress routes remain cost/quality evidence, not trading authority.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate

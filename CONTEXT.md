@@ -459,7 +459,11 @@ exact routes; baseline produced zero unsupported EventAssessment routes but over
 routine items to Watch, while treatment promoted five out-of-scope Hong Kong issuer earnings to
 EventAssessment. Total authoritative usage was 13,626 input / 19,447 output Tokens and 26,062
 microusd. Registered scope in model context is therefore necessary but not sufficient evidence of a
-stable material-ingress rule. No Triage Decision or downstream authority exists.
+stable high-precision material-ingress rule. No Triage Decision or downstream authority exists for
+that terminal batch. For later non-comparison-bound actual receipts, v11 is operational as a broad
+discovery/triage step: it may create a Triage Decision but cannot establish target scope or
+materiality. EventAssessment plus the deterministic Materiality Gate remains the sole path that may
+admit an in-scope material target. V9/v10 ordinary runs stay closed.
 The Harness injects authoritative atom, cluster and cited-evidence identities
 into the unchanged canonical Digest, Partition and Proposal artifacts. All schemas freeze the
 repeated map roles per Work Unit, one

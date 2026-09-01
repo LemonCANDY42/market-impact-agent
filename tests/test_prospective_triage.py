@@ -20,7 +20,6 @@ from market_impact_agent.event_impact_triage_work_evaluation import (
 from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
-    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
 )
 from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
 from market_impact_agent.prospective_triage import (
@@ -301,10 +300,9 @@ def test_unverified_failed_batch_cannot_release_head_or_exclude_versions(
     [
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
-        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
     ],
 )
-def test_material_ingress_ordinary_path_is_rejected_before_provider_or_decision(
+def test_legacy_material_ingress_ordinary_path_is_rejected_before_provider_or_decision(
     tmp_path: Path, schema_version: str
 ) -> None:
     prepared = cast(PreparedProspectiveTriageWork, _PreparedComparisonCandidate(schema_version))

@@ -145,8 +145,9 @@ The bootstrap implements:
   against broad discovery or follow-up Watches. The completed v10 pristine comparison was terminal:
   12 versions; baseline had 7 unsupported routes, 5/12 exact routes and 8,494 microusd; treatment
   had 6 unsupported routes, 6/12 exact routes and 8,363 microusd. The authoritative total was 14,391
-  input / 11,648 output Tokens and 16,857 microusd; the failed comparison created no Decision. New
-  V11 was the last tested material-event ingress dialect. It preserves v10's one-call graph and four-field positional output,
+  input / 11,648 output Tokens and 16,857 microusd; the failed comparison created no Decision. V11
+  is the current operational material-event ingress dialect for new, non-comparison-bound batches.
+  It preserves v10's one-call graph and four-field positional output,
   but adds a closed registered checkpoint-rule projection with eligibility/exclusion rules, target
   venues and allowed instrument classes. Those fields constrain routing; the model cannot invent
   cross-market target links. Its sealed pristine comparison completed on 12 new actual-receipt
@@ -154,10 +155,12 @@ The bootstrap implements:
   foreign items to Watch; treatment produced five unsupported EventAssessment routes by promoting
   out-of-scope Hong Kong issuer earnings. Both arms scored 6/12 exact routes. Total authoritative
   usage was 13,626 input / 19,447 output Tokens and 26,062 microusd. The gate terminalized the batch,
-  released the active head and created no Decision. Registered-scope visibility is therefore
-  necessary but not sufficient; the next design review must require an evidence-backed in-scope
-  target before EventAssessment without narrowing broad discovery or silently expanding the trading
-  universe.
+  released the active head and created no Decision. That result remains immutable negative precision
+  evidence, but both arms retained all sealed must-Watch items and the excess routes cannot grant
+  Trigger Admission. New v11 batches may therefore create a Triage Decision with one call per Work
+  Unit; EventAssessment must still bind concrete targets, and the existing deterministic Materiality
+  Gate alone enforces venue/class/horizon scope before Query Gate. V9/v10 ordinary runs and every
+  comparison-bound or terminal batch remain closed.
   The prospective repair also journals
   each physical attempt with a
   correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized

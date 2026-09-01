@@ -50,6 +50,7 @@ from market_impact_agent.prospective_triage import (
     PreparedProspectiveTriageWork,
     ProspectiveTriageActiveBatchStore,
     run_prepared_prospective_triage_comparison,
+    run_prepared_prospective_triage_work,
 )
 from market_impact_agent.runtime_store import RunStatus
 from tests.test_event_impact_triage_work_runtime import (
@@ -397,6 +398,52 @@ def test_v11_comparison_rebuilds_a_same_version_baseline(
     assert summary["baseline_plan_id"] == baseline_runner.plan.plan_id
     assert summary["treatment_plan_id"] == prepared.plan.plan_id
     assert summary["status"] == "completed"
+
+
+def test_v11_operational_ingress_admits_a_triage_decision_without_comparison(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepared, _, _, treatment_runner, treatment_provider = _workflow_fixture(
+        tmp_path, dialect="v11"
+    )
+
+    def build_runner(**_kwargs: object) -> EventImpactTriageWorkRunner:
+        return treatment_runner
+
+    monkeypatch.setattr(prospective_triage, "_build_prospective_triage_runner", build_runner)
+    run_root = tmp_path / "workflow"
+    state_root = tmp_path / "state"
+    active_store = ProspectiveTriageActiveBatchStore(run_root)
+    active_store.install(prepared, expected_epoch_revision=0)
+
+    summary = asyncio.run(
+        run_prepared_prospective_triage_work(
+            prepared=prepared,
+            registration=treatment_runner.registration,
+            state_root=state_root,
+            run_root=run_root,
+            skill_root=tmp_path / "skills",
+            provider=treatment_provider,
+        )
+    )
+
+    decision_id = cast(str, summary["decision_id"])
+    _, _, decision = EventImpactTriageDecisionStore(state_root).get_context(
+        prepared.candidate_set.candidate_set_id
+    )
+    assert summary["status"] == "completed"
+    assert decision.decision_id == decision_id
+    assert summary["judgment_or_execution_authority"] is False
+    assert (
+        active_store.active(
+            registration_id=prepared.candidate_set.registration_id,
+            checkpoint_key=prepared.candidate_set.checkpoint_key,
+            route_plan_id=prepared.candidate_set.route_plan_id,
+            route_admission_id=prepared.candidate_set.route_admission_id,
+        )
+        is None
+    )
 
 
 def _rehash_report(

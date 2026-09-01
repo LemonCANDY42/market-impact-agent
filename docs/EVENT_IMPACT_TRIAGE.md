@@ -557,15 +557,16 @@ active head without creating a Decision.
 The v9-v11 failures localize the remaining ingress problem: semantic scope instructions do not make
 an LLM a stable scope authority. It may still invent a generic path from an out-of-scope issuer or
 foreign-policy fact to risk appetite, discount rates or future policy, or move that uncertainty into
-an over-broad Watch. The fix must not narrow discovery. Before another model dialect, the smallest
-complete design review must require EventAssessment to cite a supplied or Harness-resolved in-scope
-target whose venue/class satisfies the registered rule. A plausible event missing that target may
-request one bounded target-resolution Watch; it cannot claim materiality or silently expand the
-trading universe. Routine context remains archived. Watch and downstream EventAssessment may
+an over-broad Watch. The fix does not narrow discovery or add another target authority. V11 is
+operational for new, non-comparison-bound batches and may create a Triage Decision, but its routes
+remain cost/quality dispositions. EventAssessment must cite concrete target paths and the existing
+deterministic Materiality Gate alone enforces registered venue/class/horizon scope before Trigger
+Admission. A plausible event missing that target may request one bounded target-resolution Watch;
+it cannot claim materiality or silently expand the trading universe. Routine context remains
+archived. Watch and downstream EventAssessment may
 propose additional anchored Monitoring Scopes for newly discovered issuers, industries, ETFs,
 frozen sets or information aspects, but those scopes need separate Harness admission, budget, PIT
-lineage and a fresh Run. They cannot silently widen the original decision or trading universe. The
-next revision must use a new pristine batch rather than relabeling or rerunning exposed versions.
+lineage and a fresh Run. They cannot silently widen the original decision or trading universe.
 
 That controlled expansion now has a concrete proposal/admission seam. A parent Agent sees only the
 named `WatchDelegateProfile` records permitted for its Agent type and lineage depth, similar to Skill
@@ -589,18 +590,18 @@ parent authority is real.
 Still required for real acceptance:
 
 - preserve the closed material-ingress authority boundary: the ordinary path rejects
-  comparison-governed v9-v11 before
-  any Provider call, and failed-batch terminalization may exclude actual-receipt versions only after
+  comparison-governed v9/v10 before any Provider call; v11 ordinary operation accepts only new,
+  non-comparison-bound batches; and failed-batch terminalization may exclude actual-receipt versions only after
   reopening the append-only Comparison Registration and Report plus both exact Run/Usage authorities.
   Recovery after Report or terminal commit is local-only, uses the first durable identity and time,
   does not construct or probe a Provider, and rejects authority subclasses or reinstallation of an
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
   ingress roles, and the current Position Snapshot remains identity-only;
-- an accepted in-scope target-evidence boundary and one later pristine comparison; v8-v11 remain
-  terminal negative evidence and cannot be recycled as blind acceptance data;
-- passing semantic results for false positives, must-catch misses, `needs_review`, routing,
-  unsupported transmission paths and resource use;
+- the concrete PDI-29G EventAssessment model authority and its existing deterministic Materiality
+  Gate; v8-v11 terminal comparison versions remain negative evidence and cannot be recycled;
+- ongoing observation of false positives, misses, `needs_review`, routing, unsupported transmission
+  paths and resource use as operational quality evidence;
 - a real selected event passed through PDI-30 and Query Gate.
 
 The second-batch v4 interruption is resolved only at the runtime-authority layer: its one permitted

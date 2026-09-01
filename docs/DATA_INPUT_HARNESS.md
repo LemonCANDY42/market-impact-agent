@@ -378,9 +378,9 @@ batch. Eleven such versions were later frozen and terminalized by the failed pri
 they were not converted into a semantic Decision. A later sealed v11 comparison projected the
 registered eligibility/exclusion, venue and instrument-class bounds into the existing one-call
 ingress. It is also terminal negative evidence: its 12 versions cannot be recycled, it created no
-Decision, and later receipts remain unclassified until an accepted in-scope target-evidence boundary
-is registered and passes a new comparison. V11 does not reinterpret the terminal v9 or v10 versions
-as a Decision.
+Decision, and it does not reinterpret the terminal v9 or v10 versions as a Decision. Later
+non-comparison-bound receipts may use v11 once to create a Triage Decision; an EventAssessment target
+still requires the existing deterministic Materiality Gate before Trigger Admission.
 
 The longer soak also found that four 120-second purchased-news Jobs can each become incomplete after
 a real post-admission misfire even though their latest outcome is healthy and lag is near zero. The

@@ -1202,7 +1202,6 @@ async def run_prepared_prospective_triage_work(
     if prepared.plan.schema_version in {
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
         EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
-        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
     }:
         raise ValueError(
             "prospective material ingress is comparison-governed; use the comparison run"
