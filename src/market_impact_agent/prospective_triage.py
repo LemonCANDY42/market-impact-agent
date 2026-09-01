@@ -47,12 +47,14 @@ from market_impact_agent.event_impact_triage_work_format_recovery import (
 )
 from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunner,
     EventImpactTriageWorkRunResult,
     build_event_impact_triage_work_execution_plan_v8,
     build_event_impact_triage_work_execution_plan_v9,
+    build_event_impact_triage_work_execution_plan_v10,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -960,7 +962,7 @@ def prepare_next_prospective_triage_work(
         ),
     )
     profile = load_builtin_model_provider_profile(registration.model_profile_id)
-    plan = build_event_impact_triage_work_execution_plan_v9(
+    plan = build_event_impact_triage_work_execution_plan_v10(
         candidate_set=candidate_set,
         work_manifest=manifest,
         registration=registration,
@@ -1195,8 +1197,13 @@ async def run_prepared_prospective_triage_work(
 ) -> dict[str, object]:
     """Run one frozen Work graph and persist a Decision only after full reopening."""
 
-    if prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9:
-        raise ValueError("prospective triage v9 is comparison-governed; use the comparison run")
+    if prepared.plan.schema_version in {
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
+    }:
+        raise ValueError(
+            "prospective material ingress is comparison-governed; use the comparison run"
+        )
     comparison_path = run_root / "comparison" / "registrations.sqlite3"
     if comparison_path.exists() and EventImpactTriageWorkComparisonStore(
         comparison_path
@@ -1294,11 +1301,14 @@ async def run_prepared_prospective_triage_comparison(
         raise ValueError("prospective triage labels belong to another Candidate Set")
     if prepared.plan.arm is not TriageComparisonArm.TREATMENT:
         raise ValueError("prepared prospective triage plan is not the treatment arm")
-    plan_builder = (
-        build_event_impact_triage_work_execution_plan_v9
-        if prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9
-        else build_event_impact_triage_work_execution_plan_v8
-    )
+    plan_builder = {
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9: (
+            build_event_impact_triage_work_execution_plan_v9
+        ),
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10: (
+            build_event_impact_triage_work_execution_plan_v10
+        ),
+    }.get(prepared.plan.schema_version, build_event_impact_triage_work_execution_plan_v8)
     baseline_plan = plan_builder(
         candidate_set=prepared.candidate_set,
         work_manifest=prepared.manifest,

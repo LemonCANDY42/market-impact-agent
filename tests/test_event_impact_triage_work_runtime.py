@@ -53,6 +53,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V7,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V8,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
@@ -67,6 +68,7 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v7,
     build_event_impact_triage_work_execution_plan_v8,
     build_event_impact_triage_work_execution_plan_v9,
+    build_event_impact_triage_work_execution_plan_v10,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -168,7 +170,7 @@ class ScriptedWorkProvider(ModelProvider):
         typed_classify = prompt_template_id.endswith(("-v4", "-v5", "-v6", "-v7", "-v8", "-v8m"))
         ordinal_evidence = prompt_template_id.endswith(("-v5", "-v6", "-v7", "-v8", "-v8m"))
         phase_input = cast(dict[str, object], task["phase_input"])
-        if prompt_template_id.endswith("-v9"):
+        if prompt_template_id.endswith(("-v9", "-v10")):
             atoms = cast(list[dict[str, object]], phase_input["atoms"])
             return {
                 "routes": [
@@ -344,7 +346,7 @@ class MaterialWatchProvider(ScriptedWorkProvider):
 
 class MixedMaterialIngressProvider(ScriptedWorkProvider):
     def _output(self, task: dict[str, object]) -> dict[str, object]:
-        if not str(task["prompt_template_id"]).endswith("-v9"):
+        if not str(task["prompt_template_id"]).endswith(("-v9", "-v10")):
             return super()._output(task)
         atoms = cast(list[dict[str, object]], cast(dict[str, object], task["phase_input"])["atoms"])
         fixtures = (
@@ -1006,6 +1008,7 @@ def _runtime(
         "v7": build_event_impact_triage_work_execution_plan_v7,
         "v8": build_event_impact_triage_work_execution_plan_v8,
         "v9": build_event_impact_triage_work_execution_plan_v9,
+        "v10": build_event_impact_triage_work_execution_plan_v10,
     }[dialect]
     plan = builder(
         candidate_set=candidate_set,
@@ -2809,8 +2812,15 @@ def test_v8_direct_checkpoint_keeps_model_eligibility_classification(tmp_path: P
     assert "checkpoint_eligibility" in cast(list[str], contract["required_fields"])
 
 
-def test_v9_material_ingress_uses_one_positional_call_and_derives_downstream_artifacts(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("dialect", "expected_schema"),
+    [
+        ("v9", EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9),
+        ("v10", EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10),
+    ],
+)
+def test_material_ingress_uses_one_positional_call_and_derives_downstream_artifacts(
+    tmp_path: Path, dialect: str, expected_schema: str
 ) -> None:
     provider = MixedMaterialIngressProvider()
     registration = _material_registration()
@@ -2819,7 +2829,7 @@ def test_v9_material_ingress_uses_one_positional_call_and_derives_downstream_art
         arm=TriageComparisonArm.TREATMENT,
         count=3,
         provider=provider,
-        dialect="v9",
+        dialect=dialect,
         registration=registration,
         checkpoint_key="next-material-a-share-event",
     )
@@ -2827,11 +2837,15 @@ def test_v9_material_ingress_uses_one_positional_call_and_derives_downstream_art
     result = asyncio.run(runner.run())
 
     assert result.status is RunStatus.COMPLETED
-    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9
+    assert plan.schema_version == expected_schema
     assert plan.partition_binding is None
     assert plan.classify_binding is None
     assert plan.max_total_runs == len(manifest.work_units) == 1
     assert len(provider.requests) == 1
+    if dialect == "v10":
+        system_policy = str(provider.requests[0][0]["content"])
+        assert "supplied content itself" in system_policy
+        assert "Generic risk appetite" in system_policy
     assert {item.phase for item in result.members} == {TriageWorkPhase.MAP}
     assert result.partition is not None
     assert result.proposal is not None
@@ -2846,6 +2860,7 @@ def test_v9_material_ingress_uses_one_positional_call_and_derives_downstream_art
     assert [item.recommended_route.value for item in result.proposal.clusters].count("archive") == 1
     assert all(item.triage_confidence == 0.0 for item in result.proposal.clusters)
     request = json.loads(str(provider.requests[0][-1]["content"]))
+    assert request["required_output"]["contract_version"] == dialect
     phase_input = cast(dict[str, object], request["phase_input"])
     assert set(phase_input) == {"work_unit_ordinal", "atoms"}
     assert all(

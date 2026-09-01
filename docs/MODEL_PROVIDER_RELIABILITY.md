@@ -89,14 +89,16 @@ request, creates no new Usage, leaves the failed source Usage charged, and canno
 tokens or another recovery. This format path is distinct from Provider retry, circuit and Replacement
 Grant authority.
 
-Material-ingress v9 preserves the same dispatch, ambiguity, parser, Usage and restart evidence but
-has only one model phase: one coordinator request per bounded Work Unit. Partition and classify are
+Material-ingress v9 and v10 preserve the same dispatch, ambiguity, parser, Usage and restart
+evidence but have only one model phase: one coordinator request per bounded Work Unit. Partition and
+classify are
 deterministic Harness derivations, so they cannot create extra Provider ambiguity or receive separate
 budgets. A failed blind comparison is terminalized before its active head is released; restart cannot
 rerun the failed versions or reinterpret them as a semantic Decision. The terminalization authority
 does not trust a caller-reconstructed failure: it first reopens the append-only Comparison
 Registration and Report and replays both completed Run Journals and exact Usage sets. The ordinary
-run path rejects comparison-governed v9 before Provider availability or generation. If a process
+run path rejects comparison-governed material-ingress plans before Provider availability or
+generation. If a process
 crashes after Report or terminal commit, retry reopens the first durable identity and finishes head
 release without constructing or probing a Provider; only a genuinely missing Work member can resolve
 and check a Provider immediately before a new dispatch. A factory or availability failure at that

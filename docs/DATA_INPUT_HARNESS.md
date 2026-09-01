@@ -376,7 +376,7 @@ checkpoints, seven operational material-event trigger routes and zero post-admis
 zero was the expected clean epoch boundary: only later actual receipts could enter the next v9
 batch. Eleven such versions were later frozen and terminalized by the failed pristine v9 comparison;
 they were not converted into a semantic Decision. Later receipts remain unclassified and may be
-selected only by a new, versioned and independently accepted ingress design.
+selected only by the independently registered v10 ingress design and a new sealed comparison.
 
 The longer soak also found that four 120-second purchased-news Jobs can each become incomplete after
 a real post-admission misfire even though their latest outcome is healthy and lag is near zero. The

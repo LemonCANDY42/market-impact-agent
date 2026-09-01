@@ -11,15 +11,17 @@ The shortest accepted path to Agent-directed paper operation is:
    append-only misses, receipts or replacement history. Collection health is supporting
    infrastructure, not the current experiment blocker;
 1. preserve the closed Triage authority boundaries before consuming another actual-receipt version:
-   comparison-governed v9 is rejected by the ordinary run path before any Provider call, and
+   comparison-governed material-ingress v9/v10 is rejected by the ordinary run path before any
+   Provider call, and
    failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
    and Usage. Agent Watch admission remains globally fail-closed until a named concrete parent
    Run/Decision owner can derive its evidence, subject and matcher projection; a caller context or
    self-hashed artifact is not authority;
-2. freeze one next-version material-ingress rule that incorporates v9's real counterexample: retain
+2. use the frozen v10 material-ingress rule that incorporates v9's real counterexample: retain
    broad discovery, archive routine context without a stated surprise, send plausible but unresolved
    relevance with one named observable to Attention Watch, and require both a new causal fact and a
-   concrete evidence-bounded transmission variable for EventAssessment. Run it once on a new sealed
+   concrete evidence-bounded transmission variable for EventAssessment. Its scripted mechanics are
+   accepted; run it once on a new sealed
    pristine batch; do not retune or rerun the exposed v8/v9 batches. A pass must produce a formal
    Triage Decision and either select the first rule-eligible event or route one supported material
    event onward; a failure is terminal and should trigger an input/task-definition review rather than
@@ -98,7 +100,7 @@ changes and both crash windows are explicit regression cases. A self-issued Agen
 projection remained circular, so that issuer was
 removed: offers, admission lookup, callbacks and restart activation now all fail closed until a
 concrete parent authority is integrated. These repairs authorize neither another real batch nor a
-Watch scheduler; the next versioned ingress rule and PDI-40 parent/scheduler acceptance remain
+Watch scheduler; the v10 pristine blind comparison and PDI-40 parent/scheduler acceptance remain
 separate gates.
 
 Provider resolution remains lazy for new Work only. Factory or availability failure before dispatch
@@ -576,6 +578,16 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
       transmission from generic risk-appetite/discount-rate possibilities, then face a new blind
       batch. The separate frozen-cadence mismatch was corrected by the versioned v5 registration
       and v6 route epoch rather than waived.
+    - [x] Add v10 without expanding the graph or output surface. It keeps one coordinator call and
+      the same positional archive/Watch/EventAssessment result, but EventAssessment now requires the
+      supplied content itself to support both a realized or committed new causal fact and a concrete
+      transmission variable already changed or committed to change. Generic risk appetite,
+      sentiment, discount-rate and possible-future-opportunity stories are insufficient alone;
+      plausible relevance missing one named observable goes to Watch. Scripted runtime, parser,
+      replay, cost and ordinary-path fail-closed acceptance are complete.
+    - [ ] Freeze sealed labels for a new actual-receipt v10 Candidate Set and run one same-contract
+      pristine comparison. Zero must-catch misses and zero unsupported material routes are required;
+      failure remains terminal and does not trigger another prompt-only revision.
     - [x] Add the distinct v2 Work Comparison Registration and Report. The append-only Harness
       registration binds exact Candidate Set/Manifest hashes, the sealed Label Set, both Work Plans,
       shared registration/checkpoint/profile, frozen semantic gates and their 299 microusd aggregate

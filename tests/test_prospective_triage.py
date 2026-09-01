@@ -19,6 +19,7 @@ from market_impact_agent.event_impact_triage_work_evaluation import (
 )
 from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
 )
 from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
 from market_impact_agent.prospective_triage import (
@@ -294,11 +295,20 @@ def test_unverified_failed_batch_cannot_release_head_or_exclude_versions(
     )
 
 
-def test_v9_ordinary_path_is_rejected_before_provider_or_decision(tmp_path: Path) -> None:
-    prepared = cast(PreparedProspectiveTriageWork, _PreparedComparisonCandidate())
+@pytest.mark.parametrize(
+    "schema_version",
+    [
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
+    ],
+)
+def test_material_ingress_ordinary_path_is_rejected_before_provider_or_decision(
+    tmp_path: Path, schema_version: str
+) -> None:
+    prepared = cast(PreparedProspectiveTriageWork, _PreparedComparisonCandidate(schema_version))
     provider = _ForbiddenProvider()
 
-    with pytest.raises(ValueError, match="v9 is comparison-governed"):
+    with pytest.raises(ValueError, match="material ingress is comparison-governed"):
         asyncio.run(
             run_prepared_prospective_triage_work(
                 prepared=prepared,
@@ -323,11 +333,13 @@ def test_v9_ordinary_path_is_rejected_before_provider_or_decision(tmp_path: Path
 
 class _PreparedComparisonCandidate:
     candidate_set = _Candidate()
-    plan = type(
-        "V9Plan",
-        (),
-        {"schema_version": EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9},
-    )()
+
+    def __init__(self, schema_version: str) -> None:
+        self.plan = type(
+            "MaterialIngressPlan",
+            (),
+            {"schema_version": schema_version},
+        )()
 
 
 class _ForbiddenProvider:
@@ -340,4 +352,4 @@ class _ForbiddenProvider:
 
     async def complete(self, **_kwargs: object) -> object:
         self.completion_calls += 1
-        raise AssertionError("v9 ordinary run called the Provider")
+        raise AssertionError("material ingress ordinary run called the Provider")

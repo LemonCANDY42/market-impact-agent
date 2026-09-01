@@ -435,13 +435,19 @@ observable when routing to Attention Watch. It does not echo IDs, classify final
 semantically cluster events, map a complete universe, inspect a portfolio or propose an action.
 The Harness injects atom/version identity, creates one provisional cluster per exact-content atom and
 derives the legacy Proposal fields required by downstream EventAssessment. Consequently Provider
-calls scale with bounded Work Units rather than candidate clusters. V2-v8 remain immutable replay
-dialects.
+calls scale with bounded Work Units rather than candidate clusters. Schema v10 keeps this small
+graph and unchanged output shape, but narrows the semantic rule: EventAssessment requires the
+supplied content itself to support both a realized or committed new causal fact and a concrete
+transmission variable already changed or committed to change. Generic risk-appetite, sentiment,
+discount-rate or possible-future-opportunity stories cannot satisfy that route alone; one missing
+specific observable goes to Attention Watch, while routine context without a supplied surprise or
+realized change is archived. V2-v9 remain immutable replay dialects.
 The first pristine v9 batch rejected its semantic rule: both same-contract arms retained both
 must-catch events but produced unsupported EventAssessment routes, so no Decision or downstream
-authority exists. V9 remains replayable infrastructure and negative design evidence. A successor
-must preserve broad discovery while requiring evidence-bounded transmission for EventAssessment,
-route unresolved expansion to Attention Watch, and face a new blind batch.
+authority exists. V9 remains replayable infrastructure and negative design evidence. V10 preserves
+broad discovery while requiring evidence-bounded transmission for EventAssessment and routing
+unresolved expansion to Attention Watch. Its scripted contract is accepted, but it has no semantic
+Decision authority until it passes a new pristine blind batch.
 The Harness injects authoritative atom, cluster and cited-evidence identities
 into the unchanged canonical Digest, Partition and Proposal artifacts. All schemas freeze the
 repeated map roles per Work Unit, one
@@ -479,7 +485,8 @@ IDs/hashes, baseline/treatment Work Plan IDs, shared prospective registration, c
 Model Provider Profile, semantic metrics/gates and the plan-derived aggregate cost ceiling. Labels
 stay outside plans and runtime inputs; the contract grants no PIT, strategy, Judgment or execution
 authority. Both plans must use the same Work Plan schema revision; mixed revisions fail before
-registration, while equal-revision v3/v3, v4/v4, v5/v5, v6/v6, v7/v7, v8/v8 or v9/v9 comparisons
+registration, while equal-revision v3/v3, v4/v4, v5/v5, v6/v6, v7/v7, v8/v8, v9/v9 or
+v10/v10 comparisons
 retain the existing Registration and Report authority. A comparison that fails a semantic batch gate
 now creates an append-only terminal-batch artifact before releasing its active head. Terminal versions
 are excluded from later readiness selection without creating a semantic Decision; the failed Proposal,

@@ -126,9 +126,12 @@ The bootstrap implements:
   evidence against doing full exposure and adversarial analysis at ingress, not against the events.
   A zero-Provider authority replay later terminalized all 29 versions and released the active head;
   it did not create a Triage Decision or change the old Run/Usage records.
-  New material-event batches use v9: one coordinator call per bounded Work Unit returns only
+  New material-event batches use v10: one coordinator call per bounded Work Unit returns only
   archive/Watch/EventAssessment, one changed fact and either one transmission or one unresolved
-  observable. The Harness injects identity and defers semantic clustering, complete target mapping,
+  observable. V10 also requires the supplied item itself to support both a realized or committed
+  new causal fact and a concrete transmission variable; generic risk-appetite or possible-future-
+  opportunity narratives cannot enter EventAssessment on their own. The Harness injects identity
+  and defers semantic clustering, complete target mapping,
   portfolio analysis and action selection to EventAssessment. Direct checkpoints
   retain explicit eligibility classification, while the material-event stage-one model returns only
   `archive`, `attention_watch`, or `event_assessment`; the Harness derives its provisional legacy
@@ -139,7 +142,8 @@ The bootstrap implements:
   The Harness therefore terminalized the batch, released the active head and granted no Decision,
   Query Gate, Judgment or execution authority. Its 18,900 microusd cost and failed gate remain
   immutable evidence against the current overly broad `plausible transmission` wording, not
-  against broad discovery or follow-up Watches.
+  against broad discovery or follow-up Watches. V10 scripted mechanics are accepted; a new sealed
+  pristine batch remains required before it can create a Triage Decision.
   The prospective repair also journals
   each physical attempt with a
   correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized

@@ -529,6 +529,16 @@ route gate and worse than baseline. Total authoritative usage was 15,176 input /
 Tokens and 18,900 microusd. The failed report terminalized all 11 versions and released the active
 head without creating a Decision.
 
+V10 preserves v9's one-coordinator-call graph and four-field positional result. It changes only the
+versioned semantic rule: EventAssessment now requires the supplied item itself to support a realized
+or committed new causal fact and a concrete transmission variable already changed or committed to
+change. Generic risk appetite, sentiment, discount-rate and possible-future-opportunity narratives
+are explicitly insufficient on their own. A plausible event missing one named observable goes to
+Attention Watch; routine closes, auctions, calendars, scheduled statistics, requests, meetings or
+plans without a supplied surprise, enacted term, named project, procurement, financing, production
+commitment or other realized change are archived. This is scripted contract acceptance only; v10
+still requires a new sealed pristine batch before it can create a Triage Decision.
+
 The failure localizes the remaining ingress problem: an LLM can invent a generic path from almost
 any market print or foreign-policy fact to risk appetite, discount rates or future policy. The fix
 must not narrow discovery. A valid next revision instead requires evidence of a new causal fact and
@@ -561,7 +571,8 @@ parent authority is real.
 
 Still required for real acceptance:
 
-- preserve the closed v9 authority boundary: the ordinary path rejects comparison-governed v9 before
+- preserve the closed material-ingress authority boundary: the ordinary path rejects
+  comparison-governed v9/v10 before
   any Provider call, and failed-batch terminalization may exclude actual-receipt versions only after
   reopening the append-only Comparison Registration and Report plus both exact Run/Usage authorities.
   Recovery after Report or terminal commit is local-only, uses the first durable identity and time,
@@ -569,7 +580,7 @@ Still required for real acceptance:
   already terminalized batch;
 - portfolio-impact and historical-analogy analysis inside EventAssessment; they are intentionally not
   ingress roles, and the current Position Snapshot remains identity-only;
-- one new pristine batch for the next versioned ingress rule; v8 and v9 remain terminal negative
+- one new pristine batch for v10; v8 and v9 remain terminal negative
   evidence and cannot be recycled as blind acceptance data;
 - passing semantic results for false positives, must-catch misses, `needs_review`, routing,
   unsupported transmission paths and resource use;
