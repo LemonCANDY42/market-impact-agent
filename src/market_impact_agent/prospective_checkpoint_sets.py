@@ -864,7 +864,7 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 ),
                 tool_manifest=CheckpointToolManifest(
                     name=_TOOL_NAMES[capability],
-                    version="2",
+                    version=registration.checkpoint_tool_version,
                     snapshot_ids=snapshot_ids,
                     allowed_filter_fields=_FILTER_FIELDS[capability],
                 ),
@@ -978,31 +978,85 @@ def build_checkpoint_tool_descriptors(
                 capability=bound_capability,
             )
 
+        description = (
+            f"Read-only {binding.capability.value} decision inputs projected from "
+            f"observations frozen for checkpoint {snapshot_set.checkpoint_key}. "
+            "Arguments cannot change the cutoff, sources, policies, or Provider versions."
+        )
+        filter_properties: dict[str, object] = {
+            item: {"type": "string", "minLength": 1} for item in manifest.allowed_filter_fields
+        }
+        properties: dict[str, object] = {
+            "query": {"type": "string", "minLength": 1},
+            "publisher": {"type": "string", "minLength": 1},
+            "filters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": filter_properties,
+            },
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+        }
+        if manifest.version == "3":
+            description += (
+                " Call with {} first to read the already selected records; no search terms "
+                "or filters are needed. This is a frozen-record reader, NOT natural-language "
+                "search. Optional query, publisher and filters narrow results together (AND). "
+                "Use exact values seen in records; omit unknown criteria, never guess values "
+                "or use 'unknown' as a placeholder. Follow page.next_offset to read more. "
+                "An empty filtered page does not mean the frozen evidence is missing; "
+                "check page.total_available and page.total_matched. No external fetch occurs."
+            )
+            properties["query"] = {
+                "type": "string",
+                "minLength": 1,
+                "description": (
+                    "Optional case-insensitive literal substring of record data, e.g. an "
+                    "instrument code. NOT a question, semantic search, or date range. "
+                    "Omit for default reading."
+                ),
+            }
+            properties["publisher"] = {
+                "type": "string",
+                "minLength": 1,
+                "description": (
+                    "Optional case-insensitive exact publisher value from record data. "
+                    "Omit unless known; this is not a source-discovery request."
+                ),
+            }
+            for field in filter_properties:
+                filter_properties[field] = {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": (
+                        f"Optional case-sensitive exact {field} value from record data. "
+                        "All supplied filters must match. Omit if unknown; no inferred ranges."
+                    ),
+                }
+            properties["offset"] = {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0,
+                "description": (
+                    "Zero-based offset in the filtered, record-ID-sorted result. "
+                    "Use page.next_offset with unchanged filters to continue."
+                ),
+            }
+            properties["limit"] = {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20,
+                "description": "Maximum records per page; defaults to 20.",
+            }
         descriptors.append(
             ToolDescriptor(
                 name=manifest.name,
                 version=f"{manifest.version}+{snapshot_set.snapshot_set_id}",
-                description=(
-                    f"Read-only {binding.capability.value} decision inputs projected from "
-                    f"observations frozen for checkpoint {snapshot_set.checkpoint_key}. "
-                    "Arguments cannot change the cutoff, sources, policies, or Provider versions."
-                ),
+                description=description,
                 input_schema={
                     "type": "object",
                     "additionalProperties": False,
-                    "properties": {
-                        "query": {"type": "string", "minLength": 1},
-                        "publisher": {"type": "string", "minLength": 1},
-                        "filters": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {
-                                item: {"type": "string", "minLength": 1}
-                                for item in manifest.allowed_filter_fields
-                            },
-                        },
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
-                    },
+                    "properties": properties,
                 },
                 required_capabilities=frozenset({required_capability}),
                 side_effect=ToolSideEffect.READ_ONLY,
@@ -1076,7 +1130,11 @@ def _handle_checkpoint_tool(
     records: tuple[dict[str, object], ...],
     capability: ObservationCapability,
 ) -> dict[str, object]:
-    if not set(arguments) <= {"query", "publisher", "filters", "limit"}:
+    paged = manifest.version == "3"
+    allowed_arguments = {"query", "publisher", "filters", "limit"}
+    if paged:
+        allowed_arguments.add("offset")
+    if not set(arguments) <= allowed_arguments:
         raise ValueError("checkpoint tool arguments contain unsupported fields")
     query = _optional_trimmed(arguments.get("query"), "query")
     publisher = _optional_trimmed(arguments.get("publisher"), "publisher")
@@ -1098,8 +1156,12 @@ def _handle_checkpoint_tool(
         or not 1 <= limit_value <= 100
     ):
         raise ValueError("checkpoint tool limit must be between 1 and 100")
+    offset = arguments.get("offset", 0)
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+        raise ValueError("checkpoint tool offset must be a nonnegative integer")
 
     rows: list[dict[str, object]] = []
+    total_matched = 0
     for projected in records:
         searchable_payload = canonical_json_bytes(projected["data"]).decode().casefold()
         if query is not None and query.casefold() not in searchable_payload:
@@ -1117,25 +1179,38 @@ def _handle_checkpoint_tool(
             for key, value in filters.items()
         ):
             continue
-        rows.append(projected)
-        if len(rows) >= limit_value:
+        total_matched += 1
+        if not paged or (total_matched > offset and len(rows) < limit_value):
+            rows.append(projected)
+        if not paged and len(rows) >= limit_value:
             break
-    core = {
-        "schema_version": "market-impact.checkpoint-data-tool-result.v2",
+    selection: dict[str, object] = {
+        "query": query,
+        "publisher": publisher,
+        "filters": filters,
+        "limit": limit_value,
+    }
+    if paged:
+        selection["offset"] = offset
+    core: dict[str, object] = {
+        "schema_version": f"market-impact.checkpoint-data-tool-result.v{'3' if paged else '2'}",
         "checkpoint_snapshot_set_id": snapshot_set.snapshot_set_id,
         "registration_id": snapshot_set.registration_id,
         "checkpoint_key": snapshot_set.checkpoint_key,
         "barrier_at": _timestamp(snapshot_set.barrier_at),
         "capability": capability.value,
         "snapshot_ids": list(manifest.snapshot_ids),
-        "selection": {
-            "query": query,
-            "publisher": publisher,
-            "filters": filters,
-            "limit": limit_value,
-        },
+        "selection": selection,
         "records": rows,
     }
+    if paged:
+        core["page"] = {
+            "total_available": len(records),
+            "total_matched": total_matched,
+            "offset": offset,
+            "returned": len(rows),
+            "next_offset": offset + len(rows) if offset + len(rows) < total_matched else None,
+        }
     return {**core, "result_id": f"checkpoint-data-tool-result-{canonical_hash(core)}"}
 
 

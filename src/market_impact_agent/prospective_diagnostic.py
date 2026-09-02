@@ -304,11 +304,16 @@ class ProspectiveDiagnosticRegistration:
     replicate_schedule_rule: str | None = None
     schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA
     reassessment: RegisteredReassessment | None = None
+    checkpoint_tool_version: str = "2"
 
     def __post_init__(self) -> None:
         if self.schema_version not in _SUPPORTED_REGISTRATION_SCHEMAS:
             raise ValueError("unsupported prospective diagnostic registration schema")
         is_reassessment = self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
+        if self.checkpoint_tool_version not in {"2", "3"} or (
+            self.checkpoint_tool_version == "3" and not is_reassessment
+        ):
+            raise ValueError("checkpoint tool v3 requires a new reassessment registration")
         if is_reassessment != (self.reassessment is not None):
             raise ValueError("only registration v5 requires a registered reassessment")
         if not is_reassessment and any(
@@ -461,6 +466,8 @@ class ProspectiveDiagnosticRegistration:
             payload["replicate_schedule_rule"] = self.replicate_schedule_rule
         if self.reassessment is not None:
             payload["reassessment"] = self.reassessment.to_dict()
+        if self.checkpoint_tool_version != "2":
+            payload["checkpoint_tool_version"] = self.checkpoint_tool_version
         return payload
 
     def to_dict(self) -> dict[str, object]:
@@ -484,6 +491,7 @@ class ProspectiveDiagnosticRegistration:
         replicate_schedule_rule: str | None = None,
         schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
         reassessment: RegisteredReassessment | None = None,
+        checkpoint_tool_version: str = "2",
     ) -> ProspectiveDiagnosticRegistration:
         core: dict[str, object] = {
             "schema_version": schema_version,
@@ -506,6 +514,8 @@ class ProspectiveDiagnosticRegistration:
             core["replicate_schedule_rule"] = replicate_schedule_rule
         if reassessment is not None:
             core["reassessment"] = reassessment.to_dict()
+        if checkpoint_tool_version != "2":
+            core["checkpoint_tool_version"] = checkpoint_tool_version
         return cls(
             registration_id=(f"prospective-diagnostic-registration-{canonical_hash(core)}"),
             registered_at=registered_at,
@@ -522,6 +532,7 @@ class ProspectiveDiagnosticRegistration:
             replicate_schedule_rule=replicate_schedule_rule,
             schema_version=schema_version,
             reassessment=reassessment,
+            checkpoint_tool_version=checkpoint_tool_version,
         )
 
 
@@ -531,6 +542,7 @@ def build_reassessment_registration(
     subject: RegisteredReassessment,
     registered_at: datetime,
     model_profile_id: str = REASSESSMENT_PROFILE,
+    checkpoint_tool_version: str = "3",
 ) -> ProspectiveDiagnosticRegistration:
     """Declare one opened diagnostic; retain original freshness limits for current context."""
     if model_profile_id not in REASSESSMENT_PROFILE_BUDGETS:
@@ -608,6 +620,7 @@ def build_reassessment_registration(
         claim_scope="process_diagnostic_only_no_alpha_or_execution_claim",
         schema_version=PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
         reassessment=subject,
+        checkpoint_tool_version=checkpoint_tool_version,
     )
 
 
@@ -631,6 +644,11 @@ def prospective_diagnostic_registration_from_dict(
         }
         else set()
     )
+    extra_fields: set[str] = set()
+    if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5:
+        extra_fields.add("reassessment")
+    if "checkpoint_tool_version" in payload:
+        extra_fields.add("checkpoint_tool_version")
     _exact_keys(
         payload,
         {
@@ -648,11 +666,7 @@ def prospective_diagnostic_registration_from_dict(
             "claim_scope",
         }
         | adaptive_fields
-        | (
-            {"reassessment"}
-            if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
-            else set()
-        ),
+        | extra_fields,
         "prospective diagnostic registration fields",
     )
     registration = ProspectiveDiagnosticRegistration(
@@ -683,6 +697,11 @@ def prospective_diagnostic_registration_from_dict(
             _reassessment_from_dict(payload.get("reassessment"))
             if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
             else None
+        ),
+        checkpoint_tool_version=(
+            _string(payload, "checkpoint_tool_version")
+            if "checkpoint_tool_version" in payload
+            else "2"
         ),
     )
     if registration.to_dict() != payload:

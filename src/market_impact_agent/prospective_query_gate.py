@@ -211,6 +211,12 @@ def evaluate_prospective_query_gate(
     checkpoint = registration.checkpoint(snapshot_set.checkpoint_key)
     if snapshot_set.registration_id != registration.registration_id:
         raise ValueError("Query Gate Snapshot Set belongs to a different registration")
+    if any(
+        (binding.tool_manifest.version == "3") != (registration.checkpoint_tool_version == "3")
+        for binding in snapshot_set.capability_bindings
+        if binding.tool_manifest is not None
+    ):
+        raise ValueError("Query Gate checkpoint tool version differs from the registration")
     trigger_bound = registration.schema_version in {
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,

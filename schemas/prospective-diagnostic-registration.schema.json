@@ -28,6 +28,7 @@
         "schema_version": {
           "const": "market-impact.prospective-diagnostic-registration.v5"
         },
+        "checkpoint_tool_version": { "const": "3" },
         "registration_id": {
           "type": "string",
           "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"

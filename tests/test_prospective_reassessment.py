@@ -7,6 +7,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from threading import Event
 from typing import cast
@@ -15,7 +16,7 @@ import pytest
 
 from market_impact_agent.agent_contracts import JudgmentDecision, JudgmentProposal, canonical_hash
 from market_impact_agent.agent_engine import compose_authoritative_agent_engine
-from market_impact_agent.agent_runtime import ModelTurn, SkillRegistry, ToolDescriptor, ToolRegistry
+from market_impact_agent.agent_runtime import ModelTurn, SkillRegistry, ToolCall, ToolRegistry
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.data_inputs import (
     DataSnapshot,
@@ -35,7 +36,10 @@ from market_impact_agent.event_impact_triage import (
 from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
 from market_impact_agent.model_provider import load_builtin_model_provider_profile
 from market_impact_agent.observations import ObservationCapability
-from market_impact_agent.prospective_checkpoint_sets import materialize_checkpoint_decision_inputs
+from market_impact_agent.prospective_checkpoint_sets import (
+    materialize_checkpoint_decision_inputs,
+    prospective_checkpoint_snapshot_set_from_dict,
+)
 from market_impact_agent.prospective_data import (
     ProspectiveDataJournal,
     prospective_observation_version_id,
@@ -53,6 +57,8 @@ from market_impact_agent.prospective_diagnostic import (
     build_reassessment_registration,
     prospective_diagnostic_registration_from_dict,
 )
+from market_impact_agent.prospective_execution import prospective_execution_plan_from_dict
+from market_impact_agent.prospective_query_gate import evaluate_prospective_query_gate
 from market_impact_agent.prospective_trigger_admission import (
     ProspectiveTriggerAdmissionStore,
     TriggerAdmissionKind,
@@ -61,7 +67,7 @@ from market_impact_agent.prospective_trigger_admission import (
 from market_impact_agent.runtime_store import RunStatus
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
-from .test_agent_engine import SimulatedCrash, final_turn
+from .test_agent_engine import SimulatedCrash, final_turn, tool_turn
 from .test_event_impact_triage import RecordingWorkRunAuthority
 from .test_prospective_checkpoint_sets import (
     _accepted_report,  # pyright: ignore[reportPrivateUsage]
@@ -96,6 +102,7 @@ def prepared_state(
     trade_date: object = "20260901",
     omit_trade_date: bool = False,
     model_profile_id: str = REASSESSMENT_PROFILE,
+    checkpoint_tool_version: str = "3",
 ) -> State:
     store = LocalDataSnapshotStore(tmp_path / "state")
     journal = ProspectiveDataJournal(store)
@@ -220,6 +227,7 @@ def prepared_state(
         original_registration=original,
         registered_at=NOW - timedelta(minutes=1),
         model_profile_id=model_profile_id,
+        checkpoint_tool_version=checkpoint_tool_version,
         subject=RegisteredReassessment(
             original_registration_id=original.registration_id,
             original_candidate_set_id=candidate.candidate_set_id,
@@ -312,12 +320,14 @@ def abstain_turn(event_id: str):
     )
 
 
+@pytest.mark.parametrize("tool_version", ["2", "3"])
 def test_exact_old_subject_current_context_and_single_judgment_replay(
     tmp_path: Path,
+    tool_version: str,
 ) -> None:
     # Both budget profiles are exercised through the CLI below; the shared lifecycle
     # needs one integration case, not a second copy for a cost-only configuration.
-    state = prepared_state(tmp_path)
+    state = prepared_state(tmp_path, checkpoint_tool_version=tool_version)
     store, triage, _, registration, _, original_decision = state
     before = triage.get_context(original_decision.candidate_set_id)
     trigger = admit(state)
@@ -325,12 +335,25 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(
     assert trigger.admitted_at == NOW
     assert prospective_trigger_admission_from_dict(trigger.to_dict()) == trigger
     assert prospective_diagnostic_registration_from_dict(registration.to_dict()) == registration
+    assert ("checkpoint_tool_version" in registration.to_dict()) == (tool_version == "3")
     for value, schema in (
         (registration.to_dict(), "prospective-diagnostic-registration.schema.json"),
         (trigger.to_dict(), "prospective-trigger-admission.schema.json"),
     ):
         assert validate_agent_contract(value, schema) == ()
     _, snapshot_set, pack, instruction = reassessment_inputs(store=store, trigger=trigger)
+    assert {
+        item.tool_manifest.version
+        for item in snapshot_set.capability_bindings
+        if item.tool_manifest is not None
+    } == {tool_version}
+    assert ("start each relevant checkpoint tool with {}" in instruction) == (tool_version == "3")
+    assert (
+        validate_agent_contract(
+            snapshot_set.to_dict(), "prospective-checkpoint-snapshot-set.schema.json"
+        )
+        == ()
+    )
     assert pack.as_of == NOW
     assert min(item.available_at for item in pack.evidence) == OLD
     assert pack.allowed_targets == ("000001.SZ",)
@@ -342,6 +365,37 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(
     engine = engine_for(store, provider)
     refs, gate, request = prepare_reassessment_judgment(store=store, trigger=trigger, engine=engine)
     assert gate.model_run_eligible and provider.calls == 0
+    # Re-hashing a different tool surface is not authority to change a registered epoch.
+    changed = snapshot_set.core_dict()
+    for binding in cast(list[dict[str, object]], changed["capability_bindings"]):
+        manifest = binding["tool_manifest"]
+        if isinstance(manifest, dict):
+            manifest["version"] = "2" if tool_version == "3" else "3"
+    changed["snapshot_set_id"] = f"prospective-checkpoint-snapshot-set-{canonical_hash(changed)}"
+    with pytest.raises(ValueError, match="tool version differs"):
+        evaluate_prospective_query_gate(
+            registration=registration,
+            snapshot_set=prospective_checkpoint_snapshot_set_from_dict(changed),
+            evidence_pack=pack,
+            decision_inputs=inputs,
+            snapshot_store=store,
+            execution_plan=prospective_execution_plan_from_dict(
+                store.artifacts.read_json(refs.execution_plan_hash)
+            ),
+            model_profile_id=registration.model_profile_id,
+            model_cost_limit_usd=Decimal(registration.aggregate_model_cost_limit_usd),
+            evaluated_at=NOW,
+            trigger_admission=trigger,
+            trigger_admission_authority=ProspectiveTriggerAdmissionStore(store),
+        )
+    for tool in engine.tool_registry.model_tools(request.tool_access):
+        function = cast(dict[str, object], tool["function"])
+        parameters = cast(dict[str, object], function["parameters"])
+        properties = cast(dict[str, object], parameters["properties"])
+        assert ("offset" in properties) == (tool_version == "3")
+        if tool_version == "2":
+            assert properties["query"] == {"type": "string", "minLength": 1}
+            assert cast(str, function["description"]).endswith("policies, or Provider versions.")
     assert (
         validate_agent_contract(
             store.artifacts.read_json(refs.execution_plan_hash),
@@ -400,7 +454,7 @@ def test_cli_registers_explicit_budget_without_mutating_old_registration(
 ) -> None:
     from market_impact_agent.cli import main
 
-    store, triage, original, old, _, _ = prepared_state(tmp_path)
+    store, triage, original, old, _, _ = prepared_state(tmp_path, checkpoint_tool_version="2")
     assert old.reassessment is not None
     original_path = tmp_path / "original.json"
     question_path = tmp_path / "question.txt"
@@ -437,6 +491,8 @@ def test_cli_registers_explicit_budget_without_mutating_old_registration(
     assert new.aggregate_model_cost_limit_usd == "1.00"
     assert new.registration_id != old.registration_id
     assert new.reassessment == old.reassessment
+    assert new.checkpoint_tool_version == "3"
+    assert "checkpoint_tool_version" not in old.to_dict()
     assert old.aggregate_model_cost_limit_usd == "0.30"
     assert triage.get_context(old.reassessment.original_candidate_set_id) == before
     frozen_bytes = new_path.read_bytes()
@@ -626,43 +682,189 @@ def test_terminal_ledger_crash_reconciles_exactly_once(
     assert provider.calls == 1 and replay.calls == 0 and len(usage.records()) == 1
 
 
-def test_shared_receipt_rows_are_not_exposed_by_checkpoint_tools(tmp_path: Path) -> None:
-    from market_impact_agent.prospective_checkpoint_sets import build_checkpoint_tool_descriptors
-
+def test_default_reads_reach_agent_without_exposing_shared_receipt_rows(tmp_path: Path) -> None:
     state = prepared_state(tmp_path, with_unrelated_row=True)
     store = state[0]
     trigger = admit(state)
-    provider = Provider(AssertionError("no model in inspect"))
-    _, gate, request = prepare_reassessment_judgment(
-        store=store, trigger=trigger, engine=engine_for(store, provider)
+    counts = {
+        "lookup_event_revelation": 2,
+        "lookup_exposure_candidates": 1,
+        "lookup_market_context": 1,
+    }
+
+    class ReadingProvider(Provider):
+        async def complete(self, **kwargs: object) -> ModelTurn:
+            self.calls += 1
+            if self.calls == 1:
+                offered = cast(tuple[dict[str, object], ...], kwargs["tools"])
+                calls: list[ToolCall] = []
+                for tool in offered:
+                    function = cast(dict[str, object], tool["function"])
+                    name = cast(str, function["name"])
+                    if name not in counts:
+                        continue
+                    assert "Call with {} first" in cast(str, function["description"])
+                    parameters = cast(dict[str, object], function["parameters"])
+                    assert not parameters.get("required")
+                    properties = cast(dict[str, object], parameters["properties"])
+                    assert (
+                        "NOT a question" in cast(dict[str, str], properties["query"])["description"]
+                    )
+                    calls.append(ToolCall(call_id=name, name=name, arguments={}))
+                assert {call.name for call in calls} == set(counts)
+                assistant: dict[str, object] = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": call.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for call in calls
+                    ],
+                }
+                return replace(
+                    tool_turn(1),
+                    model=self.model,
+                    assistant_message=assistant,
+                    tool_calls=tuple(calls),
+                    raw_response={"message": assistant},
+                )
+            assert self.calls == 2
+            messages = cast(tuple[dict[str, object], ...], kwargs["messages"])
+            returned = [item for item in messages if item.get("role") == "tool"]
+            assert len(returned) == 3
+            for message in returned:
+                envelope = json.loads(cast(str, message["content"]))
+                assert envelope["untrusted"]
+                payload = envelope["result"]
+                expected = counts[cast(str, message["tool_call_id"])]
+                assert len(payload["records"]) == expected
+                assert payload["page"]["total_available"] == expected
+                assert payload["page"]["next_offset"] is None
+                assert "999999.SZ" not in json.dumps(payload)
+            return replace(abstain_turn(trigger.cluster_id), model=self.model)
+
+    provider = ReadingProvider(AssertionError("scripted reads only"))
+    engine = engine_for(store, provider)
+    refs, gate, request = prepare_reassessment_judgment(store=store, trigger=trigger, engine=engine)
+    assert gate.model_run_eligible and provider.calls == 0
+    assert request.tool_access.allowed_tools == frozenset(counts)
+    assert len(request.evidence_pack.evidence) == 4
+    result = asyncio.run(
+        run_reassessment_judgment(
+            store=store,
+            refs=refs,
+            engine=engine,
+            usage_ledger=UsageLedger(store.root / "usage.sqlite3"),
+        )
     )
-    _, snapshot_set, pack, _ = reassessment_inputs(store=store, trigger=trigger)
-    assert len(pack.evidence) == 4
-    descriptors = build_checkpoint_tool_descriptors(
+    assert result.status is RunStatus.COMPLETED
+    assert provider.calls == 2
+
+
+def test_v3_paging_and_explicit_filters_preserve_authorized_record_boundary(tmp_path: Path) -> None:
+    from market_impact_agent.prospective_checkpoint_sets import build_checkpoint_tool_descriptors
+
+    state = prepared_state(tmp_path)
+    store = state[0]
+    trigger = admit(state)
+    provider = Provider(AssertionError("tool-only acceptance"))
+    engine = engine_for(store, provider)
+    _, gate, request = prepare_reassessment_judgment(store=store, trigger=trigger, engine=engine)
+    _, snapshot_set, _, _ = reassessment_inputs(store=store, trigger=trigger)
+    name = "lookup_event_revelation"
+
+    async def read(arguments: dict[str, object], registry: ToolRegistry = engine.tool_registry):
+        result = await registry.execute(
+            ToolCall(call_id="read", name=name, arguments=arguments), access=request.tool_access
+        )
+        payload = store.artifacts.read_json(result.result_artifact.content_hash)
+        assert isinstance(payload, dict)
+        assert json.loads(result.model_content)["result"] == payload
+        return cast(dict[str, object], payload)
+
+    default = asyncio.run(read({}))
+    assert default["schema_version"] == "market-impact.checkpoint-data-tool-result.v3"
+    records = cast(list[dict[str, object]], default["records"])
+    assert len(records) == 2
+    assert default["page"] == {
+        "total_available": 2,
+        "total_matched": 2,
+        "offset": 0,
+        "returned": 2,
+        "next_offset": None,
+    }
+    first = asyncio.run(read({"limit": 1}))
+    assert first["records"] == records[:1]
+    next_offset = cast(dict[str, object], first["page"])["next_offset"]
+    second = asyncio.run(read({"limit": 1, "offset": next_offset}))
+    assert second["records"] == records[1:]
+    assert cast(dict[str, object], second["page"])["next_offset"] is None
+    assert asyncio.run(read({"limit": 1, "offset": next_offset})) == second
+    exhausted = asyncio.run(read({"offset": 100}))
+    assert exhausted["records"] == []
+    assert exhausted["page"] == {
+        "total_available": 2,
+        "total_matched": 2,
+        "offset": 100,
+        "returned": 0,
+        "next_offset": None,
+    }
+    # The same exact criteria still work; guessed or natural-language criteria
+    # remain empty, with counts that distinguish over-filtering from missing input.
+    exact = asyncio.run(read({"query": "000001.sz", "filters": {"instrument_code": "000001.SZ"}}))
+    assert exact["records"] == records
+    empty_queries: tuple[dict[str, object], ...] = (
+        {"query": "Find the issuer's forecast for the next five sessions"},
+        {"filters": {"instrument_code": "unknown"}},
+        {"query": "000001", "filters": {"instrument_code": "000002.SZ"}},
+        {"publisher": "unknown"},
+    )
+    for arguments in empty_queries:
+        empty = asyncio.run(read(arguments))
+        assert empty["records"] == []
+        assert empty["page"] == {
+            "total_available": 2,
+            "total_matched": 0,
+            "offset": 0,
+            "returned": 0,
+            "next_offset": None,
+        }
+    invalid_queries: tuple[dict[str, object], ...] = (
+        {"offset": -1},
+        {"offset": True},
+        {"offset": 1.5},
+        {"cutoff": "2099"},
+    )
+    for arguments in invalid_queries:
+        with pytest.raises(ValueError, match="schema validation"):
+            asyncio.run(read(arguments))
+
+    # Counts and pages see only this Run's authorized records, not the rest of
+    # the same frozen Snapshot (or records from another capability).
+    restricted = ToolRegistry(store.artifacts)
+    for descriptor in build_checkpoint_tool_descriptors(
         snapshot_set,
         store=store,
         frozen_input=gate.frozen_input,
-        authorized_decision_input_ids=gate.frozen_decision_input_ids,
+        authorized_decision_input_ids=frozenset({cast(str, records[1]["record_id"])}),
         required_capability="market.read",
-    )
-    assert request.tool_access.allowed_tools == frozenset(
-        {
-            "lookup_event_revelation",
-            "lookup_exposure_candidates",
-            "lookup_market_context",
-        }
-    )
-    for descriptor in descriptors:
-
-        async def read(selected: ToolDescriptor) -> object:
-            return await selected.handler({})
-
-        payload = asyncio.run(read(descriptor))
-        assert isinstance(payload, dict)
-        assert len(cast(list[object], payload["records"])) == (
-            2 if descriptor.name == "lookup_event_revelation" else 1
-        )
-        assert "999999.SZ" not in json.dumps(payload)
+    ):
+        restricted.register(descriptor)
+    subset = asyncio.run(read({}, restricted))
+    assert subset["records"] == records[1:]
+    assert subset["page"] == {
+        "total_available": 1,
+        "total_matched": 1,
+        "offset": 0,
+        "returned": 1,
+        "next_offset": None,
+    }
     assert provider.calls == 0
 
 

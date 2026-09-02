@@ -659,14 +659,26 @@ passes function parameters through and copies `strict` only when supplied. This 
 not establish the effective upstream schema for these requests; do not claim the gateway forced
 the optional fields or assign the entire failure to model capability.
 
-Next acceptance must repair the frozen-input access surface before another model experiment:
-provide an unmistakable default read of the already selected evidence, explain literal search and
-AND-filter semantics for optional narrowing, and test the exact model-facing schema plus nonempty
-required reads against production-shaped inputs. Do not silently remove explicit filters, widen
-the frozen set, mix runtime HTTP into it, or rewrite the old tool manifest/Run. Changes require a new
-frozen execution binding; the single authorized diagnostic is finished and is not automatically
-repeated using its unspent budget. No Signal, Intent, Account, Watch resolution or Paper operation
-was created.
+The input-access repair now binds checkpoint tool v3 in **new** reassessment registrations. The
+offered schema/description and research instruction explicitly start with `{}`; optional query is
+literal substring matching and exact filters combine with AND. Results expose authorized-record
+counts and deterministic paging, so zero matches are not confused with zero available input.
+Production-shaped offline acceptance runs the actual composition root, Query Gate, offered tools,
+ToolRegistry and Agent loop; the next model request contains 2/1/1 event/issuer/valuation records
+and excludes the unrelated issuer from a shared receipt. Paging, explicit no-match criteria,
+authorization subsets, schema rejection and legacy v2 replay are checked at the same public seams.
+This scripted Provider test verifies data delivery, not real-model comprehension or decision quality.
+See `DATA_INPUT_HARNESS.md` for the owning tool contract.
+An offline reconstruction of both real earlier reassessments (the interrupted original and the
+completed USD 1 diagnostic) matched their original registration, Snapshot Set, Evidence Pack and
+tool-manifest hashes exactly. It made no model requests and did not reinterpret their results.
+
+The repair does not silently remove filters, widen the frozen set, mix runtime HTTP into it, or
+rewrite the old manifest/Run. Query Gate rejects a tool-v3 upgrade/downgrade outside its registered
+version. The next real-model acceptance is a separately authorized synthetic-data canary; only after
+that should a separately registered current-time market judgment test the repaired interface.
+The single authorized Earnings diagnostic is finished and is not automatically repeated using its
+unspent budget. No Signal, Intent, Account, Watch resolution or Paper operation was created.
 
 ### Actual-receipt coverage failure — 2026-09-02
 

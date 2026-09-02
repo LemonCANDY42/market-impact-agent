@@ -85,7 +85,13 @@ The real USD 1 diagnostic completed for $0.019440 and exact offline terminal rep
 additional requests. Its abstention exposed a separate literal-query/optional-filter usability
 failure: all nine Agent reads were empty despite nonempty default reads. Availability, successful
 transport and signed completion are therefore not evidence that the Agent consumed the required
-data. See `EVENT_IMPACT_TRIAGE.md` for the fixed denominator and next input-access acceptance gate.
+data. See `EVENT_IMPACT_TRIAGE.md` for the fixed denominator and input-access acceptance gate.
+New reassessment registrations now bind checkpoint tool v3: explicit `{}` default reading,
+documented literal/AND narrowing, and authorized-record counts/pagination. The production-shaped
+offline test executes the offered tools through the actual Agent loop and checks the records in
+the next model request. Old registrations retain v2 and their frozen tool bindings. This is interface
+acceptance, not evidence that a real model has used the new surface correctly; a new paid canary
+requires separate authorization and does not reopen the completed Earnings diagnostic.
 
 `MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
 machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a

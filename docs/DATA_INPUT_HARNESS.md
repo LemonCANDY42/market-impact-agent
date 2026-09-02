@@ -129,16 +129,32 @@ create another Data Query or move the cutoff. The binding is ready for a registe
 the generic Agent CLI does not add it implicitly; an undeclared complete snapshot cannot become a
 source of Agent context.
 
-New `ProspectiveCheckpointSnapshotSet` artifacts use schema v2 with tool manifest v2 and return
-Checkpoint Decision Inputs rather than exposing Provider-specific `normalized_payload` rows as the
-Agent contract. The published schema continues to validate legacy schema-v1/manifest-v1 artifacts
-without reinterpreting them as v2 output. Each new record has a content ID and keeps its Observation
+`ProspectiveCheckpointSnapshotSet` introduced Checkpoint Decision Inputs with schema v2/tool
+manifest v2; later Snapshot Set versions bind partial coverage, exact observations and Trigger
+Admission. These return projected inputs rather than exposing Provider-specific
+`normalized_payload` rows as the Agent contract. Legacy artifact and tool versions remain
+replayable without silently upgrading their execution surface. Each record has a content ID and keeps its Observation
 ID, Snapshot ID, source-specific route kinds, source/lineage,
 occurred/published/source-updated/available/authority times, and explicit price-basis and
 completeness-gap fields. The projection normalizes names only: it does not infer consensus,
 expectation surprise, causal direction, then-effective taxonomy when the source interval is absent,
 total return, or execution eligibility. The enclosing tool result is also content-identified and
 remains bound to the immutable checkpoint barrier and authorized Snapshot set.
+
+New Earnings reassessment registrations select `checkpoint_tool_version: "3"`; absent means the
+unchanged v2 surface and is omitted again when serializing old registrations. This choice is part
+of registration identity, Snapshot manifests, Query Gate and the frozen Run binding. Other
+checkpoint entry points remain v2. No existing Run is upgraded or rerun by this default change.
+The v3 model-facing contract says to call `{}` first: the Harness has already selected the evidence.
+Optional `query` is case-insensitive **literal substring** matching, not natural-language search;
+`publisher` is case-insensitive exact matching and `filters` are case-sensitive exact matches.
+All supplied criteria combine with AND; unknown criteria should be omitted, not filled with guessed
+values or `"unknown"`. Explicit filters are never silently dropped or treated as wildcards.
+V3 results include `page.total_available`, `total_matched`, `offset`, `returned`, and `next_offset`.
+The default page is 20 records (maximum 100), ordered by record ID; continue with `next_offset`
+and unchanged criteria. Counts and pages include only this Run's authorized Decision Inputs, not
+other observations in a shared receipt. An empty filtered result distinguishes zero matches from
+zero available evidence. Pagination cannot alter the barrier, fetch data, or expand authorization.
 
 `CheckpointMarketUniverseView` is the narrow multi-record consumer for PDI-11 through PDI-13. It
 accepts only validated Checkpoint Decision Inputs from one Snapshot Set and one content-identified

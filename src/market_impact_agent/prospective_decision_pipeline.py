@@ -257,6 +257,15 @@ def reassessment_inputs(
             sort_keys=True,
         )
     )
+    if registration.checkpoint_tool_version == "3":
+        instruction += (
+            "\nFrozen-record reading: start each relevant checkpoint tool with {}. "
+            "These records have already been selected for this question. Optional query is "
+            "literal substring matching, not a natural-language question. Only narrow with "
+            "exact known field values after reading; omit unknown filters. Follow "
+            "page.next_offset if present. Empty filtered results do not establish missing "
+            "evidence: compare total_available and total_matched."
+        )
     return registration, snapshot_set, pack, instruction
 
 

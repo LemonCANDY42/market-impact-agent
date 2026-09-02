@@ -173,18 +173,24 @@ exact credential-removed replay. All nine tool queries returned zero rows: natur
 and literal `"unknown"` filters excluded the frozen data. Offline default/exact-instrument reads of
 the same handlers returned 2/1/1 event/issuer/valuation records. Delivery and accounting now have real
 acceptance evidence, but Agent input-access usability does not; this is not an investment-quality
-result. The next workslice is a clear default read of already frozen evidence, explicit optional
-literal/AND query semantics and production-shaped model-facing tool acceptance, preserving all old
-bindings and results. No further model call or trading authority is implied by the unspent budget.
+result. New reassessment registrations now select tool v3 with clear default reading, explicit
+literal/AND query semantics and authorized-record counts/pagination. Production-shaped offline
+acceptance verifies nonempty inputs in the Agent's next request, filtered-empty versus missing data,
+scope isolation, and old v2 replay. Real-model use of this new surface remains unverified. No
+further model call or trading authority is implied by the unspent budget.
 Exact identities and accounting are in `docs/EVENT_IMPACT_TRIAGE.md`.
 
 A bounded reuse slice now replaces threaded urllib model I/O with pinned HTTPX2 async requests.
 It removes the custom redirect handler and detached worker-thread I/O without adding an Agent
 Runner or another state owner. Retry, concurrency, cancellation accounting and replay remain
 Harness-owned; the reference comparison is in `docs/MODEL_PROVIDER_RELIABILITY.md`. This is an
-offline engineering change, not a successful rerun of the Earnings diagnostic: the versioned
-default-read tool surface remains the next semantic-input task. Old Profiles, results, budgets and
-trading gates are unchanged; no new paid-model invocation is authorized by this change.
+offline engineering change, not a successful rerun of the Earnings diagnostic. The next acceptance
+is a separately authorized synthetic canary of the new default-read surface, followed by a newly
+registered current-time market judgment if input access works. Old Profiles, results, budgets and
+trading gates are unchanged; no new paid-model invocation is authorized by these code changes.
+The tool-v3 slice passed ruff, format, pyright, diff checks and 1,770 tests, plus independent
+read-only review. Offline reconstruction also preserved the two real older reassessments'
+registration, Snapshot Set, Evidence Pack and tool-manifest hashes exactly, with zero model calls.
 
 A later read-only runtime audit at September 2 10:03 UTC found three, not four, operational
 checkpoint families. The v7 material route is blocked by an internal receipt-coverage gap after
