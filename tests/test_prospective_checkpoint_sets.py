@@ -1194,7 +1194,7 @@ def test_checkpoint_tool_binds_route_kinds_to_each_observation_source(tmp_path: 
         ),
     ),
 )
-def test_checkpoint_tool_filters_tushare_record_fields_and_semantic_aliases(
+def test_checkpoint_tool_literal_query_and_exact_filters_across_capabilities(
     tmp_path: Path,
     capability: ObservationCapability,
     record: dict[str, object],
@@ -1256,20 +1256,24 @@ def test_checkpoint_tool_filters_tushare_record_fields_and_semantic_aliases(
         required_capability="data.snapshot.read",
     )[0]
 
-    async def invoke_tool() -> object:
-        return await descriptor.handler(
-            {
-                "publisher": "Tushare Pro",
-                "filters": filters,
-            }
-        )
+    async def read_records(arguments: dict[str, object]) -> list[dict[str, object]]:
+        result = await descriptor.handler(arguments)
+        assert isinstance(result, dict)
+        return cast(list[dict[str, object]], result["records"])
 
-    result_value = asyncio.run(invoke_tool())
+    async def exercise_queries() -> None:
+        records = await read_records({})
+        assert len(records) == 1
+        assert await read_records({"publisher": "Tushare Pro", "filters": filters}) == records
+        assert await read_records({"query": next(iter(filters.values()))}) == records
+        # The legacy tool uses literal search, not a natural-language retrieval plan.
+        assert await read_records({"query": "Find exact records for the next five sessions"}) == []
+        for field in filters:
+            # Every predicate is conjunctive, and "unknown" is a value, not omission.
+            assert await read_records({"filters": {**filters, field: "unknown"}}) == [], field
+        assert await read_records({"publisher": "Unrelated publisher"}) == []
 
-    assert isinstance(result_value, dict)
-    result = cast(dict[str, object], result_value)
-    records = cast(list[dict[str, object]], result["records"])
-    assert len(records) == 1
+    asyncio.run(exercise_queries())
 
 
 def test_industry_membership_projection_is_effective_dated_without_backfill(

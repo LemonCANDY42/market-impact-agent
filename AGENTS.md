@@ -36,6 +36,9 @@ execution phases remain fail-closed until their acceptance gates pass.
 
 ## Verification
 
+Follow the requirement-driven test selection and pruning rules in
+`CONTRIBUTING.md#test-quality-and-efficiency`; test count is not an acceptance target.
+
 Run locally before considering a change complete:
 
 ```bash

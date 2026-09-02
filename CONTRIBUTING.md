@@ -20,6 +20,33 @@ uv run pytest
 
 GitHub Actions may repeat these checks but is never the only acceptance path.
 
+## Test quality and efficiency
+
+- Tie each test to a module requirement, owned boundary, or observed regression and
+  the incorrect behavior it must distinguish. Judge the suite by useful fault
+  detection, stability, and runtime, not test count or coverage percentage alone.
+- Use the smallest faithful test scope: pure checks for pure rules, parameterized
+  equivalence classes and boundary cases for variations, and representative
+  integration tests through the real composition root and authoritative stores.
+  Mock external I/O where needed, not the behavior under acceptance; do not copy
+  production logic into a test-only implementation.
+- Pair valid behavior with relevant failures. An always-empty tool, always-blocked
+  gate, or ignored filter must not pass merely because the expected rejection was
+  observed. For changed critical behavior, use a targeted fault injection or
+  mutation when useful to verify that the assertions distinguish the regression.
+- Give shared behavior one owning test matrix. Keep cross-layer cases only where
+  they protect distinct wiring, lifecycle, or authority failures. Merge or delete
+  overlapping tests with no independent protection; do not retain weak tests just
+  because they already exist. Preserve necessary legacy replay and safety cases,
+  but avoid repeating the full lifecycle for every configuration combination.
+- Prefer deterministic clocks, explicit concurrency barriers, and isolated state
+  to real sleeps or incidental ordering. Profile slow tests before changing them;
+  do not remove a necessary recovery or risk check merely to shorten the suite.
+- During iteration run affected tests; at workslice completion run the required
+  local checks above. Keep paid-model and broker acceptance separately authorized
+  and budgeted. Offline passes do not establish real tool usability, investment
+  effectiveness, or broker readiness.
+
 ## Design rules
 
 - Use the language in [CONTEXT.md](CONTEXT.md).

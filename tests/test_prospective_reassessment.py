@@ -312,11 +312,12 @@ def abstain_turn(event_id: str):
     )
 
 
-@pytest.mark.parametrize("profile_alias", [REASSESSMENT_PROFILE, REASSESSMENT_USD1_PROFILE])
 def test_exact_old_subject_current_context_and_single_judgment_replay(
-    tmp_path: Path, profile_alias: str
+    tmp_path: Path,
 ) -> None:
-    state = prepared_state(tmp_path, model_profile_id=profile_alias)
+    # Both budget profiles are exercised through the CLI below; the shared lifecycle
+    # needs one integration case, not a second copy for a cost-only configuration.
+    state = prepared_state(tmp_path)
     store, triage, _, registration, _, original_decision = state
     before = triage.get_context(original_decision.candidate_set_id)
     trigger = admit(state)
@@ -337,7 +338,7 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(
     assert "not financial truth" in instruction
     inputs = materialize_checkpoint_decision_inputs(snapshot_set, store=store)
     assert len(inputs) == 4
-    provider = Provider(abstain_turn(pack.event_id), profile_alias)
+    provider = Provider(abstain_turn(pack.event_id))
     engine = engine_for(store, provider)
     refs, gate, request = prepare_reassessment_judgment(store=store, trigger=trigger, engine=engine)
     assert gate.model_run_eligible and provider.calls == 0
@@ -355,7 +356,7 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(
     )
     assert result.status is RunStatus.COMPLETED
     assert provider.calls == 1
-    restarted_provider = Provider(AssertionError("terminal replay dispatched"), profile_alias)
+    restarted_provider = Provider(AssertionError("terminal replay dispatched"))
     replay = asyncio.run(
         run_reassessment_judgment(
             store=store,
@@ -663,45 +664,6 @@ def test_shared_receipt_rows_are_not_exposed_by_checkpoint_tools(tmp_path: Path)
         )
         assert "999999.SZ" not in json.dumps(payload)
     assert provider.calls == 0
-
-
-def test_frozen_lookup_literal_search_is_not_semantic_search(tmp_path: Path) -> None:
-    """Retain the real empty-read failure mechanism; never silently drop explicit filters."""
-    from market_impact_agent.prospective_checkpoint_sets import build_checkpoint_tool_descriptors
-
-    state = prepared_state(tmp_path)
-    store = state[0]
-    trigger = admit(state)
-    _, snapshot_set, _, _ = reassessment_inputs(store=store, trigger=trigger)
-    records = materialize_checkpoint_decision_inputs(snapshot_set, store=store)
-    descriptors = build_checkpoint_tool_descriptors(
-        snapshot_set,
-        store=store,
-        frozen_input=snapshot_set.frozen_input,
-        authorized_decision_input_ids=frozenset(cast(str, item["record_id"]) for item in records),
-        required_capability="market.read",
-    )
-    for descriptor in descriptors:
-
-        async def reads(selected: ToolDescriptor) -> None:
-            matching: tuple[dict[str, object], ...] = (
-                {},
-                {"filters": {"instrument_code": "000001.SZ"}},
-            )
-            for arguments in matching:
-                result = await selected.handler(arguments)
-                assert isinstance(result, dict)
-                assert len(cast(list[object], result["records"])) > 0
-            excluding: tuple[dict[str, object], ...] = (
-                {"query": "Find exact original records for the next five sessions"},
-                {"filters": {"instrument_code": "unknown"}},
-            )
-            for arguments in excluding:
-                result = await selected.handler(arguments)
-                assert isinstance(result, dict)
-                assert result["records"] == []
-
-        asyncio.run(reads(descriptor))
 
 
 def test_wrong_subject_or_unregistered_source_cannot_prepare(tmp_path: Path) -> None:
