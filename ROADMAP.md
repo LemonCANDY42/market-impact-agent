@@ -178,6 +178,14 @@ literal/AND query semantics and production-shaped model-facing tool acceptance, 
 bindings and results. No further model call or trading authority is implied by the unspent budget.
 Exact identities and accounting are in `docs/EVENT_IMPACT_TRIAGE.md`.
 
+A bounded reuse slice now replaces threaded urllib model I/O with pinned HTTPX2 async requests.
+It removes the custom redirect handler and detached worker-thread I/O without adding an Agent
+Runner or another state owner. Retry, concurrency, cancellation accounting and replay remain
+Harness-owned; the reference comparison is in `docs/MODEL_PROVIDER_RELIABILITY.md`. This is an
+offline engineering change, not a successful rerun of the Earnings diagnostic: the versioned
+default-read tool surface remains the next semantic-input task. Old Profiles, results, budgets and
+trading gates are unchanged; no new paid-model invocation is authorized by this change.
+
 A later read-only runtime audit at September 2 10:03 UTC found three, not four, operational
 checkpoint families. The v7 material route is blocked by an internal receipt-coverage gap after
 the 09:14 scheduled news opportunity was missed; later opportunities resumed successful collection.

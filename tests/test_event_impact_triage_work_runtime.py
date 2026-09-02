@@ -613,7 +613,7 @@ class OneFailureTransport(JsonHttpTransport):
         self.failure = failure
         self.requests: list[dict[str, object]] = []
 
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,
@@ -653,7 +653,7 @@ class SafeRetryTransport(JsonHttpTransport):
             ]
         )
 
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,

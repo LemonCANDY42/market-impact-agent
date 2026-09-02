@@ -44,7 +44,7 @@ from market_impact_agent.model_provider import (
     ModelProviderProfile,
     load_model_provider_profile,
 )
-from market_impact_agent.openai_chat_provider import PinnedUrllibJsonTransport
+from market_impact_agent.openai_chat_provider import PinnedHttpxJsonTransport
 from market_impact_agent.paired_skill_ablation_contract import (
     ALLOWED_CAPABILITIES,
     ALLOWED_TOOLS,
@@ -107,30 +107,30 @@ class PreparedSkillAblation:
     research_instruction: str
 
 
-def fetch_cpa_usage_keeper_pricing(
+async def fetch_cpa_usage_keeper_pricing(
     *,
     model: str,
     captured_at: datetime,
 ) -> CPAUsageKeeperPricing:
-    transport = PinnedUrllibJsonTransport(
+    transport = PinnedHttpxJsonTransport(
         allowed_origin=CPA_USAGE_KEEPER_ORIGIN,
         provider_label="CPA Usage Keeper",
     )
-    version = transport.request_json(
+    version = await transport.request_json(
         method="GET",
         url=f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/version",
         headers={},
         payload=None,
         timeout_seconds=5.0,
     )
-    pricing = transport.request_json(
+    pricing = await transport.request_json(
         method="GET",
         url=f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/pricing",
         headers={},
         payload=None,
         timeout_seconds=5.0,
     )
-    rules = transport.request_json(
+    rules = await transport.request_json(
         method="GET",
         url=(f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/pricing/rules?model={quote(model, safe='')}"),
         headers={},
@@ -277,7 +277,7 @@ async def run_paired_method_skill_ablation(
 ) -> dict[str, object]:
     now = clock or (lambda: datetime.now(UTC))
     profile = load_model_provider_profile(provider_profile_path)
-    active_pricing = pricing or fetch_cpa_usage_keeper_pricing(
+    active_pricing = pricing or await fetch_cpa_usage_keeper_pricing(
         model=profile.model,
         captured_at=now(),
     )

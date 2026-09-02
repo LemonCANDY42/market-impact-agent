@@ -4,6 +4,51 @@ This document owns the failure, retry, circuit, and operator-notice boundary for
 Providers. It does not change Model Provider Profile identity, semantic evaluation, Judgment
 authority, or any trading permission.
 
+## Transport reuse — 2 September 2026
+
+The bounded reuse slice replaces the urllib opener/redirect handler and `asyncio.to_thread`
+model I/O with `httpx2==2.12.0`. The dependency was already present transitively; it is now pinned
+as a direct runtime dependency. No external Runner, retry supervisor, session store or tool-loop
+authority is added. Provider-specific payloads and complete response dictionaries remain lossless;
+the Harness still validates model identity, tool arguments and usage before accepting a turn.
+
+The reference decision was based on source inspection and a synthetic, zero-model-cost probe:
+
+| Reference | Evidence and decision |
+| --- | --- |
+| [OpenAI Python 3.7.0](https://github.com/openai/openai-python/tree/ab76ab5c64b8d19761ce838891acc80743cd944a), Apache-2.0 | Supports custom endpoints and direct requests, but defaults to two retries. A `MockTransport` probe confirmed `OPENAI_CUSTOM_HEADERS` inheritance even with explicit endpoint/key/org/project. This is SDK configuration behavior, not an SDK defect. Its model resources are unnecessary for the existing lossless dictionary boundary; adopting it here would add configuration filtering without removing Harness policy. Not installed as a project dependency. |
+| [HTTPX2 2.12.0](https://github.com/pydantic/httpx2/tree/71ae23be5448f859c2b4e21d9972ddfa7b8d759d), BSD-3-Clause | Also used by the inspected OpenAI SDK. Native async request/context-manager lifecycle and default zero connection retries fit this boundary. Adopted through its public API; no vendored source. |
+
+`PinnedHttpxJsonTransport.request_json` is async. Both model adapters and CPA Usage Keeper reads
+await it; synchronous CLI entry points own their `asyncio.run` boundary. Each physical attempt owns
+one client context, which closes on success, failure or cancellation. This intentionally keeps the
+previous request-scoped lifetime, without a cross-loop connection pool or a second lifecycle owner.
+Every URL must match the pinned origin; redirects are disabled, and loopback requests ignore proxy
+environment variables. HTTPX does not import unrelated `OPENAI_*` headers or credentials. Remote
+HTTPS retains its existing environment-proxy policy. HTTPX transport retries remain zero; the
+existing Harness retry loop alone emits dispatches and decides 429 backoff or explicitly authorized
+one-time received-408 regeneration. An outer request deadline also bounds streaming/trickling reads.
+
+Cancellation closes the local connection; it does **not** prove that the gateway or upstream model
+stopped generation. A dispatched request without a durable result remains unknown, retains its
+dispatch/accounting evidence and cannot be automatically resent on restart. The existing bounded
+work scheduler still owns concurrency/dependency barriers; this transport starts no independent
+tasks or queues. Gateway-internal attempts remain outside project proof.
+
+Acceptance exercises the real provider/parser/observer/AgentEngine/Journal/Usage path with HTTP
+responses for success, 429 exhaustion, legacy 408, authorized regeneration and repeated 408. A real
+loopback TCP test proves cancellation closes the connection and restart does not redispatch.
+Focused fault cases cover timeout/TLS, malformed/non-object JSON, origin rejection, redirects and
+ambient proxy/header isolation. Existing work-scheduler and replay tests remain the concurrency
+authority; no duplicate scheduler is tested or introduced.
+
+This change does not alter frozen Profile, prompt, tool or artifact contracts, does not rewrite old
+Runs, and does not grant a new model call. The previous nine empty tool queries are a **separate
+input-access usability failure**: a transport library cannot turn a natural-language question into
+a valid literal/AND filter. A new versioned default-read tool surface and a separately authorized
+model-facing canary remain necessary before claiming that failure is resolved. No live gateway,
+paid-model or broker acceptance is inferred from offline transport tests.
+
 ## Failure model
 
 Observer-capable model adapters assign each project-to-gateway physical request one opaque

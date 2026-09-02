@@ -5122,8 +5122,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.target_description,
                     args.target_definition_ref,
                     args.judge_provider_profile,
-                    fetch_cpa_usage_keeper_pricing(
-                        model=judge_profile.model, captured_at=registered_at
+                    asyncio.run(
+                        fetch_cpa_usage_keeper_pricing(
+                            model=judge_profile.model, captured_at=registered_at
+                        )
                     ),
                 )
             elif args.target_description is not None or args.target_definition_ref is not None:
@@ -5154,9 +5156,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     declaration.available_evidence,
                     True,
                 ),
-                pricing=fetch_cpa_usage_keeper_pricing(
-                    model=profile.model,
-                    captured_at=registered_at,
+                pricing=asyncio.run(
+                    fetch_cpa_usage_keeper_pricing(
+                        model=profile.model,
+                        captured_at=registered_at,
+                    )
                 ),
                 max_total_cost_microusd=args.max_total_cost_microusd,
                 registered_at=registered_at,

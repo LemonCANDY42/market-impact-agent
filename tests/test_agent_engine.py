@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import cast
 
+import httpx2
 import pytest
 
 from market_impact_agent.agent_contracts import (
@@ -54,6 +55,7 @@ from market_impact_agent.openai_chat_provider import (
     OpenAIChatCompatibleProvider,
     OpenAIChatProviderConfig,
     OpenAIChatProviderError,
+    PinnedHttpxJsonTransport,
 )
 from market_impact_agent.provider_reliability import (
     ProviderAttemptEvent,
@@ -1250,7 +1252,7 @@ class ObservedFixtureTransport:
         self.calls = 0
         self.before_request: Callable[[], None] = lambda: None
 
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,
@@ -1325,6 +1327,7 @@ def http_failure(status: int) -> OpenAIChatProviderError:
 def test_real_observer_retry_path_signed_replay_and_usage(
     tmp_path: Path,
     outcome: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     responses: list[dict[str, object] | BaseException] = [
         observed_response(tool_turn(1)),
@@ -1336,8 +1339,53 @@ def test_real_observer_retry_path_signed_replay_and_usage(
         responses.append(http_failure(408))
     else:
         responses.extend([http_failure(429), http_failure(429)])
-    transport = ObservedFixtureTransport(responses)
-    provider = observed_provider(transport, retry_received_408_once=outcome.startswith("408_"))
+    physical_requests: list[httpx2.Request] = []
+
+    async def wire(request: httpx2.Request) -> httpx2.Response:
+        assert_durable_dispatch()
+        physical_requests.append(request)
+        response = responses.pop(0)
+        if isinstance(response, OpenAIChatProviderError):
+            assert response.http_status is not None
+            return httpx2.Response(
+                response.http_status,
+                json={"error": str(response)},
+                headers={"Retry-After": "0"},
+            )
+        assert isinstance(response, dict)
+        return httpx2.Response(200, json=response)
+
+    client_type = httpx2.AsyncClient
+
+    def mock_client(
+        *, follow_redirects: bool, trust_env: bool, timeout: float
+    ) -> httpx2.AsyncClient:
+        return client_type(
+            transport=httpx2.MockTransport(wire),
+            follow_redirects=follow_redirects,
+            trust_env=trust_env,
+            timeout=timeout,
+        )
+
+    monkeypatch.setattr(httpx2, "AsyncClient", mock_client)
+    provider = OpenAIChatCompatibleProvider(
+        api_key="fixture-only-key",
+        provider_id="fixture-provider",
+        provider_label="Fixture",
+        config=OpenAIChatProviderConfig(
+            origin="https://fixture.invalid",
+            model="fixture-model",
+            api_path="/chat/completions",
+            models_path="/models",
+            max_attempts=3,
+            retry_backoff_seconds=0,
+            retry_received_408_once=outcome.startswith("408_"),
+        ),
+        completion_parameters={},
+        transport=PinnedHttpxJsonTransport(
+            allowed_origin="https://fixture.invalid", provider_label="Fixture"
+        ),
+    )
     fixture = make_engine(tmp_path / "authority", provider, handler_calls=[])
     store = LocalDataSnapshotStore(tmp_path / "authority")
     engine = compose_authoritative_agent_engine(
@@ -1355,17 +1403,16 @@ def test_real_observer_retry_path_signed_replay_and_usage(
         assert events[-1].event_type == "model.attempt.dispatched"
         assert events[-1].payload["method"] == "POST"
         assert sum(event.event_type == "model.attempt.dispatched" for event in events) == (
-            transport.calls + 1
+            len(physical_requests) + 1
         )
 
-    transport.before_request = assert_durable_dispatch
     result = asyncio.run(engine.run(run_request))
     assert result.status is (
         RunStatus.COMPLETED if outcome in {"success", "408_regenerated"} else RunStatus.FAILED
     )
-    assert transport.calls == (4 if outcome == "429_exhausted" else 3)
+    assert len(physical_requests) == (4 if outcome == "429_exhausted" else 3)
     assert result.metrics is not None
-    assert result.metrics.provider_attempts == transport.calls
+    assert result.metrics.provider_attempts == len(physical_requests)
     events = engine.journal.events(run_request.run_id)
     completed = [event for event in events if event.event_type == "model.turn.completed"]
     failures = [event for event in events if event.event_type == "model.turn.failed"]
@@ -1374,7 +1421,7 @@ def test_real_observer_retry_path_signed_replay_and_usage(
     assert result.metrics.latency_ms == expected_latency
     assert expected_latency > 0
     attempts = [event for event in events if event.event_type.startswith("model.attempt.")]
-    assert len(attempts) == transport.calls * 2
+    assert len(attempts) == len(physical_requests) * 2
     assert attempts[2].payload["request_id"] == attempts[4].payload["request_id"]
     assert attempts[2].payload["physical_attempt"] == 1
     assert attempts[4].payload["physical_attempt"] == 2
@@ -1426,6 +1473,88 @@ def test_real_observer_retry_path_signed_replay_and_usage(
         )
     )
     assert UsageLedger(usage.path).records()[0].record.metrics == result.metrics
+
+
+def test_http_cancellation_closes_socket_and_restart_does_not_redispatch(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        received, disconnected = asyncio.Event(), asyncio.Event()
+        hits: list[bytes] = []
+
+        async def stalled_endpoint(
+            reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+        ) -> None:
+            try:
+                headers = await reader.readuntil(b"\r\n\r\n")
+                length = next(
+                    int(line.split(b":", 1)[1])
+                    for line in headers.split(b"\r\n")
+                    if line.lower().startswith(b"content-length:")
+                )
+                hits.append(await reader.readexactly(length))
+                received.set()
+                assert await reader.read() == b""
+            finally:
+                writer.close()
+                await writer.wait_closed()
+                disconnected.set()
+
+        server = await asyncio.start_server(stalled_endpoint, "127.0.0.1", 0)
+        async with server:
+            origin = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"
+            provider = OpenAIChatCompatibleProvider(
+                api_key="synthetic-local-key",
+                provider_id="fixture-provider",
+                provider_label="Fixture",
+                config=OpenAIChatProviderConfig(
+                    origin=origin,
+                    model="fixture-model",
+                    api_path="/chat/completions",
+                    models_path="/models",
+                    max_attempts=3,
+                    retry_backoff_seconds=0,
+                    retry_received_408_once=True,
+                ),
+                completion_parameters={},
+                transport=PinnedHttpxJsonTransport(allowed_origin=origin, provider_label="Fixture"),
+            )
+            fixture = make_engine(tmp_path, provider, handler_calls=[])
+            store = LocalDataSnapshotStore(tmp_path / "authority")
+            engine = compose_authoritative_agent_engine(
+                store=store,
+                provider=provider,
+                config=fixture.config,
+                tool_registry=fixture.tool_registry,
+                skill_registry=fixture.skill_registry,
+                clock=lambda: NOW,
+            )
+            run_request = request("http-cancelled")
+            caller = asyncio.create_task(engine.run(run_request))
+            try:
+                await asyncio.wait_for(received.wait(), timeout=5)
+            finally:
+                caller.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await caller
+            await asyncio.wait_for(disconnected.wait(), timeout=5)
+            assert len(hits) == 1
+            assert engine.journal.get_run(run_request.run_id).status is RunStatus.RUNNING
+            # Same production provider: a redispatch would hit the endpoint again.
+            result = await engine.run(run_request)
+            assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
+            interrupted = engine.journal.event("http-cancelled.turn.1.interrupted")
+            assert interrupted is not None
+            assert interrupted.payload["accounting_state"] == "unknown"
+            assert (
+                sum(
+                    event.event_type == "model.attempt.dispatched"
+                    for event in engine.journal.events(run_request.run_id)
+                )
+                == 1
+            )
+            assert await engine.run(run_request) == result
+            assert len(hits) == 1
+
+    asyncio.run(exercise())
 
 
 @pytest.mark.parametrize(

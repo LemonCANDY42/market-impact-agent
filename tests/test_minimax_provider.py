@@ -10,11 +10,11 @@ import pytest
 
 import market_impact_agent.minimax_provider as minimax_provider_module
 from market_impact_agent.minimax_provider import (
+    HttpxJsonTransport,
     JsonHttpTransport,
     MiniMaxOpenAIProvider,
     MiniMaxProviderConfig,
     MiniMaxProviderError,
-    UrllibJsonTransport,
 )
 
 
@@ -23,7 +23,7 @@ class FixtureTransport(JsonHttpTransport):
         self.responses = responses
         self.requests: list[dict[str, object]] = []
 
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,
@@ -314,12 +314,14 @@ def test_credential_request_rejects_all_redirects_without_forwarding_authorizati
         monkeypatch.setattr(minimax_provider_module, "MINIMAX_CHINA_ORIGIN", origin)
 
         with pytest.raises(MiniMaxProviderError) as raised:
-            UrllibJsonTransport().request_json(
-                method="GET",
-                url=f"{origin}/start",
-                headers={"Authorization": "Bearer redirect-secret"},
-                payload=None,
-                timeout_seconds=2,
+            asyncio.run(
+                HttpxJsonTransport().request_json(
+                    method="GET",
+                    url=f"{origin}/start",
+                    headers={"Authorization": "Bearer redirect-secret"},
+                    payload=None,
+                    timeout_seconds=2,
+                )
             )
 
         assert raised.value.error_class == "http"

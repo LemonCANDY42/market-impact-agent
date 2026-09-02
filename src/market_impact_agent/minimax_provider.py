@@ -11,7 +11,7 @@ from market_impact_agent.openai_chat_provider import (
     OpenAIChatCompatibleProvider,
     OpenAIChatProviderConfig,
     OpenAIChatProviderError,
-    PinnedUrllibJsonTransport,
+    PinnedHttpxJsonTransport,
 )
 
 MINIMAX_CHINA_ORIGIN = "https://api.minimaxi.com"
@@ -51,7 +51,7 @@ class MiniMaxProviderConfig:
         return urljoin(self.base_url.rstrip("/") + "/", path.lstrip("/"))
 
 
-class UrllibJsonTransport(PinnedUrllibJsonTransport):
+class HttpxJsonTransport(PinnedHttpxJsonTransport):
     def __init__(self) -> None:
         super().__init__(allowed_origin=MINIMAX_CHINA_ORIGIN, provider_label="MiniMax")
 
@@ -80,7 +80,7 @@ class MiniMaxOpenAIProvider(OpenAIChatCompatibleProvider):
                 retry_backoff_seconds=config.retry_backoff_seconds,
             ),
             completion_parameters={"reasoning_split": True},
-            transport=transport or UrllibJsonTransport(),
+            transport=transport or HttpxJsonTransport(),
         )
 
     @classmethod

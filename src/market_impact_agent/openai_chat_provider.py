@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Protocol, cast
-from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
-from urllib.request import BaseHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import uuid4
+
+import httpx2
 
 from market_impact_agent.agent_runtime import ModelTurn, ProviderUsage, ToolCall
 from market_impact_agent.provider_reliability import (
@@ -26,7 +26,7 @@ from market_impact_agent.provider_reliability import (
 
 
 class JsonHttpTransport(Protocol):
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,
@@ -41,21 +41,9 @@ class OpenAIChatProviderError(ProviderFailure):
     pass
 
 
-class _NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(
-        self,
-        req: Request,
-        fp: object,
-        code: int,
-        msg: str,
-        headers: object,
-        newurl: str,
-    ) -> None:
-        _ = (req, fp, code, msg, headers, newurl)
-        return None
+class PinnedHttpxJsonTransport:
+    """One cancellable physical request; Harness owns retries and durable state."""
 
-
-class PinnedUrllibJsonTransport:
     def __init__(self, *, allowed_origin: str, provider_label: str) -> None:
         _validate_origin(allowed_origin, "allowed_origin")
         _nonempty(provider_label, "provider_label")
@@ -66,7 +54,7 @@ class PinnedUrllibJsonTransport:
             "::1",
         }
 
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,
@@ -75,35 +63,41 @@ class PinnedUrllibJsonTransport:
         payload: dict[str, object] | None,
         timeout_seconds: float,
     ) -> dict[str, object]:
-        if any(name.lower() == "authorization" for name in headers):
-            self._assert_pinned_credential_url(url)
+        self._assert_pinned_url(url)
         body = None
         if payload is not None:
             body = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode()
-        request = Request(url, data=body, headers=dict(headers), method=method)
-        handlers: list[BaseHandler] = [_NoRedirectHandler()]
-        if self._disable_environment_proxies:
-            handlers.insert(0, ProxyHandler({}))
         try:
-            with build_opener(*handlers).open(request, timeout=timeout_seconds) as response:
-                response_body = response.read()
-        except HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")[:2000]
-            diagnostic_code = _http_diagnostic_code(exc.code, error_body)
-            generation_state = _http_generation_state(method, exc.code, diagnostic_code)
+            # Request-scoped ownership avoids pools bound to a different event loop
+            # and closes the socket before cancellation releases the Harness lease.
+            async with (
+                asyncio.timeout(timeout_seconds),
+                httpx2.AsyncClient(
+                    follow_redirects=False,
+                    trust_env=not self._disable_environment_proxies,
+                    timeout=timeout_seconds,
+                ) as client,
+            ):
+                response = await client.request(method, url, headers=headers, content=body)
+                response.raise_for_status()
+        except httpx2.HTTPStatusError as exc:
+            status = exc.response.status_code
+            error_body = exc.response.content.decode("utf-8", errors="replace")[:2000]
+            diagnostic_code = _http_diagnostic_code(status, error_body)
+            generation_state = _http_generation_state(method, status, diagnostic_code)
             raise OpenAIChatProviderError(
-                f"{self._provider_label} request was rejected with HTTP {exc.code}",
+                f"{self._provider_label} request was rejected with HTTP {status}",
                 error_class=("tls" if diagnostic_code == "tls_bad_record_mac" else "http"),
                 diagnostic_code=diagnostic_code,
-                http_status=exc.code,
+                http_status=status,
                 generation_state=generation_state,
                 retry_disposition=_http_retry_disposition(
-                    method, exc.code, diagnostic_code, generation_state
+                    method, status, diagnostic_code, generation_state
                 ),
-                retry_after_seconds=_retry_after_seconds(exc.headers.get("Retry-After")),
+                retry_after_seconds=_retry_after_seconds(exc.response.headers.get("Retry-After")),
                 attempts=1,
             ) from exc
-        except TimeoutError as exc:
+        except (TimeoutError, httpx2.TimeoutException) as exc:
             raise OpenAIChatProviderError(
                 f"{self._provider_label} request timed out",
                 error_class="timeout",
@@ -112,7 +106,7 @@ class PinnedUrllibJsonTransport:
                 retry_disposition=_transport_retry_disposition(method),
                 attempts=1,
             ) from exc
-        except URLError as exc:
+        except httpx2.RequestError as exc:
             tls_bad_record_mac = _is_tls_bad_record_mac(exc)
             raise OpenAIChatProviderError(
                 f"{self._provider_label} transport failed",
@@ -123,8 +117,8 @@ class PinnedUrllibJsonTransport:
                 attempts=1,
             ) from exc
         try:
-            decoded = json.loads(response_body)
-        except json.JSONDecodeError as exc:
+            decoded = response.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise OpenAIChatProviderError(
                 f"{self._provider_label} returned invalid JSON",
                 error_class="invalid_json",
@@ -144,7 +138,7 @@ class PinnedUrllibJsonTransport:
             )
         return cast(dict[str, object], decoded)
 
-    def _assert_pinned_credential_url(self, url: str) -> None:
+    def _assert_pinned_url(self, url: str) -> None:
         parsed = urlsplit(url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
         if (
@@ -154,7 +148,7 @@ class PinnedUrllibJsonTransport:
             or parsed.fragment
         ):
             raise OpenAIChatProviderError(
-                f"{self._provider_label} credential-bearing request rejected an unpinned origin",
+                f"{self._provider_label} request rejected an unpinned origin",
                 error_class="credential_origin",
                 retryable=False,
                 attempts=1,
@@ -361,8 +355,7 @@ class OpenAIChatCompatibleProvider:
                 ),
             )
             try:
-                response = await asyncio.to_thread(
-                    self._transport.request_json,
+                response = await self._transport.request_json(
                     method=method,
                     url=self._config.endpoint(path),
                     headers=headers,
@@ -753,8 +746,8 @@ def _retry_after_seconds(value: str | None) -> float | None:
     return max(0.0, seconds)
 
 
-def _is_tls_bad_record_mac(error: URLError) -> bool:
-    text = str(error.reason).lower()
+def _is_tls_bad_record_mac(error: httpx2.RequestError) -> bool:
+    text = str(error).lower()
     return "bad record mac" in text or "decryption failed or bad record mac" in text
 
 

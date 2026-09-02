@@ -11,7 +11,7 @@ from market_impact_agent.openai_chat_provider import (
     OpenAIChatCompatibleProvider,
     OpenAIChatProviderConfig,
     OpenAIChatProviderError,
-    PinnedUrllibJsonTransport,
+    PinnedHttpxJsonTransport,
 )
 
 CLIPROXY_LOCAL_ORIGIN = "http://127.0.0.1:8317"
@@ -60,7 +60,7 @@ class CLIProxyLunaConfig:
         return urljoin(self.origin.rstrip("/") + "/", path.lstrip("/"))
 
 
-class CLIProxyUrllibJsonTransport(PinnedUrllibJsonTransport):
+class CLIProxyHttpxJsonTransport(PinnedHttpxJsonTransport):
     def __init__(self) -> None:
         super().__init__(allowed_origin=CLIPROXY_LOCAL_ORIGIN, provider_label="CLIProxyAPI")
 
@@ -93,6 +93,6 @@ class CLIProxyLunaProvider(OpenAIChatCompatibleProvider):
                 retry_received_408_once=config.retry_received_408_once,
             ),
             completion_parameters={"reasoning_effort": config.reasoning_effort},
-            transport=transport or CLIProxyUrllibJsonTransport(),
+            transport=transport or CLIProxyHttpxJsonTransport(),
             request_id_factory=request_id_factory,
         )

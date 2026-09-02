@@ -1000,7 +1000,7 @@ def test_cli_uses_existing_provider_factory_and_prints_only_sanitized_summary(
     def fake_create(*_args: object) -> FakeProvider:
         return provider
 
-    def fake_pricing(**_kwargs: object) -> CPAUsageKeeperPricing:
+    async def fake_pricing(**_kwargs: object) -> CPAUsageKeeperPricing:
         return _pricing()
 
     monkeypatch.setattr(

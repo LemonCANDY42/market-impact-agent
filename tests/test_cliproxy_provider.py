@@ -7,6 +7,7 @@ from pathlib import Path
 from threading import Thread
 from typing import ClassVar, cast
 
+import httpx2
 import pytest
 
 from market_impact_agent.agent_schema import validate_agent_contract
@@ -21,7 +22,7 @@ from market_impact_agent.model_provider import (
 )
 from market_impact_agent.openai_chat_provider import (
     JsonHttpTransport,
-    PinnedUrllibJsonTransport,
+    PinnedHttpxJsonTransport,
 )
 from market_impact_agent.provider_reliability import (
     ProviderAttemptEvent,
@@ -39,7 +40,7 @@ class FixtureTransport(JsonHttpTransport):
         self.responses = responses
         self.requests: list[dict[str, object]] = []
 
-    def request_json(
+    async def request_json(
         self,
         *,
         method: str,
@@ -65,11 +66,13 @@ class FixtureTransport(JsonHttpTransport):
 
 class JsonServerHandler(BaseHTTPRequestHandler):
     hits: ClassVar[list[tuple[str, str | None]]] = []
+    ambient_headers: ClassVar[list[str | None]] = []
     server_label = ""
     response_status = 500
 
     def do_GET(self) -> None:
         type(self).hits.append((self.path, self.headers.get("Authorization")))
+        type(self).ambient_headers.append(self.headers.get("X-Unrelated"))
         body = json.dumps({"served_by": type(self).server_label}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -96,6 +99,7 @@ def json_server(
 ) -> Generator[tuple[ThreadingHTTPServer, type[JsonServerHandler]]]:
     class Handler(JsonServerHandler):
         hits: ClassVar[list[tuple[str, str | None]]] = []
+        ambient_headers: ClassVar[list[str | None]] = []
         server_label = label
         response_status = status
 
@@ -222,38 +226,132 @@ def test_exact_loopback_transport_never_sends_credentials_to_environment_proxy(
         proxy_origin = f"http://127.0.0.1:{proxy.server_port}"
         monkeypatch.setenv("http_proxy", proxy_origin)
         monkeypatch.setenv("HTTP_PROXY", proxy_origin)
+        monkeypatch.setenv("OPENAI_CUSTOM_HEADERS", "X-Unrelated: synthetic-ambient-value")
         monkeypatch.delenv("no_proxy", raising=False)
         monkeypatch.delenv("NO_PROXY", raising=False)
 
-        response = PinnedUrllibJsonTransport(
-            allowed_origin=target_origin,
-            provider_label="CLIProxyAPI",
-        ).request_json(
-            method="GET",
-            url=f"{target_origin}/v1/models",
-            headers={"Authorization": "Bearer dedicated-local-key"},
-            payload=None,
-            timeout_seconds=2,
+        response = asyncio.run(
+            PinnedHttpxJsonTransport(
+                allowed_origin=target_origin,
+                provider_label="CLIProxyAPI",
+            ).request_json(
+                method="GET",
+                url=f"{target_origin}/v1/models",
+                headers={"Authorization": "Bearer dedicated-local-key"},
+                payload=None,
+                timeout_seconds=2,
+            )
         )
 
     assert response == {"served_by": "target"}
     assert TargetHandler.hits == [("/v1/models", "Bearer dedicated-local-key")]
+    assert TargetHandler.ambient_headers == [None]
     assert ProxyHandler.hits == []
+
+
+@pytest.mark.parametrize(
+    ("failure", "diagnostic", "generation"),
+    [
+        ("timeout", "request_timeout", ProviderGenerationState.UNKNOWN),
+        ("tls", "tls_bad_record_mac", ProviderGenerationState.UNKNOWN),
+        ("invalid_json", "invalid_json_response", ProviderGenerationState.RESPONSE_RECEIVED),
+        ("non_object", "non_object_response", ProviderGenerationState.RESPONSE_RECEIVED),
+    ],
+)
+def test_http_transport_failure_mapping_has_no_hidden_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    diagnostic: str,
+    generation: ProviderGenerationState,
+) -> None:
+    requests: list[httpx2.Request] = []
+    clients: list[httpx2.AsyncClient] = []
+
+    async def wire(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        if failure == "timeout":
+            raise httpx2.ReadTimeout("private response diagnostic", request=request)
+        if failure == "tls":
+            raise httpx2.ConnectError("tls: bad record MAC private diagnostic", request=request)
+        return httpx2.Response(200, content=b"[]" if failure == "non_object" else b"\xff")
+
+    client_type = httpx2.AsyncClient
+
+    def mock_client(
+        *, follow_redirects: bool, trust_env: bool, timeout: float
+    ) -> httpx2.AsyncClient:
+        client = client_type(
+            transport=httpx2.MockTransport(wire),
+            follow_redirects=follow_redirects,
+            trust_env=trust_env,
+            timeout=timeout,
+        )
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(httpx2, "AsyncClient", mock_client)
+    selected = _provider(
+        PinnedHttpxJsonTransport(
+            allowed_origin="http://127.0.0.1:8317", provider_label="CLIProxyAPI"
+        ),
+        retry_received_408_once=True,
+        max_attempts=3,
+    )
+    with pytest.raises(CLIProxyProviderError) as captured:
+        asyncio.run(
+            selected.complete(
+                messages=({"role": "user", "content": "frozen input"},),
+                tools=(),
+                temperature=0.1,
+                top_p=0.95,
+                max_output_tokens=256,
+                timeout_seconds=5,
+            )
+        )
+    assert len(requests) == 1
+    assert clients[0].is_closed
+    assert captured.value.diagnostic_code == diagnostic
+    assert captured.value.generation_state is generation
+    assert captured.value.retry_disposition is (
+        ProviderRetryDisposition.FORBIDDEN
+        if generation is ProviderGenerationState.UNKNOWN
+        else ProviderRetryDisposition.TERMINAL
+    )
+    assert "private" not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://other.invalid/v1/models",
+        "http://user@127.0.0.1:8317/v1/models",
+        "http://127.0.0.1:8317/v1/models#fragment",
+    ],
+)
+def test_http_transport_rejects_unpinned_url_before_io(url: str) -> None:
+    with pytest.raises(CLIProxyProviderError, match="unpinned origin"):
+        asyncio.run(
+            PinnedHttpxJsonTransport(
+                allowed_origin="http://127.0.0.1:8317", provider_label="CLIProxyAPI"
+            ).request_json(method="GET", url=url, headers={}, payload=None, timeout_seconds=1)
+        )
 
 
 def test_http_500_body_recognizes_tls_bad_record_mac_without_persisting_body() -> None:
     with json_server("tls: bad record MAC SECRET-BODY") as (server, Handler):
         origin = f"http://127.0.0.1:{server.server_port}"
         with pytest.raises(CLIProxyProviderError) as captured:
-            PinnedUrllibJsonTransport(
-                allowed_origin=origin,
-                provider_label="CLIProxyAPI",
-            ).request_json(
-                method="POST",
-                url=f"{origin}/v1/chat/completions",
-                headers={"Authorization": "Bearer dedicated-local-key"},
-                payload={"model": "gpt-5.6-luna"},
-                timeout_seconds=2,
+            asyncio.run(
+                PinnedHttpxJsonTransport(
+                    allowed_origin=origin,
+                    provider_label="CLIProxyAPI",
+                ).request_json(
+                    method="POST",
+                    url=f"{origin}/v1/chat/completions",
+                    headers={"Authorization": "Bearer dedicated-local-key"},
+                    payload={"model": "gpt-5.6-luna"},
+                    timeout_seconds=2,
+                )
             )
 
     assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
@@ -272,15 +370,17 @@ def test_http_408_incomplete_upstream_stream_is_ambiguous_and_forbidden() -> Non
     with json_server(body, status=408) as (server, Handler):
         origin = f"http://127.0.0.1:{server.server_port}"
         with pytest.raises(CLIProxyProviderError) as captured:
-            PinnedUrllibJsonTransport(
-                allowed_origin=origin,
-                provider_label="CLIProxyAPI",
-            ).request_json(
-                method="POST",
-                url=f"{origin}/v1/chat/completions",
-                headers={"Authorization": "Bearer dedicated-local-key"},
-                payload={"model": "gpt-5.6-luna"},
-                timeout_seconds=2,
+            asyncio.run(
+                PinnedHttpxJsonTransport(
+                    allowed_origin=origin,
+                    provider_label="CLIProxyAPI",
+                ).request_json(
+                    method="POST",
+                    url=f"{origin}/v1/chat/completions",
+                    headers={"Authorization": "Bearer dedicated-local-key"},
+                    payload={"model": "gpt-5.6-luna"},
+                    timeout_seconds=2,
+                )
             )
 
     assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
@@ -294,15 +394,17 @@ def test_generic_http_408_generation_post_is_ambiguous_and_forbidden() -> None:
     with json_server("request timeout", status=408) as (server, Handler):
         origin = f"http://127.0.0.1:{server.server_port}"
         with pytest.raises(CLIProxyProviderError) as captured:
-            PinnedUrllibJsonTransport(
-                allowed_origin=origin,
-                provider_label="CLIProxyAPI",
-            ).request_json(
-                method="POST",
-                url=f"{origin}/v1/chat/completions",
-                headers={"Authorization": "Bearer dedicated-local-key"},
-                payload={"model": "gpt-5.6-luna"},
-                timeout_seconds=2,
+            asyncio.run(
+                PinnedHttpxJsonTransport(
+                    allowed_origin=origin,
+                    provider_label="CLIProxyAPI",
+                ).request_json(
+                    method="POST",
+                    url=f"{origin}/v1/chat/completions",
+                    headers={"Authorization": "Bearer dedicated-local-key"},
+                    payload={"model": "gpt-5.6-luna"},
+                    timeout_seconds=2,
+                )
             )
 
     assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]
@@ -320,15 +422,17 @@ def test_http_5xx_explicit_pre_generation_diagnostics_are_terminal(
     with json_server(diagnostic_code) as (server, Handler):
         origin = f"http://127.0.0.1:{server.server_port}"
         with pytest.raises(CLIProxyProviderError) as captured:
-            PinnedUrllibJsonTransport(
-                allowed_origin=origin,
-                provider_label="CLIProxyAPI",
-            ).request_json(
-                method="POST",
-                url=f"{origin}/v1/chat/completions",
-                headers={"Authorization": "Bearer dedicated-local-key"},
-                payload={"model": "gpt-5.6-luna"},
-                timeout_seconds=2,
+            asyncio.run(
+                PinnedHttpxJsonTransport(
+                    allowed_origin=origin,
+                    provider_label="CLIProxyAPI",
+                ).request_json(
+                    method="POST",
+                    url=f"{origin}/v1/chat/completions",
+                    headers={"Authorization": "Bearer dedicated-local-key"},
+                    payload={"model": "gpt-5.6-luna"},
+                    timeout_seconds=2,
+                )
             )
 
     assert Handler.hits == [("/v1/chat/completions", "Bearer dedicated-local-key")]

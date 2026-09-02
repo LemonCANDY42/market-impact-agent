@@ -258,7 +258,10 @@ TradingAgents-CN, last30days-skill, Codex, OpenCode, and Pi were reviewed as pri
 whole project became a runtime dependency or vendored core. The implementation cleanly uses
 only narrow patterns: typed tools and scopes, append-only recovery, capability manifests,
 secret redaction, explicit process cancellation, and content-identified compaction. The
-official MCP Python SDK is the only adopted Agent-protocol dependency.
+official MCP Python SDK is the adopted Agent-protocol dependency. Model HTTP I/O now uses pinned
+`httpx2==2.12.0`, rather than a custom urllib opener in a worker thread. This is transport reuse,
+not adoption of an external Agent Runner. The reference comparison and cancellation/retry boundary
+are owned by [Model Provider Reliability](MODEL_PROVIDER_RELIABILITY.md#transport-reuse--2-september-2026).
 
 ## Acceptance gate
 

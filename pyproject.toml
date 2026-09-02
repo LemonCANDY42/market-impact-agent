@@ -19,7 +19,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dependencies = ["json-repair==0.63.4", "jsonschema>=4.25,<5"]
+dependencies = ["httpx2==2.12.0", "json-repair==0.63.4", "jsonschema>=4.25,<5"]
 
 [project.optional-dependencies]
 agent = ["mcp>=2,<3"]
