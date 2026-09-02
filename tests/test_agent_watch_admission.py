@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Thread
 from typing import Any, cast
@@ -15,6 +15,7 @@ from market_impact_agent.agent_watch_admission import (
     AgentWatchAdmissionService,
     AgentWatchRequest,
     EventImpactTriageWatchAuthority,
+    EventImpactTriageWatchAuthorityResolver,
     WatchAdmissionBlocker,
     WatchAdmissionOutcome,
     WatchDelegateProfile,
@@ -46,7 +47,9 @@ from market_impact_agent.monitoring_scope import (
 )
 from market_impact_agent.observations import ObservationCapability
 from market_impact_agent.prospective_data import ProspectiveDataJournal
-from market_impact_agent.research import EventArchetype, EventStage
+from market_impact_agent.prospective_diagnostic import load_prospective_diagnostic_registration
+from market_impact_agent.prospective_event_assessment import EventAssessmentRunAuthority
+from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 
 from .test_attention_watch import (
     FIRST_RECEIPT,
@@ -63,6 +66,7 @@ from .test_event_impact_triage import (
 TEMPLATE_REF = f"monitoring-query-template-{'a' * 64}"
 PARENT_REF = "event-envelope-example"
 PARENT_TYPE = "triage.coordinator"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _profile(*, collection_policy_id: str) -> WatchDelegateProfile:
@@ -236,6 +240,7 @@ def _triage_setup(
         recommended_route=TriageRoute.ATTENTION_WATCH,
         event_archetypes=(EventArchetype.ISSUER_CORPORATE,),
         event_stage=EventStage.FIRST_OBSERVED,
+        transmission_channels=(TransmissionChannel.RISK_UNCERTAINTY_INSURANCE,),
         changed_facts=("Alpha product safety concerns may be escalating.",),
         rule_reasons=("Primary-source confirmation remains incomplete.",),
         evidence_version_ids=(first,),
@@ -589,6 +594,88 @@ def test_triage_authority_rejects_other_roots_subclasses_and_unrouted_cluster(
             candidate_set_id=authority.candidate_set_id,
             cluster_id=unrelated.cluster_id,
         ).delegation_context()
+
+
+def test_completed_event_assessment_watch_becomes_a_concrete_parent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_set = _candidate_set(tmp_path / "event-assessment")
+    first, *remaining = candidate_set.version_ids
+    review = TriageClusterProposal.build(
+        candidate_version_ids=(first,),
+        checkpoint_eligibility=CheckpointEligibility.NEEDS_REVIEW,
+        recommended_route=TriageRoute.EVENT_ASSESSMENT,
+        event_archetypes=(EventArchetype.ISSUER_CORPORATE,),
+        event_stage=EventStage.FIRST_OBSERVED,
+        transmission_channels=(TransmissionChannel.RISK_UNCERTAINTY_INSURANCE,),
+        changed_facts=("Alpha product safety concerns may be escalating.",),
+        rule_reasons=("A concrete transmission path requires assessment.",),
+        evidence_version_ids=(first,),
+        uncertainty_notes=("A binding authority response is still missing.",),
+        affected_entity_refs=("issuer.alpha",),
+        watch_questions=("Did an authority publish a binding follow-up?",),
+        triage_confidence=0.52,
+    )
+    archive = TriageClusterProposal.build(
+        candidate_version_ids=tuple(remaining),
+        checkpoint_eligibility=CheckpointEligibility.INELIGIBLE,
+        recommended_route=TriageRoute.ARCHIVE,
+        event_archetypes=(),
+        event_stage=EventStage.FIRST_OBSERVED,
+        changed_facts=(),
+        rule_reasons=("The remaining items do not change the registered rule.",),
+        evidence_version_ids=tuple(remaining),
+        triage_confidence=0.9,
+    )
+    proposal = EventImpactTriageProposal.build(
+        candidate_set=candidate_set,
+        clusters=(review, archive),
+    )
+    store = LocalDataSnapshotStore(tmp_path / "event-assessment/state")
+    decision_store = EventImpactTriageDecisionStore(store.root)
+    decision = decision_store.admit(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        run_evidence=_run_evidence(),
+        run_authority=RecordingRunAuthority(
+            candidate_set.candidate_set_id,
+            proposal.proposal_id,
+        ),
+        decided_at=candidate_set.frozen_at + timedelta(seconds=1),
+    )
+    completed_at = decision.decided_at + timedelta(seconds=2)
+
+    def reopen_completed_watch(
+        self: EventAssessmentRunAuthority,
+        **kwargs: object,
+    ) -> datetime:
+        _ = (self, kwargs)
+        return completed_at
+
+    monkeypatch.setattr(
+        EventAssessmentRunAuthority,
+        "reopen_completed_watch",
+        reopen_completed_watch,
+    )
+    assessment_authority = EventAssessmentRunAuthority(
+        run_root=tmp_path / "event-assessment/runs",
+        registration=load_prospective_diagnostic_registration(
+            ROOT / "examples/research/prospective-diagnostic-registration-v5.json"
+        ),
+        skill_root=ROOT / "skills",
+    )
+    resolver = EventImpactTriageWatchAuthorityResolver(
+        store,
+        decision_store=decision_store,
+        event_assessment_authority=assessment_authority,
+    )
+
+    context = resolver.authority(review.cluster_id).delegation_context()
+
+    assert context.parent_ref == review.cluster_id
+    assert context.parent_agent_type == "event-assessment.coordinator"
+    assert context.created_at == completed_at
 
 
 def test_exhausted_equivalent_watch_rejects_a_late_subscriber(tmp_path: Path) -> None:

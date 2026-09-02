@@ -164,6 +164,13 @@ class CrashBeforeUsageRunner(EventAssessmentRunner):
         )
 
 
+class UncheckedExposureBindingRunner(EventAssessmentRunner):
+    """Create a self-consistent wrong-parent terminal fixture for authority tests."""
+
+    def _validate_static_bindings(self) -> None:
+        pass
+
+
 def test_event_assessment_run_is_durable_and_authoritative(tmp_path: Path) -> None:
     registration, candidate_set, proposal, decision, cluster, contents = _inputs()
     provider = FixtureProvider((_valid_response(),))
@@ -255,6 +262,78 @@ def test_empty_assessment_path_completes_as_watch_without_retry(tmp_path: Path) 
     assert result.disposition is MaterialityDisposition.WATCH
     assert result.blockers == ("No evidence-bound listed target mapping is available.",)
     assert provider.calls == 1
+    completed_at = EventAssessmentRunAuthority(
+        run_root=tmp_path / "runs",
+        registration=registration,
+        skill_root=ROOT / "skills",
+    ).reopen_completed_watch(
+        candidate_set=candidate_set,
+        proposal=proposal,
+        decision=decision,
+        cluster=cluster,
+    )
+    assert (
+        completed_at == RunJournal(tmp_path / "runs/runs.sqlite3").get_run(result.run_id).updated_at
+    )
+
+
+@pytest.mark.parametrize("mismatch", ["candidate_set", "cluster", "cutoff"])
+def test_completed_watch_rejects_self_consistent_wrong_exposure_binding(
+    tmp_path: Path, mismatch: str
+) -> None:
+    registration, candidate_set, proposal, decision, cluster, contents = _inputs()
+    original = _exposure_view(candidate_set, decision, cluster)
+    wrong_view = ExposureCandidateView.build(
+        candidate_set_id=(
+            f"event-impact-triage-candidate-set-{'f' * 64}"
+            if mismatch == "candidate_set"
+            else original.candidate_set_id
+        ),
+        cluster_id=(f"triage-cluster-{'f' * 64}" if mismatch == "cluster" else original.cluster_id),
+        cutoff_at=(
+            original.cutoff_at + timedelta(minutes=1)
+            if mismatch == "cutoff"
+            else original.cutoff_at
+        ),
+        candidates=original.candidates,
+    )
+    provider = FixtureProvider(
+        (
+            {
+                "paths": [],
+                "counterevidence": [],
+                "invalidation_conditions": [],
+                "blockers": ["No evidence-bound listed target mapping is available."],
+            },
+        )
+    )
+    result = asyncio.run(
+        _runner(
+            tmp_path,
+            registration,
+            candidate_set,
+            proposal,
+            decision,
+            cluster,
+            contents,
+            provider,
+            runner_class=UncheckedExposureBindingRunner,
+            exposure_view=wrong_view,
+        ).run()
+    )
+    assert result.status is RunStatus.COMPLETED
+
+    with pytest.raises(ValueError, match="Exposure Candidate View authority is invalid"):
+        EventAssessmentRunAuthority(
+            run_root=tmp_path / "runs",
+            registration=registration,
+            skill_root=ROOT / "skills",
+        ).reopen_completed_watch(
+            candidate_set=candidate_set,
+            proposal=proposal,
+            decision=decision,
+            cluster=cluster,
+        )
 
 
 def test_terminal_replay_skips_provider_creation_and_recovers_usage(tmp_path: Path) -> None:
@@ -651,6 +730,7 @@ def _runner(
     provider_factory: Callable[[], ModelProvider] | None = None,
     provider_health_store: ProviderHealthStore | None = None,
     runner_class: type[EventAssessmentRunner] = EventAssessmentRunner,
+    exposure_view: ExposureCandidateView | None = None,
 ) -> EventAssessmentRunner:
     return runner_class(
         registration=registration,
@@ -659,7 +739,7 @@ def _runner(
         decision=decision,
         cluster=cluster,
         contents=contents,
-        exposure_view=_exposure_view(candidate_set, decision, cluster),
+        exposure_view=exposure_view or _exposure_view(candidate_set, decision, cluster),
         profile=load_builtin_model_provider_profile(registration.model_profile_id),
         provider=provider,
         provider_factory=provider_factory,

@@ -8,7 +8,12 @@ from typing import cast
 
 import pytest
 
-from market_impact_agent.cli import build_parser, main, status_payload
+from market_impact_agent.cli import (
+    _effective_model_request_concurrency,  # pyright: ignore[reportPrivateUsage]
+    build_parser,
+    main,
+    status_payload,
+)
 from market_impact_agent.energy_monitor import EnergyMonitorCycle, EnergySourceMonitor
 from tests.test_energy_monitor import build_monitor
 
@@ -73,7 +78,10 @@ def test_method_skill_ablation_cli_requires_the_registered_horizon() -> None:
     assert args.eligible_horizon_sessions == 102
 
 
-def test_prospective_triage_cli_binds_one_receipt_ordered_batch() -> None:
+def test_prospective_triage_cli_binds_one_receipt_ordered_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", raising=False)
     args = build_parser().parse_args(
         [
             "agent",
@@ -93,7 +101,40 @@ def test_prospective_triage_cli_binds_one_receipt_ordered_batch() -> None:
     assert args.agent_command == "prospective-triage-run"
     assert args.checkpoint_key == "next-material-a-share-event"
     assert args.maximum_candidates == 24
+    assert _effective_model_request_concurrency(args.maximum_concurrent_model_requests) == 3
     assert args.prepare_only is True
+
+
+def test_prospective_triage_cli_reads_and_validates_model_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", "2")
+    args = build_parser().parse_args(
+        [
+            "agent",
+            "prospective-triage-run",
+            "--registration",
+            "registration.json",
+            "--route-plan",
+            "route-plan.json",
+            "--checkpoint-key",
+            "next-material-a-share-event",
+            "--prepare-only",
+        ]
+    )
+    assert _effective_model_request_concurrency(args.maximum_concurrent_model_requests) == 2
+
+    monkeypatch.setenv("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", "bad")
+    parser = build_parser()
+    with pytest.raises(SystemExit) as help_exit:
+        parser.parse_args(["--help"])
+    assert help_exit.value.code == 0
+    assert _effective_model_request_concurrency(3) == 3
+    with pytest.raises(ValueError, match="must be an integer"):
+        _effective_model_request_concurrency(None)
+    monkeypatch.setenv("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", "9")
+    with pytest.raises(ValueError, match="between 1 and 8"):
+        _effective_model_request_concurrency(None)
 
 
 def test_prospective_triage_comparison_cli_requires_frozen_labels() -> None:

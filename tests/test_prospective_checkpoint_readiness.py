@@ -228,6 +228,46 @@ def test_route_plan_allows_multiple_jobs_for_one_semantic_news_route() -> None:
     )
 
 
+@pytest.mark.parametrize("upstream_source", ("tushare-etf-basic", "tushare-stock-basic"))
+def test_route_admission_accepts_exact_tradable_instrument_master_sources(
+    tmp_path: Path,
+    upstream_source: str,
+) -> None:
+    registration = _registration()
+    plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=registration.registration_id,
+        bindings=(
+            ProspectiveCheckpointRouteBinding(
+                checkpoint_key="next-a-share-policy-event",
+                capability=ObservationCapability.EXPOSURE_CANDIDATES,
+                route_kind="tradable_instrument_master",
+                job_id=JOB_ID,
+            ),
+        ),
+    )
+    runtime = _runtime(
+        policy=_FakePolicy(capability=ObservationCapability.EXPOSURE_CANDIDATES),
+        declaration=_FakeDeclaration(
+            capability=ObservationCapability.EXPOSURE_CANDIDATES,
+            provider_id="tushare-observation",
+            upstream_source=upstream_source,
+            semantic_scope="aggregated_source_observation_actual_receipt_only",
+        ),
+    )
+    store = ProspectiveCheckpointAdmissionStore(
+        tmp_path / "state",
+        clock=lambda: ADMITTED_AT,
+    )
+
+    admission = store.admit(
+        route_plan=plan,
+        registration=registration,
+        runtime=runtime,
+    )
+
+    assert admission.route_plan_id == plan.plan_id
+
+
 def test_readiness_keeps_each_job_bound_to_a_shared_news_semantic(
     tmp_path: Path,
 ) -> None:

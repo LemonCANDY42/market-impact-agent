@@ -449,6 +449,114 @@ class EventAssessmentRunAuthority(CompletedEventAssessmentAuthority):
         ):
             raise ValueError("EventAssessment Usage Ledger does not reconcile")
 
+    def reopen_completed_watch(
+        self,
+        *,
+        candidate_set: EventImpactTriageCandidateSet,
+        proposal: EventImpactTriageProposal,
+        decision: EventImpactTriageDecision,
+        cluster: TriageClusterProposal,
+    ) -> datetime:
+        """Reopen one pathless completed assessment that explicitly requested a Watch."""
+
+        if cluster.cluster_id not in decision.event_assessment_cluster_ids:
+            raise ValueError("EventAssessment Watch requires an EventAssessment-routed cluster")
+        if candidate_set.registration_id != self.registration.registration_id:
+            raise ValueError("EventAssessment Watch belongs to another registration")
+        proposal.validate_against(candidate_set)
+        if (
+            decision.candidate_set_id != candidate_set.candidate_set_id
+            or decision.proposal_id != proposal.proposal_id
+        ):
+            raise ValueError("EventAssessment Watch does not bind the Triage Decision")
+        profile = load_builtin_model_provider_profile(self.registration.model_profile_id)
+        matches: list[
+            tuple[RunRecord, dict[str, object], ExposureCandidateView, EventAssessmentRunBinding]
+        ] = []
+        for stored_usage in self.usage.records():
+            usage = stored_usage.record
+            if usage.status is not RunStatus.COMPLETED or usage.terminal_artifact_hash is None:
+                continue
+            terminal = _object(
+                self.artifacts.read_json(usage.terminal_artifact_hash),
+                "EventAssessment Watch terminal artifact",
+            )
+            raw_binding = _object(
+                terminal.get("binding"),
+                "EventAssessment Watch binding",
+            )
+            if (
+                raw_binding.get("candidate_set_id") != candidate_set.candidate_set_id
+                or raw_binding.get("proposal_id") != proposal.proposal_id
+                or raw_binding.get("triage_decision_id") != decision.decision_id
+                or raw_binding.get("cluster_id") != cluster.cluster_id
+                or terminal.get("disposition") != MaterialityDisposition.WATCH.value
+            ):
+                continue
+            exposure_view = _exposure_candidate_view_from_dict(
+                terminal.get("exposure_candidate_view")
+            )
+            binding = _build_binding(
+                registration=self.registration,
+                candidate_set=candidate_set,
+                proposal=proposal,
+                decision=decision,
+                cluster=cluster,
+                profile=profile,
+                skills=SkillRegistry(self.skill_root),
+                exposure_view=exposure_view,
+            )
+            record = self.journal.get_run(usage.run_id)
+            if record.run_id == _run_id(binding):
+                matches.append((record, terminal, exposure_view, binding))
+        if len(matches) != 1:
+            raise ValueError("EventAssessment Watch requires one matching completed run")
+        record, terminal, exposure_view, binding = matches[0]
+        if (
+            exposure_view.candidate_set_id != candidate_set.candidate_set_id
+            or exposure_view.cluster_id != cluster.cluster_id
+            or exposure_view.cutoff_at != decision.decided_at
+            or len(exposure_view.candidates) != binding.exposure_candidate_count
+        ):
+            raise ValueError("EventAssessment Watch Exposure Candidate View authority is invalid")
+        run_id = record.run_id
+        if record.status is not RunStatus.COMPLETED or record.terminal_artifact_id is None:
+            raise ValueError("EventAssessment Watch requires one completed run")
+        metrics = _metrics(terminal.get("metrics"))
+        if (
+            terminal.get("schema_version") != EVENT_ASSESSMENT_TERMINAL_SCHEMA
+            or terminal.get("run_id") != run_id
+            or terminal.get("binding") != binding.to_dict()
+            or terminal.get("exposure_candidate_view") != exposure_view.to_dict()
+            or terminal.get("execution_binding_hash") != record.config_hash
+            or terminal.get("journal_hash") != self.journal.journal_hash(run_id)
+            or terminal.get("provider_id") != profile.provider_id
+            or terminal.get("model") != profile.model
+            or terminal.get("tool_surface_hash") != EVENT_ASSESSMENT_TOOL_SURFACE_HASH
+            or terminal.get("assessment") is not None
+            or terminal.get("materiality") is not None
+            or terminal.get("disposition") != MaterialityDisposition.WATCH.value
+            or not _strings(terminal.get("blockers"), "EventAssessment Watch blockers")
+        ):
+            raise ValueError("EventAssessment Watch terminal authority is invalid")
+        records = tuple(
+            item.record for item in self.usage.records() if item.record.run_id == run_id
+        )
+        if len(records) != 1:
+            raise ValueError("EventAssessment Watch requires one Usage Ledger record")
+        usage = records[0]
+        if (
+            usage.status is not RunStatus.COMPLETED
+            or usage.terminal_artifact_hash != record.terminal_artifact_id
+            or usage.provider_profile_id != profile.profile_id
+            or usage.provider_profile_hash != profile.profile_hash
+            or usage.execution_binding_hash != record.config_hash
+            or usage.run_journal_hash != terminal.get("journal_hash")
+            or usage.metrics != metrics
+        ):
+            raise ValueError("EventAssessment Watch Usage Ledger does not reconcile")
+        return record.updated_at
+
 
 class EventAssessmentRunner:
     """One bounded no-tool semantic run for one Triage-routed cluster."""

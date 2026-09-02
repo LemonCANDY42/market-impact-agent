@@ -22,6 +22,34 @@ The machine-local environment names are:
 - CLIProxyAPI Profile values are fixed to `http://127.0.0.1:8317`, `gpt-5.6-luna`, and
   `reasoning_effort=xhigh`; alternate origins, models, or effort values are rejected.
 
+On the accepted local host, private model values live in
+`~/.config/market-impact-agent/model.env` with mode `0600`. The
+`market-impact-model` launcher parses only the allowlisted names above, exports them to one child
+process, and starts the project CLI. It does not source executable shell syntax and does not expose
+the model environment to the prospective collector. Callers therefore do not need to retrieve or
+inject a key for every run.
+
+Model identity, endpoint, reasoning effort, sampling, context limits, retry policy, pricing, and
+budgets remain in a content-identified Model Provider Profile. These are not secret setup burden:
+the Harness selects the registered profile and freezes the effective profile in each execution
+plan and Run record. An environment value may supply a credential or assert the expected MiniMax
+origin/model, but it may not silently override the frozen profile. This keeps the ordinary command
+simple without making old experiments unreproducible.
+
+`MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
+machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a
+new Triage Work Execution Plan before any request is dispatched. Changing the environment therefore
+does not reinterpret an active or historical Plan. The ceiling applies only to independent members
+inside one phase: all map roles finish before partition, and partition finishes before classify.
+Independent members run in deterministic waves of at most the ceiling. The Harness waits for the
+admitted wave, records each exact Run/Usage identity, appends the hash-chained Usage Ledger serially
+(including successful peers when a sibling raises), and starts no later wave or phase after a
+terminal failure. Ambiguity takes precedence in the aggregate status. It neither
+retries an ambiguous dispatch nor grants additional budget or authority. Legacy v2-v11 Plans remain
+serial. Separate collector concurrency is unrelated and cannot dispatch model calls.
+The environment default is resolved only for the selected Triage command, and an explicit valid CLI
+value takes precedence; a malformed value does not break unrelated commands or help.
+
 MiniMax's official [M3 model page](https://www.minimax.io/models/text/m3),
 [OpenAI-compatible API guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
 [China/international endpoint guide](https://platform.minimax.io/docs/token-plan/cursor), and
@@ -29,8 +57,8 @@ MiniMax's official [M3 model page](https://www.minimax.io/models/text/m3),
 Provider references. The API key never enters prompts, run artifacts, model history, tool
 arguments, logs, or committed configuration. The runtime records a versioned cost estimate;
 it is not an invoice and currently does not subtract automatic prompt-cache discounts.
-The CLIProxyAPI credential remains only in the trusted machine configuration and is not copied to
-the repository or global shell configuration. Codex OAuth is included usage with no asserted
+The CLIProxyAPI credential remains only in trusted mode-`0600` machine configuration and is not
+copied to the repository or global shell configuration. Codex OAuth is included usage with no asserted
 USD/token rate, so the Usage Ledger records Token and latency budgets while its marginal estimated
 USD cost is zero; that zero must not be read as unlimited quota or no resource consumption.
 

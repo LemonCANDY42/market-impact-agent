@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.attention_watch import (
@@ -51,6 +51,9 @@ from market_impact_agent.prospective_data import (
     prospective_observation_version_id,
 )
 
+if TYPE_CHECKING:
+    from market_impact_agent.prospective_event_assessment import EventAssessmentRunAuthority
+
 AGENT_WATCH_REQUEST_SCHEMA = "market-impact.agent-watch-request.v1"
 AGENT_WATCH_ADMISSION_SCHEMA = "market-impact.agent-watch-admission.v1"
 
@@ -63,6 +66,7 @@ _ACTIVE_WATCH_STATUSES = (
     AttentionWatchStatus.TRIGGERED.value,
 )
 _TRIAGE_COORDINATOR_AGENT_TYPE = "triage.coordinator"
+_EVENT_ASSESSMENT_COORDINATOR_AGENT_TYPE = "event-assessment.coordinator"
 _MATCHER_TERM = re.compile(r"[a-z][a-z0-9._:-]{2,63}|[\u3400-\u9fff]{2,16}")
 _MAX_AUTHORIZED_MATCHER_TERMS = 32
 _GENERIC_TRIAGE_MATCHER_TERMS = frozenset(
@@ -242,6 +246,7 @@ class EventImpactTriageWatchAuthority:
         decision_store: EventImpactTriageDecisionStore,
         candidate_set_id: str,
         cluster_id: str,
+        event_assessment_authority: EventAssessmentRunAuthority | None = None,
     ) -> None:
         if type(store) is not LocalDataSnapshotStore:
             raise TypeError("Triage Watch authority requires the concrete Data Snapshot store")
@@ -253,10 +258,20 @@ class EventImpactTriageWatchAuthority:
             raise ValueError("Triage Watch authority requires a Candidate Set ID")
         if not cluster_id.startswith("event-impact-triage-cluster-"):
             raise ValueError("Triage Watch authority requires a cluster ID")
+        if event_assessment_authority is not None:
+            from market_impact_agent.prospective_event_assessment import (
+                EventAssessmentRunAuthority,
+            )
+
+            if type(event_assessment_authority) is not EventAssessmentRunAuthority:
+                raise TypeError(
+                    "Triage Watch authority requires the concrete EventAssessment authority"
+                )
         self.store = store
         self.decision_store = decision_store
         self.candidate_set_id = candidate_set_id
         self.cluster_id = cluster_id
+        self.event_assessment_authority = event_assessment_authority
 
     def delegation_context(self) -> AgentDelegationContext:
         """Derive the projection anew from the append-only Triage Decision owner."""
@@ -266,19 +281,35 @@ class EventImpactTriageWatchAuthority:
         if len(matches) != 1:
             raise ValueError("Triage Watch cluster is not in the authoritative Proposal")
         cluster = matches[0]
-        if (
-            cluster.cluster_id not in decision.attention_watch_cluster_ids
-            or cluster.recommended_route is not TriageRoute.ATTENTION_WATCH
+        direct_watch = (
+            cluster.cluster_id in decision.attention_watch_cluster_ids
+            and cluster.recommended_route is TriageRoute.ATTENTION_WATCH
+        )
+        if direct_watch:
+            parent_agent_type = _TRIAGE_COORDINATOR_AGENT_TYPE
+            created_at = decision.decided_at
+        elif (
+            cluster.cluster_id in decision.event_assessment_cluster_ids
+            and cluster.recommended_route is TriageRoute.EVENT_ASSESSMENT
+            and self.event_assessment_authority is not None
         ):
+            parent_agent_type = _EVENT_ASSESSMENT_COORDINATOR_AGENT_TYPE
+            created_at = self.event_assessment_authority.reopen_completed_watch(
+                candidate_set=candidate_set,
+                proposal=proposal,
+                decision=decision,
+                cluster=cluster,
+            )
+        else:
             raise ValueError("Triage cluster is not authorized for Attention Watch")
         evidence_refs = tuple(
             sorted({*cluster.candidate_version_ids, *cluster.evidence_version_ids})
         )
         return AgentDelegationContext(
             parent_ref=cluster.cluster_id,
-            parent_agent_type=_TRIAGE_COORDINATOR_AGENT_TYPE,
+            parent_agent_type=parent_agent_type,
             lineage_depth=0,
-            created_at=decision.decided_at,
+            created_at=created_at,
             authorized_evidence_refs=evidence_refs,
             authorized_subjects=(
                 MonitoringSubjectRef(
@@ -310,6 +341,7 @@ class EventImpactTriageWatchAuthorityResolver:
         store: LocalDataSnapshotStore,
         *,
         decision_store: EventImpactTriageDecisionStore,
+        event_assessment_authority: EventAssessmentRunAuthority | None = None,
     ) -> None:
         if type(store) is not LocalDataSnapshotStore:
             raise TypeError("Triage Watch resolver requires the concrete Data Snapshot store")
@@ -317,16 +349,30 @@ class EventImpactTriageWatchAuthorityResolver:
             raise TypeError("Triage Watch resolver requires the concrete Triage Decision store")
         if decision_store.root != store.root:
             raise ValueError("Triage Watch resolver stores must share one exact state root")
+        if event_assessment_authority is not None:
+            from market_impact_agent.prospective_event_assessment import (
+                EventAssessmentRunAuthority,
+            )
+
+            if type(event_assessment_authority) is not EventAssessmentRunAuthority:
+                raise TypeError(
+                    "Triage Watch resolver requires the concrete EventAssessment authority"
+                )
         self.store = store
         self.decision_store = decision_store
+        self.event_assessment_authority = event_assessment_authority
 
     def authority(self, parent_ref: str) -> EventImpactTriageWatchAuthority:
-        candidate, _, _, cluster = self.decision_store.get_watch_context_by_cluster(parent_ref)
+        if self.event_assessment_authority is None:
+            candidate, _, _, cluster = self.decision_store.get_watch_context_by_cluster(parent_ref)
+        else:
+            candidate, _, _, cluster = self.decision_store.get_cluster_context(parent_ref)
         return EventImpactTriageWatchAuthority(
             self.store,
             decision_store=self.decision_store,
             candidate_set_id=candidate.candidate_set_id,
             cluster_id=cluster.cluster_id,
+            event_assessment_authority=self.event_assessment_authority,
         )
 
     def reopen(self, context: AgentDelegationContext) -> AgentDelegationContext:

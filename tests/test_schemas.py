@@ -223,6 +223,7 @@ def test_schema_is_valid(schema_name: str) -> None:
         "examples/research/prospective-checkpoint-route-plan-v4.json",
         "examples/research/prospective-checkpoint-route-plan-v5.json",
         "examples/research/prospective-checkpoint-route-plan-v6.json",
+        "examples/research/prospective-checkpoint-route-plan-v7.json",
     ],
 )
 def test_examples_conform_to_schema(example_path: str) -> None:
@@ -296,6 +297,7 @@ def test_examples_conform_to_schema(example_path: str) -> None:
             "prospective-checkpoint-route-plan-v4.json",
             "prospective-checkpoint-route-plan-v5.json",
             "prospective-checkpoint-route-plan-v6.json",
+            "prospective-checkpoint-route-plan-v7.json",
         )
     ):
         schema_name = "prospective-checkpoint-route-plan.schema.json"

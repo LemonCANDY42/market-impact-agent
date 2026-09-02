@@ -49,6 +49,8 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkExecutionPlan,
     EventImpactTriageWorkRunner,
@@ -57,6 +59,8 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v9,
     build_event_impact_triage_work_execution_plan_v10,
     build_event_impact_triage_work_execution_plan_v11,
+    build_event_impact_triage_work_execution_plan_v12,
+    build_event_impact_triage_work_execution_plan_v13,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -126,6 +130,7 @@ class _LazyAvailabilityModelProvider:
         self._profile = profile
         self._provider = provider
         self._available = False
+        self._availability_lock = asyncio.Lock()
 
     @property
     def provider_id(self) -> str:
@@ -147,8 +152,13 @@ class _LazyAvailabilityModelProvider:
     async def _assert_available(self, provider: ModelProvider) -> None:
         if self._available:
             return
-        await cast(_AvailabilityModelProvider, provider).assert_model_available(timeout_seconds=30)
-        self._available = True
+        async with self._availability_lock:
+            if self._available:
+                return
+            await cast(_AvailabilityModelProvider, provider).assert_model_available(
+                timeout_seconds=30
+            )
+            self._available = True
 
     async def prepare_for_model_call(self) -> None:
         """Resolve and probe immediately before the Runner records a dispatch."""
@@ -215,6 +225,7 @@ class PreparedProspectiveTriageWork:
             "work_unit_count": len(self.manifest.work_units),
             "plan_id": self.plan.plan_id,
             "maximum_provider_runs": self.plan.max_total_runs,
+            "maximum_concurrent_model_requests": self.plan.max_concurrent_model_requests,
             "maximum_estimated_cost_microusd": self.plan.max_total_estimated_cost_microusd,
             "profile_id": self.profile.profile_id,
             "protocol_artifact_hashes": dict(self.protocol_artifact_hashes),
@@ -912,6 +923,7 @@ def prepare_next_prospective_triage_work(
     skill_root: Path,
     evaluated_at: datetime,
     maximum_candidate_count: int = 32,
+    maximum_concurrent_model_requests: int = 3,
 ) -> PreparedProspectiveTriageWork:
     """Freeze the next actual-receipt prefix and its checkpoint-specific plan."""
 
@@ -969,9 +981,9 @@ def prepare_next_prospective_triage_work(
     profile = load_builtin_model_provider_profile(registration.model_profile_id)
     checkpoint = registration.checkpoint(checkpoint_key)
     plan_builder = (
-        build_event_impact_triage_work_execution_plan_v11
+        build_event_impact_triage_work_execution_plan_v13
         if checkpoint.mechanism is DiagnosticMechanism.MATERIAL_EVENT
-        else build_event_impact_triage_work_execution_plan_v8
+        else build_event_impact_triage_work_execution_plan_v12
     )
     plan = plan_builder(
         candidate_set=candidate_set,
@@ -981,6 +993,7 @@ def prepare_next_prospective_triage_work(
         model_profile_alias=registration.model_profile_id,
         model_profile=profile,
         skills=SkillRegistry(skill_root),
+        max_concurrent_model_requests=maximum_concurrent_model_requests,
     )
     registered_limit = int(Decimal(registration.aggregate_model_cost_limit_usd) * 1_000_000)
     if plan.max_total_estimated_cost_microusd > registered_limit:
@@ -1034,6 +1047,7 @@ def prepare_or_reopen_prospective_triage_work(
     skill_root: Path,
     evaluated_at: datetime,
     maximum_candidate_count: int = 32,
+    maximum_concurrent_model_requests: int = 3,
 ) -> PreparedProspectiveTriageWork:
     """Reopen the route epoch's active graph or atomically reserve its next prefix."""
 
@@ -1070,6 +1084,7 @@ def prepare_or_reopen_prospective_triage_work(
         skill_root=skill_root,
         evaluated_at=evaluated_at,
         maximum_candidate_count=maximum_candidate_count,
+        maximum_concurrent_model_requests=maximum_concurrent_model_requests,
     )
     installed = active_store.install(
         prepared,
@@ -1312,26 +1327,50 @@ async def run_prepared_prospective_triage_comparison(
         raise ValueError("prospective triage labels belong to another Candidate Set")
     if prepared.plan.arm is not TriageComparisonArm.TREATMENT:
         raise ValueError("prepared prospective triage plan is not the treatment arm")
-    plan_builder = {
-        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9: (
-            build_event_impact_triage_work_execution_plan_v9
-        ),
-        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10: (
-            build_event_impact_triage_work_execution_plan_v10
-        ),
-        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11: (
-            build_event_impact_triage_work_execution_plan_v11
-        ),
-    }.get(prepared.plan.schema_version, build_event_impact_triage_work_execution_plan_v8)
-    baseline_plan = plan_builder(
-        candidate_set=prepared.candidate_set,
-        work_manifest=prepared.manifest,
-        registration=registration,
-        arm=TriageComparisonArm.BASELINE,
-        model_profile_alias=registration.model_profile_id,
-        model_profile=prepared.profile,
-        skills=SkillRegistry(skill_root),
-    )
+    skills = SkillRegistry(skill_root)
+    if prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12:
+        baseline_plan = build_event_impact_triage_work_execution_plan_v12(
+            candidate_set=prepared.candidate_set,
+            work_manifest=prepared.manifest,
+            registration=registration,
+            arm=TriageComparisonArm.BASELINE,
+            model_profile_alias=registration.model_profile_id,
+            model_profile=prepared.profile,
+            skills=skills,
+            max_concurrent_model_requests=prepared.plan.max_concurrent_model_requests,
+        )
+    elif prepared.plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13:
+        baseline_plan = build_event_impact_triage_work_execution_plan_v13(
+            candidate_set=prepared.candidate_set,
+            work_manifest=prepared.manifest,
+            registration=registration,
+            arm=TriageComparisonArm.BASELINE,
+            model_profile_alias=registration.model_profile_id,
+            model_profile=prepared.profile,
+            skills=skills,
+            max_concurrent_model_requests=prepared.plan.max_concurrent_model_requests,
+        )
+    else:
+        plan_builder = {
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9: (
+                build_event_impact_triage_work_execution_plan_v9
+            ),
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10: (
+                build_event_impact_triage_work_execution_plan_v10
+            ),
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11: (
+                build_event_impact_triage_work_execution_plan_v11
+            ),
+        }.get(prepared.plan.schema_version, build_event_impact_triage_work_execution_plan_v8)
+        baseline_plan = plan_builder(
+            candidate_set=prepared.candidate_set,
+            work_manifest=prepared.manifest,
+            registration=registration,
+            arm=TriageComparisonArm.BASELINE,
+            model_profile_alias=registration.model_profile_id,
+            model_profile=prepared.profile,
+            skills=skills,
+        )
     protocol_store = ArtifactStore(run_root / "protocol-artifacts")
     label_artifact = protocol_store.put_json(label_set.to_dict())
     baseline_plan_artifact = protocol_store.put_json(baseline_plan.to_dict())

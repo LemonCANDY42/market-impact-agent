@@ -55,6 +55,8 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
     EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12,
+    EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13,
     EventImpactTriageWorkDecisionAuthority,
     EventImpactTriageWorkRunner,
     TriageWorkPhase,
@@ -71,6 +73,8 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     build_event_impact_triage_work_execution_plan_v9,
     build_event_impact_triage_work_execution_plan_v10,
     build_event_impact_triage_work_execution_plan_v11,
+    build_event_impact_triage_work_execution_plan_v12,
+    build_event_impact_triage_work_execution_plan_v13,
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
@@ -288,6 +292,99 @@ class ScriptedWorkProvider(ModelProvider):
         }
 
 
+class ConcurrencyTrackingProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.active = 0
+        self.peak = 0
+        self.timeline: list[tuple[str, str]] = []
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        task = next(
+            decoded
+            for message in reversed(messages)
+            if message.get("role") == "user"
+            for decoded in (json.loads(str(message["content"])),)
+            if "phase" in decoded
+        )
+        phase = str(task["phase"])
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        self.timeline.append(("start", phase))
+        try:
+            await asyncio.sleep(0.01)
+            return await super().complete(
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                top_p=top_p,
+                max_output_tokens=max_output_tokens,
+                timeout_seconds=timeout_seconds,
+            )
+        finally:
+            self.timeline.append(("end", phase))
+            self.active -= 1
+
+
+class OneConcurrentTerminalFailureProvider(ConcurrencyTrackingProvider):
+    def __init__(
+        self,
+        states: tuple[ProviderGenerationState, ...] = (ProviderGenerationState.RESPONSE_RECEIVED,),
+    ) -> None:
+        super().__init__()
+        self.states = list(states)
+
+    async def complete(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+    ) -> ModelTurn:
+        task = next(
+            decoded
+            for message in reversed(messages)
+            if message.get("role") == "user"
+            for decoded in (json.loads(str(message["content"])),)
+            if "phase" in decoded
+        )
+        if self.states and task["phase"] == TriageWorkPhase.MAP.value:
+            state = self.states.pop(0)
+            await asyncio.sleep(0.01)
+            raise ProviderFailure(
+                "fixture terminal response failure",
+                error_class="invalid_response",
+                diagnostic_code="fixture_terminal_response",
+                generation_state=state,
+                retry_disposition=(
+                    ProviderRetryDisposition.FORBIDDEN
+                    if state is ProviderGenerationState.UNKNOWN
+                    else ProviderRetryDisposition.TERMINAL
+                ),
+                attempts=1,
+            )
+        return await super().complete(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+
+
 class FailOnceAvailabilityProvider(ScriptedWorkProvider):
     def __init__(self) -> None:
         super().__init__()
@@ -305,6 +402,17 @@ class FailOnceAvailabilityProvider(ScriptedWorkProvider):
                 retry_disposition=ProviderRetryDisposition.TERMINAL,
                 attempts=1,
             )
+
+
+class SlowAvailabilityProvider(ScriptedWorkProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.availability_calls = 0
+
+    async def assert_model_available(self, *, timeout_seconds: float) -> None:
+        _ = timeout_seconds
+        self.availability_calls += 1
+        await asyncio.sleep(0.01)
 
 
 class InvalidV5EvidenceOnceProvider(ScriptedWorkProvider):
@@ -1012,6 +1120,8 @@ def _runtime(
         "v9": build_event_impact_triage_work_execution_plan_v9,
         "v10": build_event_impact_triage_work_execution_plan_v10,
         "v11": build_event_impact_triage_work_execution_plan_v11,
+        "v12": build_event_impact_triage_work_execution_plan_v12,
+        "v13": build_event_impact_triage_work_execution_plan_v13,
     }[dialect]
     plan = builder(
         candidate_set=candidate_set,
@@ -2813,6 +2923,162 @@ def test_v8_direct_checkpoint_keeps_model_eligibility_classification(tmp_path: P
     )
     contract = cast(dict[str, object], classify_request["required_output"])
     assert "checkpoint_eligibility" in cast(list[str], contract["required_fields"])
+
+
+def test_v12_bounds_concurrency_and_preserves_phase_barriers(tmp_path: Path) -> None:
+    provider = ConcurrencyTrackingProvider()
+    runner, _, _, _, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=25,
+        provider=provider,
+        dialect="v12",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12
+    assert plan.max_concurrent_model_requests == 3
+    assert event_impact_triage_work_execution_plan_from_dict(plan.to_dict()) == plan
+    invalid_plan = plan.to_dict()
+    invalid_plan["max_concurrent_model_requests"] = 9
+    with pytest.raises(ValueError, match="concurrent model request ceiling"):
+        event_impact_triage_work_execution_plan_from_dict(invalid_plan)
+    assert provider.peak == 3
+    first_partition = provider.timeline.index(("start", TriageWorkPhase.PARTITION.value))
+    last_map = max(
+        index
+        for index, event in enumerate(provider.timeline)
+        if event == ("end", TriageWorkPhase.MAP.value)
+    )
+    first_classify = provider.timeline.index(("start", TriageWorkPhase.CLASSIFY.value))
+    last_partition = max(
+        index
+        for index, event in enumerate(provider.timeline)
+        if event == ("end", TriageWorkPhase.PARTITION.value)
+    )
+    assert last_map < first_partition < last_partition < first_classify
+    replay = asyncio.run(runner.run())
+    assert replay == result
+
+
+def test_lazy_provider_probes_availability_once_under_concurrency() -> None:
+    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
+    provider = SlowAvailabilityProvider()
+    wrapped = _LazyAvailabilityModelProvider(profile=profile, provider=provider)
+
+    async def prepare_all() -> None:
+        await asyncio.gather(*(wrapped.prepare_for_model_call() for _ in range(3)))
+
+    asyncio.run(prepare_all())
+
+    assert provider.availability_calls == 1
+
+
+def test_v13_material_ingress_uses_the_same_frozen_concurrency_ceiling(
+    tmp_path: Path,
+) -> None:
+    provider = ConcurrencyTrackingProvider()
+    registration = _material_registration()
+    runner, _, _, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=25,
+        provider=provider,
+        dialect="v13",
+        registration=registration,
+        checkpoint_key="next-material-a-share-event",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert plan.schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13
+    assert plan.max_concurrent_model_requests == 3
+    assert plan.max_total_runs == len(manifest.work_units) == 3
+    assert provider.peak == 3
+
+
+def test_v12_waits_for_started_peers_and_does_not_cross_a_failed_phase(
+    tmp_path: Path,
+) -> None:
+    provider = OneConcurrentTerminalFailureProvider()
+    runner, _, _, manifest, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=37,
+        provider=provider,
+        dialect="v12",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.FAILED
+    assert len(manifest.work_units) > 3
+    assert len(result.members) == 3
+    assert sum(item.status is RunStatus.FAILED for item in result.members) == 1
+    assert sum(item.status is RunStatus.COMPLETED for item in result.members) == 2
+    assert provider.active == 0
+    assert all(phase == TriageWorkPhase.MAP.value for _, phase in provider.timeline)
+    assert len(runner.usage_ledger.records()) == 3
+    requests = len(provider.requests)
+    assert asyncio.run(runner.run()) == result
+    assert len(provider.requests) == requests
+    assert len(runner.usage_ledger.records()) == 3
+
+
+def test_v12_seals_successful_peer_usage_before_raising_persistent_exception(
+    tmp_path: Path,
+) -> None:
+    provider = ConcurrencyTrackingProvider()
+    runner, _, _, manifest, plan = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=37,
+        provider=provider,
+        dialect="v12",
+    )
+    binding = plan.map_bindings[0]
+    runner.journal.start_run(
+        run_id=runner._member_run_id(binding, manifest.work_units[0].work_unit_id),
+        config_hash="f" * 64,
+        created_at=NOW,
+    )
+
+    with pytest.raises(ValueError, match="another execution binding"):
+        asyncio.run(runner.run())
+    first_usage = runner.usage_ledger.records()
+    assert len(first_usage) == 2
+    assert all(item.record.status is RunStatus.COMPLETED for item in first_usage)
+    assert len(provider.requests) == 2
+    with pytest.raises(ValueError, match="another execution binding"):
+        asyncio.run(runner.run())
+    assert runner.usage_ledger.records() == first_usage
+    assert len(provider.requests) == 2
+
+
+def test_v12_ambiguity_takes_precedence_over_other_concurrent_failures(tmp_path: Path) -> None:
+    provider = OneConcurrentTerminalFailureProvider(
+        (ProviderGenerationState.RESPONSE_RECEIVED, ProviderGenerationState.UNKNOWN)
+    )
+    runner, _, _, _, _ = _runtime(
+        tmp_path,
+        arm=TriageComparisonArm.TREATMENT,
+        count=37,
+        provider=provider,
+        dialect="v12",
+    )
+
+    result = asyncio.run(runner.run())
+
+    assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
+    assert [item.status for item in result.members] == [
+        RunStatus.FAILED,
+        RunStatus.HUMAN_INPUT_REQUIRED,
+        RunStatus.COMPLETED,
+    ]
+    assert len(runner.usage_ledger.records()) == 3
 
 
 @pytest.mark.parametrize(

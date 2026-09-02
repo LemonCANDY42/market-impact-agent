@@ -7,11 +7,11 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 The shortest accepted path to Agent-directed paper operation is:
 
-0. keep the admitted v5 registration/v6 route epoch and supervisor healthy without resetting its
+0. keep the admitted v5 registration/v7 route epoch and supervisor healthy without resetting its
    append-only misses, receipts or replacement history. Collection health is supporting
    infrastructure, not the current experiment blocker;
 1. preserve the closed Triage authority boundaries: comparison-governed material-ingress v9/v10 is
-   rejected by the ordinary run path before any Provider call, while v11 may run only for a new
+   rejected by the ordinary run path before any Provider call, while v11/v13 may run only for a new
    non-comparison-bound actual-receipt batch; and
    failed-batch terminalization reopens the exact append-only Comparison Registration, Report, Runs
    and Usage. Agent Watch admission is enabled only for an exact Watch-listed cluster reopened from
@@ -21,7 +21,8 @@ The shortest accepted path to Agent-directed paper operation is:
    registered eligibility/exclusion rules, target venues and instrument classes is necessary but not
    sufficient: baseline over-routed Watch and treatment promoted five out-of-scope Hong Kong issuer
    earnings to EventAssessment;
-3. run new v11 actual-receipt batches as broad, single-call-per-Work-Unit Triage. Archive, Watch and
+3. run new v13 actual-receipt batches with unchanged v11 broad, single-call-per-Work-Unit semantics
+   and bounded concurrency. Archive, Watch and
    EventAssessment are cost/quality dispositions only; none establishes target scope or grants a
    Trigger Admission;
 4. complete PDI-29G and create one exact Trigger Admission: either the checkpoint-selected Triage
@@ -47,7 +48,7 @@ does not rename two weeks of observations as long-run alpha evidence or authoriz
 program. Phase 2, Method Quality, regime and prospective registrations keep their immutable evidence
 roles but cannot independently promote a strategy.
 
-- **Days 1-3 — unblock decisions.** Permit v11 single-run operational Triage for new batches and
+- **Days 1-3 — unblock decisions.** Permit v11 semantics (v13 bounded execution) for new batches and
   reuse EventAssessment plus the deterministic Materiality Gate as the only in-scope target
   authority, while allowing already-registered direct policy, earnings and macro checkpoints to
   proceed independently. No new ingress prompt dialect, target authority or blind comparison is
@@ -98,13 +99,39 @@ Nautilus-to-IBKR Paper runtime candidate. These are engineering capabilities, no
 strategy is effective or that the broker Provider is accepted.
 
 The evidence gates remain open. Strict historical PIT remains `0/18`; no three-case improved
-Modeled-PIT pilot or 24-case frozen holdout has yet produced an effectiveness result. The current
-prospective route has four Earnings candidates but only two of four checkpoint families operational;
-the frozen Earnings model run has no Provider attempt because its exact registered CPA credential is
-not available to that runtime. No genuine Trigger has therefore completed PDI-30 through PDI-32 or
-created an Agent-directed Mock order. The concrete IBKR runtime has not performed a real Paper
+Modeled-PIT pilot or 24-case frozen holdout has yet produced an effectiveness result. A private,
+mode-`0600` model environment and strict launcher now supply the existing CPA credential without
+exposing it to the collector or repository; effective model, endpoint, reasoning, price and budget
+remain frozen in each Profile and Run. Five Earnings candidates have now completed formal Triage.
+One earlier candidate completed EventAssessment as `watch` because the frozen exposure view lacked
+its exact issuer/instrument mapping, and one later candidate is checkpoint-selected. The existing
+ready-time anti-cherry-pick rule correctly blocks that later candidate until the earlier Watch has a
+terminal resolution. Route plan v7 has now admitted the accepted `stock_basic` instrument-master
+route without rewriting an earlier epoch. Its first scheduled actual-receipt run accepted 5,554
+records over six bounded requests, and the next readiness audit found all four checkpoint families
+operational. The next material-ingress batch completed on 14 actual-receipt versions: five archive,
+nine Attention Watches and zero EventAssessment routes. Its two model calls cost 21,730 microusd,
+and the nine Watches were admitted deterministically. No genuine Trigger has yet completed PDI-30 through PDI-32 or created
+an Agent-directed Mock order. The concrete IBKR runtime has not performed a real Paper
 submit, cancel, replace-by-cancel-and-resubmit, restart/fault, or Provider Acceptance canary;
 production activation remains closed. Live remains disabled.
+
+The separate direct-policy operational run froze its own denominator of 24 actual-receipt
+versions. It ran serially, completed eight of nine started logical members, and failed at the single
+partition member after three fully received responses all violated the closed output contract. The
+immutable Usage authority records 11 physical attempts, 171,787 input / 77,183 output Tokens and
+126,982 microusd; it created no Proposal, Decision, Trigger, Judgment or execution authority. This
+is a semantic/runtime negative result, not a missing-event result. Its active head must be
+terminalized without dropping the denominator before another direct-policy batch is admitted.
+
+New Work Plan v12/v13 mechanics now freeze a bounded same-Plan model-request ceiling, default three,
+without changing v8/v11 semantics or old artifacts. Only independent members in the same phase may
+overlap; map-role, partition and classify barriers remain strict, already-dispatched peers finish
+durably, Usage is hash-chained serially, and any failed/ambiguous member blocks the next fixed wave
+and phase. Successful peers retain Usage even when a sibling raises, and ambiguity takes precedence
+in the aggregate status. This
+reduces wall time only. It does not increase frozen call/token/cost budgets, fix the failed policy
+contract, or authorize a second concurrently running Plan.
 
 The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
 incremental: read-only reconciled account/position context, then deterministic portfolio/sizing
@@ -759,6 +786,18 @@ Stage 4 — prove bounded Judgment inputs before automatic dispatch:
     The v4 post-admission miss remains immutable. The first v5 report recorded 4/4 operational
     checkpoints: policy and material-event high-cadence routes plus Earnings and NBS were all in
     healthy external wait with no backdated candidate.
+  - [x] Admit v7 route plan
+    `prospective-checkpoint-route-plan-8a2008dc7648227e86dd58d7e5345067c85d22c530addf17734c00d8530ce283`
+    as admission
+    `prospective-checkpoint-route-admission-67ceb77b6d47457097fe3956a44ab47910f0fb8d9ab466f69020ed787417618b`.
+    It adds the already accepted Tushare `stock_basic` route as
+    `tradable_instrument_master` for every checkpoint and preserves the previous route epochs.
+    The successor Job's first scheduled actual-receipt run accepted 5,554 records through six
+    bounded requests in about 64 seconds with zero failures, misses or lag. Readiness report
+    `prospective-checkpoint-readiness-report-578c3cae25c03814657553e8d58d31005c3e7d8fa04f191ef3fe2dd7eea1e8c9`
+    then found 4/4 operational checkpoints and fourteen new policy/material-event candidate
+    versions. Earlier Triage and EventAssessment inputs remain immutable; this later instrument
+    snapshot can improve only newly frozen runs.
   - [ ] After PDI-29 produces an exact direct or material Trigger Admission, seal its trading-session barrier and
     freeze the actual Snapshot Set, Evidence Pack, read-only tools, Prospective Evidence Lineage, and
     Prospective Execution Plan. Pre-admission observations remain ineligible.
@@ -852,9 +891,12 @@ Stage 5 — automate bounded follow-up and open registered outcomes:
     routed to Attention Watch, and derives its evidence references, event-cluster subject and bounded
     matcher terms. Text matching requires at least two co-occurring non-generic anchors; exact
     single-term matching is limited to structured identity fields. Activation, restart and callback
-    each reopen the same parent authority. Caller projections, authority subclasses, archived
-    clusters and EventAssessment-routed clusters remain fail-closed. Admission, shared-scope callback
-    fan-out and admission-before-Watch activation recovery have concrete regression coverage.
+    each reopen the same parent authority. Caller projections, authority subclasses and archived
+    clusters remain fail-closed. A completed EventAssessment-routed cluster may use the same
+    authority only when its exact terminal Run, frozen Exposure Candidate View and Usage record
+    reopen as `disposition=watch` with no admitted path; incomplete, failed and path-bearing runs
+    cannot. Admission, shared-scope callback fan-out and admission-before-Watch activation recovery
+    have concrete regression coverage.
   - [x] Reuse the installed prospective collection worker for shared due-collection fan-out. One
     completed, Journaled Collection Snapshot is offered to every due Watch bound to that exact
     Collection Policy; each Watch retains its own lease, matcher, byte/poll/wake budget and durable

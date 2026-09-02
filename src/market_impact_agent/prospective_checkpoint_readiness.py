@@ -835,6 +835,12 @@ _ROUTE_SOURCE_CONTRACTS = {
         upstream_sources=("tushare-etf-sh-cons", "tushare-etf-sz-cons"),
         semantic_scopes=("aggregated_exchange_pcf_actual_receipt_only",),
     ),
+    "tradable_instrument_master": _RouteSourceContract(
+        capability=ObservationCapability.EXPOSURE_CANDIDATES,
+        provider_id="tushare-observation",
+        upstream_sources=("tushare-etf-basic", "tushare-stock-basic"),
+        semantic_scopes=("aggregated_source_observation_actual_receipt_only",),
+    ),
     "tradability_state": _RouteSourceContract(
         capability=ObservationCapability.EXPOSURE_CANDIDATES,
         provider_id="tushare-observation",

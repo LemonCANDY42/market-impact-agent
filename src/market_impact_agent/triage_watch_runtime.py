@@ -45,6 +45,7 @@ from market_impact_agent.monitoring_scope import (
 from market_impact_agent.observations import ObservationCapability
 from market_impact_agent.prospective_data import ProspectiveCollectionPolicy, ProspectiveDataJournal
 from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
+from market_impact_agent.prospective_event_assessment import EventAssessmentRunAuthority
 from market_impact_agent.runtime_store import RunJournal, RunStatus
 
 TRIAGE_FOLLOW_UP_CALLBACK_AGENT_TYPE = "triage.follow-up-coordinator"
@@ -143,7 +144,10 @@ def build_triage_follow_up_profile(
             ),
             callback_agent_type=TRIAGE_FOLLOW_UP_CALLBACK_AGENT_TYPE,
             callback_agent_profile_ref=callback_profile_ref,
-            allowed_parent_agent_types=("triage.coordinator",),
+            allowed_parent_agent_types=(
+                "event-assessment.coordinator",
+                "triage.coordinator",
+            ),
             allowed_subject_kinds=(MonitoringSubjectKind.EVENT_CLUSTER,),
             preloaded_skills=(TRIAGE_FOLLOW_UP_SKILL,),
             skill_manifest_hashes=(skill_hash,),
@@ -179,14 +183,31 @@ def admit_triage_follow_up_watch(
     skill_root: Path,
     match_field_path: str,
     admitted_at: datetime,
+    registration: ProspectiveDiagnosticRegistration | None = None,
+    event_assessment_run_root: Path | None = None,
 ) -> TriageWatchAdmissionResult:
     _strict_utc(admitted_at, "Triage Watch admitted_at")
     store = LocalDataSnapshotStore(state_root)
     journal = ProspectiveDataJournal(store)
     decision_store = EventImpactTriageDecisionStore(store.root)
-    resolver = EventImpactTriageWatchAuthorityResolver(store, decision_store=decision_store)
+    if (registration is None) != (event_assessment_run_root is None):
+        raise ValueError("EventAssessment Watch authority requires both registration and run root")
+    event_assessment_authority = (
+        None
+        if registration is None or event_assessment_run_root is None
+        else EventAssessmentRunAuthority(
+            run_root=event_assessment_run_root,
+            registration=registration,
+            skill_root=skill_root,
+        )
+    )
+    resolver = EventImpactTriageWatchAuthorityResolver(
+        store,
+        decision_store=decision_store,
+        event_assessment_authority=event_assessment_authority,
+    )
     authority = resolver.authority(cluster_id)
-    _, _, _, cluster = decision_store.get_watch_context_by_cluster(cluster_id)
+    _, _, _, cluster = decision_store.get_cluster_context(cluster_id)
     context = authority.delegation_context()
     policy = journal.policy(collection_policy_id)
     profile, _ = build_triage_follow_up_profile(
@@ -253,6 +274,7 @@ async def run_triage_watch_wake_callbacks(
     *,
     state_root: Path,
     run_root: Path,
+    event_assessment_run_root: Path,
     registration: ProspectiveDiagnosticRegistration,
     model_profile_alias: str,
     skill_root: Path,
@@ -266,7 +288,15 @@ async def run_triage_watch_wake_callbacks(
     store = LocalDataSnapshotStore(state_root)
     journal = ProspectiveDataJournal(store)
     decision_store = EventImpactTriageDecisionStore(store.root)
-    resolver = EventImpactTriageWatchAuthorityResolver(store, decision_store=decision_store)
+    resolver = EventImpactTriageWatchAuthorityResolver(
+        store,
+        decision_store=decision_store,
+        event_assessment_authority=EventAssessmentRunAuthority(
+            run_root=event_assessment_run_root,
+            registration=registration,
+            skill_root=skill_root,
+        ),
+    )
     service = AgentWatchAdmissionService(
         store,
         profiles=(),

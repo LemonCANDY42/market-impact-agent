@@ -106,6 +106,12 @@ EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10 = (
 EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11 = (
     "market-impact.event-impact-triage-work-execution-plan.v11"
 )
+EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12 = (
+    "market-impact.event-impact-triage-work-execution-plan.v12"
+)
+EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13 = (
+    "market-impact.event-impact-triage-work-execution-plan.v13"
+)
 EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA = EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V2
 EVENT_IMPACT_TRIAGE_WORK_RUN_ARTIFACT_SCHEMA_V2 = (
     "market-impact.event-impact-triage-work-run-artifact.v2"
@@ -148,6 +154,8 @@ TRIAGE_WORK_RUNTIME_REF_V8 = "event-impact-triage-work-runtime-v8"
 TRIAGE_WORK_RUNTIME_REF_V9 = "event-impact-triage-work-runtime-v9"
 TRIAGE_WORK_RUNTIME_REF_V10 = "event-impact-triage-work-runtime-v10"
 TRIAGE_WORK_RUNTIME_REF_V11 = "event-impact-triage-work-runtime-v11"
+TRIAGE_WORK_RUNTIME_REF_V12 = "event-impact-triage-work-runtime-v12"
+TRIAGE_WORK_RUNTIME_REF_V13 = "event-impact-triage-work-runtime-v13"
 TRIAGE_WORK_RUNTIME_REF = TRIAGE_WORK_RUNTIME_REF_V2
 TRIAGE_WORK_TOOL_SURFACE_HASH = canonical_hash([])
 TRIAGE_WORK_FORMAT_RECOVERY_RUN_SCHEMA = (
@@ -436,6 +444,7 @@ class EventImpactTriageWorkExecutionPlan:
     max_total_input_tokens: int
     max_total_output_tokens: int
     max_total_estimated_cost_microusd: int
+    max_concurrent_model_requests: int = 1
     allowed_tools: tuple[str, ...] = ()
     allowed_mcp_servers: tuple[str, ...] = ()
     historical_pit_claim: bool = False
@@ -455,6 +464,8 @@ class EventImpactTriageWorkExecutionPlan:
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V9,
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V10,
             EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11,
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12,
+            EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13,
         }:
             raise ValueError("unsupported Event Impact Triage Work Execution Plan schema")
         dialect = _plan_dialect(self.schema_version)
@@ -573,6 +584,13 @@ class EventImpactTriageWorkExecutionPlan:
             != sum(item.max_estimated_cost_microusd for item in self.phase_ceilings)
         ):
             raise ValueError("triage work aggregate budgets must equal phase ceilings")
+        if _supports_bounded_concurrency(self.schema_version):
+            if not 1 <= self.max_concurrent_model_requests <= 8:
+                raise ValueError(
+                    "triage work concurrent model request ceiling must be between 1 and 8"
+                )
+        elif self.max_concurrent_model_requests != 1:
+            raise ValueError("legacy triage work plans are serial")
         if self.allowed_tools or self.allowed_mcp_servers:
             raise ValueError(f"triage work {dialect} exposes no tools or MCP servers")
         if (
@@ -605,7 +623,7 @@ class EventImpactTriageWorkExecutionPlan:
         return next(item for item in self.phase_ceilings if item.phase is phase)
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "schema_version": self.schema_version,
             "candidate_set_id": self.candidate_set_id,
             "candidate_set_hash": self.candidate_set_hash,
@@ -637,6 +655,9 @@ class EventImpactTriageWorkExecutionPlan:
             "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
             "execution_capability": self.execution_capability,
         }
+        if _supports_bounded_concurrency(self.schema_version):
+            result["max_concurrent_model_requests"] = self.max_concurrent_model_requests
+        return result
 
     def to_dict(self) -> dict[str, object]:
         return {"plan_id": self.plan_id, **self.core_dict()}
@@ -882,6 +903,58 @@ def build_event_impact_triage_work_execution_plan_v11(
     )
 
 
+def build_event_impact_triage_work_execution_plan_v12(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    work_manifest: EventImpactTriageWorkManifest,
+    registration: ProspectiveDiagnosticRegistration,
+    arm: TriageComparisonArm,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+    max_concurrent_model_requests: int = 3,
+) -> EventImpactTriageWorkExecutionPlan:
+    """Build v8 direct-checkpoint semantics with bounded phase concurrency."""
+
+    return _build_event_impact_triage_work_execution_plan(
+        candidate_set=candidate_set,
+        work_manifest=work_manifest,
+        registration=registration,
+        arm=arm,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12,
+        max_concurrent_model_requests=max_concurrent_model_requests,
+    )
+
+
+def build_event_impact_triage_work_execution_plan_v13(
+    *,
+    candidate_set: EventImpactTriageCandidateSet,
+    work_manifest: EventImpactTriageWorkManifest,
+    registration: ProspectiveDiagnosticRegistration,
+    arm: TriageComparisonArm,
+    model_profile_alias: str,
+    model_profile: ModelProviderProfile,
+    skills: SkillRegistry,
+    max_concurrent_model_requests: int = 3,
+) -> EventImpactTriageWorkExecutionPlan:
+    """Build v11 material-ingress semantics with bounded phase concurrency."""
+
+    return _build_event_impact_triage_work_execution_plan(
+        candidate_set=candidate_set,
+        work_manifest=work_manifest,
+        registration=registration,
+        arm=arm,
+        model_profile_alias=model_profile_alias,
+        model_profile=model_profile,
+        skills=skills,
+        schema_version=EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13,
+        max_concurrent_model_requests=max_concurrent_model_requests,
+    )
+
+
 def _build_event_impact_triage_work_execution_plan(
     *,
     candidate_set: EventImpactTriageCandidateSet,
@@ -892,6 +965,7 @@ def _build_event_impact_triage_work_execution_plan(
     model_profile: ModelProviderProfile,
     skills: SkillRegistry,
     schema_version: str,
+    max_concurrent_model_requests: int = 1,
 ) -> EventImpactTriageWorkExecutionPlan:
     dialect = _plan_dialect(schema_version)
     work_manifest.validate_against(candidate_set)
@@ -1025,6 +1099,8 @@ def _build_event_impact_triage_work_execution_plan(
         "judgment_model_calls_authorized": False,
         "execution_capability": False,
     }
+    if _supports_bounded_concurrency(schema_version):
+        core["max_concurrent_model_requests"] = max_concurrent_model_requests
     return EventImpactTriageWorkExecutionPlan(
         plan_id=f"event-impact-triage-work-execution-plan-{canonical_hash(core)}",
         candidate_set_id=candidate_set.candidate_set_id,
@@ -1049,6 +1125,7 @@ def _build_event_impact_triage_work_execution_plan(
         max_total_estimated_cost_microusd=sum(
             item.max_estimated_cost_microusd for item in phase_ceilings
         ),
+        max_concurrent_model_requests=max_concurrent_model_requests,
         schema_version=schema_version,
     )
 
@@ -1088,6 +1165,8 @@ def event_impact_triage_work_execution_plan_from_dict(
         "judgment_model_calls_authorized",
         "execution_capability",
     }
+    if _supports_bounded_concurrency(schema_version):
+        expected.add("max_concurrent_model_requests")
     if set(payload) != expected:
         raise ValueError("Event Impact Triage Work Execution Plan fields are invalid")
     result = EventImpactTriageWorkExecutionPlan(
@@ -1130,6 +1209,11 @@ def event_impact_triage_work_execution_plan_from_dict(
         max_total_input_tokens=_integer(payload, "max_total_input_tokens"),
         max_total_output_tokens=_integer(payload, "max_total_output_tokens"),
         max_total_estimated_cost_microusd=_integer(payload, "max_total_estimated_cost_microusd"),
+        max_concurrent_model_requests=(
+            _integer(payload, "max_concurrent_model_requests")
+            if _supports_bounded_concurrency(schema_version)
+            else 1
+        ),
         allowed_tools=_string_tuple(payload.get("allowed_tools"), "allowed_tools"),
         allowed_mcp_servers=_string_tuple(
             payload.get("allowed_mcp_servers"), "allowed_mcp_servers"
@@ -1408,6 +1492,8 @@ class EventImpactTriageWorkRunner:
     async def _run_claimed_plan(self) -> EventImpactTriageWorkRunResult:
         contents = self.content_resolver.resolve(self.candidate_set)
         self._validate_contents(contents)
+        if self.plan.max_concurrent_model_requests > 1:
+            return await self._run_claimed_plan_bounded(contents)
         members: list[TriageWorkRunMember] = []
         digests: list[TriageCandidateDigest] = []
         ingress_routes: list[MaterialIngressRoute] = []
@@ -1536,6 +1622,261 @@ class EventImpactTriageWorkRunner:
             run_evidence=evidence,
             members=tuple(members),
         )
+
+    async def _run_claimed_plan_bounded(
+        self, contents: tuple[TriageCandidateContent, ...]
+    ) -> EventImpactTriageWorkRunResult:
+        member_by_key: dict[tuple[TriageWorkPhase, str, TriageAgentRole], TriageWorkRunMember] = {}
+        digests: list[TriageCandidateDigest] = []
+        ingress_routes: list[MaterialIngressRoute] = []
+        content_by_version = {item.version_id: item for item in contents}
+        atom_by_id = {item.atom_id: item for item in self.work_manifest.atoms}
+        upstream_by_unit: dict[str, list[object]] = {
+            unit.work_unit_id: [] for unit in self.work_manifest.work_units
+        }
+        for binding in self.plan.map_bindings:
+            inputs = tuple(
+                self._map_input(
+                    unit,
+                    binding.role,
+                    content_by_version,
+                    atom_by_id,
+                    tuple(upstream_by_unit[unit.work_unit_id]),
+                )
+                for unit in self.work_manifest.work_units
+            )
+            results = await self._run_members_bounded(
+                tuple(
+                    (binding, unit.work_unit_id, phase_input)
+                    for unit, phase_input in zip(self.work_manifest.work_units, inputs, strict=True)
+                )
+            )
+            for unit, phase_input, result in zip(
+                self.work_manifest.work_units[: len(results)],
+                inputs[: len(results)],
+                results,
+                strict=True,
+            ):
+                member_by_key[(binding.phase, unit.work_unit_id, binding.role)] = result
+                if result.status is not RunStatus.COMPLETED:
+                    continue
+                accepted_output = self._reopen_completed_member(
+                    member=result,
+                    binding=binding,
+                    unit_id=unit.work_unit_id,
+                    phase_input=phase_input,
+                )
+                if binding.role is TriageAgentRole.COORDINATOR:
+                    if _plan_dialect(self.plan.schema_version) in _MATERIAL_INGRESS_DIALECTS:
+                        ingress_routes.extend(
+                            self._parse_material_ingress_routes(accepted_output, unit)
+                        )
+                    else:
+                        digests.extend(self._parse_digests(accepted_output, unit))
+                else:
+                    upstream_by_unit[unit.work_unit_id].append(accepted_output)
+            blocked_status = self._blocked_phase_status(results)
+            if blocked_status is not None:
+                return self._blocked(
+                    self._ordered_started_members(member_by_key),
+                    digests,
+                    status=blocked_status,
+                )
+        members = self._ordered_started_members(member_by_key)
+        if _plan_dialect(self.plan.schema_version) in _MATERIAL_INGRESS_DIALECTS:
+            frozen_digests, partition, proposal = self._material_ingress_artifacts(
+                tuple(ingress_routes)
+            )
+            evidence = EventImpactTriageWorkRunEvidence(
+                plan_id=self.plan.plan_id,
+                members=tuple(members),
+                usage_ledger_hash=self.usage_ledger.ledger_hash,
+            )
+            self.assert_authoritative_completed_work_run(
+                candidate_set=self.candidate_set,
+                work_manifest=self.work_manifest,
+                digests=frozen_digests,
+                partition=partition,
+                proposal=proposal,
+                run_evidence=evidence,
+            )
+            return EventImpactTriageWorkRunResult(
+                plan_id=self.plan.plan_id,
+                status=RunStatus.COMPLETED,
+                digests=frozen_digests,
+                partition=partition,
+                proposal=proposal,
+                run_evidence=evidence,
+                members=tuple(members),
+            )
+        expected_atoms = tuple(item.atom_id for item in self.work_manifest.atoms)
+        if tuple(item.atom_id for item in digests) != expected_atoms:
+            raise ValueError("triage map did not emit exactly one Digest per Work Atom")
+        assert self.plan.partition_binding is not None
+        assert self.plan.classify_binding is not None
+        partition_input = self._partition_input(tuple(digests))
+        partition_member = await self._run_member(
+            binding=self.plan.partition_binding,
+            unit_id=self.work_manifest.manifest_id,
+            phase_input=partition_input,
+        )
+        member_by_key[
+            (
+                self.plan.partition_binding.phase,
+                self.work_manifest.manifest_id,
+                self.plan.partition_binding.role,
+            )
+        ] = partition_member
+        self._append_usage(partition_member)
+        if partition_member.status is not RunStatus.COMPLETED:
+            return self._blocked(
+                self._ordered_started_members(member_by_key),
+                digests,
+                status=partition_member.status,
+            )
+        partition_output = self._reopen_completed_member(
+            member=partition_member,
+            binding=self.plan.partition_binding,
+            unit_id=self.work_manifest.manifest_id,
+            phase_input=partition_input,
+        )
+        partition = self._parse_partition(partition_output, tuple(digests))
+        classify_inputs = tuple(
+            self._classify_input(cluster, content_by_version) for cluster in partition.clusters
+        )
+        classify_results = await self._run_members_bounded(
+            tuple(
+                (self.plan.classify_binding, cluster.cluster_seed_id, phase_input)
+                for cluster, phase_input in zip(partition.clusters, classify_inputs, strict=True)
+            )
+        )
+        proposals: list[TriageClusterProposal] = []
+        for cluster, phase_input, result in zip(
+            partition.clusters[: len(classify_results)],
+            classify_inputs[: len(classify_results)],
+            classify_results,
+            strict=True,
+        ):
+            member_by_key[(result.phase, result.unit_id, result.role)] = result
+            if result.status is not RunStatus.COMPLETED:
+                continue
+            classify_output = self._reopen_completed_member(
+                member=result,
+                binding=self.plan.classify_binding,
+                unit_id=cluster.cluster_seed_id,
+                phase_input=phase_input,
+            )
+            proposals.append(self._parse_cluster_proposal(classify_output, cluster))
+        blocked_status = self._blocked_phase_status(classify_results)
+        if blocked_status is not None:
+            return self._blocked(
+                self._ordered_started_members(member_by_key, partition=partition),
+                digests,
+                partition,
+                status=blocked_status,
+            )
+        proposal = EventImpactTriageProposal.build(
+            candidate_set=self.candidate_set, clusters=tuple(proposals)
+        )
+        members = self._ordered_started_members(member_by_key, partition=partition)
+        evidence = EventImpactTriageWorkRunEvidence(
+            plan_id=self.plan.plan_id,
+            members=tuple(members),
+            usage_ledger_hash=self.usage_ledger.ledger_hash,
+        )
+        self.assert_authoritative_completed_work_run(
+            candidate_set=self.candidate_set,
+            work_manifest=self.work_manifest,
+            digests=tuple(digests),
+            partition=partition,
+            proposal=proposal,
+            run_evidence=evidence,
+        )
+        return EventImpactTriageWorkRunResult(
+            plan_id=self.plan.plan_id,
+            status=RunStatus.COMPLETED,
+            digests=tuple(digests),
+            partition=partition,
+            proposal=proposal,
+            run_evidence=evidence,
+            members=tuple(members),
+        )
+
+    async def _run_members_bounded(
+        self,
+        jobs: tuple[tuple[TriageWorkRoleBinding, str, dict[str, object]], ...],
+    ) -> tuple[TriageWorkRunMember, ...]:
+        members: list[TriageWorkRunMember] = []
+        width = self.plan.max_concurrent_model_requests
+        # Fixed waves preserve the same started prefix on replay without a second
+        # scheduler journal, including when an earlier peer fails before a slow peer.
+        for offset in range(0, len(jobs), width):
+            outcomes = await asyncio.gather(
+                *(
+                    self._run_member(
+                        binding=binding,
+                        unit_id=unit_id,
+                        phase_input=phase_input,
+                    )
+                    for binding, unit_id, phase_input in jobs[offset : offset + width]
+                ),
+                return_exceptions=True,
+            )
+            wave = tuple(item for item in outcomes if isinstance(item, TriageWorkRunMember))
+            # Seal paid terminal peers before propagating an escaping sibling exception.
+            # The hash chain remains single-writer and replay-idempotent.
+            for member in wave:
+                self._append_usage(member)
+            first_error = next((item for item in outcomes if isinstance(item, BaseException)), None)
+            if first_error is not None:
+                raise first_error
+            members.extend(wave)
+            if self._blocked_phase_status(wave) is not None:
+                break
+        return tuple(members)
+
+    @staticmethod
+    def _blocked_phase_status(members: tuple[TriageWorkRunMember, ...]) -> RunStatus | None:
+        statuses = {item.status for item in members}
+        for status in (
+            RunStatus.HUMAN_INPUT_REQUIRED,
+            RunStatus.BUDGET_EXHAUSTED,
+            RunStatus.FAILED,
+            RunStatus.CANCELLED,
+        ):
+            if status in statuses:
+                return status
+        return None
+
+    def _ordered_started_members(
+        self,
+        members: dict[tuple[TriageWorkPhase, str, TriageAgentRole], TriageWorkRunMember],
+        *,
+        partition: TriageClusterPartition | None = None,
+    ) -> list[TriageWorkRunMember]:
+        keys = [
+            (TriageWorkPhase.MAP, unit.work_unit_id, binding.role)
+            for unit in self.work_manifest.work_units
+            for binding in self.plan.map_bindings
+        ]
+        if self.plan.partition_binding is not None:
+            keys.append(
+                (
+                    TriageWorkPhase.PARTITION,
+                    self.work_manifest.manifest_id,
+                    TriageAgentRole.COORDINATOR,
+                )
+            )
+        if partition is not None:
+            keys.extend(
+                (
+                    TriageWorkPhase.CLASSIFY,
+                    cluster.cluster_seed_id,
+                    TriageAgentRole.COORDINATOR,
+                )
+                for cluster in partition.clusters
+            )
+        return [members[key] for key in keys if key in members]
 
     def assert_authoritative_completed_work_run(
         self,
@@ -4636,11 +4977,13 @@ class EventImpactTriageWorkRunner:
         members: list[TriageWorkRunMember],
         digests: list[TriageCandidateDigest],
         partition: TriageClusterPartition | None = None,
+        *,
+        status: RunStatus | None = None,
     ) -> EventImpactTriageWorkRunResult:
-        status = members[-1].status
+        terminal_status = members[-1].status if status is None else status
         return EventImpactTriageWorkRunResult(
             plan_id=self.plan.plan_id,
-            status=status,
+            status=terminal_status,
             digests=tuple(digests),
             partition=partition,
             proposal=None,
@@ -5639,10 +5982,25 @@ def _plan_dialect(schema_version: str) -> str:
         return "v10"
     if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V11:
         return "v11"
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12:
+        return "v8"
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13:
+        return "v11"
     raise ValueError("unsupported Event Impact Triage Work Execution Plan schema")
 
 
+def _supports_bounded_concurrency(schema_version: str) -> bool:
+    return schema_version in {
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12,
+        EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13,
+    }
+
+
 def _runtime_ref(schema_version: str) -> str:
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V12:
+        return TRIAGE_WORK_RUNTIME_REF_V12
+    if schema_version == EVENT_IMPACT_TRIAGE_WORK_EXECUTION_PLAN_SCHEMA_V13:
+        return TRIAGE_WORK_RUNTIME_REF_V13
     return {
         "v2": TRIAGE_WORK_RUNTIME_REF_V2,
         "v3": TRIAGE_WORK_RUNTIME_REF_V3,

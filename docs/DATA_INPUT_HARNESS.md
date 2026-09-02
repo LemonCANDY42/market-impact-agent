@@ -330,7 +330,7 @@ route-plan history remain immutable. The new plan was durably admitted as follow
 ```bash
 market-impact data checkpoint-route-admit \
   --registration examples/research/prospective-diagnostic-registration-v5.json \
-  --route-plan examples/research/prospective-checkpoint-route-plan-v6.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v7.json \
   --state-root .market-impact/data-inputs
 ```
 
@@ -348,7 +348,7 @@ Then run the non-mutating readiness audit:
 ```bash
 market-impact data checkpoint-readiness \
   --registration examples/research/prospective-diagnostic-registration-v5.json \
-  --route-plan examples/research/prospective-checkpoint-route-plan-v6.json \
+  --route-plan examples/research/prospective-checkpoint-route-plan-v7.json \
   --state-root .market-impact/data-inputs
 ```
 

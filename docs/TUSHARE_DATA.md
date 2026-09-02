@@ -98,6 +98,14 @@ passed the same capture, Journal, isolated replay, rights, and seven-gate path o
 | `report_rc` | prior expectation observations | 4,802 | `source-route-acceptance-report-a79d8525ea67763d8022a8909dcfd7a85683f5c476ab6ff2f89149aec9fba8ff` |
 | `news` (`src=sina`) | event revelation | 29 | `source-route-acceptance-report-e9bc974b0b3e0101701fed3b0dd37e57cc7fc595b93dff3802129fb125b9dde8` |
 
+The accepted `stock_basic` route is also registered as a daily prospective
+`tradable_instrument_master` Job. Its first scheduled post-admission run on 2026-09-02 accepted
+5,554 records through six bounded requests in about 64 seconds with zero failures, misses or lag.
+Route plan v7 binds that Job to all four prospective checkpoint families. The private Snapshot and
+licensed rows remain ignored; only counts and content identities are documented here. The first
+receipt can improve newly frozen decisions but cannot be injected into an earlier Triage or
+EventAssessment run.
+
 The two valuation/context routes passed all seven gates on 2026-09-01 and are registered as bounded
 daily prospective Jobs after the normal post-close publication window. `daily_basic` contributes
 close, turnover, PE/PB/PS, dividend yield, share base, market value and limit status for the received

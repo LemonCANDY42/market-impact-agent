@@ -574,6 +574,38 @@ and routed all four sealed Watch items to Watch. Total authoritative usage was 1
 output Tokens and 26,062 microusd. The failed Report terminalized all versions and released the
 active head without creating a Decision.
 
+V12 and V13 change execution scheduling only. V12 reuses the exact v8 direct-checkpoint dialect;
+V13 reuses the exact v11 material-ingress dialect. A new Plan freezes a `1..8`
+`max_concurrent_model_requests` ceiling (the installed default is three). The runner may execute
+independent Work Units for one map-role stage, or independent cluster classifications, concurrently.
+It retains hard map-role, partition and classify barriers; partition remains one serial member.
+Each phase uses deterministic waves of at most the ceiling. Peers in the admitted wave reach a
+durable terminal result, but one failed or ambiguous member prevents later waves, the next stage
+and all downstream Decision authority. This preserves the same started prefix on replay without a
+second scheduler journal. Provider calls keep distinct
+Run/dispatch/response/Usage identities, and the coordinator appends the hash-chained Usage Ledger in
+canonical serial order after each wave, even if a sibling raises before returning a member.
+Any ambiguous member makes the aggregate status `human_input_required`, regardless of other failures.
+Replay performs no new calls. The frozen total
+Run, token and cost ceilings are unchanged, so concurrency changes elapsed time rather than budget.
+This ceiling is local to the one claimed Plan; the active-head and crash-safe claim prevent a second
+same-Plan process from multiplying it. The scheduler must not launch separate model Plans against
+the same Profile concurrently until a host-wide arbiter has a demonstrated need.
+
+The first real direct-policy v8 operational batch remains immutable negative evidence rather than a
+concurrency benchmark. It froze 24 actual-receipt versions in two Work Units and completed eight of
+nine started logical members serially. Its partition coordinator received three Provider responses,
+but every response failed the closed output contract; the ninth member therefore ended `failed`, no
+cluster Proposal or Decision was created, and no downstream authority exists. The authoritative
+Ledger contains 11 physical attempts, 171,787 input / 77,183 output Tokens and 126,982 microusd.
+Parallel dispatch cannot repair that semantic-contract failure; the batch must be terminalized under
+its own immutable denominator before a new execution dialect is used on a fresh batch.
+
+The separate new v11 material-ingress operational batch completed on 14 actual-receipt versions:
+five archive and nine Attention Watch dispositions, with no EventAssessment route. Two physical
+model calls cost 21,730 microusd, and the nine Watches were admitted through the deterministic
+parent-authority path. This is operational process evidence, not blind semantic promotion.
+
 The v9-v11 failures localize the remaining ingress problem: semantic scope instructions do not make
 an LLM a stable scope authority. It may still invent a generic path from an out-of-scope issuer or
 foreign-policy fact to risk appetite, discount rates or future policy, or move that uncertainty into
@@ -605,21 +637,31 @@ speculative association from silently becoming a trade-universe or account actio
 
 The proposal/admission boundary now has one concrete authority without adding a second generic
 decision-view state machine. `EventImpactTriageWatchAuthority` reopens the exact durable Candidate
-Set, Proposal and Triage Decision, accepts only a cluster explicitly listed for Attention Watch, and
-derives its evidence references, event-cluster subject and bounded matcher terms from that cluster's
-frozen Observation versions. Free-text scopes require at least two co-occurring non-generic anchors;
-single-term exact scopes are restricted to structured identity fields. Activation, restart and Wake
-callback resolution each reopen the same parent Decision authority. The generic
-`AgentDelegationContextStore` still cannot mint authority;
-caller-created projections, self-hashed artifacts, subclasses, archived clusters and
-EventAssessment-routed clusters remain fail-closed. Exact profile offers, admission, callback lookup,
-shared-scope fan-out and admission-before-Watch activation recovery are therefore accepted only for
-this Triage-owned path. The first dispatch freezes the callback subscriber set for that exact Wake;
+Set, Proposal and Triage Decision. It accepts either a cluster explicitly listed for Attention Watch
+or an EventAssessment-routed cluster whose one authoritative completed run ended with
+`disposition=watch`, no assessment/materiality path and explicit blockers. The latter route reopens
+the terminal Run Journal, Usage Ledger, frozen Exposure Candidate View and exact Profile before it
+can become a parent; a model response or caller-shaped context cannot grant this authority. Both
+the path-bearing and pathless authorities require the View's exact Candidate Set, cluster and
+Decision cutoff, not merely a self-consistent View hash. Both
+routes derive evidence references, the event-cluster subject and bounded matcher terms from the
+cluster's frozen Observation versions. Free-text scopes require at least two co-occurring
+non-generic anchors; single-term exact scopes are restricted to structured identity fields.
+Activation, restart and Wake callback resolution each reopen the same parent Decision and, for the
+EventAssessment path, the same completed Run authority. The generic `AgentDelegationContextStore`
+still cannot mint authority; caller-created projections, self-hashed artifacts, subclasses,
+archived clusters and incomplete, failed or path-bearing EventAssessment results remain
+fail-closed. Exact profile offers, admission, callback lookup, shared-scope fan-out and
+admission-before-Watch activation recovery are therefore accepted only for these two Triage-owned
+paths. The first dispatch freezes the callback subscriber set for that exact Wake;
 later subscribers to a reused Watch cannot change its replay fan-out and apply only to future Wakes.
 The installed prospective collection worker now reuses each completed Journaled Snapshot across all
 due Watches on the same exact Collection Policy. Profile registration and multi-parent Triage
 resolution are durable; individual Watch leases, budgets, matchers, aggregate freezes and callback
-outboxes are not shared. A first real paid-news Watch was admitted on 2026-09-01. Its initial
+outboxes are not shared. A first real paid-news Watch was admitted on 2026-09-01. On 2026-09-02 a
+completed real EventAssessment with no supported issuer mapping also entered the same bounded
+Watch/Wake authority; this records an unresolved input/transmission question and grants no Trigger,
+Judgment or execution authority. Its initial
 recovery exposed an old-policy-window overconstraint, now fixed by freezing a recent admission
 baseline spanning at least one maximum-gap interval and accumulating proof only from that baseline
 forward. Later real polls completed with no exact matching new version, so the system correctly made
@@ -647,8 +689,8 @@ Still required for real acceptance:
   Authorized Decision View, while portfolio decisions, sizing and broker-paper execution remain
   separate downstream gates;
 - one real path-bearing PDI-29G EventAssessment that passes deterministic Materiality; the concrete
-  runtime/authority and a real completed no-path Watch are accepted, while v8-v11 terminal comparison
-  versions remain negative evidence and cannot be recycled;
+  runtime/authority and completed no-path EventAssessment-to-Watch bridge are accepted, while v8-v11
+  terminal comparison versions remain negative evidence and cannot be recycled;
 - ongoing observation of false positives, misses, `needs_review`, routing, unsupported transmission
   paths and resource use as operational quality evidence;
 - a real selected event passed through PDI-30 and Query Gate.

@@ -251,6 +251,21 @@ class AvailableModelProvider(ModelProvider, Protocol):
     async def assert_model_available(self, *, timeout_seconds: float) -> None: ...
 
 
+def _effective_model_request_concurrency(explicit: int | None) -> int:
+    raw = (
+        explicit
+        if explicit is not None
+        else os.environ.get("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", "3")
+    )
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS must be an integer") from exc
+    if not 1 <= value <= 8:
+        raise ValueError("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS must be between 1 and 8")
+    return value
+
+
 @contextmanager
 def _collection_cancellation_signal() -> Generator[Callable[[], bool]]:
     requested = Event()
@@ -865,6 +880,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Receipt-ordered batch size; hard maximum 128",
     )
     prospective_triage_parser.add_argument(
+        "--maximum-concurrent-model-requests",
+        type=int,
+        default=None,
+        help=(
+            "Frozen per-plan request concurrency; default comes from "
+            "MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS"
+        ),
+    )
+    prospective_triage_parser.add_argument(
         "--skill-root",
         type=Path,
         default=_default_agent_skill_root(),
@@ -907,6 +931,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     triage_watch_admit_parser.add_argument("--cluster-id", required=True)
     triage_watch_admit_parser.add_argument("--collection-policy-id", required=True)
+    triage_watch_admit_parser.add_argument("--registration", type=Path)
+    triage_watch_admit_parser.add_argument(
+        "--event-assessment-run-root",
+        type=Path,
+        default=Path(".market-impact/event-assessments/current"),
+    )
     triage_watch_admit_parser.add_argument(
         "--model-profile-alias",
         default="cliproxyapi-luna-xhigh-cpa-v1",
@@ -948,6 +978,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-root",
         type=Path,
         default=Path(".market-impact/watch-wake/current"),
+    )
+    watch_wake_run_parser.add_argument(
+        "--event-assessment-run-root",
+        type=Path,
+        default=Path(".market-impact/event-assessments/current"),
     )
     prospective_triage_compare_parser = agent_subparsers.add_parser(
         "prospective-triage-compare-run",
@@ -3362,6 +3397,11 @@ def _run_triage_watch_admit_command(args: argparse.Namespace) -> int:
     try:
         from market_impact_agent.triage_watch_runtime import admit_triage_follow_up_watch
 
+        registration = (
+            None
+            if args.registration is None
+            else load_prospective_diagnostic_registration(args.registration)
+        )
         result = admit_triage_follow_up_watch(
             state_root=args.state_root,
             cluster_id=args.cluster_id,
@@ -3370,6 +3410,10 @@ def _run_triage_watch_admit_command(args: argparse.Namespace) -> int:
             skill_root=args.skill_root,
             match_field_path=args.match_field_path,
             admitted_at=(datetime.now(UTC) if args.admitted_at is None else args.admitted_at),
+            registration=registration,
+            event_assessment_run_root=(
+                None if registration is None else args.event_assessment_run_root
+            ),
         ).summary()
     except (
         KeyError,
@@ -3397,6 +3441,7 @@ def _run_watch_wake_command(args: argparse.Namespace) -> int:
             run_triage_watch_wake_callbacks(
                 state_root=args.state_root,
                 run_root=args.run_root,
+                event_assessment_run_root=args.event_assessment_run_root,
                 registration=registration,
                 model_profile_alias=args.model_profile_alias,
                 skill_root=args.skill_root,
@@ -4597,6 +4642,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     datetime.now(UTC) if args.evaluated_at is None else args.evaluated_at
                 ),
                 maximum_candidate_count=args.maximum_candidates,
+                maximum_concurrent_model_requests=_effective_model_request_concurrency(
+                    args.maximum_concurrent_model_requests
+                ),
             )
             result = (
                 prepared.summary()

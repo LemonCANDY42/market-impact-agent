@@ -727,8 +727,24 @@ class EventImpactTriageDecisionStore:
     ]:
         """Resolve one globally content-identified Attention Watch parent."""
 
+        candidate, proposal, decision, cluster = self.get_cluster_context(cluster_id)
+        if cluster_id not in decision.attention_watch_cluster_ids:
+            raise ValueError("Triage cluster is not authorized for Attention Watch")
+        return candidate, proposal, decision, cluster
+
+    def get_cluster_context(
+        self,
+        cluster_id: str,
+    ) -> tuple[
+        EventImpactTriageCandidateSet,
+        EventImpactTriageProposal,
+        EventImpactTriageDecision,
+        TriageClusterProposal,
+    ]:
+        """Resolve one globally content-identified cluster without granting a route."""
+
         if not cluster_id.startswith("event-impact-triage-cluster-"):
-            raise ValueError("Triage Watch lookup requires a cluster ID")
+            raise ValueError("Triage cluster lookup requires a cluster ID")
         with self._connect() as connection:
             rows = tuple(
                 connection.execute(
@@ -757,10 +773,7 @@ class EventImpactTriageDecisionStore:
             raise KeyError(f"unknown event impact Triage cluster: {cluster_id}")
         if len(matches) != 1:
             raise ValueError("Triage cluster identity resolves to multiple Decisions")
-        candidate, proposal, decision, cluster = matches[0]
-        if cluster_id not in decision.attention_watch_cluster_ids:
-            raise ValueError("Triage cluster is not authorized for Attention Watch")
-        return candidate, proposal, decision, cluster
+        return matches[0]
 
     def route_epoch_contexts(
         self,
