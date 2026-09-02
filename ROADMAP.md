@@ -176,21 +176,31 @@ acceptance evidence, but Agent input-access usability does not; this is not an i
 result. New reassessment registrations now select tool v3 with clear default reading, explicit
 literal/AND query semantics and authorized-record counts/pagination. Production-shaped offline
 acceptance verifies nonempty inputs in the Agent's next request, filtered-empty versus missing data,
-scope isolation, and old v2 replay. Real-model use of this new surface remains unverified. No
-further model call or trading authority is implied by the unspent budget.
+scope isolation, and old v2 replay. The subsequently authorized real CPA synthetic canary failed
+input access: identical unsupported filters repeated across five requests, twelve empty executed
+reads, and no Judgment. The fifth model response raised the requested-call count to fifteen, so
+the twelve-call limit blocked its three calls before execution. Cost was $0.012786, with no project retry. Offline `{}` reads
+still returned 2/1/1 records; credential-free replay preserved the terminal and sole Usage row.
+No further model call or trading authority is implied by the unspent budget.
 Exact identities and accounting are in `docs/EVENT_IMPACT_TRIAGE.md`.
 
 A bounded reuse slice now replaces threaded urllib model I/O with pinned HTTPX2 async requests.
 It removes the custom redirect handler and detached worker-thread I/O without adding an Agent
 Runner or another state owner. Retry, concurrency, cancellation accounting and replay remain
 Harness-owned; the reference comparison is in `docs/MODEL_PROVIDER_RELIABILITY.md`. This is an
-offline engineering change, not a successful rerun of the Earnings diagnostic. The next acceptance
-is a separately authorized synthetic canary of the new default-read surface, followed by a newly
-registered current-time market judgment if input access works. Old Profiles, results, budgets and
-trading gates are unchanged; no new paid-model invocation is authorized by these code changes.
+offline engineering change, not a successful rerun of the Earnings diagnostic. The failed synthetic
+canary now requires a design re-examination, not another market run: distinguish default reading of
+Harness-selected evidence from optional search and inspect effective gateway schema semantics.
+The project offers optional fields without `strict`; the post-translation upstream schema was not
+captured, so the failure cannot yet be attributed solely to the model or gateway. Stop prompt-only
+patching and repeated paid attempts. Only after a corrected interface passes separately authorized
+acceptance should a new current-time market judgment proceed. Old Profiles, results, budgets and
+trading gates remain unchanged.
 The tool-v3 slice passed ruff, format, pyright, diff checks and 1,770 tests, plus independent
 read-only review. Offline reconstruction also preserved the two real older reassessments'
 registration, Snapshot Set, Evidence Pack and tool-manifest hashes exactly, with zero model calls.
+The canary evidence/documentation milestone separately passed all required static checks and the
+1,770-test full suite; independent read-only review found no concrete evidence or claim issue.
 
 A later read-only runtime audit at September 2 10:03 UTC found three, not four, operational
 checkpoint families. The v7 material route is blocked by an internal receipt-coverage gap after

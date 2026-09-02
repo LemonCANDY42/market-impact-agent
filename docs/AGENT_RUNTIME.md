@@ -89,9 +89,14 @@ data. See `EVENT_IMPACT_TRIAGE.md` for the fixed denominator and input-access ac
 New reassessment registrations now bind checkpoint tool v3: explicit `{}` default reading,
 documented literal/AND narrowing, and authorized-record counts/pagination. The production-shaped
 offline test executes the offered tools through the actual Agent loop and checks the records in
-the next model request. Old registrations retain v2 and their frozen tool bindings. This is interface
-acceptance, not evidence that a real model has used the new surface correctly; a new paid canary
-requires separate authorization and does not reopen the completed Earnings diagnostic.
+the next model request. Old registrations retain v2 and their frozen tool bindings. The separately
+authorized real CPA synthetic canary then failed: five model requests repeatedly supplied unsupported
+filters, twelve executed reads were empty, and the next three requested calls exceeded the tool
+budget. Cost was $0.012786, not the USD 1 ceiling; no Judgment was produced. Credential-free replay
+preserved the same terminal and Usage row. Offline availability is therefore still not real-model
+input-consumption acceptance. Re-examine the selected-evidence reader/search boundary and effective
+gateway schema before another authorized run; do not repeat the Earnings diagnostic or keep tuning
+descriptions against the same failure. Exact evidence is in `EVENT_IMPACT_TRIAGE.md`.
 
 `MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
 machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a

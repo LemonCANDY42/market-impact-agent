@@ -675,10 +675,53 @@ tool-manifest hashes exactly. It made no model requests and did not reinterpret 
 
 The repair does not silently remove filters, widen the frozen set, mix runtime HTTP into it, or
 rewrite the old manifest/Run. Query Gate rejects a tool-v3 upgrade/downgrade outside its registered
-version. The next real-model acceptance is a separately authorized synthetic-data canary; only after
-that should a separately registered current-time market judgment test the repaired interface.
+version. Real-model acceptance requires a separately authorized synthetic-data canary; only after
+it passes should a separately registered current-time market judgment test the repaired interface.
 The single authorized Earnings diagnostic is finished and is not automatically repeated using its
 unspent budget. No Signal, Intent, Account, Watch resolution or Paper operation was created.
+
+#### Tool-v3 synthetic canary — failed input access, 2026-09-02
+
+The user approved one new synthetic-data canary with an estimated USD 1 ceiling. It reused the
+existing reassessment fixture, Profile `cliproxyapi-luna-max-cpa-reassessment-usd1-v1`, production
+checkpoint readers, Agent loop and Usage Ledger in an isolated **non-promotional** Run Journal.
+The model was explicitly told that all records and provenance were synthetic. This is interface
+acceptance, not an actual-receipt Earnings sample, formal Query Gate promotion or strategy result.
+
+Registration `0ebb0e77d153a41e1c8e9901966e532ca845e2bd18119a1975356e800be22c6b` froze the
+inputs and execution binding before dispatch. Run
+`synthetic-checkpoint-read-v3-9af48f932a0a6961ce1567aee98844b7a609c143835b494aabe90958af20a6d7`
+ended at `2026-09-02T12:19:02.251414Z` as `budget_exhausted`, terminal
+`96b2f3f54bc9af1847d8d8c903987cf6458a4ad2659cf86d1c6792d679d299a2`. The exhausted limit was
+**12 executed tool calls**, not the USD 1 ceiling: five completed model requests asked for fifteen
+calls; the last three were rejected before execution. There were five recorded successful physical
+attempts and no project retry or transport error. Usage reconciles 51,415 input / 2,085 output Tokens
+to 12,786 microusd ($0.012786), ledger
+`59d60beb6a0a5352691cb842e5a8bc69fcd9085e83aa46d79e1dea41b2143d37`. No Judgment was produced.
+
+All twelve executed reads returned zero matches despite reporting 2/1/1 available event, issuer
+and valuation records. Across all five turns the model repeated the same three name/argument
+combinations; none used `{}`. It supplied unsupported exact values for publisher, headline,
+industry/index and trading date. Offline reads of the exact frozen handlers with `{}` returned
+2/1/1 records and excluded the unrelated issuer from the shared receipt. The recorded initial
+model context includes the default-read instruction; subsequent contexts contain the preceding
+tool results and available-versus-matched counts. Thus this is not evidence that the selected
+records vanished or that the project discarded the tool feedback.
+
+The project-side offered schemas have no required argument/filter fields and do not set `strict`.
+The effective upstream schema after gateway translation was not captured. The observed repeated
+filters do **not** establish whether model behavior, downstream schema handling or both caused the
+failure. Prompt-only remediation has now failed this real interface check; do not keep tuning the
+same descriptions or spend the remaining budget on another run. Re-examine the ownership boundary
+between reading Harness-selected evidence and optional search, including effective wire-schema
+semantics, before authorizing another bounded canary. Do not silently discard requested filters,
+widen the frozen set, inject guessed records or reopen an old registration.
+
+Credential-free replay returned the identical terminal, Journal and sole Usage row without a model
+dispatch. Offline audit CAS is
+`78953913e5321c8fd95e4af5dc821443654f6b30f153c1fa8e36074d14a445ba`; the scripts and evidence
+remain under ignored `.market-impact/checkpoint-tool-v3-canary-20260902/`. The approval is consumed;
+no real Earnings rerun, Watch mutation, Signal, Intent or Paper operation follows from this failure.
 
 ### Actual-receipt coverage failure — 2026-09-02
 
