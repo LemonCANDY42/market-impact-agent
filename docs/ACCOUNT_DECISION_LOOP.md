@@ -36,9 +36,9 @@ hard blocker at that owning boundary.
 ## Continuous market and account sensing
 
 Market monitoring and position monitoring are one operating loop, not two competing authorities.
-The Harness continuously collects accepted source routes, while either a new-evidence trigger or a
-scheduled portfolio review freezes one Authorized Decision View and starts a bounded Agent run. The
-same view may include:
+In the target loop, the Harness continuously collects accepted source routes, while either a
+new-evidence trigger or a scheduled portfolio review freezes one Authorized Decision View and
+starts a bounded Agent run. The same view may include:
 
 - news, official releases, macro vintages, expectations and positioning;
 - raw tradable bars plus cutoff-correct adjusted research series, volume, turnover, liquidity and
@@ -51,6 +51,15 @@ A broad discovery run may find a new issuer, industry, ETF, constituent set or i
 and request a bounded Watch. A holdings review starts from every current position and open-order
 conflict before considering new exposure. Both may request accepted local-first retrieval, but only
 the Harness can collect, journal and freeze new data for a fresh Run.
+
+The event path has concrete runtime owners; the independently registered current-time/scheduled
+review entrance is not yet an accepted executable Trigger. It must not be simulated by relabeling
+old news as newly received or manufacturing a Watch Wake. The user-approved delayed-review policy
+keeps the original missed-window sample and opens a separate current-time judgment. Its accumulated
+subject evidence retains original receipt/authority times; fresh contextual inputs use the new
+Harness cutoff. Subject age is not the same as a stale current price or account snapshot. A
+read-only reassessment need not claim a trading-session deadline; exact calendar and tradability
+evidence remain required wherever a session or executable action is claimed.
 
 The Agent keeps three conclusions distinct:
 

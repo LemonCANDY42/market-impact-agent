@@ -108,8 +108,13 @@ One earlier candidate completed EventAssessment as `watch` because the frozen ex
 its exact issuer/instrument mapping, and one later candidate is checkpoint-selected. The existing
 ready-time anti-cherry-pick rule blocks that later candidate for both an unresolved predecessor
 review and two earlier eligible candidates; resolving or cancelling a Watch alone cannot admit the
-later selection. The required late-resolution/first-eligible continuation boundary is not yet
-complete (see `docs/EVENT_IMPACT_TRIAGE.md`). Route plan v7 has now admitted the accepted `stock_basic` instrument-master
+later selection. Independent review rejected a proposed late-resolution shortcut: the ordinary Wake
+child receives new news without the parent's unresolved question, so even an exact linked terminal
+child cannot prove that review resolved (see `docs/EVENT_IMPACT_TRIAGE.md`). The original classifier
+also lacked a clear projection of already
+verified Harness receipt/source facts and left a two-report-period event relationship unresolved.
+The next semantic input must address those actual questions, not spend another run asking the model
+to infer provenance. Route plan v7 has now admitted the accepted `stock_basic` instrument-master
 route without rewriting an earlier epoch. Its first scheduled actual-receipt run accepted 5,554
 records over six bounded requests, and the next readiness audit found all four checkpoint families
 operational. The next material-ingress batch completed on 14 actual-receipt versions: five archive,
@@ -118,6 +123,32 @@ and the nine Watches were admitted deterministically. No genuine Trigger has yet
 an Agent-directed Mock order. The concrete IBKR runtime has not performed a real Paper
 submit, cancel, replace-by-cancel-and-resubmit, restart/fault, or Provider Acceptance canary;
 production activation remains closed. Live remains disabled.
+
+Delayed-review handling is now user-approved: preserve the old slot as a non-run disposition, then
+register a separate current-time judgment without backfilling the old sample. For this legacy
+registration, `missed_window` is a diagnostic retirement with `legacy_session_unanchored` and no
+invented proven deadline. The first-new-event registration cannot silently become a review of
+previously received news. A new read-only reassessment needs a fresh Harness cutoff and an explicit
+accumulated-subject role; an exact calendar is required when claiming a trading session or executable
+action, not merely to analyze old evidence now. Existing old Decisions, failed runs and denominator
+members remain unchanged. Neither a manufactured Wake nor a shifted old cutoff is an admissible
+shortcut. The replacement current-time registration-to-Judgment path remains the next implementation
+node, separate from closing the old slot.
+The original Earnings slot was retired at September 2 09:16 UTC as disposition `8e168ebc…fabd91`;
+exact restart replay, both original Candidate/Decision pairs and the unchanged active Watch were
+verified. No model call or Trigger was created. The corrected implementation passed independent
+read-only review, all static checks and 1,712 tests, including wheel packaging.
+
+That next node is bounded to one registered initial read-only Judgment, not a new experiment engine:
+extend the existing Registration/Trigger with an accumulated-subject reassessment mode; freeze exact
+original Earnings versions plus cutoff-visible accepted context at current Harness time; retain
+normal context freshness checks while reporting the subject's age; and reuse Snapshot, Query Gate,
+AgentEngine, Run Journal and Usage Ledger. Provide the model with the Harness-owned receipt/source
+facts and the original unresolved period/partition question. It requires no fabricated Account,
+Paper dependency, session deadline or Wake. A terminal Judgment or abstention demonstrates this
+initial stage only, not the separately registered paired/conditional-Judge comparison, Signal,
+Intent, Skill effect or investment effectiveness. Failure and replay must retain usage and never
+silently repeat the initial run.
 
 The separate direct-policy operational run froze its own denominator of 24 actual-receipt
 versions. It ran serially, completed eight of nine started logical members, and failed at the single

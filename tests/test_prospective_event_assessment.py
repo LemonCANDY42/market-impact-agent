@@ -593,7 +593,7 @@ def test_unresolved_watch_does_not_block_later_assessment_throughput(
             return candidate_set, proposal, decision
 
         def route_epoch_contexts(self, **kwargs: object) -> tuple[tuple[object, ...], ...]:
-            _ = kwargs
+            assert kwargs["at"] == decision.decided_at
             return (
                 (candidate_set, proposal, decision, cluster),
                 (candidate_set, proposal, decision, cluster),
@@ -631,7 +631,7 @@ def test_unresolved_watch_does_not_block_later_assessment_throughput(
     monkeypatch.setattr(module, "EventAssessmentRunner", FakeRunner)
 
     def build_view(**kwargs: object) -> ExposureCandidateView:
-        _ = kwargs
+        assert kwargs["cutoff_at"] == decision.decided_at
         return _exposure_view(candidate_set, decision, cluster)
 
     monkeypatch.setattr(

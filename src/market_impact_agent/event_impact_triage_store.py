@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -869,6 +871,18 @@ class EventImpactTriageDecisionStore:
                 cluster,
             ) in sorted(contexts, key=lambda item: item[:3])
         )
+
+    @contextmanager
+    def admission_guard(self) -> Generator[None]:
+        """Hold Triage writers until downstream selection and insertion finish.
+
+        Always acquire this before the Trigger store transaction. These are two
+        databases, not an atomic cross-database commit: Triage is only read here.
+        """
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            yield
 
     def _row_for_candidate_set(self, candidate_set_id: str) -> sqlite3.Row | None:
         with self._connect() as connection:

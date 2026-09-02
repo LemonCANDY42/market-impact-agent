@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -20,6 +22,11 @@ from market_impact_agent.event_impact_triage import (
     TriageRoute,
 )
 from market_impact_agent.prospective_diagnostic import (
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    DiagnosticCutoffRule,
     DiagnosticMechanism,
     ProspectiveDiagnosticRegistration,
 )
@@ -30,6 +37,7 @@ PROSPECTIVE_HISTORICAL_ANALOGY_PACK_SCHEMA = "market-impact.prospective-historic
 PROSPECTIVE_EVENT_ASSESSMENT_SCHEMA = "market-impact.prospective-event-assessment.v1"
 PROSPECTIVE_MATERIALITY_GATE_SCHEMA = "market-impact.prospective-materiality-gate-result.v1"
 PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA = "market-impact.prospective-trigger-admission.v1"
+CHECKPOINT_DISPOSITION_SCHEMA = "market-impact.checkpoint-disposition.v1"
 STRATEGY_WINDOW_SEAL_SCHEMA = "market-impact.strategy-window-seal.v2"
 
 
@@ -97,6 +105,8 @@ class StrategyWindowSeal:
 
 
 class CompletedTriageDecisionAuthority(Protocol):
+    def admission_guard(self) -> AbstractContextManager[None]: ...
+
     def get_context(
         self,
         candidate_set_id: str,
@@ -140,32 +150,6 @@ class TriggerAdmissionAuthority(Protocol):
     def assert_authoritative(self, admission: ProspectiveTriggerAdmission) -> None: ...
 
 
-def terminal_wake_resolution_parent_ids(
-    resolution_contexts: tuple[
-        tuple[
-            EventImpactTriageCandidateSet,
-            EventImpactTriageProposal,
-            EventImpactTriageDecision,
-            TriageClusterProposal,
-        ],
-        ...,
-    ],
-) -> tuple[str, ...]:
-    """Return parents whose exact Wake child reached a terminal non-Watch route."""
-
-    resolved: set[str] = set()
-    for candidate_set, _, decision, _ in resolution_contexts:
-        parent_cluster_id = candidate_set.parent_cluster_id
-        if parent_cluster_id is None:
-            continue
-        if (
-            decision.status is not TriageDecisionStatus.NEEDS_REVIEW
-            and not decision.attention_watch_cluster_ids
-        ):
-            resolved.add(parent_cluster_id)
-    return tuple(sorted(resolved))
-
-
 def unresolved_route_review_cluster_ids(
     *,
     earlier_contexts: tuple[
@@ -177,25 +161,25 @@ def unresolved_route_review_cluster_ids(
         ],
         ...,
     ],
-    resolution_contexts: tuple[
-        tuple[
-            EventImpactTriageCandidateSet,
-            EventImpactTriageProposal,
-            EventImpactTriageDecision,
-            TriageClusterProposal,
-        ],
-        ...,
-    ],
 ) -> tuple[str, ...]:
-    """Return earlier review clusters not terminally resolved by an exact Wake child."""
+    """Keep original reviews unresolved: generic Wake Triage is not parent review."""
 
     unresolved = {
         cluster.cluster_id
         for _, _, _, cluster in earlier_contexts
         if cluster.checkpoint_eligibility is CheckpointEligibility.NEEDS_REVIEW
     }
-    unresolved.difference_update(terminal_wake_resolution_parent_ids(resolution_contexts))
     return tuple(sorted(unresolved))
+
+
+def triage_cluster_ready_at(
+    candidate_set: EventImpactTriageCandidateSet, cluster: TriageClusterProposal
+) -> datetime:
+    availability = {item.version_id: item.first_available_at for item in candidate_set.observations}
+    return max(
+        availability[version_id]
+        for version_id in (*cluster.candidate_version_ids, *cluster.evidence_version_ids)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -852,11 +836,139 @@ class ProspectiveTriggerAdmission:
         return {**self.core_dict(), "admission_id": self.admission_id}
 
 
+@dataclass(frozen=True, slots=True)
+class CheckpointDisposition:
+    """A retired diagnostic slot with no Agent run and no event reclassification."""
+
+    disposition_id: str
+    registration_id: str
+    checkpoint_key: str
+    route_plan_id: str
+    route_admission_id: str
+    anchor_candidate_set_id: str
+    candidate_decision_ids: tuple[tuple[str, str], ...]
+    recorded_at: datetime
+    kind: str = "missed_window"
+    reason: str = "legacy_session_unanchored"
+    proven_deadline: None = None
+    judgment_model_calls_authorized: bool = False
+    execution_capability: bool = False
+    schema_version: str = CHECKPOINT_DISPOSITION_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema_version != CHECKPOINT_DISPOSITION_SCHEMA:
+            raise ValueError("unsupported Checkpoint Disposition schema")
+        if self.kind != "missed_window" or self.reason != "legacy_session_unanchored":
+            raise ValueError("unsupported Checkpoint Disposition kind or reason")
+        if self.proven_deadline is not None:
+            raise ValueError("legacy unanchored cutoff has no proven deadline")
+        for value, prefix in (
+            (self.registration_id, "prospective-diagnostic-registration-"),
+            (self.route_plan_id, "prospective-checkpoint-route-plan-"),
+            (self.route_admission_id, "prospective-checkpoint-route-admission-"),
+            (self.anchor_candidate_set_id, "event-impact-triage-candidate-set-"),
+        ):
+            _prefixed_hash(value, prefix, "Checkpoint Disposition identity")
+        _trimmed(self.checkpoint_key, "Checkpoint Disposition checkpoint")
+        if not self.candidate_decision_ids or self.candidate_decision_ids != tuple(
+            sorted(set(self.candidate_decision_ids))
+        ):
+            raise ValueError("Checkpoint Disposition requires canonical nonempty Triage identities")
+        candidate_ids = tuple(candidate for candidate, _ in self.candidate_decision_ids)
+        decision_ids = tuple(decision for _, decision in self.candidate_decision_ids)
+        if len(set(candidate_ids)) != len(candidate_ids) or len(set(decision_ids)) != len(
+            decision_ids
+        ):
+            raise ValueError("Checkpoint Disposition requires one Decision per Candidate Set")
+        if self.anchor_candidate_set_id not in candidate_ids:
+            raise ValueError("Checkpoint Disposition must retain its original anchor")
+        for candidate_id, decision_id in self.candidate_decision_ids:
+            _prefixed_hash(candidate_id, "event-impact-triage-candidate-set-", "Candidate Set")
+            _prefixed_hash(decision_id, "event-impact-triage-decision-", "Triage Decision")
+        _strict_utc(self.recorded_at, "Checkpoint Disposition recorded_at")
+        if self.judgment_model_calls_authorized or self.execution_capability:
+            raise ValueError("Checkpoint Disposition cannot authorize models or execution")
+        if self.disposition_id != f"checkpoint-disposition-{canonical_hash(self.core_dict())}":
+            raise ValueError("Checkpoint Disposition ID does not match content")
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "kind": self.kind,
+            "reason": self.reason,
+            "registration_id": self.registration_id,
+            "checkpoint_key": self.checkpoint_key,
+            "route_plan_id": self.route_plan_id,
+            "route_admission_id": self.route_admission_id,
+            "anchor_candidate_set_id": self.anchor_candidate_set_id,
+            "candidate_decision_ids": [
+                {"candidate_set_id": candidate_id, "triage_decision_id": decision_id}
+                for candidate_id, decision_id in self.candidate_decision_ids
+            ],
+            "recorded_at": _timestamp(self.recorded_at),
+            "proven_deadline": self.proven_deadline,
+            "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
+            "execution_capability": self.execution_capability,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {**self.core_dict(), "disposition_id": self.disposition_id}
+
+
+def checkpoint_disposition_from_dict(value: object) -> CheckpointDisposition:
+    payload = _object(value, "Checkpoint Disposition")
+    _exact_keys(
+        payload,
+        {
+            "schema_version",
+            "disposition_id",
+            "kind",
+            "reason",
+            "registration_id",
+            "checkpoint_key",
+            "route_plan_id",
+            "route_admission_id",
+            "anchor_candidate_set_id",
+            "candidate_decision_ids",
+            "recorded_at",
+            "proven_deadline",
+            "judgment_model_calls_authorized",
+            "execution_capability",
+        },
+        "Checkpoint Disposition",
+    )
+    pairs: list[tuple[str, str]] = []
+    for item in _list(payload.get("candidate_decision_ids"), "Checkpoint Triage identities"):
+        pair = _object(item, "Checkpoint Triage identity")
+        _exact_keys(pair, {"candidate_set_id", "triage_decision_id"}, "Checkpoint Triage identity")
+        pairs.append((_string(pair, "candidate_set_id"), _string(pair, "triage_decision_id")))
+    if payload.get("proven_deadline") is not None:
+        raise ValueError("legacy unanchored cutoff has no proven deadline")
+    return CheckpointDisposition(
+        disposition_id=_string(payload, "disposition_id"),
+        registration_id=_string(payload, "registration_id"),
+        checkpoint_key=_string(payload, "checkpoint_key"),
+        route_plan_id=_string(payload, "route_plan_id"),
+        route_admission_id=_string(payload, "route_admission_id"),
+        anchor_candidate_set_id=_string(payload, "anchor_candidate_set_id"),
+        candidate_decision_ids=tuple(pairs),
+        recorded_at=_datetime(payload.get("recorded_at"), "Checkpoint Disposition recorded_at"),
+        kind=_string(payload, "kind"),
+        reason=_string(payload, "reason"),
+        judgment_model_calls_authorized=_boolean(payload, "judgment_model_calls_authorized"),
+        execution_capability=_boolean(payload, "execution_capability"),
+        schema_version=_string(payload, "schema_version"),
+    )
+
+
 class ProspectiveTriggerAdmissionStore:
     """Durable, content-verified index for immutable Trigger Admissions."""
 
-    def __init__(self, store: LocalDataSnapshotStore) -> None:
+    def __init__(
+        self, store: LocalDataSnapshotStore, *, clock: Callable[[], datetime] | None = None
+    ) -> None:
         self.store = store
+        self._clock = clock or (lambda: datetime.now(UTC))
         self.index_path = store.index_path
         with self._connect() as connection:
             connection.execute(
@@ -894,6 +1006,22 @@ class ProspectiveTriggerAdmissionStore:
                 ON prospective_trigger_admissions(registration_id, checkpoint_key)
                 """
             )
+            connection.executescript("""
+                CREATE TABLE IF NOT EXISTS checkpoint_dispositions (
+                    disposition_id TEXT PRIMARY KEY,
+                    artifact_hash TEXT NOT NULL UNIQUE,
+                    registration_id TEXT NOT NULL,
+                    checkpoint_key TEXT NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    UNIQUE(registration_id, checkpoint_key)
+                );
+                CREATE TRIGGER IF NOT EXISTS checkpoint_dispositions_no_update
+                    BEFORE UPDATE ON checkpoint_dispositions
+                    BEGIN SELECT RAISE(ABORT, 'Checkpoint Dispositions are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS checkpoint_dispositions_no_delete
+                    BEFORE DELETE ON checkpoint_dispositions
+                    BEGIN SELECT RAISE(ABORT, 'Checkpoint Dispositions are append-only'); END;
+            """)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.index_path)
@@ -902,6 +1030,163 @@ class ProspectiveTriggerAdmissionStore:
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA busy_timeout = 5000")
         return connection
+
+    def checkpoint_disposition(
+        self, *, registration_id: str, checkpoint_key: str
+    ) -> CheckpointDisposition | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM checkpoint_dispositions "
+                "WHERE registration_id = ? AND checkpoint_key = ?",
+                (registration_id, checkpoint_key),
+            ).fetchone()
+        return None if row is None else self._verified_disposition(row)
+
+    def _verified_disposition(self, row: sqlite3.Row) -> CheckpointDisposition:
+        disposition = checkpoint_disposition_from_dict(
+            self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
+        )
+        if (
+            disposition.disposition_id != row["disposition_id"]
+            or disposition.registration_id != row["registration_id"]
+            or disposition.checkpoint_key != row["checkpoint_key"]
+            or _timestamp(disposition.recorded_at) != row["recorded_at"]
+        ):
+            raise ValueError("Checkpoint Disposition index differs from its artifact")
+        return disposition
+
+    def record_legacy_missed_window(
+        self,
+        *,
+        registration: ProspectiveDiagnosticRegistration,
+        checkpoint_key: str,
+        candidate_set_id: str,
+        triage_authority: CompletedTriageDecisionAuthority,
+    ) -> CheckpointDisposition:
+        """Record approved non-run retirement; this does not prove an expiry time."""
+        from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
+
+        if type(triage_authority) is not EventImpactTriageDecisionStore:
+            raise TypeError("Checkpoint Disposition requires the concrete Triage Decision store")
+        if triage_authority.root != self.store.root:
+            raise ValueError("Checkpoint Disposition requires the same-root Triage authority")
+        checkpoint = registration.checkpoint(checkpoint_key)
+        if (
+            registration.schema_version
+            not in {
+                PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
+                PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
+                PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
+                PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+            }
+            or type(checkpoint.cutoff) is not DiagnosticCutoffRule
+        ):
+            raise ValueError("missed-window retirement requires a legacy unanchored session cutoff")
+        with triage_authority.admission_guard():
+            anchor, _, _ = triage_authority.get_context(candidate_set_id)
+            if (anchor.registration_id, anchor.checkpoint_key) != (
+                registration.registration_id,
+                checkpoint_key,
+            ):
+                raise ValueError(
+                    "Checkpoint Disposition anchor belongs to another registration/checkpoint"
+                )
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                existing = connection.execute(
+                    "SELECT * FROM checkpoint_dispositions "
+                    "WHERE registration_id = ? AND checkpoint_key = ?",
+                    (registration.registration_id, checkpoint_key),
+                ).fetchone()
+                if existing is not None:
+                    disposition = self._verified_disposition(existing)
+                    if (
+                        disposition.route_plan_id != anchor.route_plan_id
+                        or disposition.route_admission_id != anchor.route_admission_id
+                        or disposition.anchor_candidate_set_id != candidate_set_id
+                    ):
+                        raise ValueError(
+                            "Checkpoint Disposition conflicts with requested anchor/epoch"
+                        )
+                    for candidate_id, decision_id in disposition.candidate_decision_ids:
+                        candidate, _, decision = triage_authority.get_context(candidate_id)
+                        if decision.decision_id != decision_id or (
+                            candidate.registration_id,
+                            candidate.checkpoint_key,
+                            candidate.route_plan_id,
+                            candidate.route_admission_id,
+                        ) != (
+                            anchor.registration_id,
+                            anchor.checkpoint_key,
+                            anchor.route_plan_id,
+                            anchor.route_admission_id,
+                        ):
+                            raise ValueError(
+                                "Checkpoint Disposition original Triage identity changed"
+                            )
+                    return disposition
+                if (
+                    connection.execute(
+                        "SELECT 1 FROM prospective_trigger_admissions "
+                        "WHERE registration_id = ? AND checkpoint_key = ?",
+                        (registration.registration_id, checkpoint_key),
+                    ).fetchone()
+                    is not None
+                ):
+                    raise ValueError("checkpoint already has a Trigger Admission")
+                now = self._clock()
+                _strict_utc(now, "Checkpoint Disposition Harness clock")
+                contexts = triage_authority.route_epoch_contexts(
+                    registration_id=anchor.registration_id,
+                    checkpoint_key=anchor.checkpoint_key,
+                    route_plan_id=anchor.route_plan_id,
+                    route_admission_id=anchor.route_admission_id,
+                    at=now,
+                )
+                identities = tuple(
+                    sorted({(item[0].candidate_set_id, item[2].decision_id) for item in contexts})
+                )
+                if not identities or candidate_set_id not in {item[0] for item in identities}:
+                    raise ValueError(
+                        "Checkpoint Disposition requires a nonempty completed route epoch"
+                    )
+                core = {
+                    "schema_version": CHECKPOINT_DISPOSITION_SCHEMA,
+                    "kind": "missed_window",
+                    "reason": "legacy_session_unanchored",
+                    "registration_id": registration.registration_id,
+                    "checkpoint_key": checkpoint_key,
+                    "route_plan_id": anchor.route_plan_id,
+                    "route_admission_id": anchor.route_admission_id,
+                    "anchor_candidate_set_id": candidate_set_id,
+                    "candidate_decision_ids": [
+                        {"candidate_set_id": candidate_id, "triage_decision_id": decision_id}
+                        for candidate_id, decision_id in identities
+                    ],
+                    "recorded_at": _timestamp(now),
+                    "proven_deadline": None,
+                    "judgment_model_calls_authorized": False,
+                    "execution_capability": False,
+                }
+                disposition = checkpoint_disposition_from_dict(
+                    {
+                        **core,
+                        "disposition_id": f"checkpoint-disposition-{canonical_hash(core)}",
+                    }
+                )
+                artifact = self.store.artifacts.put_json(disposition.to_dict())
+                connection.execute(
+                    "INSERT INTO checkpoint_dispositions(disposition_id, artifact_hash, "
+                    "registration_id, checkpoint_key, recorded_at) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        disposition.disposition_id,
+                        artifact.content_hash,
+                        registration.registration_id,
+                        checkpoint_key,
+                        _timestamp(now),
+                    ),
+                )
+                return disposition
 
     def record(
         self,
@@ -919,6 +1204,103 @@ class ProspectiveTriggerAdmissionStore:
         ] = (),
         assessment_authority: CompletedEventAssessmentAuthority | None = None,
     ) -> ProspectiveTriggerAdmission:
+        with triage_authority.admission_guard():
+            return self._record_guarded(
+                admission,
+                registration=registration,
+                candidate_set=candidate_set,
+                proposal=proposal,
+                decision=decision,
+                triage_authority=triage_authority,
+                assessment=assessment,
+                materiality=materiality,
+                preceding_materiality_contexts=preceding_materiality_contexts,
+                assessment_authority=assessment_authority,
+            )
+
+    def inspect_checkpoint(
+        self,
+        *,
+        registration: ProspectiveDiagnosticRegistration,
+        candidate_set_id: str,
+        triage_authority: CompletedTriageDecisionAuthority,
+    ) -> dict[str, object]:
+        """Inspect current selection without writing an admission or granting authority."""
+        from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
+
+        if type(triage_authority) is not EventImpactTriageDecisionStore:
+            raise TypeError("checkpoint inspection requires the concrete Triage Decision store")
+        if triage_authority.root != self.store.root:
+            raise ValueError("checkpoint inspection requires the same-root Triage authority")
+        with triage_authority.admission_guard():
+            anchor, _, _ = triage_authority.get_context(candidate_set_id)
+            if anchor.registration_id != registration.registration_id:
+                raise ValueError("checkpoint anchor belongs to another registration")
+            now = self._clock()
+            contexts = triage_authority.route_epoch_contexts(
+                registration_id=anchor.registration_id,
+                checkpoint_key=anchor.checkpoint_key,
+                route_plan_id=anchor.route_plan_id,
+                route_admission_id=anchor.route_admission_id,
+                at=now,
+            )
+            eligible = next(
+                (
+                    context
+                    for context in contexts
+                    if context[3].checkpoint_eligibility is CheckpointEligibility.ELIGIBLE
+                    and context[3].recommended_route is TriageRoute.CHECKPOINT_CANDIDATE
+                ),
+                None,
+            )
+            reviews = (
+                contexts
+                if eligible is None
+                else tuple(
+                    context
+                    for context in contexts
+                    if triage_cluster_ready_at(context[0], context[3])
+                    <= triage_cluster_ready_at(eligible[0], eligible[3])
+                )
+            )
+            unresolved = unresolved_route_review_cluster_ids(
+                earlier_contexts=reviews,
+            )
+            disposition = self.checkpoint_disposition(
+                registration_id=anchor.registration_id, checkpoint_key=anchor.checkpoint_key
+            )
+            return {
+                "evaluated_at": _timestamp(now),
+                "candidate_set_id": None if eligible is None else eligible[0].candidate_set_id,
+                "triage_decision_id": None if eligible is None else eligible[2].decision_id,
+                "cluster_id": None if eligible is None else eligible[3].cluster_id,
+                "blocking_review_cluster_ids": list(unresolved),
+                "selection_ready": eligible is not None and not unresolved and disposition is None,
+                "checkpoint_disposition": None if disposition is None else disposition.to_dict(),
+                "admission_allowed": False,
+            }
+
+    def _record_guarded(
+        self,
+        admission: ProspectiveTriggerAdmission,
+        *,
+        registration: ProspectiveDiagnosticRegistration,
+        candidate_set: EventImpactTriageCandidateSet,
+        proposal: EventImpactTriageProposal,
+        decision: EventImpactTriageDecision,
+        triage_authority: CompletedTriageDecisionAuthority,
+        assessment: ProspectiveEventAssessmentArtifact | None = None,
+        materiality: ProspectiveMaterialityGateResult | None = None,
+        preceding_materiality_contexts: tuple[
+            tuple[ProspectiveEventAssessmentArtifact, ProspectiveMaterialityGateResult], ...
+        ] = (),
+        assessment_authority: CompletedEventAssessmentAuthority | None = None,
+    ) -> ProspectiveTriggerAdmission:
+        from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
+
+        concrete_authority = type(triage_authority) is EventImpactTriageDecisionStore
+        if concrete_authority and triage_authority.root != self.store.root:
+            raise ValueError("Trigger Admission requires the same-root Triage authority")
         reopened = triage_authority.get_context(candidate_set.candidate_set_id)
         if reopened != (candidate_set, proposal, decision):
             raise ValueError("Trigger Admission inputs do not match authoritative Triage Decision")
@@ -956,12 +1338,20 @@ class ProspectiveTriggerAdmissionStore:
         ):
             raise ValueError("Trigger Admission route epoch context differs from its Triage inputs")
         earlier_contexts = epoch_contexts[:selected_index]
+        review_contexts = tuple(
+            context
+            for context in epoch_contexts
+            if triage_cluster_ready_at(context[0], context[3])
+            <= triage_cluster_ready_at(candidate_set, selected_cluster)
+        )
         unresolved_review = unresolved_route_review_cluster_ids(
-            earlier_contexts=earlier_contexts,
-            resolution_contexts=epoch_contexts[: selected_index + 1],
+            earlier_contexts=review_contexts,
         )
         if unresolved_review:
-            raise ValueError("Trigger Admission has an earlier unresolved review candidate")
+            raise ValueError(
+                "Trigger Admission has an earlier unresolved review candidate: "
+                + ", ".join(unresolved_review)
+            )
         expected_preceding_contexts: tuple[
             tuple[
                 EventImpactTriageCandidateSet,
@@ -1083,6 +1473,15 @@ class ProspectiveTriggerAdmissionStore:
         )
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if (
+                connection.execute(
+                    "SELECT 1 FROM checkpoint_dispositions "
+                    "WHERE registration_id = ? AND checkpoint_key = ?",
+                    (admission.registration_id, admission.checkpoint_key),
+                ).fetchone()
+                is not None
+            ):
+                raise ValueError("checkpoint is closed by a non-run Checkpoint Disposition")
             row = connection.execute(
                 """
                 SELECT artifact_hash, event_assessment_artifact_hash,

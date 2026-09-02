@@ -223,6 +223,8 @@ def _setup(
 
 def _triage_setup(
     tmp_path: Path,
+    *,
+    eligible_remaining: bool = False,
 ) -> tuple[
     LocalDataSnapshotStore,
     ProspectiveDataJournal,
@@ -262,7 +264,27 @@ def _triage_setup(
     )
     proposal = EventImpactTriageProposal.build(
         candidate_set=candidate_set,
-        clusters=(review, archive),
+        clusters=(
+            review,
+            *(
+                tuple(
+                    TriageClusterProposal.build(
+                        candidate_version_ids=(version_id,),
+                        checkpoint_eligibility=CheckpointEligibility.ELIGIBLE,
+                        recommended_route=TriageRoute.CHECKPOINT_CANDIDATE,
+                        event_archetypes=(EventArchetype.ISSUER_CORPORATE,),
+                        event_stage=EventStage.FIRST_OBSERVED,
+                        changed_facts=("A separate policy change is confirmed.",),
+                        rule_reasons=("The registered checkpoint rule is satisfied.",),
+                        evidence_version_ids=(version_id,),
+                        triage_confidence=0.9,
+                    )
+                    for version_id in remaining
+                )
+                if eligible_remaining
+                else (archive,)
+            ),
+        ),
     )
     decision_store = EventImpactTriageDecisionStore(store.root)
     decision_store.admit(

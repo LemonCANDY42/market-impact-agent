@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -58,6 +59,9 @@ def _hex(seed: int) -> str:
 
 
 class _TriageAuthority:
+    def admission_guard(self) -> AbstractContextManager[None]:
+        return nullcontext()
+
     def __init__(
         self,
         context: tuple[
@@ -979,7 +983,7 @@ def test_checkpoint_admission_rejects_an_earlier_unresolved_review(
         )
 
 
-def test_checkpoint_admission_accepts_a_terminal_wake_child_as_review_resolution(
+def test_checkpoint_admission_rejects_generic_terminal_wake_as_review_resolution(
     tmp_path: Path,
 ) -> None:
     registration = _registration()
@@ -1015,7 +1019,7 @@ def test_checkpoint_admission_accepts_a_terminal_wake_child_as_review_resolution
         epoch_contexts=(first, child),
     )
 
-    assert (
+    with pytest.raises(ValueError, match="earlier unresolved review"):
         ProspectiveTriggerAdmissionStore(LocalDataSnapshotStore(tmp_path / "state")).record(
             admission,
             registration=registration,
@@ -1024,8 +1028,6 @@ def test_checkpoint_admission_accepts_a_terminal_wake_child_as_review_resolution
             decision=decision,
             triage_authority=authority,
         )
-        == admission
-    )
 
 
 def test_checkpoint_admission_keeps_parent_blocked_when_wake_child_needs_review(

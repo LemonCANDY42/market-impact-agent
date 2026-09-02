@@ -320,7 +320,7 @@ _Avoid_: Historical qualification, service-install receipt, Query Gate, executio
 
 **Prospective Diagnostic Registration**:
 A content-identified requirements freeze for two to four first-eligible future checkpoints with
-different event mechanisms. It fixes each checkpoint's end-of-day cutoff construction, explicit
+different event mechanisms. It fixes each checkpoint's end-of-day local time and delay, explicit
 capability applicability, route-kind and source-diversity minima, cadence/gap/freshness limits,
 eligible venues and instruments, candidate horizons, paired Agent arms, replicate policy, aggregate
 model budget, hidden-outcome rule, and stop/go conditions before new acquisition or inference. It
@@ -334,6 +334,9 @@ and requires the registered CPA-priced model profile. The current registration r
 schema v4 and changes only the broad material-event cadence from the superseded 120/600-second promise
 to the purchased news Jobs' admitted 300/900-second physical cadence; its new route epoch begins at
 Harness admission and cannot inherit older receipts.
+The current cutoff rule does not yet bind the trading-session date for a delayed eligibility
+resolution. A healthy route or successful Trigger selection cannot authorize moving an old event
+to a later session; that date must be settled before real checkpoint Snapshot freezing.
 _Avoid_: Source configuration, experiment result, Provider allowlist, trading mandate
 
 **Prospective Checkpoint Route Plan**:
@@ -442,7 +445,22 @@ before a later candidate can pass. The durable authority also rejects an earlier
 or direct eligible candidate hidden in another batch. Both paths bind the registration, checkpoint,
 route plan/admission epoch and exact trigger Observation Versions. The artifact grants neither Query
 Gate, Judgment, Signal, nor execution authority.
+First-eligible ordering is a sampling rule for this registered experiment, not a global lock on
+news analysis or portfolio monitoring. A generic Wake-child classification is not a resolution of
+its parent's review: the current callback input contains new messages, not the original unresolved
+question. Watch cancellation, a terminal child or a new instrument-master receipt cannot clear that
+review. A separately recorded non-run checkpoint disposition may close the old experiment slot,
+but cannot declare its news ineligible or authorize a replacement judgment.
 _Avoid_: Headline trigger, unchecked EventAssessment, policy-gate relaxation
+
+**Checkpoint Disposition**:
+A content-identified, append-only non-run record in the existing Trigger store. Its initial
+`missed_window` / `legacy_session_unanchored` case closes an approved legacy registration/checkpoint
+slot without claiming a proven deadline. It binds the original route epoch and Candidate/Decision
+identities; restart reopens those identities rather than incorporating later Decisions. Disposition
+and Trigger Admission are mutually exclusive in one database transaction. It does not reclassify
+news, cancel Watches, create an Agent Run or authorize a later judgment.
+_Avoid_: Failed model call, negative financial judgment, replacement sample, proven session expiry
 
 **Event Impact Triage Execution Plan**:
 A content-identified pre-model binding of one frozen Candidate Set to one Model Provider Profile,

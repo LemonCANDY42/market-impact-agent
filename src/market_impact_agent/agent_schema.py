@@ -61,6 +61,7 @@ AGENT_SCHEMA_FILES = (
     "prospective-event-assessment.schema.json",
     "prospective-materiality-gate-result.schema.json",
     "prospective-trigger-admission.schema.json",
+    "checkpoint-disposition.schema.json",
     "prospective-checkpoint-snapshot-set.schema.json",
     "prospective-query-gate-result.schema.json",
     "prospective-execution-plan.schema.json",

@@ -859,6 +859,14 @@ authority. A completed no-path Watch or unresolved review remains a ready-time-o
 Trigger Admission, but it does not stop later candidates from receiving their own durable bounded
 assessment. The Harness may therefore keep monitoring and analyzing new information without letting
 a later event bypass the unresolved predecessor into Snapshot Set, Query Gate or an Order Intent.
+Candidate ordering and follow-up availability are separate, but linkage alone is not resolution.
+The current generic Wake classifier does not receive its parent's original unresolved question; a
+completed child therefore cannot clear that review. Neither Watch cancellation/rebaseline, a new
+instrument-master receipt nor an operator's informal screening grants first-eligible continuation.
+An approved non-run disposition closes the old experiment slot without reclassifying its news;
+current-time reassessment must be separately registered. See
+the [Earnings continuation boundary](EVENT_IMPACT_TRIAGE.md#earnings-continuation-boundary-audit--2026-09-02)
+for the provenance, non-run accounting and still-open reassessment boundary.
 
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.

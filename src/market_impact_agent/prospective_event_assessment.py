@@ -52,7 +52,7 @@ from market_impact_agent.prospective_trigger_admission import (
     TransmissionPath,
     admit_prospective_trigger,
     evaluate_event_materiality,
-    terminal_wake_resolution_parent_ids,
+    triage_cluster_ready_at,
     unresolved_route_review_cluster_ids,
 )
 from market_impact_agent.provider_reliability import (
@@ -1668,16 +1668,12 @@ async def run_prospective_event_assessment(
     unit_cost_reservation = _maximum_event_assessment_cost(profile)
     provider_health_store = ProviderHealthStore(run_root / "provider-health.sqlite3")
     unresolved_assessment_watch_ids: set[str] = set()
-    for context_index, (
+    for (
         context_candidate,
         context_proposal,
         context_decision,
         cluster,
-    ) in enumerate(contexts):
-        resolution_contexts = contexts[: context_index + 1]
-        unresolved_assessment_watch_ids.difference_update(
-            terminal_wake_resolution_parent_ids(resolution_contexts)
-        )
+    ) in contexts:
         if cluster.cluster_id not in context_decision.event_assessment_cluster_ids:
             continue
         if _sum_metrics(metrics).estimated_cost_microusd + unit_cost_reservation > aggregate_limit:
@@ -1739,8 +1735,12 @@ async def run_prospective_event_assessment(
         if materiality.disposition is not MaterialityDisposition.ADMIT:
             continue
         if unresolved_assessment_watch_ids or unresolved_route_review_cluster_ids(
-            earlier_contexts=contexts[:context_index],
-            resolution_contexts=resolution_contexts,
+            earlier_contexts=tuple(
+                context
+                for context in contexts
+                if triage_cluster_ready_at(context[0], context[3])
+                <= triage_cluster_ready_at(context_candidate, cluster)
+            ),
         ):
             continue
         now = datetime.now(UTC)

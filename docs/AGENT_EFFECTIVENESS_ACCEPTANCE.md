@@ -66,6 +66,14 @@ an idempotent replay cannot backfill a window opened later. Sealing is atomic. A
 received later whose authoritative `admitted_at` is at or before cutoff marks the earlier seal
 stale; it may not be silently omitted.
 
+An approved legacy checkpoint retirement before any Trigger or Agent Run is separate non-run
+accounting in the existing Trigger store. Its `missed_window` disposition preserves original
+Candidate/Decision references and closes that old slot; `legacy_session_unanchored` explicitly has
+no proven deadline. It is not an Agent terminal, eligible admission, completed strategy case or
+positive promotion evidence. It neither rewrites old experimental denominators nor inserts a
+fabricated member into a sealed promotion window. A later current-time reassessment needs its own
+registration and retains the original receipt times of accumulated subject evidence.
+
 `StrategyValidationAuthorityStore.evaluate(registration_id)` accepts no outcome, metric, selector,
 store, path, denominator row, or evidence-lane override. A v2 report binds the
 `harness_authority_id`, run-set seal and prospective window seal. Existing v1 Registration,

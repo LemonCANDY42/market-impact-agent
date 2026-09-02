@@ -466,6 +466,15 @@ the four news Watches backing off on the 120/360-second policy. No durable Wake 
 collected instrument master does not retroactively alter its frozen exposure view or trigger the
 issuer-feed Watch by itself.
 
+The original Triage review has two distinct causes before that exposure assessment: its partition
+left the relationship between two reporting-period forecasts uncertain, and its classifier asked
+for registration/receipt timing and admitted source-class facts that the Harness already owns.
+The direct Work map/classify input supplies the checkpoint rule and content but not a clear trusted
+projection of those completed mechanical checks. New semantic-review inputs must distinguish the
+real event-identity question from already-verified Harness provenance; asking the model to infer
+the latter from publisher text is not evidence of a missing external source. Old outputs and their
+failure reasons remain immutable.
+
 The later selected set `f347f9be316f0a7344a2ab96a4d0051daf99e67faeee6f39293d8d5d6ca57501`
 belongs to the previous v6 route epoch, not the newly healthy v7 epoch. In that original epoch an
 unresolved review at September 1 01:55:42 UTC precedes eligible candidates at 01:55:42 and 10:58:42;
@@ -473,21 +482,60 @@ the selected candidate is only ready at September 2 01:07:30. First-eligible adm
 rejects it independently of the review gap. Cancelling, expiring or rebaselining a scheduler Watch
 is not a semantic resolution and cannot authorize skipping the two earlier eligible candidates.
 
-There is also an unaccepted continuation boundary, not just an external wait. Trigger Admission
-looks for exact terminal Wake-child resolutions only within the ready-time prefix ending at the
-selected candidate; a genuinely later child cannot clear a predecessor when reconsidering an older
-frozen candidate. EventAssessment has a corresponding prefix/Decision-time limit. Even after that
-lookup is corrected, an immutable original `needs_review` Decision cannot simply be changed to
-`eligible_selected`; no accepted re-selection authority currently bridges that state.
+The initial diagnosis focused on follow-up lookup time, but independent review found a more
+fundamental semantic boundary. The ordinary Wake executor freezes only new Observation Versions;
+its classifier does not receive the parent's original facts or unresolved question. A terminal
+linked child therefore proves a callback completed, not that the parent review was resolved.
+The proposed positive continuation was rejected even though its full test suite passed. In addition,
+a completed no-path EventAssessment Watch has no materiality result; clearing its review flag cannot
+supply the preceding result required by Materiality Admission. Neither defect can be repaired by
+loosening a timestamp check or treating ordinary archival as confirmation.
 
-The next dependency-closed slice must define and test a later semantic resolution plus deterministic
-first-eligible continuation, reusing the existing Decision/Trigger stores rather than a second queue.
-It must preserve all old Decisions and assessments, resolve only the exact parent, retain earlier
-eligible candidates and the fixed denominator, and keep the resolution's availability time separate
-from the original candidate time. Later evidence must never become visible at an earlier cutoff.
-Acceptance must exercise **review parent → already-frozen candidate → later terminal Wake child**,
-not merely admission of the child itself. The four news Watch coverage repairs remain separate.
-This audit created no replacement, Wake, reclassification, model call or Trigger permission.
+The safe boundary is:
+
+- Original receipt readiness orders candidates. A same-ready-time review also blocks, regardless of
+  hash ordering. Read-only inspection may explain the earliest eligible candidate and blockers, but
+  grants no Trigger authority.
+- Generic Wake children, including terminal archival, Watch and EventAssessment routes, cannot clear
+  the original review. A future parent-review contract must provide the unresolved question and bind
+  an explicit, evidenced resolution. It must not be inferred from absence of a new blocker.
+- Old Decisions, assessments, receipts and Watch histories remain unchanged. First-eligible ordering
+  constrains this registered experiment, not analysis throughput or portfolio monitoring globally.
+- User-approved retirement is a non-run checkpoint disposition owned by the existing Trigger store,
+  not a synthetic Agent Run or Triage Decision. It closes the old registration/checkpoint slot and
+  must atomically exclude later Trigger Admission, including across restart. Its exact original
+  Candidate/Decision references remain frozen even if later Decisions append.
+
+Registration v5 specifies 15:30 Asia/Shanghai but not which session a delayed resolution belongs to.
+Consequently the approved legacy `missed_window` disposition uses `legacy_session_unanchored` and
+`proven_deadline=null`: it records a diagnostic decision not to run the old slot, not retrospective
+proof of an exact expiry time. It neither declares the underlying news ineligible nor removes a
+denominator member. No old cutoff or receipt is moved.
+
+The separate current-time reassessment remains a subsequent implementation node. It must register
+the accumulated old evidence as the subject of a new question, preserve its original receipt times,
+freeze fresh context at Harness time and pass the applicable Query Gate before calling a model.
+The current first-new-event registration cannot be reused by manufacturing a post-registration Wake.
+Read-only analysis at a new cutoff need not claim a trading-session deadline; exact calendar and
+tradability evidence are required wherever a session or executable action is claimed.
+
+At the 08:34 UTC audit, this Earnings Watch remained active with five polls and zero Wakes. The v7
+readiness report `1f414b7e075b00bd4351cc9ea42bfb3c8627e69d5c434215fa1b61ca8994a89b` found four
+operational checkpoint families, 693 policy and 684 material unclassified versions (overlapping
+sets, not independent events), and no new v7 Earnings/NBS candidate. This does not resolve the old
+v6 review. The four news Watch coverage repairs remain separate. No replacement, Wake,
+reclassification, model call or Trigger permission is claimed from this audit.
+
+The corrected boundary was accepted after independent read-only review and 1,712 passing tests;
+the new Schema's wheel-inclusion omission was fixed and the full suite rerun. At September 2
+09:16:00 UTC, the approved original Earnings slot was actually retired as disposition
+`8e168ebcdfcab3cb5310af5d3459780f080226d60c73015d463bc798e1fabd91` (private CAS
+`2f00adb35f6cd1b8a174a37f4343c80bfefd066b1bab137776679e6b1ff62f07`). Restart replay returned the
+same record; both original Candidate/Decision pairs and the Watch policy were unchanged. The Watch
+remained active with six polls and zero Wakes. No Trigger or model call was created. This closes
+that registration/checkpoint across its route plans, not collection or other checkpoint families.
+The following v7 report at 09:16:09 UTC still found four operational collection families; that
+collection-readiness result is not permission to admit the now-retired Earnings slot.
 
 ### Actual-receipt coverage failure — 2026-09-02
 

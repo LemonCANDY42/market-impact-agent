@@ -138,8 +138,11 @@ def _prepared(
     tmp_path: Path,
     *,
     input_limit: int = 20_000,
+    eligible_remaining: bool = False,
 ):
-    store, journal, _, old_profile, old_service, authority = _triage_setup(tmp_path)
+    store, journal, _, old_profile, old_service, authority = _triage_setup(
+        tmp_path, eligible_remaining=eligible_remaining
+    )
     context = authority.delegation_context()
     admitted_at = context.created_at + timedelta(seconds=1)
     old_policy = journal.policy(old_profile.collection_policy_id)
