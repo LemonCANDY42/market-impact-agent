@@ -13,6 +13,15 @@ import pytest
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_schema import validate_agent_contract
 from market_impact_agent.cli import build_parser, main
+from market_impact_agent.data_inputs import (
+    DataFetchStatus,
+    DataPITLane,
+    DataProviderAttempt,
+    DataQuery,
+    DataSnapshot,
+    DataSourceBinding,
+    LocalDataSnapshotStore,
+)
 from market_impact_agent.observations import ObservationCapability
 from market_impact_agent.prospective_checkpoint_readiness import (
     PROSPECTIVE_CHECKPOINT_ADMISSION_TIMING_PROTOCOL,
@@ -24,11 +33,25 @@ from market_impact_agent.prospective_checkpoint_readiness import (
     evaluate_prospective_checkpoint_readiness,
     load_prospective_checkpoint_route_plan,
 )
-from market_impact_agent.prospective_collection_runtime import ProspectiveCollectionRuntime
-from market_impact_agent.prospective_data import ProspectiveObservationVersionRef
+from market_impact_agent.prospective_collection_runtime import (
+    ProspectiveCollectionAdapterKind,
+    ProspectiveCollectionJob,
+    ProspectiveCollectionRuntime,
+)
+from market_impact_agent.prospective_data import (
+    ProspectiveCollectionPolicy,
+    ProspectiveObservationVersionRef,
+)
 from market_impact_agent.prospective_diagnostic import (
     ProspectiveDiagnosticRegistration,
     load_prospective_diagnostic_registration,
+)
+from market_impact_agent.source_acceptance import (
+    SourceAcceptanceGate,
+    SourceAcceptanceGateResult,
+    SourceAcceptanceStatus,
+    SourceRouteAcceptanceDeclaration,
+    SourceRouteAcceptanceReport,
 )
 
 ROOT = Path(__file__).parents[1]
@@ -100,6 +123,16 @@ class _FakeJournal:
     def policy(self, policy_id: str) -> Any:
         assert policy_id == POLICY_ID
         return self._policy
+
+    def receipt_coverage_errors(
+        self,
+        *,
+        policy_id: str,
+        window_start: datetime,
+        not_after: datetime,
+    ) -> tuple[str, ...]:
+        assert policy_id == POLICY_ID and window_start == ADMITTED_AT and not_after >= window_start
+        return ("journal_no_receipt_before_cutoff",)
 
     def observation_version_refs(
         self,
@@ -1103,17 +1136,6 @@ def test_historical_readiness_does_not_use_future_runtime_failure(
                 "opportunities": (
                     _FakeOpportunity(
                         scheduled_for=ADMITTED_AT + timedelta(seconds=30),
-                        outcome="missed",
-                    ),
-                )
-            },
-            "event_revelation:post_admission_missed_opportunity",
-        ),
-        (
-            {
-                "opportunities": (
-                    _FakeOpportunity(
-                        scheduled_for=ADMITTED_AT + timedelta(seconds=30),
                         outcome="collector_failure",
                     ),
                 )
@@ -1148,3 +1170,339 @@ def test_post_admission_health_and_registered_cadence_are_fail_closed(
     assert checkpoint.status is CheckpointReadinessStatus.TRIGGER_ROUTE_UNCONFIGURED
     assert expected_gap in checkpoint.blocking_gaps
     assert report.waiting_for_external_event is False
+
+
+def _receipt_runtime(tmp_path: Path, *, poll: int = 300, gap: int = 900, required: bool = True):
+    store = LocalDataSnapshotStore(tmp_path / "receipt-state")
+    runtime = ProspectiveCollectionRuntime(store, clock=lambda: ADMITTED_AT)
+    source_config = {"source_config_id": "fixture-official-news"}
+    source = DataSourceBinding(
+        provider_id="csrc-official-news",
+        provider_version="1",
+        upstream_source="csrc-official-news",
+        manifest_hash="e" * 64,
+        source_config_hash=canonical_hash(source_config),
+        required=required,
+    )
+    policy = ProspectiveCollectionPolicy.build(
+        capability=ObservationCapability.EVENT_REVELATION,
+        sources=(source,),
+        window_start=ADMITTED_AT - timedelta(hours=1),
+        parameters={},
+        poll_interval_seconds=poll,
+        maximum_gap_seconds=gap,
+    )
+    declaration = SourceRouteAcceptanceDeclaration.build(
+        provider_id=source.provider_id,
+        provider_version=source.provider_version,
+        provider_manifest_hash=source.manifest_hash,
+        source_config_hash=source.source_config_hash or "",
+        upstream_source=source.upstream_source,
+        capability=policy.capability,
+        rights_basis_url="https://fixture.invalid/terms",
+        rights_reviewed_at=ADMITTED_AT,
+        permitted_use="private_research",
+        retention_scope="private_raw_and_normalized",
+        redistribution_allowed=False,
+        semantic_scope="official_capital_market_policy_publication",
+        revision_strategy="append_only_content_versions",
+    )
+    gates = tuple(
+        SourceAcceptanceGateResult(
+            gate=gate.value,
+            status=SourceAcceptanceStatus.PASS.value,
+            reasons=(),
+        )
+        for gate in SourceAcceptanceGate
+    )
+    report_core = {
+        "schema_version": "market-impact.source-route-acceptance-report.v1",
+        "declaration": declaration.to_dict(),
+        "rights_evidence": None,
+        "data_snapshot_id": "data-snapshot-fixture",
+        "deterministic_replay_snapshot_id": None,
+        "evaluated_at": ADMITTED_AT.isoformat().replace("+00:00", "Z"),
+        "gates": [gate.to_dict() for gate in gates],
+        "accepted": True,
+        "historical_pit_claim": False,
+        "evidence_promoted": False,
+        "execution_capability": False,
+    }
+    acceptance = SourceRouteAcceptanceReport(
+        report_id=f"source-route-acceptance-report-{canonical_hash(report_core)}",
+        declaration=declaration,
+        rights_evidence=None,
+        data_snapshot_id="data-snapshot-fixture",
+        deterministic_replay_snapshot_id=None,
+        evaluated_at=ADMITTED_AT,
+        gates=gates,
+        accepted=True,
+    )
+    job = ProspectiveCollectionJob.build(
+        adapter_kind=ProspectiveCollectionAdapterKind.CSRC_NEWS,
+        collection_policy=policy,
+        source_acceptance_report=acceptance,
+        source_config=source_config,
+        starts_at=ADMITTED_AT,
+        misfire_grace_seconds=180,
+        maximum_jitter_seconds=0,
+        provider_timeout_seconds=30.0,
+    )
+    runtime.register(
+        job,
+        collection_policy=policy,
+        source_acceptance_report=acceptance,
+        source_config=source_config,
+        registered_at=ADMITTED_AT,
+    )
+    plan = ProspectiveCheckpointRoutePlan.build(
+        registration_id=_registration().registration_id,
+        bindings=(
+            ProspectiveCheckpointRouteBinding(
+                checkpoint_key="next-a-share-policy-event",
+                capability=policy.capability,
+                route_kind="official_event",
+                job_id=job.job_id,
+            ),
+        ),
+    )
+    admissions = ProspectiveCheckpointAdmissionStore(
+        tmp_path / "admission", clock=lambda: ADMITTED_AT
+    )
+    admissions.admit(route_plan=plan, registration=_registration(), runtime=runtime)
+    return runtime, policy, job, plan, admissions
+
+
+def _receipt_snapshot(
+    runtime: ProspectiveCollectionRuntime,
+    policy: ProspectiveCollectionPolicy,
+    seconds: int,
+    *,
+    failed: bool = False,
+) -> DataSnapshot:
+    received = ADMITTED_AT + timedelta(seconds=seconds)
+    query = DataQuery.build(
+        capability=policy.capability,
+        pit_lane=DataPITLane.PROSPECTIVE,
+        as_of=received,
+        window_start=policy.window_start,
+        source_policy_id=policy.policy_id,
+        parameters=policy.parameters,
+        sources=policy.sources,
+        minimum_data_sources=1,
+    )
+    attempts = tuple(
+        DataProviderAttempt(
+            provider_id=source.provider_id,
+            provider_version=source.provider_version,
+            upstream_source=source.upstream_source,
+            required=source.required,
+            status=DataFetchStatus.ERROR if failed else DataFetchStatus.NO_DATA,
+            retrieved_at=received,
+            raw_response_hash=None if failed else runtime.store.put_raw(b"[]"),
+            received_count=0,
+            accepted_count=0,
+            rejected_missing_availability=0,
+            rejected_after_cutoff=0,
+            rejected_missing_authority=0,
+            rejected_authority_after_cutoff=0,
+            rejected_lane_mismatch=0,
+            error_kind="fixture_failure" if failed else None,
+        )
+        for source in policy.sources
+    )
+    core = {
+        "schema_version": "market-impact.data-snapshot.v2",
+        "query": query.to_dict(),
+        "attempts": [attempt.to_dict() for attempt in attempts],
+        "observations": [],
+        "coverage_complete": False,
+        "completed_at": received.isoformat().replace("+00:00", "Z"),
+    }
+    snapshot = DataSnapshot(
+        snapshot_id=f"data-snapshot-{canonical_hash(core)}",
+        query=query,
+        attempts=attempts,
+        observations=(),
+        coverage_complete=False,
+        completed_at=received,
+    )
+    runtime.store.put(snapshot)
+    return snapshot
+
+
+def _evaluate_receipt_readiness(
+    runtime: ProspectiveCollectionRuntime,
+    plan: ProspectiveCheckpointRoutePlan,
+    admissions: ProspectiveCheckpointAdmissionStore,
+    seconds: int,
+):
+    report = evaluate_prospective_checkpoint_readiness(
+        registration=_registration(),
+        route_plan=plan,
+        admission_store=admissions,
+        runtime=runtime,
+        evaluated_at=ADMITTED_AT + timedelta(seconds=seconds),
+    )
+    return next(
+        item for item in report.checkpoints if item.checkpoint_key == "next-a-share-policy-event"
+    )
+
+
+@pytest.mark.parametrize("required", [True, False])
+def test_scheduler_miss_with_full_receipt_coverage_is_information_only(
+    tmp_path: Path, required: bool
+) -> None:
+    runtime, policy, job, plan, admissions = _receipt_runtime(tmp_path, required=required)
+    for seconds in (0, 300, 792, 900, 1200):
+        result = runtime.run_due(
+            job.job_id,
+            now=ADMITTED_AT + timedelta(seconds=seconds),
+            collector=lambda bound_policy, _config, _scheduled, seconds=seconds: _receipt_snapshot(
+                runtime,
+                bound_policy,
+                926 if seconds == 900 else seconds,
+            ),
+        )
+        if seconds == 792:
+            assert result.missed_opportunities == 1
+    misses = [item for item in runtime.opportunities(job.job_id) if item.outcome == "missed"]
+    assert len(misses) == 1
+    assert misses[0].completed_at is not None
+    assert (misses[0].completed_at - misses[0].scheduled_for).total_seconds() == 192
+    assert job.misfire_grace_seconds == 180
+    assert 926 - 300 == 626 < policy.maximum_gap_seconds
+    assert (
+        runtime.journal.receipt_coverage_errors(
+            policy_id=policy.policy_id,
+            window_start=ADMITTED_AT,
+            not_after=ADMITTED_AT + timedelta(seconds=1200),
+        )
+        == ()
+    )
+    with sqlite3.connect(runtime.index_path) as connection:
+        before = tuple(connection.iterdump())
+    artifacts_before = {
+        path.name: path.read_bytes() for path in runtime.store.artifacts.root.iterdir()
+    }
+    checkpoint = _evaluate_receipt_readiness(runtime, plan, admissions, 1200)
+    assert checkpoint.operational_trigger_route_job_ids == (job.job_id,)
+    assert checkpoint.status is CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+    assert "event_revelation:post_admission_missed_opportunity" in checkpoint.information_gaps
+    assert "event_revelation:post_admission_missed_opportunity" not in checkpoint.blocking_gaps
+    assert not any("coverage_pending" in gap for gap in checkpoint.information_gaps)
+    with sqlite3.connect(runtime.index_path) as connection:
+        assert tuple(connection.iterdump()) == before
+    assert {
+        path.name: path.read_bytes() for path in runtime.store.artifacts.root.iterdir()
+    } == artifacts_before
+
+
+@pytest.mark.parametrize(
+    ("receipts", "cutoff", "failure", "error"),
+    [
+        ((), 901, None, "journal_no_receipt_before_cutoff"),
+        ((901, 1200), 1200, None, "journal_start_coverage_gap"),
+        ((0, 1200, 1500, 1800), 1800, None, "journal_internal_coverage_gap"),
+        ((0, 300), 1201, None, "journal_cutoff_coverage_gap"),
+        ((0, 300, 600), 600, 300, "journal_failed_source_receipt"),
+    ],
+)
+@pytest.mark.parametrize("required", [True, False])
+def test_missed_route_uses_entire_admission_window_and_fails_closed_on_receipt_gap(
+    tmp_path: Path,
+    receipts: tuple[int, ...],
+    cutoff: int,
+    failure: int | None,
+    error: str,
+    required: bool,
+) -> None:
+    runtime, policy, job, plan, admissions = _receipt_runtime(tmp_path, required=required)
+    runtime.run_due(
+        job.job_id,
+        now=ADMITTED_AT + timedelta(seconds=192),
+        collector=lambda _policy, _config, _scheduled: pytest.fail(
+            "a missed opportunity cannot collect"
+        ),
+    )
+    for seconds in receipts:
+        runtime.journal.record_snapshot(
+            _receipt_snapshot(runtime, policy, seconds, failed=seconds == failure),
+            policy=policy,
+        )
+    if error == "journal_internal_coverage_gap":
+        assert (
+            runtime.journal.receipt_coverage_errors(
+                policy_id=policy.policy_id,
+                window_start=ADMITTED_AT + timedelta(seconds=1200),
+                not_after=ADMITTED_AT + timedelta(seconds=cutoff),
+            )
+            == ()
+        )
+    checkpoint = _evaluate_receipt_readiness(runtime, plan, admissions, cutoff)
+    assert checkpoint.operational_trigger_route_job_ids == ()
+    assert f"event_revelation:post_admission_receipt_coverage:{error}" in checkpoint.blocking_gaps
+    assert "event_revelation:post_admission_missed_opportunity" in checkpoint.information_gaps
+
+
+@pytest.mark.parametrize("seconds", [192, 900])
+@pytest.mark.parametrize("required", [True, False])
+def test_missed_initial_receipt_within_allowed_gap_is_pending_not_proven(
+    tmp_path: Path,
+    seconds: int,
+    required: bool,
+) -> None:
+    runtime, _, job, plan, admissions = _receipt_runtime(tmp_path, required=required)
+    runtime.run_due(
+        job.job_id,
+        now=ADMITTED_AT + timedelta(seconds=192),
+        collector=lambda _policy, _config, _scheduled: pytest.fail(
+            "a missed opportunity cannot collect"
+        ),
+    )
+    checkpoint = _evaluate_receipt_readiness(runtime, plan, admissions, seconds)
+    assert checkpoint.operational_trigger_route_job_ids == (job.job_id,)
+    assert "event_revelation:post_admission_receipt_coverage_pending" in checkpoint.information_gaps
+    assert checkpoint.status is CheckpointReadinessStatus.WAITING_FOR_POST_ADMISSION_TRIGGER
+
+
+def test_wrong_policy_receipts_cannot_cover_a_missed_route(tmp_path: Path) -> None:
+    runtime, policy, job, plan, admissions = _receipt_runtime(tmp_path)
+    wrong = ProspectiveCollectionPolicy.build(
+        capability=policy.capability,
+        sources=policy.sources,
+        window_start=policy.window_start,
+        parameters={"different_scope": True},
+        poll_interval_seconds=300,
+        maximum_gap_seconds=900,
+    )
+    runtime.run_due(
+        job.job_id,
+        now=ADMITTED_AT + timedelta(seconds=192),
+        collector=lambda _policy, _config, _scheduled: pytest.fail(
+            "a missed opportunity cannot collect"
+        ),
+    )
+    for seconds in (0, 300, 600, 900, 1200):
+        runtime.journal.record_snapshot(_receipt_snapshot(runtime, wrong, seconds), policy=wrong)
+    checkpoint = _evaluate_receipt_readiness(runtime, plan, admissions, 1200)
+    assert (
+        "event_revelation:post_admission_receipt_coverage:journal_no_receipt_before_cutoff"
+        in checkpoint.blocking_gaps
+    )
+
+
+def test_slow_policy_stays_blocked_even_when_a_miss_has_complete_receipts(tmp_path: Path) -> None:
+    runtime, policy, job, plan, admissions = _receipt_runtime(tmp_path, poll=900, gap=2700)
+    runtime.run_due(
+        job.job_id,
+        now=ADMITTED_AT + timedelta(seconds=192),
+        collector=lambda _policy, _config, _scheduled: pytest.fail(
+            "a missed opportunity cannot collect"
+        ),
+    )
+    runtime.journal.record_snapshot(_receipt_snapshot(runtime, policy, 300), policy=policy)
+    checkpoint = _evaluate_receipt_readiness(runtime, plan, admissions, 300)
+    assert checkpoint.operational_trigger_route_job_ids == ()
+    assert "event_revelation:poll_interval_exceeds_registration" in checkpoint.blocking_gaps
+    assert "event_revelation:maximum_gap_exceeds_registration" in checkpoint.blocking_gaps

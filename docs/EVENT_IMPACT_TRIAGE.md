@@ -459,6 +459,36 @@ does not retroactively qualify history, and retrospective evidence does not auth
 
 ## Acceptance status
 
+### Earnings continuation boundary audit — 2026-09-02
+
+The earlier Earnings EventAssessment Watch is active on an hourly issuer policy. It is not one of
+the four news Watches backing off on the 120/360-second policy. No durable Wake exists. The newly
+collected instrument master does not retroactively alter its frozen exposure view or trigger the
+issuer-feed Watch by itself.
+
+The later selected set `f347f9be316f0a7344a2ab96a4d0051daf99e67faeee6f39293d8d5d6ca57501`
+belongs to the previous v6 route epoch, not the newly healthy v7 epoch. In that original epoch an
+unresolved review at September 1 01:55:42 UTC precedes eligible candidates at 01:55:42 and 10:58:42;
+the selected candidate is only ready at September 2 01:07:30. First-eligible admission therefore
+rejects it independently of the review gap. Cancelling, expiring or rebaselining a scheduler Watch
+is not a semantic resolution and cannot authorize skipping the two earlier eligible candidates.
+
+There is also an unaccepted continuation boundary, not just an external wait. Trigger Admission
+looks for exact terminal Wake-child resolutions only within the ready-time prefix ending at the
+selected candidate; a genuinely later child cannot clear a predecessor when reconsidering an older
+frozen candidate. EventAssessment has a corresponding prefix/Decision-time limit. Even after that
+lookup is corrected, an immutable original `needs_review` Decision cannot simply be changed to
+`eligible_selected`; no accepted re-selection authority currently bridges that state.
+
+The next dependency-closed slice must define and test a later semantic resolution plus deterministic
+first-eligible continuation, reusing the existing Decision/Trigger stores rather than a second queue.
+It must preserve all old Decisions and assessments, resolve only the exact parent, retain earlier
+eligible candidates and the fixed denominator, and keep the resolution's availability time separate
+from the original candidate time. Later evidence must never become visible at an earlier cutoff.
+Acceptance must exercise **review parent → already-frozen candidate → later terminal Wake child**,
+not merely admission of the child itself. The four news Watch coverage repairs remain separate.
+This audit created no replacement, Wake, reclassification, model call or Trigger permission.
+
 ### Actual-receipt coverage failure — 2026-09-02
 
 The first bounded-concurrent v13 operational batch contained 32 frozen versions and three Work

@@ -988,6 +988,29 @@ class ProspectiveDataJournal:
         self.store.put(snapshot)
         return snapshot
 
+    def receipt_coverage_errors(
+        self,
+        *,
+        policy_id: str,
+        window_start: datetime,
+        not_after: datetime,
+    ) -> tuple[str, ...]:
+        """Project all-source coverage, matching freeze defaults, without writing a Snapshot."""
+
+        policy = self.policy(policy_id)
+        _strict_utc(window_start, "prospective coverage window_start")
+        _strict_utc(not_after, "prospective coverage not_after")
+        if window_start > not_after:
+            raise ValueError("prospective coverage window_start must not follow not_after")
+        errors: set[str] = set()
+        for source in policy.sources:
+            _, error = self._coverage_receipts(
+                source=source, policy=policy, window_start=window_start, not_after=not_after
+            )
+            if error is not None:
+                errors.add(error)
+        return tuple(sorted(errors))
+
     def freeze_snapshot(
         self,
         *,

@@ -310,6 +310,68 @@ being checked before the actual four-analyst/two-Judge mix. The correction budge
 directly, preserves the v1 six-run estimator and freezes both cost estimates; regression tests cover
 an affordable higher-priced Judge and rejection when the mixed cost really exceeds the cap.
 
+### Remaining opened v2 diagnostics after received-408 acceptance
+
+After the bounded transport repair and successful synthetic canary, the continuation is fixed
+before dispatch to the original 2024-09-30 and 2021-07-01 checkpoints, in that order. The failed
+2020-02-03 v2 registration remains incomplete and is never redispatched or replaced. The private
+continuation manifest is `82b6304acd0861077c2baeb37f1b7fcaad1d03ffb63003404804e4bb0d4e7b07`.
+Both cases keep their original six evidence items, Pattern Pack and five-session horizon; v2 adds
+the same registered broad-index meaning and lane/economic uncertainty separation used by the risk
+diagnostic. Both arms use common controls with no extra Skill. Analyst and conditional-Judge roles
+select the new Luna max CPA received-408 Profile; each case reserves USD 3.00 estimated cost,
+at most two concurrent model requests and six logical runs. Cases do not overlap.
+
+A transport, output or required-read failure stops later queued cases. If the opportunity case
+still abstains solely because of research-lane, target-identity or claim limitations, stop model
+calls and repair inputs instead. An evidence-grounded economic abstention remains a legitimate
+result, not permission to replace the case or force a Judge. These are previously opened input
+diagnostics, not a new holdout, Skill ablation, executable-pilot gate, strategy promotion or proof of
+avoided losses. The original incomplete risk member remains visible in the wider program report.
+
+The opportunity case completed five Runs: control abstained twice; treatment abstained once and
+proposed up for five sessions once. Only treatment invoked its registered Judge. The Judge reread
+the original evidence and resolved to abstain: an already substantial rally and broad diffusion did
+not establish incremental continuation rather than reversal through the requested horizon. Missing
+implementation detail and the unknown checkpoint open remained economic uncertainties, not an
+automatic research-lane or target-alias veto. This meets the continuation rule for running the
+remaining fixed case; it does not prove that abstention was the correct financial decision.
+
+All five terminals reopened without dispatch or Journal changes and matched their frozen
+prompt/config/Skill bindings and Usage records. The Judge input binds both exact analyst terminals;
+the agreeing control arm made no Judge call. Ten physical requests recorded 137,215 input / 61,397
+output Tokens and 101,122 microusd estimated cost. There were no unknown-generation failures or
+408 regenerations in this case. Registration
+`f91d19aded80abe661df9e5bb56948fb92f2b2bbd849d21d02467ddea4b6a65a`, report
+`e1f61bf21b4f92bca6620f925654c5b03a52eb6f81f1a068d41ae5a619f9638d`, Usage
+`22822987bed11ba3413df9c0e9a4aca77a75ef051ca170a20da6bf356137ecf9`, and the initial
+continuation audit `4cb3414a2d73089c2e8d46c2c74f0d3484031bfbd50214a9559a232f62153005`
+remain private immutable evidence. This demonstrates conditional adjudication mechanics on a real
+historical input, not a Judge quality gain, positive return, avoided loss or Skill increment.
+
+The remaining abstention case then completed all four analyst Runs. Both arms agreed on abstention,
+so neither invoked a Judge. The mixed news record did not isolate a new economic change with a
+supported broad-index transmission and five-session horizon. Unknown expectations remained visible;
+the result must not be relabeled a correct avoided trade without subsequent outcome evaluation.
+One analyst needed its existing bounded contract-correction turn because the returned `event_id`
+did not match the frozen Evidence Pack. That was a completed semantic correction, not a network
+retry or another analyst sample. Nine physical requests recorded 184,289 input / 29,232 output
+Tokens and 71,939 microusd; no 408 or unknown-generation attempt occurred. Registration
+`f7f725023481fac852ab48549027a6670418aef8b925b3a92c02d114e7bd7b4a`, report
+`20d16467a2a32fa6f6b44dbe76017e735f724385adebf9c593879f988eb30eb1`, and Usage
+`db6028b3670f93010e65aab6c245d3e04f8d5c53a078ae78645ec5464a32c1e8` remain immutable.
+
+Final continuation audit `283d2c5eac51b1d72b2fd0fd2596ad1b362f79cb07f4b5160451190eee6486f8`
+reopened all nine completed Runs without dispatch and reconciled 19 requests, 321,504 input /
+90,629 output Tokens and 173,061 microusd across the two cases. It also verified the actual
+conditional-Judge branch and its two source terminals. Confidence remains uncalibrated observation:
+opportunity analysts reported 87%/86% (control), 84% abstain/54% up (treatment), and its Judge 91%
+abstain; abstention-case analysts reported 94–98%. These values concern their stated decisions,
+not measured probabilities of future price moves; the Judge input omits analyst confidence.
+The bounded continuation is complete. Do not repeat it to obtain non-empty decisions. Next work is
+executable, event-centered inputs and outcome/baseline evaluation, not a claim that two final
+abstentions satisfy the original three-case readiness/effectiveness gate.
+
 `StrategyValidationRegistration v1` remains the frozen registration payload; model Profile, prompt,
 Skill catalog, tool manifest, universe, cost model and fill model hashes; and the exact definition
 and executable configuration of the candidate and every named baseline. Candidate and baseline

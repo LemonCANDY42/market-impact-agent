@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -56,10 +58,10 @@ def _source() -> DataSourceBinding:
     )
 
 
-def _policy(*, maximum_gap_seconds: int = 90) -> ProspectiveCollectionPolicy:
+def _policy(*, maximum_gap_seconds: int = 90, required: bool = True) -> ProspectiveCollectionPolicy:
     return ProspectiveCollectionPolicy.build(
         capability=ObservationCapability.EVENT_REVELATION,
-        sources=(_source(),),
+        sources=(replace(_source(), required=required),),
         window_start=PUBLISHED - timedelta(hours=1),
         parameters={"max_items": 20},
         poll_interval_seconds=60,
@@ -124,7 +126,7 @@ def _snapshot(
         provider_id=selected_source.provider_id,
         provider_version=selected_source.provider_version,
         upstream_source=selected_source.upstream_source,
-        required=True,
+        required=selected_source.required,
         status=DataFetchStatus.DATA,
         retrieved_at=retrieved_at,
         raw_response_hash=raw_response_hash,
@@ -465,6 +467,73 @@ def test_freeze_version_selection_snapshot_spans_policies_in_receipt_order(
             as_of=SECOND_RECEIPT + timedelta(seconds=1),
             frozen_at=SECOND_RECEIPT + timedelta(seconds=2),
         )
+
+
+@pytest.mark.parametrize(
+    ("receipt_offsets", "cutoff_offset", "expected"),
+    [
+        ((), 60, ("journal_no_receipt_before_cutoff",)),
+        ((0, 60), 90, ()),
+        ((91,), 100, ("journal_start_coverage_gap",)),
+        ((0, 91, 120), 120, ("journal_internal_coverage_gap",)),
+        ((0,), 91, ("journal_cutoff_coverage_gap",)),
+    ],
+)
+@pytest.mark.parametrize("required", [True, False])
+def test_read_only_receipt_coverage_matches_canonical_freeze(
+    tmp_path: Path,
+    receipt_offsets: tuple[int, ...],
+    cutoff_offset: int,
+    expected: tuple[str, ...],
+    required: bool,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    policy = _policy(required=required)
+    journal.register_policy(policy)
+    for seconds in receipt_offsets:
+        journal.record_snapshot(
+            _snapshot(
+                store,
+                policy=policy,
+                retrieved_at=FIRST_RECEIPT + timedelta(seconds=seconds),
+                source=policy.sources[0],
+            ),
+            policy=policy,
+        )
+    cutoff = FIRST_RECEIPT + timedelta(seconds=cutoff_offset)
+    with sqlite3.connect(store.index_path) as connection:
+        before = tuple(connection.iterdump())
+    artifacts = {path.name: path.read_bytes() for path in store.artifacts.root.iterdir()}
+    assert (
+        journal.receipt_coverage_errors(
+            policy_id=policy.policy_id,
+            window_start=FIRST_RECEIPT,
+            not_after=cutoff,
+        )
+        == expected
+    )
+    with sqlite3.connect(store.index_path) as connection:
+        assert tuple(connection.iterdump()) == before
+    assert {path.name: path.read_bytes() for path in store.artifacts.root.iterdir()} == artifacts
+    frozen = journal.freeze_snapshot(
+        policy_id=policy.policy_id,
+        window_start=FIRST_RECEIPT,
+        not_after=cutoff,
+        frozen_at=cutoff,
+    )
+    assert (
+        tuple(
+            sorted(
+                {
+                    attempt.error_kind
+                    for attempt in frozen.attempts
+                    if attempt.error_kind is not None
+                }
+            )
+        )
+        == expected
+    )
 
 
 def test_freeze_fails_closed_when_poll_cadence_has_a_gap(tmp_path: Path) -> None:

@@ -898,6 +898,7 @@ class _ValidatedRoute:
     source_config_hash: str
     operational: bool
     health_gaps: tuple[str, ...]
+    information_gaps: tuple[str, ...]
 
 
 def evaluate_prospective_checkpoint_readiness(
@@ -973,6 +974,7 @@ def evaluate_prospective_checkpoint_readiness(
                 "after later job updates"
             )
         health_gaps: list[str] = []
+        route_information: list[str] = []
         if policy.poll_interval_seconds > slot.poll_interval_seconds:
             health_gaps.append("poll_interval_exceeds_registration")
         if policy.maximum_gap_seconds > slot.maximum_gap_seconds:
@@ -990,7 +992,19 @@ def evaluate_prospective_checkpoint_readiness(
             and _opportunity_is_visible_at(item, evaluated_at)
         )
         if any(item.outcome == "missed" for item in post_admission_opportunities):
-            health_gaps.append("post_admission_missed_opportunity")
+            route_information.append("post_admission_missed_opportunity")
+            coverage_errors = runtime.journal.receipt_coverage_errors(
+                policy_id=policy.policy_id,
+                window_start=admission.recorded_at,
+                not_after=evaluated_at,
+            )
+            for error in coverage_errors:
+                if error == "journal_no_receipt_before_cutoff" and (
+                    evaluated_at - admission.recorded_at
+                ).total_seconds() <= min(policy.maximum_gap_seconds, slot.maximum_gap_seconds):
+                    route_information.append("post_admission_receipt_coverage_pending")
+                else:
+                    health_gaps.append(f"post_admission_receipt_coverage:{error}")
         latest_post_admission = (
             max(post_admission_opportunities, key=lambda item: item.scheduled_for)
             if post_admission_opportunities
@@ -1012,6 +1026,7 @@ def evaluate_prospective_checkpoint_readiness(
             source_config_hash=declaration.source_config_hash,
             operational=not gaps,
             health_gaps=gaps,
+            information_gaps=tuple(sorted(set(route_information))),
         )
 
     checkpoint_results: list[ProspectiveCheckpointReadiness] = []
@@ -1100,7 +1115,7 @@ def evaluate_prospective_checkpoint_readiness(
             information.extend(
                 f"{slot.capability.value}:{gap}"
                 for _, value in planned
-                for gap in value.health_gaps
+                for gap in (*value.health_gaps, *value.information_gaps)
             )
             distinct_sources = {value.source_config_hash for _, value in operational}
             if slot.capability is not ObservationCapability.EVENT_REVELATION and (

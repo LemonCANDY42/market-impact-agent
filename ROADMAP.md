@@ -98,7 +98,7 @@ Mock path; an autonomous Paper mandate/risk/kill/reconciliation owner; and a pin
 Nautilus-to-IBKR Paper runtime candidate. These are engineering capabilities, not evidence that a
 strategy is effective or that the broker Provider is accepted.
 
-The evidence gates remain open. Strict historical PIT remains `0/18`; the new three-case opened
+The evidence gates remain open. Strict historical PIT remains `0/18`; the initial v1 three-case opened
 input diagnostic completed but produced no positive effectiveness acceptance, and no 24-case frozen
 holdout has produced an effectiveness result. A private,
 mode-`0600` model environment and strict launcher now supply the existing CPA credential without
@@ -106,8 +106,10 @@ exposing it to the collector or repository; effective model, endpoint, reasoning
 remain frozen in each Profile and Run. Five Earnings candidates have now completed formal Triage.
 One earlier candidate completed EventAssessment as `watch` because the frozen exposure view lacked
 its exact issuer/instrument mapping, and one later candidate is checkpoint-selected. The existing
-ready-time anti-cherry-pick rule correctly blocks that later candidate until the earlier Watch has a
-terminal resolution. Route plan v7 has now admitted the accepted `stock_basic` instrument-master
+ready-time anti-cherry-pick rule blocks that later candidate for both an unresolved predecessor
+review and two earlier eligible candidates; resolving or cancelling a Watch alone cannot admit the
+later selection. The required late-resolution/first-eligible continuation boundary is not yet
+complete (see `docs/EVENT_IMPACT_TRIAGE.md`). Route plan v7 has now admitted the accepted `stock_basic` instrument-master
 route without rewriting an earlier epoch. Its first scheduled actual-receipt run accepted 5,554
 records over six bounded requests, and the next readiness audit found all four checkpoint families
 operational. The next material-ingress batch completed on 14 actual-receipt versions: five archive,
@@ -162,6 +164,19 @@ current collection recovers. Any successor/rebaseline repair must address that e
 coverage lifetime without deleting receipts or inventing coverage; repeatedly rebaselining the same
 unsuitable policy is not a durable fix.
 
+A separate 07:44 UTC audit regressed to 2/4 operational families because readiness treated any
+post-admission scheduler miss as a permanent veto, including three 300/900-second news routes whose
+actual receipt gaps remained 616–626 seconds. The minimal repair uses the existing canonical
+full-admission-window receipt coverage instead; missed opportunities remain diagnostics and true
+start/internal/cutoff/source gaps still block. At 08:00:38 UTC the **same v7 admission** returned
+4/4 operational, with overlapping policy/material views of 584/575 unclassified versions; Earnings
+and NBS still had no new observation. This restores collection readiness, not Watch completeness,
+formal eligibility or Judgment. Exact report identity and semantics are in `docs/DATA_INPUT_HARNESS.md`.
+Independent review found and the follow-up fix closed an optional-sole-source bypass in the new
+projection: all configured sources are checked, matching canonical freeze defaults. Final full
+acceptance passed Ruff, format, Pyright, 1,699 tests and diff checks; no collector or Gateway restart
+was used.
+
 The opened historical readiness lane has now run its fixed three-case cohort, not just its unit
 tests. All 14 logical runs completed with full frozen evidence/tool coverage and reconciled Usage:
 29 physical requests, 406,162 input / 82,630 output Tokens, and 180,401 microusd. Thirteen abstained;
@@ -202,6 +217,22 @@ and reopened twice without another Provider call. No 408 occurred in that canary
 prove one regeneration, repeated-408 stop and unchanged legacy/restart boundaries. The mainline
 can now continue with separately registered historical input diagnostics, not a retry of the
 terminal failed risk case.
+
+That continuation has produced a real conditional-Judge result on the opened opportunity case:
+control abstained twice; treatment abstained once and proposed up once; only the disagreeing arm
+called a Judge, which reread the frozen evidence and chose abstention because substantial prior
+repricing did not establish five-session continuation. All five Runs completed and reconciled ten
+POSTs, 137,215 input / 61,397 output Tokens and USD 0.101122 estimated cost, without a 408. This proves
+the conditional composition and replay/accounting path ran, not that abstention or the strategy was
+economically correct. The fixed remaining abstention case also completed: both arms' analysts
+abstained twice, so neither called a Judge. One existing bounded correction repaired an echoed event
+identity; it was not a transport retry or another sample. The two-case continuation reconciles nine
+Runs, 19 POSTs, 321,504 input / 90,629 output Tokens and USD 0.173061, with no 408. The old failed
+risk case stays closed. Both arms use no additional Skill, so this is not Skill-effect evidence.
+Do not repeat these opened cases to obtain trades. Next historical work requires executable targets,
+event-centered inputs and outcome/baseline evaluation; these research-alias diagnostics do not close
+the original three-case executable-pilot gate. Detailed identities and results are in
+`docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md`.
 
 Future new Luna epochs select the separate CPA `max` Profile, with the per-run estimated-cost cap
 raised from USD 0.20 to 0.30 and newly registered aggregate caps allowed to rise by 50 percent.

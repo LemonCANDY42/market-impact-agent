@@ -200,6 +200,15 @@ current lag, backoff, failure, or miss state. Its states intentionally distingui
 unclassified candidate until a separate eligibility selection and session-barrier calculation are
 sealed.
 
+A scheduled miss remains an operational diagnostic, not permanent proof of a data gap. When a
+post-admission miss exists, readiness projects the canonical Journal receipt-coverage check over
+the **entire admission-to-evaluation window**, without freezing a Snapshot. Exact-policy source
+receipts must cover the start, every internal interval and the cutoff within the registered maximum
+gap; failed-source receipts remain gaps. A recent healthy suffix cannot erase an earlier coverage
+failure. During initial startup, no receipt within the allowed gap is explicitly pending, not proven
+coverage. Job inactivity, current failure/backoff/lag and a policy slower than the registration still
+block. This changes neither scheduler history nor the later Snapshot/eligibility gates.
+
 `ProspectiveCheckpointSnapshotSet` is the later non-authoritative barrier reconciliation. Every
 selected input must still bind an accepted route, exact Collection Policy, complete Journal-frozen
 prospective Snapshot, raw response hash, and immutable barrier. Schema v2 retains the original
@@ -322,10 +331,11 @@ lineage, and future post-registration receipts still have to reconcile at each c
 Those gaps limit coverage claims and later execution where relevant; they no longer all block a
 prospective process diagnostic. No model call begins until the structural Query Gate passes.
 
-The current v6 route plan is frozen in
-`examples/research/prospective-checkpoint-route-plan-v6.json`. It copies the accepted v5 bindings
-under the new registration and has no predecessor in that registration. V4 registration and v5
-route-plan history remain immutable. The new plan was durably admitted as follows:
+The v6 route plan copied the accepted v5 bindings under the new registration with no predecessor
+in that registration. The current v7 successor is frozen in
+`examples/research/prospective-checkpoint-route-plan-v7.json`; it retains that registration while
+updating its admitted Job bindings. V4 registration and predecessor route-plan history remain
+immutable. The current plan was durably admitted as follows:
 
 ```bash
 market-impact data checkpoint-route-admit \
@@ -383,13 +393,31 @@ non-comparison-bound receipts may use v11 once to create a Triage Decision; an E
 still requires the existing deterministic Materiality Gate before Trigger Admission.
 
 The longer soak also found that four 120-second purchased-news Jobs can each become incomplete after
-a real post-admission misfire even though their latest outcome is healthy and lag is near zero. The
+real receipt gaps, even though their latest outcome is healthy and lag is near zero. The
 one-shot supervisor already uses deadline ordering and four-way concurrency; the observed misses
 occurred when a prior batch plus the one-minute host relaunch delay exceeded the Jobs' 90-second
 misfire grace. This does not erase receipts or make the three still-operational material routes
 unhealthy, but it invalidates the earlier ten-opportunity soak as long-run proof. Fix that scheduling
 envelope through versioned Job replacements and a later route epoch; do not reset the Journal,
-forgive missed opportunities, or relax PIT timestamps.
+erase missed opportunities, or relax PIT timestamps. A scheduler misfire alone must not be mistaken
+for such an actual receipt gap.
+
+The 2026-09-02 08:00:38 UTC audit verified this distinction on the unchanged v7 admission. Before
+the repair, one 192-second scheduler delay (180-second grace) permanently blocked the remaining
+300/900-second news routes despite their 616–626-second maximum receipt intervals. Canonical
+full-window coverage now restores 4/4 operational checkpoint families. Policy and material views
+contain 584 and 575 unclassified observation versions respectively, with overlap; these are not
+independent eligible events. Earnings and NBS have no post-admission observation in this epoch.
+The existing 120/360-second routes with actual internal gaps and the slower 900/2700-second route
+remain excluded. Report `27b56f7403ed5cd8965b85ab701e357f45b2875630504d450cb039a3f9a373ee`,
+private artifact `d906ef4f6a788da94a134e780b5fa9d6ded338c8e2c978060db26c5cbfbf6d44`, preserves
+admission `67ceb77b6d47457097fe3956a44ab47910f0fb8d9ab466f69020ed787417618b` and its original
+02:58:31 UTC boundary. No Job/route replacement, baseline reset, collector restart, eligibility
+decision or trading authority was created by this repair.
+After the independent-review fix and full regression, a fresh 08:10:59 UTC audit still reports
+4/4 operational, now with 627/618 policy/material versions in the overlapping unclassified views.
+Report `48f5b83c81195148add828e24552e67799bc8fff480c1cb97080a340684a15bb`, artifact
+`9e4a04f0e00061027de40e582b46c3ab4c9967ee8b2b5c5a2f7c47d43a3a2acf`, uses the same admission.
 
 In parallel, run the small vendor trial defined in `PIT_EVIDENCE_RECOVERY.md` and start prospective
 actual-receipt collection. The trial proves source contracts; it does not require a large purchase or
