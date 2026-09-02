@@ -1,5 +1,13 @@
 # Agent Runtime Acceptance Boundary
 
+The historical-readiness v2 entry composes the existing runtime as two independent analysts per
+arm plus one conditional Judge on decision disagreement. It does not add a debate runtime, Agent
+execution capability or a new Judgment schema. The Judge uses an independently frozen accepted
+Provider Profile, receives reopened same-arm Judgment proposals and the original frozen source
+tools, and emits the ordinary JudgmentProposal. Its actual input/binding is persisted before
+dispatch and all usage is charged to the same case. See the historical-readiness v2 section in
+`AGENT_EFFECTIVENESS_ACCEPTANCE.md` for disagreement, scope, failure and evidence-claim rules.
+
 ## Status
 
 The bounded research-only Agent runtime passed its current local runtime gate. It includes

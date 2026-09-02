@@ -468,17 +468,16 @@ class SkillAblationCostEstimate:
         }
 
 
-def estimate_paired_skill_ablation_cost(
+def estimate_bounded_agent_run_cost(
     *,
     pricing: CPAUsageKeeperPricing,
     profile: ModelProviderProfile,
-    replicate_count: int,
-    arm_count: int,
+    agent_run_count: int,
     safety_multiplier: Decimal,
     max_total_cost_microusd: int,
 ) -> SkillAblationCostEstimate:
-    if replicate_count != 3 or arm_count != 2:
-        raise ValueError("diagnostic requires exactly three paired replicates")
+    if isinstance(agent_run_count, bool) or not 1 <= agent_run_count <= 6:
+        raise ValueError("cost preflight requires between one and six bounded Agent runs")
     if not Decimal("1") <= safety_multiplier <= Decimal("3"):
         raise ValueError("cost safety_multiplier must be between one and three")
     if not 1 <= max_total_cost_microusd <= 10_000_000:
@@ -517,7 +516,6 @@ def estimate_paired_skill_ablation_cost(
         )
         / 1_000_000
     )
-    agent_run_count = replicate_count * arm_count
     provider_request_upper_bound = agent_run_count * profile.budget.max_turns * profile.max_attempts
     raw_max = per_call * agent_run_count
     guarded = _ceil_decimal(Decimal(raw_max) * safety_multiplier)
@@ -533,6 +531,26 @@ def estimate_paired_skill_ablation_cost(
         guarded_max_cost_microusd=guarded,
         hard_cap_microusd=max_total_cost_microusd,
         within_budget=True,
+    )
+
+
+def estimate_paired_skill_ablation_cost(
+    *,
+    pricing: CPAUsageKeeperPricing,
+    profile: ModelProviderProfile,
+    replicate_count: int,
+    arm_count: int,
+    safety_multiplier: Decimal,
+    max_total_cost_microusd: int,
+) -> SkillAblationCostEstimate:
+    if replicate_count != 3 or arm_count != 2:
+        raise ValueError("diagnostic requires exactly three paired replicates")
+    return estimate_bounded_agent_run_cost(
+        pricing=pricing,
+        profile=profile,
+        agent_run_count=6,
+        safety_multiplier=safety_multiplier,
+        max_total_cost_microusd=max_total_cost_microusd,
     )
 
 

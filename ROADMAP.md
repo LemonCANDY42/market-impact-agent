@@ -172,7 +172,21 @@ or a positive Skill claim. The exact cohort and report identities are in
 until target-alias semantics, lane-versus-economic gap interpretation, and method/input compatibility
 are repaired. The next user-requested protocol is two independent treatment analyses plus one
 conditional Judge on substantive disagreement, not a third vote; freeze its model/budget and
-decision rule in a new epoch, and retain Harness authority. It has not yet been implemented.
+decision rule in a new epoch, and retain Harness authority. The opt-in historical v2 runner now
+implements this bounded composition using the existing AgentEngine, Journal and Usage Ledger.
+Control uses the same conditional reducer as treatment; no recursive debate or majority fallback is
+introduced. V2 freezes explicit research-target semantics and separates claim/Intent limitations
+from economic blockers; unsuitable expectation-dependent methods are not forced into an unknown
+expectation brief. This is a research-only entry, not an automatic change to prospective Judgment,
+Portfolio, Mock or IBKR execution. Real evidence and next gates are recorded in the acceptance doc.
+The one registered opened-risk v2 diagnostic has now terminated: first-round down/abstain,
+then two CPA HTTP 408 failures after complete tool reads. It produced no final arm decision or
+Judge call; four terminal records bind eight physical requests and USD 0.057039 known estimated
+cost, with failed-request usage unknown. This is transport-interrupted evidence, not strategy
+rejection or Judge-quality acceptance. Preserve the single-use failure, diagnose the CPA timeout
+boundary and verify bounded transport before another new model epoch; do not repeatedly rerun the
+opened case. The implementation passed 1,628 tests and independent review with the mixed-Judge
+budget issue corrected. Prospective/Watch blockers above and executable-pilot gates remain open.
 
 Future new Luna epochs select the separate CPA `max` Profile, with the per-run estimated-cost cap
 raised from USD 0.20 to 0.30 and newly registered aggregate caps allowed to rise by 50 percent.

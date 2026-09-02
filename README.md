@@ -489,9 +489,20 @@ and compares two complete control/treatment pairs (a third only on decision disa
 It grants no Signal, Intent or execution authority. The fixed three-case cohort, accounting
 limits and narrower claim boundary are in
 [Agent Effectiveness Acceptance](docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md#opened-historical-readiness-pilot--september-2026).
-That cohort completed 14 logical runs and 29 physical requests for a CPA estimate of USD 0.180401:
+That v1 cohort completed 14 logical runs and 29 physical requests for a CPA estimate of USD 0.180401:
 13 abstentions and one down proposal, with no non-empty majority or positive effectiveness claim.
-Input semantics and method applicability must be repaired before broader validation.
+
+The same command opts into historical v2 with `--judge-provider-profile`, `--target-description`
+and `--target-definition-ref`. It runs two independent analysts per arm, then at most one
+evidence-led Judge for each disagreeing arm; it does not count votes. `--treatment-skill none`
+allows a no-addition repeatability diagnostic when no specialist method is applicable. Analyst
+and Judge costs share the frozen total cap. Existing v1 registrations and results remain unchanged;
+v2 is still research-only and cannot authorize a Signal, Intent or broker operation.
+Its first opened-risk diagnostic returned down/abstain in round one, then two CPA HTTP 408 failures
+in round two. No Judge or final case decision followed; known estimated usage was USD 0.057039
+across eight requests, excluding unknown failed-request usage. This is an incomplete transport
+acceptance, not strategy rejection or proof that adjudication improves decisions. Diagnose the
+timeout boundary before a new separately registered experiment; do not resample the failed case.
 
 The earlier 18-checkpoint report also reconciled its append-only Usage Ledgers by Run ID. That 70-ledger union had
 528 unique terminal runs, zero duplicate or conflicting records, and $4.928324 total estimated

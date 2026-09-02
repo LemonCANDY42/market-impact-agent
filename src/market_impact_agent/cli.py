@@ -1085,6 +1085,13 @@ def build_parser() -> argparse.ArgumentParser:
     historical_pilot_parser.add_argument("--provider-profile", required=True, type=Path)
     historical_pilot_parser.add_argument("--experiment-id", required=True)
     historical_pilot_parser.add_argument("--treatment-skill", required=True)
+    historical_pilot_parser.add_argument(
+        "--judge-provider-profile",
+        type=Path,
+        help="Use v2: two analysts per arm, at most one evidence-led Judge per disagreement",
+    )
+    historical_pilot_parser.add_argument("--target-description")
+    historical_pilot_parser.add_argument("--target-definition-ref")
     historical_pilot_parser.add_argument("--news-evidence-id", required=True)
     historical_pilot_parser.add_argument("--news-content-hash", required=True)
     historical_pilot_parser.add_argument("--target-id", required=True)
@@ -4886,6 +4893,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "agent" and args.agent_command == "historical-readiness-pilot-run":
         try:
             from market_impact_agent.historical_readiness_pilot import (
+                HistoricalReadinessAdjudication,
                 HistoricalReadinessBrief,
                 HistoricalReadinessInputs,
                 prepare_historical_readiness_pilot,
@@ -4902,6 +4910,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             profile = load_model_provider_profile(args.provider_profile)
             declaration = load_method_evidence_declaration(args.method_evidence_declaration)
             registered_at = datetime.now(UTC)
+            adjudication = None
+            if args.judge_provider_profile is not None:
+                if not args.target_description or not args.target_definition_ref:
+                    raise ValueError("v2 needs target description and provenance")
+                judge_profile = load_model_provider_profile(args.judge_provider_profile)
+                adjudication = HistoricalReadinessAdjudication(
+                    args.target_description,
+                    args.target_definition_ref,
+                    args.judge_provider_profile,
+                    fetch_cpa_usage_keeper_pricing(
+                        model=judge_profile.model, captured_at=registered_at
+                    ),
+                )
+            elif args.target_description is not None or args.target_definition_ref is not None:
+                raise ValueError("target semantics are only enabled in v2")
             prepared = prepare_historical_readiness_pilot(
                 experiment_id=args.experiment_id,
                 state_root=args.state_root,
@@ -4934,6 +4957,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ),
                 max_total_cost_microusd=args.max_total_cost_microusd,
                 registered_at=registered_at,
+                adjudication=adjudication,
             )
             result = asyncio.run(run_historical_readiness_pilot(prepared))
         except (KeyError, OSError, RuntimeError, TypeError, ValueError):

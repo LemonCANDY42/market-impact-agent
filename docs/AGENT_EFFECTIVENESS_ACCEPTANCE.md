@@ -187,11 +187,12 @@ the one down proposal demonstrates this is not a deterministic prohibition. Meta
 context and genuine uncertainty about horizon persistence remain separate economic limitations.
 Do not weaken live/PIT authority or force a directional answer to improve a completion metric.
 
-### Proposed next epoch: two analysts with conditional adjudication
+### Historical readiness v2: two analysts with conditional adjudication
 
-The user's next-epoch direction is two independent treatment analyses, with one Judge invocation
-on substantive decision disagreement instead of a third treatment vote. This is not implemented
-or retroactively applied to the cohort above. The Judge receives the same frozen evidence and
+The opt-in v2 runner implements two independent analyses per arm, with one Judge invocation
+per arm on decision disagreement instead of a third vote. Control uses the same reducer as treatment,
+so a Skill comparison does not confound extra adjudication with the Skill. V1 and the completed
+cohort above are unchanged. The Judge receives the same frozen evidence and
 auditable conclusions, citations, counterarguments and uncertainties from both analyses, not future
 outcomes or private model reasoning. Adjudication is evidence-led, never majority voting: inspect
 the original sources and compare each analysis's factual claims, assumptions, transmission path,
@@ -199,14 +200,107 @@ counterevidence and horizon. A minority view may prevail; both analyses may be r
 supported conclusion within the original research scope is permitted. Vote count, model tier and
 self-reported confidence confer no decision authority. It may select or synthesize a supported
 conclusion, abstain, or request additional evidence for a separately frozen later decision. Its Profile is independently
-configurable, allowing a stronger accepted model without changing analyst identities.
+configurable through an existing accepted Model Provider Profile without changing analyst identities.
+No new model adapter or automatic model upgrade is implied.
 
 Register the exact disagreement rule, Judge Profile/prompt, total budget and final-decision rule
-before dispatch; use one Judge at most, no recursive debate or repeated adjudication until agreement.
+before dispatch; use at most one Judge per disagreeing arm, with no recursive debate or repeated
+adjudication until agreement.
 Analyst agreement is not evidence of correctness. The Judge is another bounded Judgment producer,
 not a source of facts, Trading Mandate authority or a replacement for Query/Policy/Execution gates.
 Account for the whole treatment pipeline when comparing cost and effect against the frozen control;
-the Judge does not create another independent Event Case. Input repair comes before this comparison.
+the Judge does not create another independent Event Case.
+
+The frozen disagreement key is decision/target/direction/horizon, not confidence or prose equality.
+Different rationales with the same terminal decision do not automatically trigger adjudication in
+v2; this is not semantic agreement detection. On agreement the first analyst terminal represents
+that arm, without combining confidence or claiming agreement is true. On disagreement the single
+Judge's validated Judgment represents the arm, even if it rejects both analysts. Failure or
+incomplete required reads aborts the case; there is no majority fallback or additional Judge.
+
+Registration freezes analyst and Judge Profiles/pricing, both analyst bindings, the Judge template
+binding, research scope and six-run worst-case budget (four analysts plus two conditional Judges).
+After both analysts complete, Harness reopens their exact terminal artifacts against their Journals,
+removes self-reported confidence and model metadata from the displayed proposals, and derives the
+Judge's task from those proposals plus the unchanged Evidence Pack. Before Judge dispatch, source
+terminal hashes, input hash and actual execution binding are saved privately. The Judge must reread
+the original sources; analyst opinions do not become new Evidence Items. All calls use AgentEngine,
+the same two read-only tools and Usage Ledger; at most two requests run concurrently. Cancellation
+drains started peers and denies later work. Crashed/ambiguous batches retain single-use reservation;
+ordinary bounded transport retry remains the existing Adapter's responsibility.
+
+V2 requires an explicit research target description and provenance reference, frozen as operator
+research-scope metadata, not newly established financial evidence or retroactive historical authority.
+For the existing A-share dataset, the source materializer maps `broad-market-a` to the case's primary
+index; all 15 registered cases use `000300.SH`, `index_daily`, price returns. The Agent-facing
+description can retain the identity mask while stating mainland A-share broad-index exposure,
+prior-session close-to-close features and a non-executable research target. The actual event-to-target
+transmission still needs citations from the frozen evidence. Original source documents and
+Evidence Pack remain unchanged; only the task gains the new registered definition.
+
+The task distinguishes Strict-PIT/Intent claim limitations from economic reasons to abstain. It does
+not permit future information or invent expectations. A missing content-bound `prior_expectation`
+rejects `expectations-base-rates` and a `second-level-cycle-context` consensus-gap application before
+dispatch; other cycle applications retain the existing route. `--treatment-skill none` is explicitly
+allowed in v2 to diagnose the same no-addition pipeline twice without forcing an unsuitable Skill.
+That mode has no Skill-effect claim. Data-category presence alone still does not prove semantic
+prerequisites; substantive adequacy remains an evidence audit, not a fabricated completeness flag.
+
+The first real v2 acceptance run is limited in advance to the already-opened 2020-02-03 risk
+checkpoint, keeping its original six evidence items, Pattern Pack and five-session horizon.
+Both analyst arms and conditional Judges use the separate Luna max CPA Profile; the complete
+case cap is USD 3.00. Both arms use the common controls with `treatment-skill none`, so this is
+repeatability/input-flow evidence, not a Skill ablation or max-versus-xhigh comparison. The target
+description is derived from the original A-share dataset/materializer mapping above; no original
+source document, price row, availability time or authority time is rewritten. All terminal outcomes
+are retained. Agreement skips Judge dispatch; a Judge must not be forced by resampling. Failure,
+economic abstention or remaining mechanical abstention does not permit a replacement case or
+additional replica. The earlier v1 cohort remains failed development evidence, not a baseline
+whose causal difference can be attributed to this multi-change diagnostic.
+
+That single v2 run terminated on 2026-09-02 at 06:16:25 UTC without a valid case result:
+
+| Member | Control | Treatment (same controls, no added Skill) |
+| --- | --- | --- |
+| First analyst | Five-session down proposal | Economic abstention |
+| Second analyst | CPA HTTP 408; no terminal Judgment | CPA HTTP 408; no terminal Judgment |
+
+All four members read the six frozen Evidence Items and Pattern Pack. The first two completed
+Judgments differed; the abstention concerned repricing, exposure and horizon uncertainty rather
+than treating Strict-PIT or non-executability as the sole blocker. These are observations from an
+opened case, not an effectiveness comparison. Both second-round generation requests failed with
+HTTP 408 after dispatch; this does not establish whether upstream generation had begun or completed.
+The Adapter classifies that POST failure as generation-unknown and forbids automatic retry.
+Started peers drained, no additional analyst or Judge was dispatched, and `final_decisions` is empty.
+The real evidence therefore accepts failure containment and record retention, not successful
+end-to-end Judge adjudication. It is an incomplete experiment, not a negative strategy outcome.
+
+Four terminal Usage Records reconcile to eight physical requests and known lower bounds of
+55,506 input / 38,279 output Tokens and USD 0.057039. The two failed requests returned no token
+usage; the report correctly sets `accounting_complete=false` and
+`recorded_totals_are_lower_bounds=true`. Failed-request elapsed time is likewise not included in
+the terminal usage latency, so those latency metrics must not be read as complete elapsed time.
+Read-only Keeper metadata for the same window contains eight matching Luna max requests; the
+two failed entries report 478,184 / 187,458 ms latency and 1,904 / 2,933 ms time to first token.
+This corroborates a failure after an initial upstream response rather than proving generation
+never started. Timestamp/usage correlation is diagnostic evidence, not a replacement for an exact
+request-ID reconciliation. Keeper reports zero tokens on those failures; that does not establish
+zero generation or zero billed usage. Neither telemetry set identifies the exact internal timeout
+cause, so no quota, network or model-capacity root cause is claimed.
+Private registration, report and Usage Ledger identities are respectively
+`a837bbcf2f2dd80ed4044c0881a9bf706bcb560485fc444dddc12ff6a995e9b6`,
+`d7f8cfeb7f78f645a53d245cbd169f784604644cdbefab80c97507b3011b1020`, and
+`ace5f49f455d17bd116ebed7749a1814e8609e098c70a823f6f175c2ae466c79`.
+The original USD 3 cap and single-use registration remain unchanged. Before another separately
+registered model experiment, diagnose the CPA timeout boundary and obtain bounded transport
+acceptance; do not resample this case to force a Judge. Strict-PIT remains 0/18, and this run grants
+no Skill promotion, Signal, Intent, Mock, IBKR Paper or Live authority.
+
+Implementation acceptance passed Ruff, format, Pyright and 1,628 tests. Independent read-only
+review found an overly conservative mixed-model preflight: six hypothetical Judge runs were
+being checked before the actual four-analyst/two-Judge mix. The correction budgets that actual mix
+directly, preserves the v1 six-run estimator and freezes both cost estimates; regression tests cover
+an affordable higher-priced Judge and rejection when the mixed cost really exceeds the cap.
 
 `StrategyValidationRegistration v1` remains the frozen registration payload; model Profile, prompt,
 Skill catalog, tool manifest, universe, cost model and fill model hashes; and the exact definition

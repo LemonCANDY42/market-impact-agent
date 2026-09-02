@@ -25,6 +25,7 @@ from market_impact_agent.agent_contracts import (
 from market_impact_agent.agent_runtime import ModelTurn, ProviderUsage, ToolCall
 from market_impact_agent.cli import main
 from market_impact_agent.historical_readiness_pilot import (
+    HistoricalReadinessAdjudication,
     HistoricalReadinessBrief,
     HistoricalReadinessInputs,
     PreparedHistoricalReadinessPilot,
@@ -265,6 +266,438 @@ class FakeProvider:
             )
         finally:
             self.in_flight -= 1
+
+
+class FullReadProvider(FakeProvider):
+    def __init__(self, inputs: HistoricalReadinessInputs, decisions: tuple[str, ...]) -> None:
+        super().__init__(decisions)
+        self.inputs = inputs
+
+    async def complete(self, **kwargs: object) -> ModelTurn:
+        messages = cast(tuple[dict[str, object], ...], kwargs["messages"])
+        if not any(message.get("role") == "tool" for message in messages):
+            pack = json.loads(self.inputs.evidence_pack_path.read_text())
+            calls = tuple(
+                ToolCall(
+                    f"read-{item['evidence_id']}",
+                    "read_evidence",
+                    {"evidence_id": item["evidence_id"]},
+                )
+                for item in pack["evidence"]
+            ) + tuple(
+                ToolCall(
+                    f"read-{item['pack_id']}", "read_pattern_pack", {"pack_id": item["pack_id"]}
+                )
+                for item in pack["pattern_packs"]
+            )
+            assistant: dict[str, object] = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": call.call_id,
+                        "type": "function",
+                        "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
+                    }
+                    for call in calls
+                ],
+            }
+            return ModelTurn(
+                "read",
+                self.model,
+                assistant,
+                calls,
+                "tool_calls",
+                ProviderUsage(100, 50),
+                {"message": assistant},
+            )
+        return await super().complete(
+            messages=messages,
+            tools=cast(tuple[dict[str, object], ...], kwargs["tools"]),
+            temperature=cast(float, kwargs["temperature"]),
+            top_p=cast(float, kwargs["top_p"]),
+            max_output_tokens=cast(int, kwargs["max_output_tokens"]),
+            timeout_seconds=cast(float, kwargs["timeout_seconds"]),
+        )
+
+
+def _prepare_v2(
+    inputs: HistoricalReadinessInputs,
+    tmp_path: Path,
+    *,
+    treatment: str = "none",
+    cap: int = 3_000_000,
+    judge_profile: Path = Path("examples/providers/cliproxyapi-luna-max-cpa-v1.json"),
+    judge_pricing: CPAUsageKeeperPricing | None = None,
+) -> PreparedHistoricalReadinessPilot:
+    return prepare_historical_readiness_pilot(
+        experiment_id="synthetic-adjudication",
+        state_root=tmp_path / "state",
+        inputs=inputs,
+        brief=_brief(),
+        treatment_skill=treatment,
+        routing_context=MethodRoutingContext(
+            "unclassified",
+            "diffuse",
+            ("narrative_diffusion",),
+            ("timestamped_narrative_corpus",),
+            True,
+        ),
+        pricing=_pricing(),
+        max_total_cost_microusd=cap,
+        registered_at=NOW,
+        adjudication=HistoricalReadinessAdjudication(
+            "Synthetic broad equity price index; not an executable security.",
+            "synthetic-fixture-v1",
+            judge_profile,
+            judge_pricing or _pricing(),
+        ),
+    )
+
+
+def _high_priced_judge(tmp_path: Path) -> tuple[Path, CPAUsageKeeperPricing]:
+    profile = json.loads(PROFILE.read_text())
+    profile["budget"]["max_estimated_cost_microusd"] = 3_900_000
+    profile["pricing"]["input_microusd_per_million_tokens"] = 4_000_000
+    profile["pricing"]["output_microusd_per_million_tokens"] = 24_000_000
+    profile.pop("profile_id")
+    profile["profile_id"] = "model-provider-" + canonical_hash(profile)
+    path = tmp_path / "high-priced-judge.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    return (
+        path,
+        CPAUsageKeeperPricing.from_api_payloads(
+            model="gpt-5.6-luna",
+            captured_at=NOW,
+            version_payload={"version": "v1.14.5"},
+            pricing_payload={
+                "pricing": [
+                    {
+                        "model": "gpt-5.6-luna",
+                        "pricing_style": "openai",
+                        "prompt_price_per_1m": 4,
+                        "completion_price_per_1m": 24,
+                        "cache_read_price_per_1m": 0.4,
+                        "cache_write_price_per_1m": 5,
+                        "price_multiplier": 1,
+                    }
+                ]
+            },
+            rules_payload={"model": "gpt-5.6-luna", "rules": []},
+        ),
+    )
+
+
+def test_v2_agreement_stops_without_judge_and_keeps_scope_explicit(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    provider, judge = (
+        FullReadProvider(inputs, ("up", "abstain", "up", "abstain")),
+        FullReadProvider(inputs, ()),
+    )
+    report = asyncio.run(
+        run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+    )
+    assert provider.calls == 4 and judge.calls == 0
+    assert report["diagnostic_valid"] and report["protocol_complete"]
+    assert report["provider_request_count"] == 8
+    finals = cast(dict[str, dict[str, object]], report["final_decisions"])
+    assert finals["control"]["direction"] == "up"
+    assert finals["treatment"]["decision"] == "abstain"
+    assert all(item["rule"] == "analyst_agreement_first_terminal" for item in finals.values())
+    prompt = json.dumps(provider.messages[0])
+    assert "never the sole reason to abstain" in prompt
+    assert "Synthetic broad equity price index" in prompt
+    registration = json.loads((prepared.directory / "registration.json").read_text())
+    assert registration["schema_version"].endswith(".v2")
+    assert registration["comparison_scope"] == "repeatability_only_no_added_skill"
+    assert registration["provider_profile_hash"] != registration["judge_provider_profile_hash"]
+    assert not list(prepared.directory.glob("*-judge-inputs.json"))
+
+
+@pytest.mark.parametrize("decision", ["up", "down", "abstain"])
+def test_v2_judge_can_choose_either_reject_or_synthesize_without_vote(
+    inputs: HistoricalReadinessInputs, tmp_path: Path, decision: str
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    provider = FullReadProvider(inputs, ("abstain", "up", "abstain", "abstain"))
+    judge = FullReadProvider(inputs, (decision,))
+    report = asyncio.run(
+        run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+    )
+    assert provider.calls == 4 and judge.calls == 1
+    assert report["diagnostic_valid"] and report["accounting_complete"]
+    assert report["provider_request_count"] == 10
+    finals = cast(dict[str, dict[str, object]], report["final_decisions"])
+    assert finals["treatment"]["rule"] == "evidence_led_judge"
+    assert finals["treatment"]["direction"] == (None if decision == "abstain" else decision)
+    assert finals["control"]["decision"] == "abstain"
+    task = next(
+        json.loads(cast(str, msg["content"])) for msg in judge.messages[0] if msg["role"] == "user"
+    )
+    instruction = task["research_instruction"]
+    assert "Read the original frozen evidence yourself" in instruction
+    assert "Do not vote" in instruction
+    analyses = json.loads(instruction.split("Untrusted analyst conclusions: ")[1])
+    assert [item["decision"] for item in analyses] == ["propose", "abstain"]
+    assert all("decision_confidence" not in item for item in analyses)
+    assert "confidence" not in analyses[0]["candidates"][0]
+    assert "Licensed prose" not in json.dumps(report)
+    frozen = json.loads((prepared.directory / "treatment-judge-inputs.json").read_text())
+    assert len(frozen["analyst_terminal_hashes"]) == 2
+    assert frozen["analyses_hash"] == canonical_hash(analyses)
+    records = UsageLedger(prepared.directory / "usage.sqlite3").records()
+    assert len(records) == 5
+    assert prepared.adjudication is not None
+    assert (
+        records[-1].record.provider_profile_id
+        == json.loads(prepared.adjudication.judge_profile_path.read_text())["profile_id"]
+    )
+    assert report["promotion_eligible"] is False and report["execution_capability"] == "none"
+
+
+def test_v2_each_arm_has_own_judge_and_no_recursive_debate(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    judge = FullReadProvider(inputs, ("abstain", "down"))
+    report = asyncio.run(
+        run_historical_readiness_pilot(
+            prepared,
+            provider=FullReadProvider(inputs, ("up", "up", "down", "abstain")),
+            judge_provider=judge,
+        )
+    )
+    assert judge.calls == 2
+    assert len(cast(list[object], report["runs"])) == 6
+    assert report["diagnostic_valid"]
+    for arm in ("control", "treatment"):
+        assert (prepared.directory / f"{arm}-judge-inputs.json").exists()
+
+
+@pytest.mark.parametrize("failure", ["fail", "unread"])
+def test_v2_failed_or_unread_analysis_stops_before_judge(
+    inputs: HistoricalReadinessInputs, tmp_path: Path, failure: str
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    provider = (
+        FullReadProvider(inputs, ("fail", "up"))
+        if failure == "fail"
+        else FakeProvider(("up", "down"))
+    )
+    judge = FullReadProvider(inputs, ())
+    report = asyncio.run(
+        run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+    )
+    assert provider.calls == 2 and provider.in_flight == 0 and judge.calls == 0
+    assert report["diagnostic_valid"] is False
+    assert report["final_decisions"] == {}
+    assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == 2
+
+
+def test_v2_failed_judge_is_not_replaced_or_majority_fallback(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    judge = FullReadProvider(inputs, ("fail",))
+    report = asyncio.run(
+        run_historical_readiness_pilot(
+            prepared,
+            provider=FullReadProvider(inputs, ("up", "up", "down", "down")),
+            judge_provider=judge,
+        )
+    )
+    assert judge.calls == 1
+    assert report["diagnostic_valid"] is False and report["final_decisions"] == {}
+    assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == 5
+    with pytest.raises(ValueError, match="already dispatched"):
+        asyncio.run(
+            run_historical_readiness_pilot(
+                prepared, provider=FakeProvider(()), judge_provider=judge
+            )
+        )
+
+
+def test_v2_judge_binding_and_scope_drift_deny_dispatch(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    assert prepared.adjudication is not None
+    provider, judge = FakeProvider(()), FakeProvider(())
+    for change in ({"target_description": "Different scope"}, {"judge_profile_path": PROFILE}):
+        with pytest.raises(ValueError, match="binding changed"):
+            asyncio.run(
+                run_historical_readiness_pilot(
+                    replace(prepared, adjudication=replace(prepared.adjudication, **change)),
+                    provider=provider,
+                    judge_provider=judge,
+                )
+            )
+    assert provider.calls == judge.calls == 0
+
+
+def test_v2_reserves_analyst_and_independent_judge_costs(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match="four analysts and two conditional Judges"):
+        _prepare_v2(inputs, tmp_path, cap=1_300_000)
+    assert not (tmp_path / "state").exists()
+
+
+def test_v2_preflight_prices_the_actual_mixed_plan(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    judge_profile, judge_pricing = _high_priced_judge(tmp_path)
+    prepared = _prepare_v2(
+        inputs,
+        tmp_path,
+        cap=10_000_000,
+        judge_profile=judge_profile,
+        judge_pricing=judge_pricing,
+    )
+
+    registration = json.loads((prepared.directory / "registration.json").read_text())
+    preflight = cast(dict[str, object], registration["cost_preflight"])
+    assert set(preflight) == {
+        "analyst_four_run_estimate",
+        "judge_two_run_estimate",
+        "mixed_six_run_guarded_microusd",
+        "reserved_runtime_caps_microusd",
+        "hard_cap_microusd",
+    }
+    analyst = cast(dict[str, int], preflight["analyst_four_run_estimate"])
+    judge = cast(dict[str, int], preflight["judge_two_run_estimate"])
+    assert analyst["agent_run_count"] == 4
+    assert judge["agent_run_count"] == 2
+    mixed_guarded_cost = cast(int, preflight["mixed_six_run_guarded_microusd"])
+    assert mixed_guarded_cost == (
+        analyst["guarded_max_cost_microusd"] + judge["guarded_max_cost_microusd"]
+    )
+    assert preflight["reserved_runtime_caps_microusd"] == 8_600_000
+    assert mixed_guarded_cost < 10_000_000
+
+    with pytest.raises(ValueError, match="four analysts and two conditional Judges"):
+        _prepare_v2(
+            inputs,
+            tmp_path,
+            cap=9_000_000,
+            judge_profile=judge_profile,
+            judge_pricing=judge_pricing,
+        )
+
+
+def test_v2_does_not_force_expectation_skill_on_category_only_evidence(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    declaration = json.loads(inputs.method_evidence_declaration_path.read_text())
+    declaration.pop("declaration_id")
+    declaration["evidence_types"] = [
+        {"evidence_type": name, "evidence_refs": ["news"], "pattern_pack_refs": []}
+        for name in ("reference_class", "new_evidence")
+    ]
+    declaration["declaration_id"] = "method-evidence-" + canonical_hash(declaration)
+    inputs.method_evidence_declaration_path.write_text(json.dumps(declaration))
+    with pytest.raises(ValueError, match="content-bound expectation"):
+        prepare_historical_readiness_pilot(
+            experiment_id="incompatible-method",
+            state_root=tmp_path / "state",
+            inputs=inputs,
+            brief=_brief(),
+            treatment_skill="expectations-base-rates",
+            routing_context=MethodRoutingContext(
+                "unclassified",
+                "unavailable",
+                ("base_rate_update",),
+                ("reference_class", "new_evidence"),
+                True,
+            ),
+            pricing=_pricing(),
+            max_total_cost_microusd=3_000_000,
+            registered_at=NOW,
+            adjudication=HistoricalReadinessAdjudication(
+                "Research proxy", "synthetic-v1", PROFILE, _pricing()
+            ),
+        )
+    assert not (tmp_path / "state").exists()
+
+
+def test_v2_tampered_analyst_artifact_cannot_reach_judge(
+    inputs: HistoricalReadinessInputs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from market_impact_agent import historical_readiness_pilot as module
+
+    prepared = _prepare_v2(inputs, tmp_path)
+    original = module.reopen_authoritative_agent_terminal
+
+    def corrupt_then_reopen(**kwargs: object) -> object:
+        store = cast(module.ArtifactStore, kwargs["artifact_store"])
+        artifact_hash = cast(str, kwargs["terminal_artifact_hash"])
+        (store.root / artifact_hash).write_text("{}")
+        return original(**kwargs)  # pyright: ignore[reportArgumentType]
+
+    monkeypatch.setattr(module, "reopen_authoritative_agent_terminal", corrupt_then_reopen)
+    judge = FullReadProvider(inputs, ())
+    with pytest.raises((ValueError, OSError)):
+        asyncio.run(
+            run_historical_readiness_pilot(
+                prepared,
+                provider=FullReadProvider(inputs, ("up", "up", "down", "down")),
+                judge_provider=judge,
+            )
+        )
+    assert judge.calls == 0
+    assert (prepared.directory / "dispatch.json").exists()
+    assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == 4
+
+
+def test_v2_wrong_horizon_judge_fails_without_fallback(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+    judge = FullReadProvider(inputs, ("down",))
+    judge.horizon = 2
+    report = asyncio.run(
+        run_historical_readiness_pilot(
+            prepared,
+            provider=FullReadProvider(inputs, ("up", "up", "down", "down")),
+            judge_provider=judge,
+        )
+    )
+    assert judge.calls == 1
+    assert report["diagnostic_valid"] is False and report["final_decisions"] == {}
+
+
+def test_v2_cancellation_drains_peers_without_later_runs(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+
+    async def exercise() -> dict[str, object]:
+        started, release = asyncio.Event(), asyncio.Event()
+
+        class SlowProvider(FullReadProvider):
+            async def complete(self, **kwargs: object) -> ModelTurn:
+                started.set()
+                await release.wait()
+                return await super().complete(**kwargs)
+
+        provider = SlowProvider(inputs, ("up", "down"))
+        judge = FullReadProvider(inputs, ())
+        task = asyncio.create_task(
+            run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+        )
+        await started.wait()
+        task.cancel()
+        release.set()
+        result = await task
+        assert provider.calls == 2 and provider.in_flight == 0 and judge.calls == 0
+        return result
+
+    report = asyncio.run(exercise())
+    assert report["stop_reason"] == "caller_cancelled_after_peer_drain"
+    assert report["final_decisions"] == {}
+    assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == 2
 
 
 @pytest.mark.parametrize(
