@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from decimal import Decimal
 from typing import cast
+from zoneinfo import ZoneInfo
 
 from market_impact_agent.agent_contracts import EvidencePack, canonical_hash
 from market_impact_agent.checkpoint_decision_inputs import (
@@ -12,15 +13,18 @@ from market_impact_agent.checkpoint_decision_inputs import (
 )
 from market_impact_agent.data_inputs import FrozenDataSnapshotInput, LocalDataSnapshotStore
 from market_impact_agent.domain import require_aware
+from market_impact_agent.observations import ObservationCapability
 from market_impact_agent.prospective_checkpoint_sets import (
     CheckpointRouteReconciliation,
     ProspectiveCheckpointSnapshotSet,
     materialize_checkpoint_decision_inputs,
 )
+from market_impact_agent.prospective_data import ProspectiveDataJournal
 from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
 )
@@ -201,12 +205,16 @@ def evaluate_prospective_query_gate(
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
     }:
         raise ValueError("partial-information Query Gate requires a v2, v3, or v4 registration")
     checkpoint = registration.checkpoint(snapshot_set.checkpoint_key)
     if snapshot_set.registration_id != registration.registration_id:
         raise ValueError("Query Gate Snapshot Set belongs to a different registration")
-    trigger_bound = registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+    trigger_bound = registration.schema_version in {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
+    }
     if trigger_bound:
         if trigger_admission is None:
             raise ValueError("v4 Query Gate requires a Trigger Admission")
@@ -223,6 +231,65 @@ def evaluate_prospective_query_gate(
             evidence_pack.allowed_targets
         ) <= set(trigger_admission.admitted_target_ids):
             raise ValueError("Query Gate Evidence Pack contains a target outside Materiality Gate")
+        if registration.reassessment is not None:
+            if trigger_admission.kind is not TriggerAdmissionKind.REGISTERED_REASSESSMENT or (
+                trigger_admission.registration_artifact_hash
+                != canonical_hash(registration.to_dict())
+                or snapshot_set.barrier_at != trigger_admission.admitted_at
+            ):
+                raise ValueError("Query Gate requires the exact registered reassessment")
+            from market_impact_agent.prospective_checkpoint_sets import (
+                CheckpointRouteSelection,
+                reconcile_prospective_checkpoint_snapshot_set,
+            )
+            from market_impact_agent.source_acceptance import (
+                source_route_acceptance_report_from_dict,
+            )
+
+            journal = ProspectiveDataJournal(snapshot_store)
+            reports = tuple(
+                source_route_acceptance_report_from_dict(snapshot_store.artifacts.read_json(item))
+                for item in registration.reassessment.source_acceptance_report_hashes
+            )
+            selections = tuple(
+                CheckpointRouteSelection(
+                    capability=binding.capability,
+                    route_kind=route.route_kind,
+                    snapshot_id=route.snapshot_id,
+                    collection_policy_id=route.collection_policy_id,
+                    source_acceptance_report_id=route.source_acceptance_report_id,
+                )
+                for binding in snapshot_set.capability_bindings
+                for route in binding.routes
+            )
+            reconstructed = reconcile_prospective_checkpoint_snapshot_set(
+                registration=registration,
+                checkpoint_key=snapshot_set.checkpoint_key,
+                barrier_at=trigger_admission.admitted_at,
+                reconciled_at=trigger_admission.admitted_at,
+                selections=selections,
+                store=snapshot_store,
+                journal=journal,
+                policies={
+                    item.collection_policy_id: journal.policy(item.collection_policy_id)
+                    for item in selections
+                },
+                acceptance_reports={item.report_id: item for item in reports},
+                allow_partial=True,
+                trigger_admission=trigger_admission,
+                trigger_admission_authority=trigger_admission_authority,
+            )
+            if reconstructed != snapshot_set:
+                raise ValueError(
+                    "reassessment Snapshot Set differs from exact receipt reconciliation"
+                )
+            targets = exact_reassessment_targets(
+                registration=registration,
+                trigger=trigger_admission,
+                journal=ProspectiveDataJournal(snapshot_store),
+            )
+            if evidence_pack.allowed_targets != targets:
+                raise ValueError("reassessment Evidence Pack differs from exact issuer mapping")
     elif trigger_admission is not None or trigger_admission_authority is not None:
         raise ValueError("legacy Query Gate cannot bind Trigger Admission authority")
     if evidence_pack.as_of != snapshot_set.barrier_at:
@@ -398,6 +465,95 @@ def build_query_gate_evaluation_material(
     if trigger_admission is not None:
         payload["trigger_admission"] = trigger_admission.to_dict()
     return payload
+
+
+def exact_reassessment_targets(
+    *,
+    registration: ProspectiveDiagnosticRegistration,
+    trigger: ProspectiveTriggerAdmission,
+    journal: ProspectiveDataJournal,
+) -> tuple[str, ...]:
+    """Require an exact issuer code and effective stock master, never a catalog fallback."""
+    from market_impact_agent.prospective_event_assessment import (
+        _record_is_effective,  # pyright: ignore[reportPrivateUsage]
+        _record_targets,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    subject = registration.reassessment
+    if subject is None or trigger.observation_version_ids != subject.subject_version_ids:
+        raise ValueError("exact reassessment subject is unavailable")
+    codes: set[str] = set()
+    for version_id in subject.subject_version_ids:
+        _, _, observation = journal.version_receipt(version_id, not_after=trigger.admitted_at)
+        record = _required_mapping(observation.normalized_payload, "record")
+        codes.add(_required_string(record, "ts_code"))
+    if len(codes) != 1:
+        raise ValueError("reassessment requires one exact issuer across its original subject")
+    targets: set[str] = set()
+    checkpoint = registration.checkpoint(trigger.checkpoint_key)
+    for version_id in trigger.context_version_ids:
+        _, _, observation = journal.version_receipt(version_id, not_after=trigger.admitted_at)
+        record = dict(_required_mapping(observation.normalized_payload, "record"))
+        if record.get("ts_code") not in codes:
+            raise ValueError("reassessment context belongs to another issuer")
+        api = observation.normalized_payload.get("api_name")
+        if api == "stock_basic" and _record_is_effective(
+            "stock_basic", record, trigger.admitted_at
+        ):
+            for target, venue, instrument_class in _record_targets("stock_basic", record):
+                if (
+                    venue in checkpoint.target_venues
+                    and instrument_class in checkpoint.allowed_instrument_classes
+                ):
+                    targets.add(target)
+        elif api == "daily_basic":
+            if observation.capability is not ObservationCapability.MARKET_CONTEXT:
+                raise ValueError("daily_basic reassessment context must be market_context")
+            received_at = observation.times.available_at
+            if received_at is None:
+                raise ValueError("daily_basic reassessment context lacks its original receipt")
+            _validate_reassessment_daily_context(
+                trade_date=record.get("trade_date"),
+                received_at=received_at,
+                cutoff=trigger.admitted_at,
+                maximum_age_seconds=checkpoint.slot(
+                    ObservationCapability.MARKET_CONTEXT
+                ).maximum_age_seconds,
+            )
+        else:
+            raise ValueError("reassessment context requires effective stock_basic or daily_basic")
+    if targets != codes:
+        raise ValueError("reassessment blocked: no exact accepted issuer-to-target mapping")
+    return tuple(sorted(targets))
+
+
+def _validate_reassessment_daily_context(
+    *,
+    trade_date: object,
+    received_at: datetime,
+    cutoff: datetime,
+    maximum_age_seconds: int,
+) -> None:
+    """Validate a selected current daily_basic row, not historical query availability."""
+    if (
+        not isinstance(trade_date, str)
+        or len(trade_date) != 8
+        or not trade_date.isascii()
+        or not trade_date.isdigit()
+    ):
+        raise ValueError("reassessment daily_basic requires a valid YYYYMMDD trade_date")
+    try:
+        trading_date = datetime.strptime(trade_date, "%Y%m%d").date()
+    except ValueError as exc:
+        raise ValueError("reassessment daily_basic requires a valid YYYYMMDD trade_date") from exc
+    # Tushare doc_id=32: trade_date is the trading date, close is that day's close,
+    # and updates start at 15:00 China time. This is only the earliest possible
+    # completed-day boundary, not a fabricated publication/authority timestamp or calendar.
+    earliest_completed = datetime.combine(trading_date, time(15), ZoneInfo("Asia/Shanghai"))
+    if earliest_completed > received_at or earliest_completed > cutoff:
+        raise ValueError("reassessment daily_basic day was not complete at its receipt or cutoff")
+    if (cutoff - earliest_completed).total_seconds() > maximum_age_seconds:
+        raise ValueError("reassessment daily_basic effective trade_date is stale at its cutoff")
 
 
 def _validate_evidence_lineage(

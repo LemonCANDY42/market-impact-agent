@@ -2,60 +2,219 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.market-impact-agent.local/prospective-execution-plan.schema.json",
   "title": "Market Impact Prospective Execution Plan",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema_version", "plan_id", "registration_id", "model_profile_alias",
-    "model_provider_profile", "arm_bindings"
-  ],
-  "properties": {
-    "schema_version": {"const": "market-impact.prospective-execution-plan.v1"},
-    "plan_id": {"type": "string", "pattern": "^prospective-execution-plan-[0-9a-f]{64}$"},
-    "registration_id": {"type": "string", "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"},
-    "model_profile_alias": {"type": "string", "minLength": 1},
-    "model_provider_profile": {"$ref": "https://schemas.market-impact-agent.local/model-provider-profile.schema.json"},
-    "arm_bindings": {
-      "type": "array", "minItems": 2, "maxItems": 2,
-      "prefixItems": [
-        {"$ref": "#/$defs/control"},
-        {"$ref": "#/$defs/treatment"}
+  "oneOf": [
+    {
+      "$ref": "#/$defs/legacy"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "plan_id",
+        "registration_id",
+        "model_profile_alias",
+        "model_provider_profile",
+        "arm_bindings"
       ],
-      "items": false
+      "properties": {
+        "schema_version": {
+          "const": "market-impact.prospective-execution-plan.v2"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^prospective-execution-plan-[0-9a-f]{64}$"
+        },
+        "registration_id": {
+          "type": "string",
+          "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+        },
+        "model_profile_alias": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_provider_profile": {
+          "$ref": "https://schemas.market-impact-agent.local/model-provider-profile.schema.json"
+        },
+        "arm_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/arm"
+              },
+              {
+                "properties": {
+                  "arm": {
+                    "const": "reassessment_initial"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     }
-  },
+  ],
   "$defs": {
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "binding": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "runtime_ref", "runtime_config_hash", "prompt_hash", "skill_hashes",
-        "tool_manifest_hashes", "tool_surface_hash", "mcp_server_hashes",
-        "context_estimator_id", "compactor_id"
+        "runtime_ref",
+        "runtime_config_hash",
+        "prompt_hash",
+        "skill_hashes",
+        "tool_manifest_hashes",
+        "tool_surface_hash",
+        "mcp_server_hashes",
+        "context_estimator_id",
+        "compactor_id"
       ],
       "properties": {
-        "runtime_ref": {"type": "string", "minLength": 1},
-        "runtime_config_hash": {"$ref": "#/$defs/sha256"},
-        "prompt_hash": {"$ref": "#/$defs/sha256"},
-        "skill_hashes": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
-        "tool_manifest_hashes": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
-        "tool_surface_hash": {"$ref": "#/$defs/sha256"},
-        "mcp_server_hashes": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
-        "context_estimator_id": {"type": "string", "minLength": 1},
-        "compactor_id": {"type": "string", "minLength": 1}
+        "runtime_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime_config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "prompt_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "skill_hashes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "tool_manifest_hashes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "tool_surface_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mcp_server_hashes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "context_estimator_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "compactor_id": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "arm": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["arm", "execution_binding", "execution_binding_hash"],
+      "required": [
+        "arm",
+        "execution_binding",
+        "execution_binding_hash"
+      ],
       "properties": {
-        "arm": {"type": "string"},
-        "execution_binding": {"$ref": "#/$defs/binding"},
-        "execution_binding_hash": {"$ref": "#/$defs/sha256"}
+        "arm": {
+          "type": "string"
+        },
+        "execution_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "execution_binding_hash": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
-    "control": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"arm": {"const": "structured_agent_core"}}}]},
-    "treatment": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"arm": {"const": "structured_agent_plus_routed_methods"}}}]}
+    "control": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/arm"
+        },
+        {
+          "properties": {
+            "arm": {
+              "const": "structured_agent_core"
+            }
+          }
+        }
+      ]
+    },
+    "treatment": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/arm"
+        },
+        {
+          "properties": {
+            "arm": {
+              "const": "structured_agent_plus_routed_methods"
+            }
+          }
+        }
+      ]
+    },
+    "legacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "plan_id",
+        "registration_id",
+        "model_profile_alias",
+        "model_provider_profile",
+        "arm_bindings"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "market-impact.prospective-execution-plan.v1"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^prospective-execution-plan-[0-9a-f]{64}$"
+        },
+        "registration_id": {
+          "type": "string",
+          "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
+        },
+        "model_profile_alias": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_provider_profile": {
+          "$ref": "https://schemas.market-impact-agent.local/model-provider-profile.schema.json"
+        },
+        "arm_bindings": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/control"
+            },
+            {
+              "$ref": "#/$defs/treatment"
+            }
+          ],
+          "items": false
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,21 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "earnings-reassessment-inputs",
+  "version": "1.0.0",
+  "description": "Operational access to exact frozen reassessment records; no trading or method authority.",
+  "source": "repo://skills/earnings-reassessment-inputs",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "cccef13778e8bc0ab65b48ede06c81fc6bbd4046e946b6885ea74548ad994cb7",
+  "required_capabilities": [
+    "market.read"
+  ],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [
+    "lookup_event_revelation",
+    "lookup_exposure_candidates",
+    "lookup_market_context"
+  ],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "6b78606cd5228aa1843b147538cf1b9507d1c4dbceceae8549765e4f47566be1"
+}

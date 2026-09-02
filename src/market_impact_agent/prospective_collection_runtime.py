@@ -4,6 +4,7 @@ import sqlite3
 import uuid
 from collections import Counter
 from collections.abc import Callable, Mapping
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -1488,7 +1489,53 @@ class ProspectiveCollectionRuntime:
             raise ValueError("unsupported prospective collection terminal outcome")
         _strict_utc(completed_at, "prospective collection completed_at")
         failed = outcome in {"source_failure", "collector_failure"}
-        with self._connect() as connection:
+
+        # Snapshot parsing, raw-capture verification and usage CAS persistence
+        # must not monopolize the shared authority DB's writer during preparation.
+        with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN")
+            owner = connection.execute(
+                "SELECT lease_token FROM prospective_collection_jobs WHERE job_id = ?",
+                (job.job_id,),
+            ).fetchone()
+            if owner is None:
+                raise KeyError(f"unknown prospective collection job: {job.job_id}")
+            if cast(str | None, owner["lease_token"]) != lease_token:
+                return _run_result(
+                    job.job_id,
+                    "stale_claim",
+                    scheduled_for=scheduled_for,
+                    opportunity_id=opportunity_id,
+                    data_snapshot_id=snapshot_id,
+                    missed_opportunities=missed_opportunities,
+                    error_kind="collection_lease_lost",
+                )
+            prepared_opportunity = connection.execute(
+                """
+                SELECT started_at, attempt_count, data_snapshot_id, outcome
+                FROM prospective_collection_opportunities
+                WHERE opportunity_id = ? AND lease_token = ?
+                """,
+                (opportunity_id, lease_token),
+            ).fetchone()
+        if prepared_opportunity is None:
+            raise RuntimeError("prospective collection opportunity lease is missing")
+        started_at = _datetime(cast(str, prepared_opportunity["started_at"]), "started_at")
+        completed_at = max(completed_at, started_at)
+        usage = self._build_usage_record(
+            job=job,
+            opportunity_id=opportunity_id,
+            scheduled_for=scheduled_for,
+            outcome=outcome,
+            collection_attempt_count=cast(int, prepared_opportunity["attempt_count"]),
+            started_at=started_at,
+            completed_at=completed_at,
+            snapshot_id=snapshot_id,
+            error_kind=error_kind,
+        )
+        usage_artifact = self.store.artifacts.put_json(usage.to_dict())
+
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
@@ -1511,7 +1558,7 @@ class ProspectiveCollectionRuntime:
                 )
             opportunity = connection.execute(
                 """
-                SELECT started_at, attempt_count
+                SELECT started_at, attempt_count, data_snapshot_id, outcome
                 FROM prospective_collection_opportunities
                 WHERE opportunity_id = ? AND lease_token = ?
                 """,
@@ -1519,20 +1566,8 @@ class ProspectiveCollectionRuntime:
             ).fetchone()
             if opportunity is None:
                 raise RuntimeError("prospective collection opportunity lease is missing")
-            started_at = _datetime(cast(str, opportunity["started_at"]), "started_at")
-            completed_at = max(completed_at, started_at)
-            usage = self._build_usage_record(
-                job=job,
-                opportunity_id=opportunity_id,
-                scheduled_for=scheduled_for,
-                outcome=outcome,
-                collection_attempt_count=cast(int, opportunity["attempt_count"]),
-                started_at=started_at,
-                completed_at=completed_at,
-                snapshot_id=snapshot_id,
-                error_kind=error_kind,
-            )
-            usage_artifact = self.store.artifacts.put_json(usage.to_dict())
+            if tuple(opportunity) != tuple(prepared_opportunity):
+                raise ValueError("collection finalization inputs changed during preparation")
             failures = cast(int, row["consecutive_failures"]) + 1 if failed else 0
             backoff_until = (
                 now + timedelta(seconds=_backoff_seconds(policy, failures)) if failed else None

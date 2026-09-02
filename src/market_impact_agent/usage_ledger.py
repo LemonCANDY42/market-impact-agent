@@ -175,6 +175,7 @@ class UsageLedger:
         payload_json = canonical_json_bytes(payload).decode()
         payload_hash = canonical_hash(payload)
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 "SELECT * FROM usage_records WHERE run_id = ?", (record.run_id,)
             ).fetchone()

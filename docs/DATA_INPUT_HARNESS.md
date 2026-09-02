@@ -235,6 +235,16 @@ The local adapter uses content-addressed raw/JSON artifacts plus an append-only 
 the framework a server-free acceptance path and preserves repository boundaries. The store interface
 is replaceable; licensed bodies and private rows remain outside Git.
 
+The collector and authoritative Agent Journal share this index, so write-lock lifetime is a
+cross-layer reliability boundary. Receipt/capture verification, hashing, JSON preparation and
+Usage CAS creation must occur before acquiring the SQL write transaction. The short commit still
+atomically checks receipt identity, original availability, duplicates, and the current exact
+job/opportunity lease before inserting records and finalizing state. Prepared content is not
+authority until that commit succeeds. Lease loss or conflicting content must roll back rather
+than publish a stale completion. Slow artifact preparation must not prevent another Agent from
+persisting a received model response. Moving to a second authority database or merely increasing
+SQLite's timeout is not the acceptance fix.
+
 Bulk data should use the component best suited to its semantics:
 
 - [NautilusTrader `ParquetDataCatalog`](https://nautilustrader.io/docs/latest/concepts/data/) for

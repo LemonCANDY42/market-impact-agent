@@ -81,6 +81,7 @@ class CatalogResolution(StrEnum):
 
 DEFAULT_SKILL_GROUP_ASSIGNMENTS_V1: Mapping[str, SkillGroup] = {
     "adversarial-risk": SkillGroup.PORTFOLIO_RISK,
+    "earnings-reassessment-inputs": SkillGroup.EVIDENCE_AUTHORITY,
     "energy-supply": SkillGroup.INDUSTRY_SECTOR,
     "equity-exposure": SkillGroup.ISSUER_FUNDAMENTAL,
     "event-market-context": SkillGroup.EVENT_TRANSMISSION,

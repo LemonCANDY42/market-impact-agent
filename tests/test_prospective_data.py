@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier, Event
 
 import pytest
 
@@ -329,6 +331,94 @@ def test_changed_record_content_creates_an_append_only_revision(tmp_path: Path) 
 
     assert result.new_observation_versions == 1
     assert journal.stats(policy_id=policy.policy_id)["unique_observation_version_count"] == 2
+
+
+def test_concurrent_prepared_duplicate_snapshot_has_one_atomic_append(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    policy = _policy()
+    snapshot = _snapshot(store, policy=policy, retrieved_at=FIRST_RECEIPT)
+    prepared = Barrier(2)
+    original_get = store.artifacts.get
+
+    def synchronize_preparation(content_hash: str, *, media_type: str):
+        artifact = original_get(content_hash, media_type=media_type)
+        if content_hash == snapshot.observations[0].raw_content_hash:
+            prepared.wait(timeout=5)
+        return artifact
+
+    monkeypatch.setattr(store.artifacts, "get", synchronize_preparation)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(journal.record_snapshot, snapshot, policy=policy) for _ in range(2)]
+        results = [future.result(timeout=10) for future in futures]
+    assert sorted(item.already_recorded for item in results) == [False, True]
+    assert sum(item.new_observation_versions for item in results) == 1
+    assert journal.stats(policy_id=policy.policy_id)["observation_sighting_count"] == 1
+    # Exact replay must still bypass raw-record preparation, as before this change.
+    assert journal.record_snapshot(snapshot, policy=policy).already_recorded
+
+
+def test_prepared_receipt_rechecks_first_availability_and_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    policy = _policy()
+    earlier = _snapshot(store, policy=policy, retrieved_at=FIRST_RECEIPT)
+    later = _snapshot(store, policy=policy, retrieved_at=SECOND_RECEIPT)
+    entered, release = Event(), Event()
+    original_get = store.artifacts.get
+
+    def pause_earlier(content_hash: str, *, media_type: str):
+        artifact = original_get(content_hash, media_type=media_type)
+        if content_hash == earlier.observations[0].raw_content_hash:
+            entered.set()
+            assert release.wait(timeout=5)
+        return artifact
+
+    monkeypatch.setattr(store.artifacts, "get", pause_earlier)
+    # The competing Journal uses its own CAS handle, as a separate process does.
+    competing = ProspectiveDataJournal(LocalDataSnapshotStore(store.root))
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(journal.record_snapshot, earlier, policy=policy)
+        try:
+            assert entered.wait(timeout=5)
+            assert competing.record_snapshot(later, policy=policy).new_observation_versions == 1
+        finally:
+            release.set()
+        with pytest.raises(ValueError, match="cannot be backdated"):
+            future.result(timeout=5)
+    stats = journal.stats(policy_id=policy.policy_id)
+    assert stats["collection_snapshot_count"] == stats["source_receipt_count"] == 1
+    assert stats["observation_sighting_count"] == stats["unique_observation_version_count"] == 1
+    assert (
+        journal.observation_version_refs(
+            policy_id=policy.policy_id,
+            capability=policy.capability,
+            not_before=FIRST_RECEIPT,
+            not_after=SECOND_RECEIPT,
+        )[0].first_available_at
+        == SECOND_RECEIPT
+    )
+
+
+def test_prepared_version_conflict_rolls_back_receipt_and_sighting(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "state")
+    journal = ProspectiveDataJournal(store)
+    policy = _policy()
+    journal.record_snapshot(
+        _snapshot(store, policy=policy, retrieved_at=FIRST_RECEIPT), policy=policy
+    )
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute("UPDATE prospective_observation_versions SET version_core_json = '{}' ")
+    before = journal.stats(policy_id=policy.policy_id)
+    with pytest.raises(ValueError, match="conflicting content"):
+        journal.record_snapshot(
+            _snapshot(store, policy=policy, retrieved_at=SECOND_RECEIPT), policy=policy
+        )
+    assert journal.stats(policy_id=policy.policy_id) == before
 
 
 def test_freeze_builds_standard_snapshot_and_authorized_agent_tool(tmp_path: Path) -> None:

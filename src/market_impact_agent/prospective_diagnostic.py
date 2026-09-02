@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -24,6 +24,11 @@ PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3 = (
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4 = (
     "market-impact.prospective-diagnostic-registration.v4"
 )
+PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5 = (
+    "market-impact.prospective-diagnostic-registration.v5"
+)
+REASSESSMENT_INITIAL = "reassessment_initial"
+REASSESSMENT_PROFILE = "cliproxyapi-luna-max-cpa-retry408-v1"
 # Backward-compatible default; v2 must be selected explicitly.
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1
 _SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
@@ -32,6 +37,7 @@ _SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
     }
 )
 
@@ -68,6 +74,14 @@ class DiagnosticCutoffRule:
     decision_delay_seconds: int
 
     def __post_init__(self) -> None:
+        if self.session_boundary == "harness_now":
+            if (self.timezone, self.market_close_local, self.decision_delay_seconds) != (
+                "UTC",
+                "not_applicable",
+                0,
+            ):
+                raise ValueError("current-time cutoff cannot carry a session-time claim")
+            return
         if self.timezone != "Asia/Shanghai":
             raise ValueError("diagnostic cutoff timezone must be Asia/Shanghai")
         if self.session_boundary != "after_market_close":
@@ -163,7 +177,10 @@ class ProspectiveDiagnosticCheckpoint:
     def __post_init__(self) -> None:
         _identifier(self.checkpoint_key, "diagnostic checkpoint_key")
         _trimmed(self.name, "diagnostic checkpoint name")
-        if self.selection_rule != "first_eligible_after_registration":
+        if self.selection_rule not in {
+            "first_eligible_after_registration",
+            "registered_reassessment",
+        }:
             raise ValueError("diagnostic selection rule must be first eligible after registration")
         _trimmed(self.eligibility_rule, "diagnostic eligibility rule")
         _unique_nonempty(
@@ -214,6 +231,58 @@ class ProspectiveDiagnosticCheckpoint:
 
 
 @dataclass(frozen=True, slots=True)
+class RegisteredReassessment:
+    """Exact old subject and question, not a new event or a parent-Watch resolution."""
+
+    original_registration_id: str
+    original_candidate_set_id: str
+    original_cluster_id: str
+    subject_version_ids: tuple[str, ...]
+    research_question: str
+    source_acceptance_report_hashes: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for value, prefix in (
+            (self.original_registration_id, "prospective-diagnostic-registration-"),
+            (self.original_candidate_set_id, "event-impact-triage-candidate-set-"),
+            (self.original_cluster_id, "event-impact-triage-cluster-"),
+            *((item, "prospective-observation-version-") for item in self.subject_version_ids),
+        ):
+            suffix = value.removeprefix(prefix)
+            if (
+                not value.startswith(prefix)
+                or len(suffix) != 64
+                or any(char not in "0123456789abcdef" for char in suffix)
+            ):
+                raise ValueError("reassessment requires exact content identities")
+        if not self.subject_version_ids or self.subject_version_ids != tuple(
+            sorted(set(self.subject_version_ids))
+        ):
+            raise ValueError("reassessment subject versions must be nonempty sorted and unique")
+        _trimmed(self.research_question, "reassessment research question")
+        if (
+            not self.source_acceptance_report_hashes
+            or self.source_acceptance_report_hashes
+            != tuple(sorted(set(self.source_acceptance_report_hashes)))
+            or any(
+                len(item) != 64 or any(char not in "0123456789abcdef" for char in item)
+                for item in self.source_acceptance_report_hashes
+            )
+        ):
+            raise ValueError("reassessment requires exact accepted source report hashes")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "original_registration_id": self.original_registration_id,
+            "original_candidate_set_id": self.original_candidate_set_id,
+            "original_cluster_id": self.original_cluster_id,
+            "subject_version_ids": list(self.subject_version_ids),
+            "research_question": self.research_question,
+            "source_acceptance_report_hashes": list(self.source_acceptance_report_hashes),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ProspectiveDiagnosticRegistration:
     registration_id: str
     registered_at: datetime
@@ -229,10 +298,45 @@ class ProspectiveDiagnosticRegistration:
     minimum_replicates_per_arm: int | None = None
     replicate_schedule_rule: str | None = None
     schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA
+    reassessment: RegisteredReassessment | None = None
 
     def __post_init__(self) -> None:
         if self.schema_version not in _SUPPORTED_REGISTRATION_SCHEMAS:
             raise ValueError("unsupported prospective diagnostic registration schema")
+        is_reassessment = self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
+        if is_reassessment != (self.reassessment is not None):
+            raise ValueError("only registration v5 requires a registered reassessment")
+        if not is_reassessment and any(
+            item.selection_rule != "first_eligible_after_registration"
+            or item.cutoff.session_boundary != "after_market_close"
+            for item in self.checkpoints
+        ):
+            raise ValueError("legacy registration requires its original session selection")
+        if is_reassessment:
+            if len(self.checkpoints) != 1 or self.paired_arms != (REASSESSMENT_INITIAL,):
+                raise ValueError("reassessment requires one checkpoint and one initial binding")
+            checkpoint = self.checkpoints[0]
+            if (
+                checkpoint.mechanism is not DiagnosticMechanism.EARNINGS_EXPECTATION_DELTA
+                or checkpoint.selection_rule != "registered_reassessment"
+                or checkpoint.cutoff.session_boundary != "harness_now"
+                or self.replicates_per_arm != 1
+                or self.model_profile_id != REASSESSMENT_PROFILE
+                or self.aggregate_model_cost_limit_usd != "0.30"
+                or self.outcome_opening_rule != "opened_diagnostic_not_blind_or_paired"
+            ):
+                raise ValueError("reassessment requires the bounded current-time initial Judgment")
+            for capability in (
+                ObservationCapability.EVENT_REVELATION,
+                ObservationCapability.EXPOSURE_CANDIDATES,
+            ):
+                if (
+                    checkpoint.slot(capability).applicability
+                    is not CapabilityApplicability.REQUIRED
+                ):
+                    raise ValueError(
+                        "reassessment requires exact event identity and target mapping"
+                    )
         if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1 and any(
             slot.applicability is CapabilityApplicability.OPTIONAL
             for checkpoint in self.checkpoints
@@ -258,7 +362,7 @@ class ProspectiveDiagnosticRegistration:
         maximum_checkpoints = (
             4 if self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4 else 3
         )
-        if not 2 <= len(self.checkpoints) <= maximum_checkpoints:
+        if not is_reassessment and not 2 <= len(self.checkpoints) <= maximum_checkpoints:
             raise ValueError(
                 f"prospective diagnostic requires between two and {maximum_checkpoints} checkpoints"
             )
@@ -268,12 +372,12 @@ class ProspectiveDiagnosticRegistration:
         mechanisms = tuple(item.mechanism for item in self.checkpoints)
         if len(mechanisms) != len(set(mechanisms)):
             raise ValueError("prospective diagnostic checkpoints must use different mechanisms")
-        if self.paired_arms != (
+        if not is_reassessment and self.paired_arms != (
             "structured_agent_core",
             "structured_agent_plus_routed_methods",
         ):
             raise ValueError("prospective diagnostic requires the two frozen paired arms")
-        if self.replicates_per_arm != 3:
+        if not is_reassessment and self.replicates_per_arm != 3:
             raise ValueError(
                 "prospective diagnostic requires exactly three replicates per arm as the maximum"
             )
@@ -305,7 +409,9 @@ class ProspectiveDiagnosticRegistration:
             raise ValueError("aggregate model cost limit must be decimal text") from error
         if cost <= 0 or self.aggregate_model_cost_limit_usd != f"{cost:.2f}":
             raise ValueError("aggregate model cost limit must be positive canonical USD")
-        if self.outcome_opening_rule != ("do_not_open_until_all_paired_judgments_are_sealed"):
+        if not is_reassessment and self.outcome_opening_rule != (
+            "do_not_open_until_all_paired_judgments_are_sealed"
+        ):
             raise ValueError("prospective diagnostic outcome opening rule is invalid")
         _unique_nonempty(self.stop_conditions, "prospective diagnostic stop_conditions")
         _unique_nonempty(self.go_conditions, "prospective diagnostic go_conditions")
@@ -347,6 +453,8 @@ class ProspectiveDiagnosticRegistration:
         }:
             payload["minimum_replicates_per_arm"] = self.minimum_replicates_per_arm
             payload["replicate_schedule_rule"] = self.replicate_schedule_rule
+        if self.reassessment is not None:
+            payload["reassessment"] = self.reassessment.to_dict()
         return payload
 
     def to_dict(self) -> dict[str, object]:
@@ -369,6 +477,7 @@ class ProspectiveDiagnosticRegistration:
         minimum_replicates_per_arm: int | None = None,
         replicate_schedule_rule: str | None = None,
         schema_version: str = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1,
+        reassessment: RegisteredReassessment | None = None,
     ) -> ProspectiveDiagnosticRegistration:
         core: dict[str, object] = {
             "schema_version": schema_version,
@@ -389,6 +498,8 @@ class ProspectiveDiagnosticRegistration:
         }:
             core["minimum_replicates_per_arm"] = minimum_replicates_per_arm
             core["replicate_schedule_rule"] = replicate_schedule_rule
+        if reassessment is not None:
+            core["reassessment"] = reassessment.to_dict()
         return cls(
             registration_id=(f"prospective-diagnostic-registration-{canonical_hash(core)}"),
             registered_at=registered_at,
@@ -404,7 +515,91 @@ class ProspectiveDiagnosticRegistration:
             minimum_replicates_per_arm=minimum_replicates_per_arm,
             replicate_schedule_rule=replicate_schedule_rule,
             schema_version=schema_version,
+            reassessment=reassessment,
         )
+
+
+def build_reassessment_registration(
+    *,
+    original_registration: ProspectiveDiagnosticRegistration,
+    subject: RegisteredReassessment,
+    registered_at: datetime,
+) -> ProspectiveDiagnosticRegistration:
+    """Declare one opened diagnostic; retain original freshness limits for current context."""
+    if original_registration.registration_id != subject.original_registration_id:
+        raise ValueError("reassessment subject names another original registration")
+    original = next(
+        (
+            item
+            for item in original_registration.checkpoints
+            if item.mechanism is DiagnosticMechanism.EARNINGS_EXPECTATION_DELTA
+        ),
+        None,
+    )
+    if original is None:
+        raise ValueError("original registration has no Earnings checkpoint")
+    slots = tuple(
+        replace(
+            slot,
+            applicability=CapabilityApplicability.REQUIRED,
+            required_route_kinds=("issuer_event",),
+            minimum_data_sources=1,
+            minimum_observations=len(subject.subject_version_ids),
+        )
+        if slot.capability is ObservationCapability.EVENT_REVELATION
+        else replace(
+            slot,
+            applicability=CapabilityApplicability.REQUIRED,
+            required_route_kinds=("tradable_instrument_master",),
+            minimum_data_sources=1,
+            minimum_observations=1,
+        )
+        if slot.capability is ObservationCapability.EXPOSURE_CANDIDATES
+        else replace(
+            slot,
+            applicability=CapabilityApplicability.OPTIONAL,
+            required_route_kinds=("issuer_valuation_context",),
+            minimum_data_sources=1,
+            minimum_observations=1,
+        )
+        if slot.capability is ObservationCapability.MARKET_CONTEXT
+        else slot
+        for slot in original.capability_slots
+    )
+    checkpoint = replace(
+        original,
+        name="Current-time read-only Earnings reassessment",
+        selection_rule="registered_reassessment",
+        eligibility_rule=(
+            "Exact registered original subject and accepted target mapping; "
+            "economic uncertainty may yield abstention."
+        ),
+        exclusion_rules=(
+            "No fabricated subject, target, receipt, surprise, or execution authority.",
+        ),
+        cutoff=DiagnosticCutoffRule("UTC", "harness_now", "not_applicable", 0),
+        capability_slots=slots,
+        candidate_horizon_sessions=(5,),
+    )
+    return ProspectiveDiagnosticRegistration.build(
+        registered_at=registered_at,
+        checkpoints=(checkpoint,),
+        paired_arms=(REASSESSMENT_INITIAL,),
+        replicates_per_arm=1,
+        model_profile_id=REASSESSMENT_PROFILE,
+        aggregate_model_cost_limit_usd="0.30",
+        outcome_opening_rule="opened_diagnostic_not_blind_or_paired",
+        stop_conditions=(
+            "Stop after one terminal initial Judgment or failure; never silently rerun.",
+        ),
+        go_conditions=(
+            "Exact accepted receipt, target mapping, cutoff and Query Gate permit "
+            "one read-only Judgment.",
+        ),
+        claim_scope="process_diagnostic_only_no_alpha_or_execution_claim",
+        schema_version=PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
+        reassessment=subject,
+    )
 
 
 def load_prospective_diagnostic_registration(
@@ -443,7 +638,12 @@ def prospective_diagnostic_registration_from_dict(
             "go_conditions",
             "claim_scope",
         }
-        | adaptive_fields,
+        | adaptive_fields
+        | (
+            {"reassessment"}
+            if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
+            else set()
+        ),
         "prospective diagnostic registration fields",
     )
     registration = ProspectiveDiagnosticRegistration(
@@ -470,10 +670,34 @@ def prospective_diagnostic_registration_from_dict(
             _string(payload, "replicate_schedule_rule") if adaptive_fields else None
         ),
         schema_version=schema_version,
+        reassessment=(
+            _reassessment_from_dict(payload.get("reassessment"))
+            if schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
+            else None
+        ),
     )
     if registration.to_dict() != payload:
         raise ValueError("prospective diagnostic registration is not canonical")
     return registration
+
+
+def _reassessment_from_dict(value: object) -> RegisteredReassessment:
+    payload = _object(value, "registered reassessment")
+    result = RegisteredReassessment(
+        original_registration_id=_string(payload, "original_registration_id"),
+        original_candidate_set_id=_string(payload, "original_candidate_set_id"),
+        original_cluster_id=_string(payload, "original_cluster_id"),
+        subject_version_ids=_string_tuple(
+            payload.get("subject_version_ids"), "subject_version_ids"
+        ),
+        research_question=_string(payload, "research_question"),
+        source_acceptance_report_hashes=_string_tuple(
+            payload.get("source_acceptance_report_hashes"), "source_acceptance_report_hashes"
+        ),
+    )
+    if result.to_dict() != payload:
+        raise ValueError("registered reassessment is not canonical")
+    return result
 
 
 def _checkpoint_from_dict(value: object) -> ProspectiveDiagnosticCheckpoint:

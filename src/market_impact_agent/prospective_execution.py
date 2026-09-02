@@ -10,9 +10,13 @@ from market_impact_agent.model_provider import (
     load_builtin_model_provider_profile,
     model_provider_profile_from_dict,
 )
-from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
+from market_impact_agent.prospective_diagnostic import (
+    REASSESSMENT_INITIAL,
+    ProspectiveDiagnosticRegistration,
+)
 
 PROSPECTIVE_EXECUTION_PLAN_SCHEMA = "market-impact.prospective-execution-plan.v1"
+PROSPECTIVE_EXECUTION_PLAN_SCHEMA_V2 = "market-impact.prospective-execution-plan.v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +42,10 @@ class ProspectiveExecutionPlan:
     schema_version: str = PROSPECTIVE_EXECUTION_PLAN_SCHEMA
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_EXECUTION_PLAN_SCHEMA:
+        if self.schema_version not in {
+            PROSPECTIVE_EXECUTION_PLAN_SCHEMA,
+            PROSPECTIVE_EXECUTION_PLAN_SCHEMA_V2,
+        }:
             raise ValueError("unsupported prospective execution plan schema")
         if not self.registration_id.startswith("prospective-diagnostic-registration-"):
             raise ValueError("prospective execution plan registration identity is invalid")
@@ -48,17 +55,24 @@ class ProspectiveExecutionPlan:
         ):
             raise ValueError("prospective execution plan Model Profile alias is invalid")
         arms = tuple(item.arm for item in self.arm_bindings)
-        if arms != (
+        reassessment = self.schema_version == PROSPECTIVE_EXECUTION_PLAN_SCHEMA_V2
+        if reassessment and arms != (REASSESSMENT_INITIAL,):
+            raise ValueError("reassessment execution plan requires one initial binding")
+        if not reassessment and arms != (
             "structured_agent_core",
             "structured_agent_plus_routed_methods",
         ):
             raise ValueError("prospective execution plan requires the frozen paired arms")
         binding_hashes = tuple(item.execution_binding.binding_hash for item in self.arm_bindings)
-        if len(set(binding_hashes)) != 2:
+        if not reassessment and len(set(binding_hashes)) != 2:
             raise ValueError("paired arms require distinct frozen execution surfaces")
         expected_profile = load_builtin_model_provider_profile(self.model_profile_alias)
         if self.model_provider_profile.to_dict() != expected_profile.to_dict():
             raise ValueError("execution plan profile differs from the Harness-bundled alias")
+        if reassessment:
+            if self.plan_id != self.expected_plan_id:
+                raise ValueError("prospective execution plan ID does not match content")
+            return
         control = self.arm_bindings[0].execution_binding
         treatment = self.arm_bindings[1].execution_binding
         if (
@@ -124,8 +138,13 @@ class ProspectiveExecutionPlan:
             raise ValueError("execution plan Model Profile alias differs from registration")
         if tuple(item.arm for item in arm_bindings) != registration.paired_arms:
             raise ValueError("execution plan arms differ from registration")
+        schema = (
+            PROSPECTIVE_EXECUTION_PLAN_SCHEMA_V2
+            if registration.reassessment is not None
+            else PROSPECTIVE_EXECUTION_PLAN_SCHEMA
+        )
         core = {
-            "schema_version": PROSPECTIVE_EXECUTION_PLAN_SCHEMA,
+            "schema_version": schema,
             "registration_id": registration.registration_id,
             "model_profile_alias": model_profile_alias,
             "model_provider_profile": model_profile.to_dict(),
@@ -137,6 +156,7 @@ class ProspectiveExecutionPlan:
             model_profile_alias=model_profile_alias,
             model_provider_profile=model_profile,
             arm_bindings=arm_bindings,
+            schema_version=schema,
         )
 
 

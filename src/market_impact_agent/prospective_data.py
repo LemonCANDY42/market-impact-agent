@@ -7,6 +7,7 @@ import sqlite3
 import tempfile
 from collections import defaultdict
 from collections.abc import Mapping
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -530,9 +531,7 @@ class ProspectiveDataJournal:
             raise ValueError("prospective journal requires the persisted immutable Data Snapshot")
         policy_artifact = self.store.artifacts.put_json(policy.to_dict())
 
-        new_versions = 0
-        duplicate_versions = 0
-        with self._connect() as connection:
+        def recorded_snapshot(connection: sqlite3.Connection) -> JournalAppendResult | None:
             existing_snapshot = connection.execute(
                 "SELECT policy_id FROM prospective_collection_snapshots WHERE snapshot_id = ?",
                 (snapshot.snapshot_id,),
@@ -558,6 +557,54 @@ class ProspectiveDataJournal:
                     duplicate_observation_versions=duplicate_count,
                     receipt_count=len(snapshot.attempts),
                 )
+            return None
+
+        # Exact replay need not reopen every raw record. Recheck after preparation
+        # under the writer lock because another collector may commit meanwhile.
+        with closing(self._connect()) as connection:
+            recorded = recorded_snapshot(connection)
+        if recorded is not None:
+            return recorded
+
+        receipts = tuple(zip(policy.sources, snapshot.attempts, strict=True))
+        for _, attempt in receipts:
+            if attempt.raw_response_hash is not None:
+                self.store.artifacts.get(
+                    attempt.raw_response_hash, media_type="application/octet-stream"
+                )
+        prepared_versions: list[tuple[SourceObservation, str, str, str, datetime]] = []
+        for observation in snapshot.observations:
+            self.store.artifacts.get(
+                observation.raw_content_hash, media_type="application/octet-stream"
+            )
+            version_core_json = canonical_json_bytes(
+                _observation_version_core(observation)
+            ).decode()
+            version_id = (
+                f"prospective-observation-version-{sha256(version_core_json.encode()).hexdigest()}"
+            )
+            available_at = observation.times.available_at
+            if available_at is None:
+                raise ValueError("prospective journal observations require availability")
+            prepared_versions.append(
+                (
+                    observation,
+                    version_id,
+                    version_core_json,
+                    canonical_json_bytes(observation.to_dict()).decode(),
+                    available_at,
+                )
+            )
+
+        new_versions = 0
+        duplicate_versions = 0
+        # File reads, hashing and large JSON preparation are complete. Only
+        # authoritative duplicate/first-receipt checks and atomic SQL remain.
+        with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
+            recorded = recorded_snapshot(connection)
+            if recorded is not None:
+                return recorded
 
             self._record_policy(connection, policy, policy_artifact.content_hash)
             connection.execute(
@@ -575,12 +622,7 @@ class ProspectiveDataJournal:
                     int(snapshot.coverage_complete),
                 ),
             )
-            for source, attempt in zip(policy.sources, snapshot.attempts, strict=True):
-                if attempt.raw_response_hash is not None:
-                    self.store.artifacts.get(
-                        attempt.raw_response_hash,
-                        media_type="application/octet-stream",
-                    )
+            for source, attempt in receipts:
                 connection.execute(
                     """
                     INSERT INTO prospective_source_receipts(
@@ -601,17 +643,13 @@ class ProspectiveDataJournal:
                     ),
                 )
 
-            for observation in snapshot.observations:
-                self.store.artifacts.get(
-                    observation.raw_content_hash,
-                    media_type="application/octet-stream",
-                )
-                version_core = _observation_version_core(observation)
-                version_core_json = canonical_json_bytes(version_core).decode()
-                version_id = prospective_observation_version_id(observation)
-                available_at = observation.times.available_at
-                if available_at is None:
-                    raise ValueError("prospective journal observations require availability")
+            for (
+                observation,
+                version_id,
+                version_core_json,
+                observation_json,
+                available_at,
+            ) in prepared_versions:
                 existing = connection.execute(
                     """
                     SELECT version_core_json, first_available_at
@@ -642,7 +680,7 @@ class ProspectiveDataJournal:
                             _optional_timestamp(observation.times.published_at),
                             snapshot.snapshot_id,
                             version_core_json,
-                            canonical_json_bytes(observation.to_dict()).decode(),
+                            observation_json,
                         ),
                     )
                     new_versions += 1
@@ -834,6 +872,42 @@ class ProspectiveDataJournal:
                 raise ValueError("prospective observation as-of index differs from its content")
             results.append((ref, observation))
         return tuple(results)
+
+    def version_receipt(
+        self, version_id: str, *, not_after: datetime
+    ) -> tuple[ProspectiveCollectionPolicy, DataSnapshot, SourceObservation]:
+        """Reopen an exact original receipt, without claiming continuous coverage."""
+        _strict_utc(not_after, "version receipt cutoff")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT v.observation_json, v.first_available_at, v.first_snapshot_id, "
+                "r.policy_id FROM prospective_observation_versions v "
+                "JOIN prospective_collection_snapshots r ON r.snapshot_id = v.first_snapshot_id "
+                "WHERE v.version_id = ?",
+                (version_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError("version has no original Journal receipt")
+        observation = _observation_from_json(cast(str, row["observation_json"]))
+        snapshot = self.store.get(cast(str, row["first_snapshot_id"]))
+        policy = self.policy(cast(str, row["policy_id"]))
+        if (
+            prospective_observation_version_id(observation) != version_id
+            or observation not in snapshot.observations
+            or observation.times.available_at
+            != _datetime(row["first_available_at"], "receipt time")
+            or observation.times.available_at is None
+            or observation.times.available_at > not_after
+            or observation.authority_at is None
+            or observation.authority_at > not_after
+            or snapshot.completed_at > not_after
+            or not snapshot.coverage_complete
+            or snapshot.query.pit_lane is not DataPITLane.PROSPECTIVE
+            or snapshot.query.sources != policy.sources
+            or snapshot.query.capability is not policy.capability
+        ):
+            raise ValueError("exact version receipt lacks cutoff-visible source authority")
+        return policy, snapshot, observation
 
     def freeze_version_selection_snapshot(
         self,

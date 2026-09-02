@@ -537,6 +537,88 @@ that registration/checkpoint across its route plans, not collection or other che
 The following v7 report at 09:16:09 UTC still found four operational collection families; that
 collection-readiness result is not permission to admit the now-retired Earnings slot.
 
+### Current-time reassessment: initial Judgment boundary
+
+The implemented path is an opt-in variant of the existing Registration, Trigger, Snapshot and
+Query Gate path, not a second analysis engine. One previously observed event cluster becomes the
+explicit subject of a newly registered question. The original Candidate Set, Decision and exact
+subject versions are retained; new contextual inputs must be explicitly selected from accepted
+actual receipts. The Harness freezes current time once and reopens that same input set on restart.
+Neither old receipts nor the old experiment's disposition are changed.
+
+Each selected version reopens its original first-receipt Snapshot to prove it was received from
+the bound source by the cutoff; unrelated rows in that Snapshot are not added to the Agent's input.
+This does not claim complete continuous collection over the policy's lifetime or that no other
+news existed. The normal continuous-Snapshot proof stays unchanged. Old subject age is
+reported rather than tested as newly arriving news; contextual future/stale data remains subject to
+its own visibility/freshness gate. A known issuer mapping supplies an allowed research target, not
+permission to trade it. Daily valuation data is not a total-return series or executable quote.
+For `daily_basic`, both the receipt time and the record's own `trade_date` matter. The
+[official source contract](https://tushare.pro/document/2?doc_id=32) describes end-of-day metrics,
+including that day's close, updated between 15:00 and 17:00 China time. Current-context validation
+must reject a future, missing, malformed, too-old or pre-close-received trading-date record even
+when receipt time is recent. The 15:00 completed-day boundary is an effective-data constraint,
+not an invented publication or authority timestamp. Old historical queries remain valid in their
+own lanes; this check governs the explicitly selected current valuation context.
+
+The bound instruction supplies the original review question and Harness-owned registration,
+admission and source facts. Acceptance of the source does not certify every financial claim or
+turn an aggregator into a direct issuer publication. The Agent must still distinguish facts,
+assumptions, forecast periods, revisions, uncertainties and the supported investment implication.
+Unknown prior expectations cannot be fabricated, and economic abstention remains legitimate.
+
+The opt-in `earnings-reassessment-inputs` Skill declares only the three frozen event, exposure and
+market-context lookup tools. It closes the existing research runtime's mandatory Skill tool
+allowlist, not an investment-method or promotion gate. Its instructions explain evidence access;
+they do not encode an expected direction. Existing Skills keep their original hashes. If this
+input surface is later used in a paired comparison, both arms need the same operational access
+Skill so that access itself is not mistaken for the incremental effect of a research method.
+
+Initial acceptance is one real, bounded `reassessment_initial` Judgment or abstention with a signed
+Run Journal and reconciled Usage Ledger, including failed attempts. It uses the accepted Luna max
+CPA Profile with bounded received-408 retry. Query rejection makes no model call; terminal replay
+makes no additional call; an incomplete dispatch does not silently restart. No Account, Paper,
+calendar, Wake, Signal, Order or Strategy Case terminal is created. This initial opened diagnostic
+is not the later paired/conditional-Judge comparison, a newly blind event sample, parent-Watch
+resolution, Skill promotion or investment-effectiveness evidence.
+Credential-backed Provider construction is deferred until an actual permitted model dispatch;
+offline terminal replay and interrupted-run accounting must not require a new credential lookup.
+
+The first actual reassessment registered at September 2 with cutoff `2026-09-02T10:09:15.610673Z`:
+registration `8ad970828af94c4be2d2fe272858b65122383c72274f334488073325d6b39359`, Trigger
+`34c7221d749bee40ea4c03039de4f1b8ddc6c176f37208e42087ba735db03f79` and Query Gate
+`0d7d1792de5da4081c865886f560f1854cda5f25a045e16cdcfceb4fc73cfb62`. Query Gate passed on
+two original forecast versions, exact issuer master and current-date-checked daily valuation.
+One completed model turn read all three frozen tools. The second dispatched turn returned from
+transport, but its success observer and subsequent failure-terminal append both hit the shared
+SQLite writer lock. No Judgment was admitted. Concurrent daily-data collection overlapped this
+failure; a synthetic production-owner reproduction confirmed that slow collector artifact work
+inside the SQL write transaction can cause precisely this failure. The evidence does not identify
+which collector critical section held the lock at the exact instant.
+
+Credential-removed offline recovery sealed Run
+`prospective-reassessment-88d232329598a86f7ac700b5383a55d9b6ca087af97e1fa2b52d6d40fde5b690` as
+`human_input_required`, terminal `5de81d3603ba420f535e64c5aa4f5c61b4e49e60dbba4e1a328eebcfc696f185`,
+without a new model dispatch. Its one Usage row records the known completed-turn subtotal:
+7,746 input / 702 output Tokens, three tool calls and 2,392 microusd. There were two durable
+dispatch records but only one completed-turn usage record; the second response's usage remains
+unknown and must not be reported as zero or folded into a fabricated total. This is an execution
+and accounting failure specimen, not an abstention, successful Judgment or effectiveness result.
+
+The corrected collector moves immutable CAS verification, serialization and Usage preparation
+outside its write transactions, then rechecks original-availability/conflict rules and exact
+job/opportunity lease before atomic SQL commit. Four tests exercise signed Agent response writes
+while each slow collector preparation phase is paused. Duplicate races, backdating conflicts,
+lease takeover, changed preparation inputs, and staged-snapshot recovery remain covered. The
+independent reviewer found no concrete issue; 207 targeted tests and the final 1,753-test full suite
+passed, as did static checks and wheel packaging. No timeout increase or second authority store was
+introduced. A real credential-removed terminal replay returned the exact same refs and terminal;
+dispatch count stayed two and Usage count one (record hash
+`11bbc716d544a18e7ecfe3835c5b2bc99ad0a380dc3988c9ac18ca64ea10409f`). The original Watch's policy
+remained identical, with its normal scheduler advancing to seven polls and zero Wakes. No model
+rerun, order or service restart was performed. A separately approved same-question diagnostic may
+start a new current-time registration; it must not merge the lost old response or promote this Run.
+
 ### Actual-receipt coverage failure — 2026-09-02
 
 The first bounded-concurrent v13 operational batch contained 32 frozen versions and three Work

@@ -26,6 +26,7 @@ from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
     REQUIRED_DIAGNOSTIC_CAPABILITIES,
     CapabilityApplicability,
     ProspectiveDiagnosticRegistration,
@@ -541,10 +542,15 @@ def reconcile_prospective_checkpoint_snapshot_set(
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
         PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
     }:
         raise ValueError("partial checkpoint reconciliation requires a v2, v3, or v4 registration")
     checkpoint = registration.checkpoint(checkpoint_key)
-    trigger_bound = registration.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4
+    reassessment = registration.reassessment
+    trigger_bound = registration.schema_version in {
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+        PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
+    }
     if trigger_bound:
         if trigger_admission is None:
             raise ValueError("v4 checkpoint reconciliation requires a Trigger Admission")
@@ -558,6 +564,14 @@ def reconcile_prospective_checkpoint_snapshot_set(
             raise ValueError("checkpoint Trigger Admission belongs to another checkpoint")
         if trigger_admission.admitted_at > barrier_at:
             raise ValueError("checkpoint barrier predates its Trigger Admission")
+        if reassessment is not None and (
+            trigger_admission.kind.value != "registered_reassessment"
+            or trigger_admission.registration_artifact_hash
+            != canonical_hash(registration.to_dict())
+            or trigger_admission.admitted_at != barrier_at
+            or trigger_admission.observation_version_ids != reassessment.subject_version_ids
+        ):
+            raise ValueError("reassessment cutoff or subject differs from frozen Trigger")
     elif trigger_admission is not None or trigger_admission_authority is not None:
         raise ValueError("legacy checkpoint reconciliation cannot bind Trigger Admission authority")
     selection_keys = tuple(
@@ -576,6 +590,7 @@ def reconcile_prospective_checkpoint_snapshot_set(
     bindings: list[CheckpointCapabilityBinding] = []
     capability_gaps: list[str] = []
     reconciled_trigger_versions: set[str] = set()
+    reconciled_context_versions: set[str] = set()
     for capability in sorted(REQUIRED_DIAGNOSTIC_CAPABILITIES, key=lambda item: item.value):
         slot = checkpoint.slot(capability)
         selected = tuple(item for item in selections if item.capability is capability)
@@ -632,7 +647,8 @@ def reconcile_prospective_checkpoint_snapshot_set(
             if policy.maximum_gap_seconds > slot.maximum_gap_seconds:
                 raise ValueError("checkpoint collection policy maximum gap is too large")
             snapshot = store.get(selection.snapshot_id)
-            journal.assert_frozen_snapshot(snapshot)
+            if reassessment is None:
+                journal.assert_frozen_snapshot(snapshot)
             if snapshot.query.source_policy_id != policy.policy_id:
                 raise ValueError("checkpoint Snapshot and collection policy do not match")
             if snapshot.query.sources != policy.sources:
@@ -643,7 +659,9 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 raise ValueError("checkpoint Snapshot must use prospective actual receipts")
             if not snapshot.coverage_complete:
                 raise ValueError("checkpoint Snapshot coverage is incomplete")
-            if snapshot.query.parameters.get("requested_not_after") != _timestamp(barrier_at):
+            if reassessment is None and snapshot.query.parameters.get(
+                "requested_not_after"
+            ) != _timestamp(barrier_at):
                 raise ValueError("checkpoint Snapshot barrier does not match registration")
             if snapshot.query.as_of > barrier_at:
                 raise ValueError("checkpoint Snapshot effective cutoff exceeds its barrier")
@@ -653,6 +671,12 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 raise ValueError("checkpoint selection requires an accepted route report")
             if report.evaluated_at > reconciled_at:
                 raise ValueError("accepted route report postdates checkpoint reconciliation")
+            if (
+                reassessment is not None
+                and canonical_hash(report.to_dict())
+                not in reassessment.source_acceptance_report_hashes
+            ):
+                raise ValueError("reassessment source was not explicitly registered")
             declaration = report.declaration
             if declaration.capability is not capability:
                 raise ValueError("accepted route capability mismatch")
@@ -692,6 +716,42 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 and item.provider_version == declaration.provider_version
                 and item.upstream_source == declaration.upstream_source
             )
+            if reassessment is not None:
+                assert trigger_admission is not None
+                selected_versions = set(
+                    (
+                        *trigger_admission.observation_version_ids,
+                        *trigger_admission.context_version_ids,
+                    )
+                )
+                matching_observations = tuple(
+                    item
+                    for item in matching_observations
+                    if prospective_observation_version_id(item) in selected_versions
+                )
+                for observation in matching_observations:
+                    version_id = prospective_observation_version_id(observation)
+                    receipt_policy, receipt_snapshot, receipt_observation = journal.version_receipt(
+                        version_id, not_after=barrier_at
+                    )
+                    if (receipt_policy, receipt_snapshot, receipt_observation) != (
+                        policy,
+                        snapshot,
+                        observation,
+                    ):
+                        raise ValueError("reassessment requires the exact original version receipt")
+                    if capability is not ObservationCapability.EVENT_REVELATION:
+                        if version_id not in trigger_admission.context_version_ids:
+                            raise ValueError("reassessment subject must be event evidence")
+                        reconciled_context_versions.add(version_id)
+                        if (
+                            observation.times.available_at is None
+                            or (barrier_at - observation.times.available_at).total_seconds()
+                            > slot.maximum_age_seconds
+                        ):
+                            raise ValueError("reassessment selected context is stale at its cutoff")
+                    elif version_id not in reassessment.subject_version_ids:
+                        raise ValueError("reassessment cannot introduce a new news subject")
             if capability is ObservationCapability.EVENT_REVELATION and trigger_admission:
                 admitted_versions = set(trigger_admission.observation_version_ids)
                 matching_observations = tuple(
@@ -718,7 +778,10 @@ def reconcile_prospective_checkpoint_snapshot_set(
                     route_latest_available_at = available_at
                 if latest_available_at is None or available_at > latest_available_at:
                     latest_available_at = available_at
-            if (
+            old_subject = (
+                reassessment is not None and capability is ObservationCapability.EVENT_REVELATION
+            )
+            if not old_subject and (
                 route_latest_available_at is None
                 or (barrier_at - route_latest_available_at).total_seconds()
                 > slot.maximum_age_seconds
@@ -764,6 +827,15 @@ def reconcile_prospective_checkpoint_snapshot_set(
                 f"{capability.value}:observation_count:{len(observation_ids)}/{slot.minimum_observations}"
             )
         if (
+            reassessment is not None
+            and capability is ObservationCapability.EVENT_REVELATION
+            and latest_available_at is not None
+        ):
+            age_seconds = int((barrier_at - latest_available_at).total_seconds())
+            capability_gaps.append(f"event_revelation:registered_subject_age_seconds:{age_seconds}")
+        if not (
+            reassessment is not None and capability is ObservationCapability.EVENT_REVELATION
+        ) and (
             latest_available_at is None
             or (barrier_at - latest_available_at).total_seconds() > slot.maximum_age_seconds
         ):
@@ -806,6 +878,12 @@ def reconcile_prospective_checkpoint_snapshot_set(
         trigger_admission.observation_version_ids
     ):
         raise ValueError("checkpoint Snapshot Set does not contain the exact Trigger Admission")
+    if (
+        reassessment is not None
+        and trigger_admission is not None
+        and reconciled_context_versions != set(trigger_admission.context_version_ids)
+    ):
+        raise ValueError("reassessment Snapshot Set does not contain the exact frozen context")
     sorted_capability_gaps = tuple(sorted(set(capability_gaps)))
     complete = not sorted_capability_gaps
     snapshot_set_schema = (

@@ -132,23 +132,51 @@ previously received news. A new read-only reassessment needs a fresh Harness cut
 accumulated-subject role; an exact calendar is required when claiming a trading session or executable
 action, not merely to analyze old evidence now. Existing old Decisions, failed runs and denominator
 members remain unchanged. Neither a manufactured Wake nor a shifted old cutoff is an admissible
-shortcut. The replacement current-time registration-to-Judgment path remains the next implementation
-node, separate from closing the old slot.
+shortcut. The separate current-time registration-to-Judgment variant is now implemented; closing
+the old slot remains a distinct non-run disposition.
 The original Earnings slot was retired at September 2 09:16 UTC as disposition `8e168ebc…fabd91`;
 exact restart replay, both original Candidate/Decision pairs and the unchanged active Watch were
 verified. No model call or Trigger was created. The corrected implementation passed independent
 read-only review, all static checks and 1,712 tests, including wheel packaging.
 
-That next node is bounded to one registered initial read-only Judgment, not a new experiment engine:
-extend the existing Registration/Trigger with an accumulated-subject reassessment mode; freeze exact
-original Earnings versions plus cutoff-visible accepted context at current Harness time; retain
-normal context freshness checks while reporting the subject's age; and reuse Snapshot, Query Gate,
-AgentEngine, Run Journal and Usage Ledger. Provide the model with the Harness-owned receipt/source
-facts and the original unresolved period/partition question. It requires no fabricated Account,
+This node is bounded to one registered initial read-only Judgment, not a new experiment engine.
+It extends the existing Registration/Trigger with an accumulated-subject reassessment mode, freezes
+exact original Earnings versions plus cutoff-visible accepted context at current Harness time,
+retains context freshness checks while reporting the subject's age, and reuses Snapshot, Query Gate,
+AgentEngine, Run Journal and Usage Ledger. The model receives Harness-owned receipt/source facts and
+the original unresolved period/partition question. It requires no fabricated Account,
 Paper dependency, session deadline or Wake. A terminal Judgment or abstention demonstrates this
 initial stage only, not the separately registered paired/conditional-Judge comparison, Signal,
 Intent, Skill effect or investment effectiveness. Failure and replay must retain usage and never
 silently repeat the initial run.
+Independent review exposed two defects before execution: receipt-only valuation freshness and
+credential lookup preceding offline interrupted-run recovery. Both were corrected and independently
+rechecked. Current `daily_basic` context now validates the record's trading date against its original
+receipt/cutoff and frozen age limit; provider construction occurs only for an allowed dispatch.
+The operational input-access Skill belongs to evidence-authority governance, not an effective
+investment-method claim. Final static checks, wheel inclusion and all 1,742 tests passed.
+The real registered reassessment then passed Query Gate and completed the three exact input-tool
+reads, but its second model response could not be journaled during a concurrent collector write
+lock. Offline recovery sealed it as `human_input_required`, with no redispatch or Judgment. The
+known first-turn subtotal is 2,392 microusd; the second turn's usage is unknown. A production-owner
+contention reproduction confirmed expensive collector artifact work inside a write transaction as
+a sufficient failure mechanism. The correction now prepares immutable artifacts outside the receipt
+and collection-finalization write transactions, retaining atomic duplicate/first-receipt checks and
+revalidating lease/preparation inputs at commit. Four production-owner contention cases, rollback
+and takeover tests, independent review, packaging, all static checks and the final 1,753-test suite
+passed. Actual credential-removed terminal replay kept the same refs/terminal, two dispatches and
+one Usage record. No new diagnostic was launched: a separate current-time same-question run needs
+explicit approval; the interrupted run is not resumed or silently replaced. This is not initial
+Judgment acceptance. Exact identities and accounting are in `docs/EVENT_IMPACT_TRIAGE.md`.
+
+A later read-only runtime audit at September 2 10:03 UTC found three, not four, operational
+checkpoint families. The v7 material route is blocked by an internal receipt-coverage gap after
+the 09:14 scheduled news opportunity was missed; later opportunities resumed successful collection.
+The report is `f24ca8f3f4aa10d8442bc9b93dbe96788caef3115f45bd7130ba4ce1cd7d48d2`. This is not
+evidence of missing news or permission to erase old misses. Policy retains an operational official
+route; Earnings and NBS remain operational with no new post-admission trigger. This continuity
+blocker is separate from a bounded, exact-receipt current-time reassessment, which does not claim
+complete news coverage. No collector restart or schedule change was made by this audit.
 
 The separate direct-policy operational run froze its own denominator of 24 actual-receipt
 versions. It ran serially, completed eight of nine started logical members, and failed at the single

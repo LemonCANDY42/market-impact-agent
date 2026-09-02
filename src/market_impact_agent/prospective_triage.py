@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -126,11 +127,13 @@ class _LazyAvailabilityModelProvider:
         *,
         profile: ModelProviderProfile,
         provider: ModelProvider | None,
+        on_resolve: Callable[[], None] | None = None,
     ) -> None:
         self._profile = profile
         self._provider = provider
         self._available = False
         self._availability_lock = asyncio.Lock()
+        self._on_resolve = on_resolve
 
     @property
     def provider_id(self) -> str:
@@ -147,6 +150,9 @@ class _LazyAvailabilityModelProvider:
             self._provider = provider
         if provider.provider_id != self.provider_id or provider.model != self.model:
             raise ValueError("prospective triage Provider differs from the frozen profile")
+        if self._on_resolve is not None:
+            self._on_resolve()
+            self._on_resolve = None
         return provider
 
     async def _assert_available(self, provider: ModelProvider) -> None:

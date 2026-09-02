@@ -74,6 +74,13 @@ positive promotion evidence. It neither rewrites old experimental denominators n
 fabricated member into a sealed promotion window. A later current-time reassessment needs its own
 registration and retains the original receipt times of accumulated subject evidence.
 
+The initial current-time reassessment is a non-promotional, opened diagnostic. Its single
+Judgment must have authoritative Run/Usage evidence, but it does not seal a strategy case,
+retroactively resolve its parent Watch, or count as a new blind event. See the
+[initial Judgment boundary](EVENT_IMPACT_TRIAGE.md#current-time-reassessment-initial-judgment-boundary).
+Paired comparison, conditional-Judge arbitration and executable Decision Admission remain
+separate acceptance steps; a successful transport or one completed Judgment does not satisfy them.
+
 `StrategyValidationAuthorityStore.evaluate(registration_id)` accepts no outcome, metric, selector,
 store, path, denominator row, or evidence-lane override. A v2 report binds the
 `harness_authority_id`, run-set seal and prospective window seal. Existing v1 Registration,

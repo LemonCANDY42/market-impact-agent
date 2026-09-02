@@ -26,6 +26,7 @@ from market_impact_agent.prospective_diagnostic import (
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V2,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V3,
     PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V4,
+    PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5,
     DiagnosticCutoffRule,
     DiagnosticMechanism,
     ProspectiveDiagnosticRegistration,
@@ -37,6 +38,7 @@ PROSPECTIVE_HISTORICAL_ANALOGY_PACK_SCHEMA = "market-impact.prospective-historic
 PROSPECTIVE_EVENT_ASSESSMENT_SCHEMA = "market-impact.prospective-event-assessment.v1"
 PROSPECTIVE_MATERIALITY_GATE_SCHEMA = "market-impact.prospective-materiality-gate-result.v1"
 PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA = "market-impact.prospective-trigger-admission.v1"
+PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA_V2 = "market-impact.prospective-trigger-admission.v2"
 CHECKPOINT_DISPOSITION_SCHEMA = "market-impact.checkpoint-disposition.v1"
 STRATEGY_WINDOW_SEAL_SCHEMA = "market-impact.strategy-window-seal.v2"
 
@@ -56,6 +58,7 @@ class MaterialityDisposition(StrEnum):
 class TriggerAdmissionKind(StrEnum):
     CHECKPOINT_ELIGIBLE = "checkpoint_eligible"
     MATERIAL_EVENT = "material_event"
+    REGISTERED_REASSESSMENT = "registered_reassessment"
 
 
 @dataclass(frozen=True, slots=True)
@@ -728,10 +731,34 @@ class ProspectiveTriggerAdmission:
     judgment_model_calls_authorized: bool = False
     execution_capability: bool = False
     schema_version: str = PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA
+    registration_artifact_hash: str | None = None
+    context_version_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.schema_version != PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA:
+        if self.schema_version not in {
+            PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA,
+            PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA_V2,
+        }:
             raise ValueError("unsupported prospective Trigger Admission schema")
+        if self.kind is TriggerAdmissionKind.REGISTERED_REASSESSMENT:
+            if self.schema_version != PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA_V2:
+                raise ValueError("reassessment requires Trigger v2")
+            if self.registration_artifact_hash is None:
+                raise ValueError("reassessment requires its exact registration artifact")
+            _prefixed_hash(self.registration_artifact_hash, "", "reassessment registration hash")
+            _sorted_unique(self.context_version_ids, "reassessment context versions")
+            if not self.context_version_ids or set(self.context_version_ids) & set(
+                self.observation_version_ids
+            ):
+                raise ValueError("reassessment requires separate exact context versions")
+            for item in self.context_version_ids:
+                _prefixed_hash(
+                    item, "prospective-observation-version-", "reassessment context version"
+                )
+        elif self.schema_version != PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA or (
+            self.registration_artifact_hash is not None or self.context_version_ids
+        ):
+            raise ValueError("legacy Trigger cannot carry reassessment state")
         _prefixed_hash(
             self.registration_id,
             "prospective-diagnostic-registration-",
@@ -809,7 +836,7 @@ class ProspectiveTriggerAdmission:
         return f"prospective-trigger-admission-{canonical_hash(self.core_dict())}"
 
     def core_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "kind": self.kind.value,
             "registration_id": self.registration_id,
@@ -831,6 +858,10 @@ class ProspectiveTriggerAdmission:
             "judgment_model_calls_authorized": self.judgment_model_calls_authorized,
             "execution_capability": self.execution_capability,
         }
+        if self.kind is TriggerAdmissionKind.REGISTERED_REASSESSMENT:
+            payload["registration_artifact_hash"] = self.registration_artifact_hash
+            payload["context_version_ids"] = list(self.context_version_ids)
+        return payload
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "admission_id": self.admission_id}
@@ -1204,6 +1235,8 @@ class ProspectiveTriggerAdmissionStore:
         ] = (),
         assessment_authority: CompletedEventAssessmentAuthority | None = None,
     ) -> ProspectiveTriggerAdmission:
+        if admission.kind is TriggerAdmissionKind.REGISTERED_REASSESSMENT:
+            raise ValueError("registered reassessment must use record_reassessment")
         with triage_authority.admission_guard():
             return self._record_guarded(
                 admission,
@@ -1217,6 +1250,126 @@ class ProspectiveTriggerAdmissionStore:
                 preceding_materiality_contexts=preceding_materiality_contexts,
                 assessment_authority=assessment_authority,
             )
+
+    def record_reassessment(
+        self,
+        *,
+        registration: ProspectiveDiagnosticRegistration,
+        original_registration: ProspectiveDiagnosticRegistration,
+        context_version_ids: tuple[str, ...],
+        triage_authority: CompletedTriageDecisionAuthority,
+    ) -> ProspectiveTriggerAdmission:
+        """Freeze a fresh diagnostic cutoff once; never reinterpret an old Trigger slot."""
+        from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
+        from market_impact_agent.prospective_data import ProspectiveDataJournal
+
+        subject = registration.reassessment
+        if (
+            registration.schema_version != PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
+            or subject is None
+        ):
+            raise ValueError("reassessment requires registration v5")
+        if (
+            type(triage_authority) is not EventImpactTriageDecisionStore
+            or triage_authority.root != self.store.root
+        ):
+            raise TypeError("reassessment requires the same-root concrete Triage authority")
+        if original_registration.registration_id != subject.original_registration_id:
+            raise ValueError("reassessment original registration differs")
+        _sorted_unique(context_version_ids, "reassessment context versions")
+        registration_hash = self.store.artifacts.put_json(registration.to_dict()).content_hash
+        self.store.artifacts.put_json(original_registration.to_dict())
+        journal = ProspectiveDataJournal(self.store)
+        with triage_authority.admission_guard(), self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM prospective_trigger_admissions "
+                "WHERE registration_id = ? AND checkpoint_key = ?",
+                (registration.registration_id, registration.checkpoints[0].checkpoint_key),
+            ).fetchone()
+            if row is not None:
+                admission = self._verified(row["admission_id"], row)
+                if (
+                    admission.registration_artifact_hash != registration_hash
+                    or admission.context_version_ids != context_version_ids
+                ):
+                    raise ValueError("reassessment already froze different inputs")
+                return admission
+            if (
+                connection.execute(
+                    "SELECT 1 FROM checkpoint_dispositions "
+                    "WHERE registration_id = ? AND checkpoint_key = ?",
+                    (registration.registration_id, registration.checkpoints[0].checkpoint_key),
+                ).fetchone()
+                is not None
+            ):
+                raise ValueError("reassessment checkpoint is already closed")
+            candidate, proposal, decision = triage_authority.get_context(
+                subject.original_candidate_set_id
+            )
+            cluster = next(
+                (
+                    item
+                    for item in proposal.clusters
+                    if item.cluster_id == subject.original_cluster_id
+                ),
+                None,
+            )
+            now = self._clock()
+            _strict_utc(now, "reassessment Harness cutoff")
+            if (
+                candidate.registration_id != original_registration.registration_id
+                or cluster is None
+                or tuple(
+                    sorted(set((*cluster.candidate_version_ids, *cluster.evidence_version_ids)))
+                )
+                != subject.subject_version_ids
+                or now < registration.registered_at
+                or now < decision.decided_at
+            ):
+                raise ValueError("reassessment does not bind the original completed subject")
+            for version_id in (*subject.subject_version_ids, *context_version_ids):
+                journal.version_receipt(version_id, not_after=now)
+            core: dict[str, object] = {
+                "schema_version": PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA_V2,
+                "kind": TriggerAdmissionKind.REGISTERED_REASSESSMENT.value,
+                "registration_id": registration.registration_id,
+                "checkpoint_key": registration.checkpoints[0].checkpoint_key,
+                "candidate_set_id": candidate.candidate_set_id,
+                "proposal_id": proposal.proposal_id,
+                "triage_decision_id": decision.decision_id,
+                "cluster_id": cluster.cluster_id,
+                "observation_version_ids": list(subject.subject_version_ids),
+                "event_assessment_id": None,
+                "materiality_gate_result_id": None,
+                "preceding_materiality_gate_result_ids": [],
+                "admitted_target_ids": [],
+                "held_target_ids": [],
+                "admitted_at": _timestamp(now),
+                "registration_artifact_hash": registration_hash,
+                "context_version_ids": list(context_version_ids),
+                "historical_pit_claim": False,
+                "judgment_model_calls_authorized": False,
+                "execution_capability": False,
+            }
+            admission = prospective_trigger_admission_from_dict(
+                {**core, "admission_id": f"prospective-trigger-admission-{canonical_hash(core)}"}
+            )
+            artifact = self.store.artifacts.put_json(admission.to_dict())
+            connection.execute(
+                "INSERT INTO prospective_trigger_admissions(admission_id, artifact_hash, "
+                "registration_id, checkpoint_key, cluster_id, admitted_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    admission.admission_id,
+                    artifact.content_hash,
+                    admission.registration_id,
+                    admission.checkpoint_key,
+                    admission.cluster_id,
+                    _timestamp(now),
+                ),
+            )
+            return admission
 
     def inspect_checkpoint(
         self,
@@ -1763,6 +1916,8 @@ class ProspectiveTriggerAdmissionStore:
         admission: ProspectiveTriggerAdmission,
         artifact_hash: str,
     ) -> None:
+        if admission.kind is TriggerAdmissionKind.REGISTERED_REASSESSMENT:
+            raise ValueError("opened diagnostic reassessment cannot enter a strategy window")
         existing = connection.execute(
             "SELECT admission_hash FROM strategy_window_events_v2 "
             "WHERE window_id = ? AND admission_id = ?",
@@ -1958,7 +2113,10 @@ class ProspectiveTriggerAdmissionStore:
             tuple[ProspectiveEventAssessmentArtifact, ProspectiveMaterialityGateResult], ...
         ],
     ) -> None:
-        if admission.kind is TriggerAdmissionKind.CHECKPOINT_ELIGIBLE:
+        if admission.kind in {
+            TriggerAdmissionKind.CHECKPOINT_ELIGIBLE,
+            TriggerAdmissionKind.REGISTERED_REASSESSMENT,
+        }:
             if assessment is not None or materiality is not None or preceding_materiality_contexts:
                 raise ValueError("checkpoint Trigger Admission cannot persist material context")
             return
@@ -2397,7 +2555,12 @@ def prospective_trigger_admission_from_dict(value: object) -> ProspectiveTrigger
             "historical_pit_claim",
             "judgment_model_calls_authorized",
             "execution_capability",
-        },
+        }
+        | (
+            {"registration_artifact_hash", "context_version_ids"}
+            if payload.get("schema_version") == PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA_V2
+            else set()
+        ),
         "prospective Trigger Admission",
     )
     return ProspectiveTriggerAdmission(
@@ -2441,6 +2604,12 @@ def prospective_trigger_admission_from_dict(value: object) -> ProspectiveTrigger
         ),
         execution_capability=_boolean(payload, "execution_capability"),
         schema_version=_string(payload, "schema_version"),
+        registration_artifact_hash=_optional_string(payload, "registration_artifact_hash"),
+        context_version_ids=(
+            _string_tuple(payload.get("context_version_ids"), "reassessment context versions")
+            if payload.get("schema_version") == PROSPECTIVE_TRIGGER_ADMISSION_SCHEMA_V2
+            else ()
+        ),
     )
 
 

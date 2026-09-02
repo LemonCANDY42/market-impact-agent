@@ -141,6 +141,13 @@ below; copying an entire coding-agent product is neither required nor sufficient
   Every returned `ModelTurn.model` and replayed Judgment Provider/model identity must exactly match
   the active frozen Provider Profile, including for replaceable custom Provider implementations.
 
+The same-root collector must keep expensive artifact preparation outside its SQL write lock; see
+`DATA_INPUT_HARNESS.md`. A returned response whose Journal write fails is not an unanswered request
+or permission to redispatch. Offline recovery preserves its incomplete dispatch and records
+`human_input_required`; completed-turn usage is a known subtotal, with unresolved dispatch usage
+reported separately as unknown, not zero. This boundary needs concurrent production-owner tests,
+not only an isolated Agent Journal test.
+
 ### Context and automatic compaction
 
 - an inspectable context ledger, not only one mutable prompt string;

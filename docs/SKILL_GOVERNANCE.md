@@ -85,6 +85,16 @@ complete baseline from all runtime manifests, both research catalogs, instructio
 admitted open candidate. Missing group assignments, catalog-only names, duplicate candidates, or a
 candidate/review mismatch fail before semantic review.
 
+Operational input-access Skills belong to `evidence_authority`. The opt-in
+`earnings-reassessment-inputs` Skill declares three frozen read-only lookup tools; unlike
+`evidence-core`'s `read_evidence` surface, these expose the exact checkpoint Decision Inputs.
+This is an authorized engineering access/invariant change, verified through tool isolation, PIT,
+replay and packaging tests, not a financial conclusion promoted from historical outcomes. It must
+appear in newly built complete baselines without rewriting sealed baseline artifacts. Any added
+directional, valuation or trading heuristic still requires the research-method lifecycle above;
+calling it operational cannot exempt it. Shared input-access Skills must be held equal across
+future paired arms and cannot themselves be reported as incremental investment effectiveness.
+
 The review then requires exactly one relationship and resolution for every baseline subject:
 
 - duplicate -> reject duplicate;

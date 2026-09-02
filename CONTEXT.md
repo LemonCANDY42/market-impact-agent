@@ -445,6 +445,11 @@ before a later candidate can pass. The durable authority also rejects an earlier
 or direct eligible candidate hidden in another batch. Both paths bind the registration, checkpoint,
 route plan/admission epoch and exact trigger Observation Versions. The artifact grants neither Query
 Gate, Judgment, Signal, nor execution authority.
+The opt-in `registered_reassessment` variant binds a new read-only registration to an old cluster's
+exact subject versions and explicitly selected context, preserving the original Triage provenance.
+It freezes current Harness time once; it does not assert new-event eligibility, Materiality, a
+parent-Watch resolution or an additional blind event. Its initial execution still requires the
+Snapshot/Query Gate and authoritative Run/Usage path described in `docs/EVENT_IMPACT_TRIAGE.md`.
 First-eligible ordering is a sampling rule for this registered experiment, not a global lock on
 news analysis or portfolio monitoring. A generic Wake-child classification is not a resolution of
 its parent's review: the current callback input contains new messages, not the original unresolved

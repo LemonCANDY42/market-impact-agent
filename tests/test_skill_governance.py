@@ -360,7 +360,13 @@ def test_complete_baseline_covers_runtime_and_both_research_catalogs() -> None:
         group_assignments=DEFAULT_SKILL_GROUP_ASSIGNMENTS_V1,
     )
 
-    assert len(snapshot.subjects) == len(manifests) == 13
+    assert len(snapshot.subjects) == len(manifests) == 14
+    assert (
+        next(
+            item for item in snapshot.subjects if item.name == "earnings-reassessment-inputs"
+        ).group
+        is SkillGroup.EVIDENCE_AUTHORITY
+    )
     assert {item.name for item in snapshot.subjects} == {item.name for item in manifests}
     missing_assignment = dict(DEFAULT_SKILL_GROUP_ASSIGNMENTS_V1)
     missing_assignment.pop("energy-supply")

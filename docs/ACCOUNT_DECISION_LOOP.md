@@ -60,6 +60,9 @@ subject evidence retains original receipt/authority times; fresh contextual inpu
 Harness cutoff. Subject age is not the same as a stale current price or account snapshot. A
 read-only reassessment need not claim a trading-session deadline; exact calendar and tradability
 evidence remain required wherever a session or executable action is claimed.
+The first reassessment increment is deliberately Judgment-only; its
+[input and terminal boundary](EVENT_IMPACT_TRIAGE.md#current-time-reassessment-initial-judgment-boundary)
+does not implement the scheduled portfolio loop or inherit any account/Signal authority.
 
 The Agent keeps three conclusions distinct:
 

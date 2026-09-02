@@ -925,6 +925,24 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/event-assessments/current"),
     )
+    reassessment_parser = agent_subparsers.add_parser(
+        "prospective-reassessment", help="Prepare or run one registered read-only Earnings Judgment"
+    )
+    reassessment_parser.add_argument(
+        "--action", choices=("register", "prepare", "inspect", "run"), default="inspect"
+    )
+    reassessment_parser.add_argument("--registration", required=True, type=Path)
+    reassessment_parser.add_argument("--original-registration", type=Path)
+    reassessment_parser.add_argument("--candidate-set-id")
+    reassessment_parser.add_argument("--cluster-id")
+    reassessment_parser.add_argument("--question-file", type=Path)
+    reassessment_parser.add_argument("--source-acceptance-report-hash", action="append", default=[])
+    reassessment_parser.add_argument("--context-version-id", action="append", default=[])
+    reassessment_parser.add_argument("--refs", type=Path)
+    reassessment_parser.add_argument(
+        "--state-root", type=Path, default=Path(".market-impact/data-inputs")
+    )
+    reassessment_parser.add_argument("--skill-root", type=Path, default=_default_agent_skill_root())
     triage_watch_admit_parser = agent_subparsers.add_parser(
         "triage-watch-admit",
         help="Materialize one authorized Triage attention-watch route without a model call",
@@ -3390,6 +3408,181 @@ def _fetch_public_https_document(
     return final_url, body
 
 
+def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
+    import sqlite3
+    from dataclasses import asdict
+
+    from market_impact_agent.agent_engine import compose_authoritative_agent_engine
+    from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
+    from market_impact_agent.model_provider import load_builtin_model_provider_profile
+    from market_impact_agent.prospective_decision_pipeline import (
+        FrozenProspectiveDecisionRefs,
+        prepare_reassessment_judgment,
+        run_reassessment_judgment,
+    )
+    from market_impact_agent.prospective_diagnostic import (
+        RegisteredReassessment,
+        build_reassessment_registration,
+    )
+    from market_impact_agent.prospective_triage import (
+        _LazyAvailabilityModelProvider,  # pyright: ignore[reportPrivateUsage]
+        _NoCallModelProvider,  # pyright: ignore[reportPrivateUsage]
+    )
+    from market_impact_agent.prospective_trigger_admission import ProspectiveTriggerAdmissionStore
+    from market_impact_agent.usage_ledger import UsageLedger
+
+    stage = "registration"
+    try:
+        store = LocalDataSnapshotStore(args.state_root)
+        authority = EventImpactTriageDecisionStore(store.root)
+        owner = ProspectiveTriggerAdmissionStore(store)
+        if args.action == "register":
+            if args.original_registration is None or args.question_file is None:
+                raise ValueError("registration requires original registration and question file")
+            original = load_prospective_diagnostic_registration(args.original_registration)
+            candidate, proposal, _ = authority.get_context(args.candidate_set_id)
+            cluster = next(item for item in proposal.clusters if item.cluster_id == args.cluster_id)
+            registration = build_reassessment_registration(
+                original_registration=original,
+                registered_at=datetime.now(UTC),
+                subject=RegisteredReassessment(
+                    original_registration_id=candidate.registration_id,
+                    original_candidate_set_id=candidate.candidate_set_id,
+                    original_cluster_id=cluster.cluster_id,
+                    subject_version_ids=tuple(
+                        sorted(set((*cluster.candidate_version_ids, *cluster.evidence_version_ids)))
+                    ),
+                    research_question=args.question_file.read_text(encoding="utf-8").strip(),
+                    source_acceptance_report_hashes=tuple(
+                        sorted(args.source_acceptance_report_hash)
+                    ),
+                ),
+            )
+            with args.registration.open("x", encoding="utf-8") as output:
+                json.dump(registration.to_dict(), output, indent=2, sort_keys=True)
+            print(json.dumps({"registration_id": registration.registration_id, "model_calls": 0}))
+            return 0
+        registration = load_prospective_diagnostic_registration(args.registration)
+        if args.refs is None:
+            raise ValueError("reassessment requires a refs path")
+        if args.action == "prepare":
+            if args.original_registration is None:
+                raise ValueError("prepare requires the exact original registration")
+            stage = "receipt_proof"
+            trigger = owner.record_reassessment(
+                registration=registration,
+                original_registration=load_prospective_diagnostic_registration(
+                    args.original_registration
+                ),
+                context_version_ids=tuple(sorted(args.context_version_id)),
+                triage_authority=authority,
+            )
+            expected_refs = None
+        else:
+            raw = json.loads(args.refs.read_text(encoding="utf-8"))
+            expected_refs = FrozenProspectiveDecisionRefs(**raw)
+            trigger = owner.get(expected_refs.trigger_admission_id)
+            if trigger.registration_id != registration.registration_id:
+                raise ValueError("refs belong to another registration")
+        stage = "input_gate"
+        profile = load_builtin_model_provider_profile(registration.model_profile_id)
+        engine = compose_authoritative_agent_engine(
+            store=store,
+            provider=_NoCallModelProvider(provider_id=profile.provider_id, model=profile.model),
+            config=profile.runtime_config(),
+            tool_registry=ToolRegistry(store.artifacts),
+            skill_registry=SkillRegistry(args.skill_root),
+        )
+        refs, gate, request = prepare_reassessment_judgment(
+            store=store, trigger=trigger, engine=engine
+        )
+        if expected_refs is not None and expected_refs != refs:
+            raise ValueError("frozen reassessment refs changed")
+        if args.action == "prepare":
+            if args.refs.exists():
+                if json.loads(args.refs.read_text(encoding="utf-8")) != asdict(refs):
+                    raise ValueError("refs file already contains a different preparation")
+            else:
+                with args.refs.open("x", encoding="utf-8") as output:
+                    json.dump(asdict(refs), output, indent=2, sort_keys=True)
+        payload: dict[str, object] = {
+            "refs": asdict(refs),
+            "run_id": request.run_id,
+            "cutoff_at": trigger.admitted_at.isoformat().replace("+00:00", "Z"),
+            "query_gate_id": gate.result_id,
+            "model_run_eligible": gate.model_run_eligible,
+            "blocking_gaps": list(gate.blocking_required_gaps),
+            "information_gaps": list(gate.nonblocking_information_gaps),
+            "cost_limit_microusd": int(
+                Decimal(registration.aggregate_model_cost_limit_usd) * 1_000_000
+            ),
+            "execution_capability": False,
+        }
+        if args.action == "run" and gate.model_run_eligible:
+            stage = "run_replay"
+            try:
+                terminal_replay = engine.journal.get_run(request.run_id).status.terminal
+            except KeyError:
+                terminal_replay = False
+            if not terminal_replay:
+
+                def bind_model_secrets() -> None:
+                    credential = os.environ.get(profile.credential_env, "")
+                    engine.secret_values = (credential,) if credential else ()
+
+                engine.provider = _LazyAvailabilityModelProvider(
+                    profile=profile,
+                    provider=None,
+                    on_resolve=bind_model_secrets,
+                )
+            result = asyncio.run(
+                run_reassessment_judgment(
+                    store=store,
+                    refs=refs,
+                    engine=engine,
+                    usage_ledger=UsageLedger(store.root / "reassessment-usage.sqlite3"),
+                )
+            )
+            payload.update(
+                status=result.status.value,
+                terminal_artifact_hash=result.terminal_store_hash,
+                terminal_replay=terminal_replay,
+                estimated_cost_microusd=None
+                if result.metrics is None
+                else result.metrics.estimated_cost_microusd,
+            )
+        else:
+            payload.update(
+                status="ready" if gate.model_run_eligible else "query_blocked", model_calls=0
+            )
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        if args.action == "run":
+            return 0 if payload.get("status") == RunStatus.COMPLETED.value else 1
+        return 0 if gate.model_run_eligible else 1
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        StopIteration,
+        sqlite3.Error,
+    ) as exc:
+        # Do not publish paid input contents, provider bodies or arbitrary model errors.
+        print(
+            json.dumps(
+                {
+                    "status": "blocked",
+                    "error_type": type(exc).__name__,
+                    "stage": stage,
+                    "execution_capability": False,
+                }
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+
 def _run_prospective_event_assessment_command(args: argparse.Namespace) -> int:
     try:
         from market_impact_agent.prospective_event_assessment import (
@@ -4711,6 +4904,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["status"] == RunStatus.COMPLETED.value else 1
     if args.command == "agent" and args.agent_command == "prospective-event-assessment-run":
         return _run_prospective_event_assessment_command(args)
+    if args.command == "agent" and args.agent_command == "prospective-reassessment":
+        return _run_prospective_reassessment_command(args)
     if args.command == "agent" and args.agent_command == "triage-watch-admit":
         return _run_triage_watch_admit_command(args)
     if args.command == "agent" and args.agent_command == "watch-wake-run":

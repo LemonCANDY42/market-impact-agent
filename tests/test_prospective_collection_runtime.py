@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event, Lock, Thread
@@ -823,6 +824,104 @@ def test_expired_lease_recovers_and_rejects_the_stale_worker_capture(tmp_path: P
         ProspectiveDataJournal(store).stats(policy_id=policy.policy_id)["collection_snapshot_count"]
         == 1
     )
+
+
+def test_lease_loss_during_usage_preparation_cannot_commit_stale_finalization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, runtime, policy, job = _runtime(tmp_path, lease_timeout_seconds=1)
+    recovery = ProspectiveCollectionRuntime(store, lease_timeout_seconds=1)
+    entered, release = Event(), Event()
+    original_build = runtime._build_usage_record  # pyright: ignore[reportPrivateUsage]
+
+    def slow_usage(**kwargs: object):
+        entered.set()
+        assert release.wait(timeout=5)
+        return original_build(**kwargs)  # pyright: ignore[reportArgumentType]
+
+    monkeypatch.setattr(runtime, "_build_usage_record", slow_usage)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            runtime.run_due,
+            job.job_id,
+            now=START,
+            collector=lambda bound_policy, _config, _due: _snapshot(
+                store, policy=bound_policy, retrieved_at=START
+            ),
+        )
+        try:
+            assert entered.wait(timeout=5)
+            recovered = recovery.run_due(
+                job.job_id,
+                now=START + timedelta(seconds=2),
+                collector=_unexpected_collector,
+            )
+        finally:
+            release.set()
+        assert future.result(timeout=5).outcome == "stale_claim"
+    assert recovered.outcome == "success"
+    assert len(runtime.usage_records(job.job_id)) == 1
+    assert runtime.usage_records(job.job_id)[0].collection_attempt_count == 2
+    assert runtime.opportunities(job.job_id)[0].outcome == "success"
+    assert runtime.journal.stats(policy_id=policy.policy_id)["collection_snapshot_count"] == 1
+
+
+def test_finalization_sql_failure_rolls_back_and_recovers_staged_snapshot(tmp_path: Path) -> None:
+    store, runtime, policy, job = _runtime(tmp_path, lease_timeout_seconds=1)
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER reject_usage BEFORE INSERT ON prospective_collection_usage_records
+            BEGIN SELECT RAISE(ABORT, 'fixture usage failure'); END
+            """
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="fixture usage failure"):
+        runtime.run_due(
+            job.job_id,
+            now=START,
+            collector=lambda bound_policy, _config, _due: _snapshot(
+                store, policy=bound_policy, retrieved_at=START
+            ),
+        )
+    assert runtime.opportunities(job.job_id)[0].outcome == "captured"
+    assert runtime.usage_records(job.job_id) == ()
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute("DROP TRIGGER reject_usage")
+    recovered = ProspectiveCollectionRuntime(store, lease_timeout_seconds=1).run_due(
+        job.job_id,
+        now=START + timedelta(seconds=2),
+        collector=_unexpected_collector,
+    )
+    assert recovered.outcome == "success"
+    assert len(runtime.usage_records(job.job_id)) == 1
+    assert runtime.journal.stats(policy_id=policy.policy_id)["collection_snapshot_count"] == 1
+
+
+def test_usage_preparation_inputs_are_revalidated_before_atomic_finalization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, runtime, _, job = _runtime(tmp_path)
+    original_build = runtime._build_usage_record  # pyright: ignore[reportPrivateUsage]
+
+    def changed_opportunity(**kwargs: object):
+        usage = original_build(**kwargs)  # pyright: ignore[reportArgumentType]
+        with sqlite3.connect(store.index_path) as connection:
+            connection.execute(
+                "UPDATE prospective_collection_opportunities SET attempt_count = attempt_count + 1"
+            )
+        return usage
+
+    monkeypatch.setattr(runtime, "_build_usage_record", changed_opportunity)
+    with pytest.raises(ValueError, match="finalization inputs changed during preparation"):
+        runtime.run_due(
+            job.job_id,
+            now=START,
+            collector=lambda bound_policy, _config, _due: _snapshot(
+                store, policy=bound_policy, retrieved_at=START
+            ),
+        )
+    assert runtime.opportunities(job.job_id)[0].outcome == "captured"
+    assert runtime.usage_records(job.job_id) == ()
 
 
 def test_late_worker_classifies_each_missed_opportunity_before_collecting(
