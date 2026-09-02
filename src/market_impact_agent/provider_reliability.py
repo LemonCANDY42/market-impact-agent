@@ -22,6 +22,7 @@ class ProviderGenerationState(StrEnum):
 
 class ProviderRetryDisposition(StrEnum):
     SAFE = "safe"
+    AUTHORIZED_REGENERATION = "authorized_regeneration"
     FORBIDDEN = "forbidden"
     TERMINAL = "terminal"
 

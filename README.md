@@ -163,9 +163,11 @@ The bootstrap implements:
   comparison-bound or terminal batch remain closed.
   The prospective repair also journals
   each physical attempt with a
-  correlation ID and generation state, forbids ambiguous POST retries, and can persist sanitized
+  correlation ID and generation state, forbids unregistered ambiguous POST retries, and can persist sanitized
   circuit/cooldown/operator-notice state; see
-  [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). Typed minimum Position Snapshot
+  [Model Provider Reliability](docs/MODEL_PROVIDER_RELIABILITY.md). New opted-in CPA Profiles permit
+  one user-authorized received-408 regeneration, retaining the failed attempt and unknown usage;
+  this does not alter old registrations or order-retry rules. Typed minimum Position Snapshot
   and evidence-lane-preserving Historical Analogy Pack payloads now bind a durable prospective
   EventAssessment projection, deterministic Materiality Gate and exact Trigger Admission. Snapshot
   Set v5 and Query Gate v5 accept either the direct checkpoint selection or that formal material-

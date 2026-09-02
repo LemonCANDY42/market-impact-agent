@@ -296,6 +296,14 @@ registered model experiment, diagnose the CPA timeout boundary and obtain bounde
 acceptance; do not resample this case to force a Judge. Strict-PIT remains 0/18, and this run grants
 no Skill promotion, Signal, Intent, Mock, IBKR Paper or Live authority.
 
+Subsequent read-only gateway diagnosis resolved the error boundary to an upstream stream closing
+before `response.completed`, not a Harness deadline or proven quota failure. See
+`MODEL_PROVIDER_RELIABILITY.md` for the exact pinned implementation and the requested-versus-effective
+parameter limitation. The generic-run diagnostic/latency and interrupted-dispatch repair applies
+only to new evidence; it does not fill in this experiment's missing Usage or permit another attempt
+under this registration. A separate synthetic wiring canary is not a valid historical case or a
+successful conditional-Judge experiment.
+
 Implementation acceptance passed Ruff, format, Pyright and 1,628 tests. Independent read-only
 review found an overly conservative mixed-model preflight: six hypothetical Judge runs were
 being checked before the actual four-analyst/two-Judge mix. The correction budgets that actual mix

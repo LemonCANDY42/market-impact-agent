@@ -24,6 +24,7 @@ from market_impact_agent.openai_chat_provider import (
     PinnedUrllibJsonTransport,
 )
 from market_impact_agent.provider_reliability import (
+    ProviderAttemptEvent,
     ProviderGenerationState,
     ProviderRetryDisposition,
 )
@@ -138,7 +139,11 @@ def _completion() -> dict[str, object]:
 
 
 def _provider(
-    transport: JsonHttpTransport, *, reasoning_effort: str = "xhigh"
+    transport: JsonHttpTransport,
+    *,
+    reasoning_effort: str = "xhigh",
+    retry_received_408_once: bool = False,
+    max_attempts: int = 2,
 ) -> CLIProxyLunaProvider:
     return CLIProxyLunaProvider(
         api_key="dedicated-local-key",
@@ -147,6 +152,8 @@ def _provider(
             model="gpt-5.6-luna",
             reasoning_effort=reasoning_effort,
             retry_backoff_seconds=0,
+            retry_received_408_once=retry_received_408_once,
+            max_attempts=max_attempts,
         ),
         transport=transport,
     )
@@ -509,6 +516,94 @@ def test_explicit_429_rejection_retries_with_retry_after_and_exponential_backoff
         cast(dict[str, str], request["headers"])["X-Market-Impact-Request-Id"]
         for request in transport.requests
     } == {"mia-rate-limit-1"}
+
+
+@pytest.mark.parametrize("second_fails", [False, True])
+def test_opt_in_received_408_regenerates_once_and_retains_unknown_generation(
+    monkeypatch: pytest.MonkeyPatch, second_fails: bool
+) -> None:
+    delays: list[float] = []
+
+    async def record_delay(seconds: float) -> None:
+        delays.append(seconds)
+
+    monkeypatch.setattr("market_impact_agent.openai_chat_provider.asyncio.sleep", record_delay)
+    failure = CLIProxyProviderError(
+        "sanitized incomplete stream",
+        error_class="http",
+        diagnostic_code="upstream_stream_incomplete",
+        http_status=408,
+        generation_state=ProviderGenerationState.UNKNOWN,
+        retry_disposition=ProviderRetryDisposition.FORBIDDEN,
+    )
+    transport = FixtureTransport(
+        [failure, failure if second_fails else _completion(), _completion()]
+    )
+    selected = _provider(transport, retry_received_408_once=True, max_attempts=3)
+    events: list[ProviderAttemptEvent] = []
+    call = selected.complete_with_observer(
+        messages=({"role": "user", "content": "frozen input"},),
+        tools=(),
+        temperature=0.1,
+        top_p=0.95,
+        max_output_tokens=256,
+        timeout_seconds=5,
+        attempt_observer=events.append,
+    )
+    if second_fails:
+        with pytest.raises(CLIProxyProviderError) as captured:
+            asyncio.run(call)
+        assert captured.value.attempts == 2
+        assert captured.value.retry_disposition is ProviderRetryDisposition.FORBIDDEN
+    else:
+        turn = asyncio.run(call)
+        assert turn.attempts == 2
+        assert turn.usage.input_tokens == 21  # No guessed usage for the incomplete request.
+    assert len(transport.requests) == 2
+    assert transport.requests[0]["payload"] == transport.requests[1]["payload"]
+    assert delays == [1.0]
+    assert [event.physical_attempt for event in events] == [1, 1, 2, 2]
+    first_failure = events[1].failure
+    assert first_failure is not None
+    assert first_failure.generation_state is ProviderGenerationState.UNKNOWN
+    assert first_failure.retry_disposition is ProviderRetryDisposition.AUTHORIZED_REGENERATION
+    assert not first_failure.retryable  # Authorization is not proof of a pre-generation rejection.
+
+
+@pytest.mark.parametrize(
+    ("status", "diagnostic", "timeout"),
+    [
+        (408, "http_408", 0.001),
+        (500, "upstream_server_error", 5),
+        (408, "quota_exhausted", 5),
+        (None, "request_timeout", 5),
+    ],
+)
+def test_408_opt_in_does_not_retry_other_failures_or_exceed_deadline(
+    status: int | None, diagnostic: str, timeout: float
+) -> None:
+    failure = CLIProxyProviderError(
+        "sanitized failure",
+        error_class="http",
+        diagnostic_code=diagnostic,
+        http_status=status,
+        generation_state=ProviderGenerationState.UNKNOWN,
+        retry_disposition=ProviderRetryDisposition.FORBIDDEN,
+    )
+    transport = FixtureTransport([failure, _completion()])
+    selected = _provider(transport, retry_received_408_once=True)
+    with pytest.raises(CLIProxyProviderError):
+        asyncio.run(
+            selected.complete(
+                messages=({"role": "user", "content": "frozen input"},),
+                tools=(),
+                temperature=0.1,
+                top_p=0.95,
+                max_output_tokens=256,
+                timeout_seconds=timeout,
+            )
+        )
+    assert len(transport.requests) == 1
 
 
 @pytest.mark.parametrize(

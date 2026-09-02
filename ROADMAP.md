@@ -188,6 +188,21 @@ boundary and verify bounded transport before another new model epoch; do not rep
 opened case. The implementation passed 1,628 tests and independent review with the mixed-Judge
 budget issue corrected. Prospective/Watch blockers above and executable-pilot gates remain open.
 
+Subsequent gateway-log and pinned-source diagnosis identified an upstream stream ending before its
+completion marker, not a proven credential/quota failure or Harness deadline. The generic runtime
+repair retains sanitized attempt diagnostics and cumulative failed-call latency, guards interrupted
+calls against redispatch, and joins owned tasks before releasing a cancelled Run's claim. New
+explicitly opted-in CPA max Profiles permit one user-authorized received-408 regeneration within the
+existing two-attempt/time budgets. Repeated 408 stops; failed answers are discarded from decisions,
+not from audit/accounting. This does not reopen the failed historical epoch or grant order-retry
+permission. Exact policy and capability limits are in `docs/MODEL_PROVIDER_RELIABILITY.md`.
+This repair passed all 1,672 tests, Ruff, formatting, Pyright and independent review. A real
+synthetic canary completed two POSTs/five tool reads, reconciled USD 0.010850 estimated usage,
+and reopened twice without another Provider call. No 408 occurred in that canary; injected tests
+prove one regeneration, repeated-408 stop and unchanged legacy/restart boundaries. The mainline
+can now continue with separately registered historical input diagnostics, not a retry of the
+terminal failed risk case.
+
 Future new Luna epochs select the separate CPA `max` Profile, with the per-run estimated-cost cap
 raised from USD 0.20 to 0.30 and newly registered aggregate caps allowed to rise by 50 percent.
 Existing xhigh cohorts, callbacks and registrations retain their exact profile and budgets. Token,

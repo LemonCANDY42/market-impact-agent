@@ -1150,7 +1150,9 @@ _Avoid_: Environment variables, fallback chain, model alias
 
 **Model Provider Failure**:
 A sanitized physical-attempt result that distinguishes whether generation was proven not started,
-may have started, or returned a response, and whether retry is safe, forbidden, or terminal. It
+may have started, or returned a response, and whether retry is safe, explicitly authorized
+regeneration, forbidden, or terminal. Authorization does not change unknown generation into proven
+non-generation; the received-408 opt-in policy is owned by `docs/MODEL_PROVIDER_RELIABILITY.md`. It
 binds a correlation ID, typed diagnostic, attempts and latency without persisting credentials,
 prompts, error bodies, or response content.
 _Avoid_: Exception string, generic retryable error, evidence that no response exists

@@ -43,7 +43,11 @@ budgets remain in a content-identified Model Provider Profile. These are not sec
 the Harness selects the registered profile and freezes the effective profile in each execution
 plan and Run record. An environment value may supply a credential or assert the expected MiniMax
 origin/model, but it may not silently override the frozen profile. This keeps the ordinary command
-simple without making old experiments unreproducible.
+simple without making old experiments unreproducible. A frozen Profile records Harness-requested
+settings, not proof of every upstream effective parameter. The 2026-09-02 local gateway audit
+confirmed that the Codex translator preserves Luna max but omits output-token caps, temperature and
+top-p upstream. Local admission/acceptance budgets are not an upstream billing ceiling; see
+`MODEL_PROVIDER_RELIABILITY.md` for the pinned source and observed boundary.
 
 New Luna epochs select the CPA `cliproxyapi-luna-max-cpa-v1.json` Profile; it
 has a distinct content-derived identity from the existing CPA xhigh Profile. Its 300,000
@@ -61,6 +65,14 @@ ledger hash is `1c1ce5b0dc4fef310605368257b4f3d5faa39bf7e9d782e1bbdfa3eb7ce084e9
 This verifies a completed configured-max request/tool/Judgment path, not upstream reasoning
 internals, max-versus-xhigh quality, real-market correctness or execution readiness. It is separate
 from the three historical xhigh pilots and grants no new trading authority.
+
+After the user's explicit received-408 retry authorization, new CPA runs use
+`cliproxyapi-luna-max-cpa-retry408-v1.json`: the same max effort, pricing, budgets and two-attempt
+ceiling, plus one bounded regeneration on an explicitly returned HTTP 408. Its Profile hash is
+also part of RuntimeConfig identity. Old max/xhigh registrations keep their old policy. The failed
+attempt remains generation-unknown, fully traced and possibly billed; only its incomplete answer
+is discarded. Repeated 408 or an interrupted process does not trigger an unbounded retry. See
+`MODEL_PROVIDER_RELIABILITY.md` for precise admission, accounting and no-trading boundaries.
 
 `MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
 machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a
@@ -111,6 +123,12 @@ below; copying an entire coding-agent product is neither required nor sufficient
 - stable run, turn, message, tool-call, and artifact identities;
 - append-only event journal plus content-identified checkpoints;
 - crash-safe resume, cancellation, bounded retries, and idempotent tool-result replay;
+- an exclusive existing Journal run claim and a durable logical-call guard before Provider
+  invocation; observer-capable adapters additionally record correlation-linked physical attempts;
+- no generation redispatch after an interrupted guarded call without a durable response; preserve
+  unknown accounting and require human input, even if an attempt-success diagnostic exists;
+- typed safe Provider diagnostics and cumulative failed-call latency in the existing Journal;
+  completed turns/final failures own accounting, not intermediate retry diagnostics;
 - explicit terminal states for completed, failed, cancelled, budget-exhausted, and
   human-input-required runs;
 - wall-time, token, estimated-cost, tool-call, and recursion budgets enforced by the Harness;

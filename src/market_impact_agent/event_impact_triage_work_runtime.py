@@ -2992,15 +2992,41 @@ class EventImpactTriageWorkRunner:
         if self.artifact_store.read_json(prompt_hash) != list(active_messages):
             raise ValueError("recovered triage work prompt artifact is invalid")
         if len(group.failures) != len(group.dispatches) - 1:
-            raise ValueError("recovered safe retry chain is incomplete")
-        for dispatch, failure in zip(group.dispatches, group.failures, strict=False):
+            raise ValueError("recovered retry chain is incomplete")
+        regeneration_used = False
+        for index, failure in enumerate(group.failures):
+            dispatch = group.dispatches[index]
+            if failure.payload.get("dispatch_event_hash") != dispatch.event_hash:
+                raise ValueError("recovered triage work failure differs from its dispatch")
             if (
-                failure.payload.get("dispatch_event_hash") != dispatch.event_hash
-                or failure.payload.get("generation_state")
-                != ProviderGenerationState.NOT_STARTED.value
-                or failure.payload.get("retry_disposition") != ProviderRetryDisposition.SAFE.value
+                failure.payload.get("generation_state") == ProviderGenerationState.NOT_STARTED.value
+                and failure.payload.get("retry_disposition") == ProviderRetryDisposition.SAFE.value
             ):
-                raise ValueError("recovered triage work retry was not proven safe")
+                continue
+            next_dispatch = group.dispatches[index + 1]
+            profile = self.plan.model_provider_profile
+            request_id = dispatch.payload.get("provider_request_id")
+            if not (
+                profile.retry_received_408_once
+                and not regeneration_used
+                and len(group.dispatches) <= profile.max_attempts
+                and failure.payload.get("http_status") == 408
+                and failure.payload.get("diagnostic_code")
+                in {"http_408", "upstream_stream_incomplete"}
+                and failure.payload.get("generation_state") == ProviderGenerationState.UNKNOWN.value
+                and failure.payload.get("retry_disposition")
+                == ProviderRetryDisposition.AUTHORIZED_REGENERATION.value
+                and isinstance(request_id, str)
+                and bool(request_id)
+                and failure.payload.get("request_id") == request_id
+                and next_dispatch.payload.get("provider_request_id") == request_id
+                and _integer(failure.payload, "physical_attempt") == index + 1
+                and _integer(failure.payload, "attempts") == index + 1
+                and _integer(next_dispatch.payload, "max_output_tokens")
+                == _integer(dispatch.payload, "max_output_tokens")
+            ):
+                raise ValueError("recovered triage work retry was not authorized by its Profile")
+            regeneration_used = True
         response = group.response
         if (
             response.payload.get("dispatch_event_hash") != group.dispatches[-1].event_hash

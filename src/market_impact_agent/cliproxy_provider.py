@@ -29,6 +29,7 @@ class CLIProxyLunaConfig:
     models_path: str = "/v1/models"
     max_attempts: int = 2
     retry_backoff_seconds: float = 0.25
+    retry_received_408_once: bool = False
 
     def __post_init__(self) -> None:
         if self.origin != CLIPROXY_LOCAL_ORIGIN:
@@ -89,6 +90,7 @@ class CLIProxyLunaProvider(OpenAIChatCompatibleProvider):
                 models_path=config.models_path,
                 max_attempts=config.max_attempts,
                 retry_backoff_seconds=config.retry_backoff_seconds,
+                retry_received_408_once=config.retry_received_408_once,
             ),
             completion_parameters={"reasoning_effort": config.reasoning_effort},
             transport=transport or CLIProxyUrllibJsonTransport(),

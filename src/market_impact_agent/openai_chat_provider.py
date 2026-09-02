@@ -169,8 +169,11 @@ class OpenAIChatProviderConfig:
     models_path: str
     max_attempts: int
     retry_backoff_seconds: float
+    retry_received_408_once: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(cast(object, self.retry_received_408_once), bool):
+            raise TypeError("retry_received_408_once must be boolean")
         _validate_origin(self.origin, "origin")
         _nonempty(self.model, "model")
         for name in ("api_path", "models_path"):
@@ -344,6 +347,7 @@ class OpenAIChatCompatibleProvider:
         _nonempty(request_id, "request_id")
         headers["X-Market-Impact-Request-Id"] = request_id
         started = time.monotonic()
+        regeneration_used = False
         for attempt in range(1, self._config.max_attempts + 1):
             attempt_started = time.monotonic()
             _observe(
@@ -363,7 +367,11 @@ class OpenAIChatCompatibleProvider:
                     url=self._config.endpoint(path),
                     headers=headers,
                     payload=payload,
-                    timeout_seconds=timeout_seconds,
+                    timeout_seconds=(
+                        max(0.001, timeout_seconds - (time.monotonic() - started))
+                        if self._config.retry_received_408_once
+                        else timeout_seconds
+                    ),
                 )
                 _observe(
                     attempt_observer,
@@ -377,6 +385,24 @@ class OpenAIChatCompatibleProvider:
                 )
                 return response, attempt, request_id
             except OpenAIChatProviderError as exc:
+                regenerate = (
+                    self._config.retry_received_408_once
+                    and method.upper() == "POST"
+                    and not regeneration_used
+                    and exc.http_status == 408
+                    and exc.generation_state is ProviderGenerationState.UNKNOWN
+                    and exc.diagnostic_code in {"http_408", "upstream_stream_incomplete"}
+                )
+                delay = self._config.retry_backoff_seconds * (2 ** (attempt - 1))
+                if regenerate:
+                    delay = max(1.0, delay)
+                if exc.retry_after_seconds is not None:
+                    delay = max(delay, min(exc.retry_after_seconds, 60.0))
+                retry = (_retry_is_safe(method, exc) or regenerate) and (
+                    attempt < self._config.max_attempts
+                )
+                if self._config.retry_received_408_once:
+                    retry = retry and (time.monotonic() - started + delay < timeout_seconds)
                 contextual = OpenAIChatProviderError(
                     _redact_secret(str(exc), self._api_key),
                     error_class=exc.error_class,
@@ -384,7 +410,11 @@ class OpenAIChatCompatibleProvider:
                     http_status=exc.http_status,
                     request_id=request_id,
                     generation_state=exc.generation_state,
-                    retry_disposition=exc.retry_disposition,
+                    retry_disposition=(
+                        ProviderRetryDisposition.AUTHORIZED_REGENERATION
+                        if regenerate and retry
+                        else exc.retry_disposition
+                    ),
                     retry_after_seconds=exc.retry_after_seconds,
                     attempts=attempt,
                     elapsed_latency_ms=(time.monotonic() - started) * 1000,
@@ -400,13 +430,16 @@ class OpenAIChatCompatibleProvider:
                         failure=contextual,
                     ),
                 )
-                if not _retry_is_safe(method, contextual) or attempt >= self._config.max_attempts:
+                if not retry:
                     raise contextual from exc
-                delay = self._config.retry_backoff_seconds * (2 ** (attempt - 1))
-                if contextual.retry_after_seconds is not None:
-                    delay = max(delay, min(contextual.retry_after_seconds, 60.0))
+                regeneration_used = regeneration_used or regenerate
                 if delay:
                     await asyncio.sleep(delay)
+                if (
+                    self._config.retry_received_408_once
+                    and time.monotonic() - started >= timeout_seconds
+                ):
+                    raise contextual from exc
         raise AssertionError("bounded OpenAI-compatible retry loop did not return")
 
 

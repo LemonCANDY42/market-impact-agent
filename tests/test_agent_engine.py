@@ -1,7 +1,7 @@
 import asyncio
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -27,6 +27,7 @@ from market_impact_agent.agent_engine import (
     AgentRunRequest,
     CancellationToken,
     compose_authoritative_agent_engine,
+    reopen_authoritative_agent_terminal,
 )
 from market_impact_agent.agent_runtime import (
     ContextCompactor,
@@ -49,8 +50,24 @@ from market_impact_agent.agent_runtime import (
 from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.mcp_runtime import McpServerSnapshot
+from market_impact_agent.openai_chat_provider import (
+    OpenAIChatCompatibleProvider,
+    OpenAIChatProviderConfig,
+    OpenAIChatProviderError,
+)
+from market_impact_agent.provider_reliability import (
+    ProviderAttemptEvent,
+    ProviderAttemptObserver,
+    ProviderAttemptPhase,
+    ProviderGenerationState,
+    ProviderRetryDisposition,
+)
+from market_impact_agent.provider_reliability import (
+    ProviderFailure as TypedProviderFailure,
+)
 from market_impact_agent.research import EvidenceTier, TransmissionDirectness
-from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
+from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
+from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
 NOW = datetime(2026, 8, 26, 6, tzinfo=UTC)
 
@@ -604,6 +621,7 @@ def test_authoritative_agent_engine_writes_root_authenticated_events(tmp_path: P
     events = RunJournal.authoritative(store).events("root-authenticated-run")
     assert [event.event_type for event in events] == [
         "run.started",
+        "model.turn.started",
         "model.turn.completed",
         "judgment.validated",
     ]
@@ -656,7 +674,12 @@ def test_authoritative_agent_engine_signs_pre_model_failure_terminal(tmp_path: P
 
     assert result.status is RunStatus.FAILED
     events = RunJournal.authoritative(store).events("signed-pre-model-failure")
-    assert [event.event_type for event in events] == ["run.started", "run.failed"]
+    assert [event.event_type for event in events] == [
+        "run.started",
+        "model.turn.started",
+        "model.turn.interrupted",
+        "run.failed",
+    ]
     assert events[-1].payload["status"] == RunStatus.FAILED.value
     replay = compose_authoritative_agent_engine(
         store=store,
@@ -705,7 +728,7 @@ def test_agent_engine_reopens_authoritative_completed_run_state(tmp_path: Path) 
         engine.assert_authoritative_completed_run(result, execution_binding=binding)
 
 
-def test_crash_resume_replays_read_only_tool_once_and_matches_control(tmp_path: Path) -> None:
+def test_crash_resume_replays_read_only_tool_but_never_resends_unknown_call(tmp_path: Path) -> None:
     resumed_root = tmp_path / "resumed"
     handler_calls: list[str] = []
     crashing = FixtureProvider([tool_turn(1), SimulatedCrash("process died")])
@@ -718,23 +741,24 @@ def test_crash_resume_replays_read_only_tool_once_and_matches_control(tmp_path: 
     resumed_engine = make_engine(resumed_root, resumed_provider, handler_calls=handler_calls)
     resumed = asyncio.run(resumed_engine.run(request("resume-run")))
 
-    control_root = tmp_path / "control"
-    control_calls: list[str] = []
-    control_engine = make_engine(
-        control_root,
-        FixtureProvider([tool_turn(1), final_turn(proposal())]),
-        handler_calls=control_calls,
-    )
-    control = asyncio.run(control_engine.run(request("resume-run")))
-
-    assert resumed.status is RunStatus.COMPLETED
+    assert resumed.status is RunStatus.HUMAN_INPUT_REQUIRED
     assert handler_calls == ["official-outage"]
-    assert control_calls == ["official-outage"]
-    assert resumed.judgment == control.judgment
-    assert resumed.terminal_store_hash == control.terminal_store_hash
+    assert resumed_provider.requests == []
+    assert resumed.metrics is not None
+    assert resumed.metrics.turns == 1
+    assert resumed.metrics.provider_attempts == 1
+    events = resumed_engine.journal.events("resume-run")
+    assert not any(event.event_type.startswith("model.attempt.") for event in events)
+    assert (
+        next(event for event in events if event.event_type == "model.turn.started").payload[
+            "attempt_observation"
+        ]
+        == "unavailable"
+    )
+    assert events[-2].payload["accounting_state"] == "unknown"
 
     replayed = asyncio.run(resumed_engine.run(request("resume-run")))
-    assert replayed.judgment == resumed.judgment
+    assert replayed == resumed
 
 
 def test_terminal_replay_rejects_another_valid_judgment_artifact(tmp_path: Path) -> None:
@@ -1157,8 +1181,607 @@ def test_hard_cost_budget_and_failed_provider_attempts_are_audited(tmp_path: Pat
     assert failed.status is RunStatus.FAILED
     assert failed.metrics is not None
     assert failed.metrics.provider_attempts == 2
+    assert failed.metrics.latency_ms == 0
+    failure_event = failure_engine.journal.event("provider-failure-run.model-failure.1")
+    assert failure_event is not None and failure_event.payload == {"attempts": 2}
     replayed_failure = asyncio.run(failure_engine.run(request("provider-failure-run")))
     assert replayed_failure.metrics == failed.metrics
+
+
+def test_typed_failure_keeps_cumulative_latency_safe_fields_and_legacy_replay(
+    tmp_path: Path,
+) -> None:
+    failure = TypedProviderFailure(
+        "RAW-UPSTREAM-BODY Bearer UNREGISTERED-CREDENTIAL protected-secret",
+        error_class="http",
+        diagnostic_code="upstream_stream_incomplete",
+        http_status=408,
+        request_id="mia-typed-408",
+        generation_state=ProviderGenerationState.UNKNOWN,
+        retry_disposition=ProviderRetryDisposition.FORBIDDEN,
+        elapsed_latency_ms=190_123.5,
+    )
+    run_request = request("typed-failure")
+    engine = make_engine(tmp_path, FixtureProvider([tool_turn(1), failure]), handler_calls=[])
+    result = asyncio.run(engine.run(run_request))
+    assert result.metrics is not None
+    assert result.metrics.latency_ms == tool_turn(1).latency_ms + 190_123.5
+    assert result.metrics.provider_attempts == 2
+    event = engine.journal.event("typed-failure.model-failure.2")
+    assert event is not None and event.payload == failure.safe_fields()
+    replay = make_engine(tmp_path, FixtureProvider([]), handler_calls=[])
+    assert asyncio.run(replay.run(run_request)) == result
+    assert result.terminal_store_hash is not None
+    assert (
+        reopen_authoritative_agent_terminal(
+            journal=engine.journal,
+            artifact_store=engine.artifact_store,
+            run_id=result.run_id,
+            status=result.status,
+            finished_at=NOW,
+            terminal_artifact_hash=result.terminal_store_hash,
+        )
+        is None
+    )
+    ledger = UsageLedger(tmp_path / "usage.sqlite")
+    ledger.append(
+        UsageRecord.from_result(
+            experiment_id="diagnostic",
+            arm_id="fixture",
+            recorded_at=NOW,
+            provider_profile_id="fixture",
+            provider_profile_hash="1" * 64,
+            execution_binding_hash="2" * 64,
+            run_journal_hash=engine.journal.journal_hash(result.run_id),
+            result=result,
+        )
+    )
+    assert UsageLedger(ledger.path).records()[0].record.metrics == result.metrics
+    serialized = json.dumps([event.to_dict() for event in engine.journal.events(result.run_id)])
+    serialized += json.dumps(engine.artifact_store.read_json(result.terminal_store_hash))
+    serialized += json.dumps(ledger.records()[0].record.to_dict())
+    for private in ("RAW-UPSTREAM-BODY", "UNREGISTERED-CREDENTIAL", "protected-secret"):
+        assert private not in serialized
+
+
+class ObservedFixtureTransport:
+    def __init__(self, responses: Sequence[dict[str, object] | BaseException]) -> None:
+        self.responses = list(responses)
+        self.calls = 0
+        self.before_request: Callable[[], None] = lambda: None
+
+    def request_json(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        payload: dict[str, object] | None,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        self.before_request()
+        self.calls += 1
+        response = self.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
+
+
+def observed_provider(
+    transport: ObservedFixtureTransport, *, retry_received_408_once: bool = False
+) -> OpenAIChatCompatibleProvider:
+    return OpenAIChatCompatibleProvider(
+        api_key="fixture-only-key",
+        provider_id="fixture-provider",
+        provider_label="Fixture",
+        config=OpenAIChatProviderConfig(
+            origin="https://fixture.invalid",
+            model="fixture-model",
+            api_path="/chat/completions",
+            models_path="/models",
+            max_attempts=3,
+            retry_backoff_seconds=0,
+            retry_received_408_once=retry_received_408_once,
+        ),
+        completion_parameters={},
+        transport=transport,
+        request_id_factory=lambda: f"mia-fixture-{transport.calls + 1}",
+    )
+
+
+def observed_response(turn: ModelTurn) -> dict[str, object]:
+    return {
+        "id": turn.response_id,
+        "model": turn.model,
+        "choices": [{"message": turn.assistant_message, "finish_reason": turn.finish_reason}],
+        "usage": {
+            "prompt_tokens": turn.usage.input_tokens,
+            "completion_tokens": turn.usage.output_tokens,
+        },
+    }
+
+
+def http_failure(status: int) -> OpenAIChatProviderError:
+    return OpenAIChatProviderError(
+        "PRIVATE-ERROR-BODY Bearer PRIVATE-CREDENTIAL",
+        error_class="http",
+        diagnostic_code="rate_limited" if status == 429 else "http_408",
+        http_status=status,
+        generation_state=(
+            ProviderGenerationState.NOT_STARTED
+            if status == 429
+            else ProviderGenerationState.UNKNOWN
+        ),
+        retry_disposition=(
+            ProviderRetryDisposition.SAFE if status == 429 else ProviderRetryDisposition.FORBIDDEN
+        ),
+        retry_after_seconds=0 if status == 429 else None,
+    )
+
+
+@pytest.mark.parametrize(
+    "outcome", ["success", "408", "429_exhausted", "408_regenerated", "408_twice"]
+)
+def test_real_observer_retry_path_signed_replay_and_usage(
+    tmp_path: Path,
+    outcome: str,
+) -> None:
+    responses: list[dict[str, object] | BaseException] = [
+        observed_response(tool_turn(1)),
+        http_failure(408 if outcome.startswith("408_") else 429),
+    ]
+    if outcome in {"success", "408_regenerated"}:
+        responses.append(observed_response(final_turn(proposal())))
+    elif outcome in {"408", "408_twice"}:
+        responses.append(http_failure(408))
+    else:
+        responses.extend([http_failure(429), http_failure(429)])
+    transport = ObservedFixtureTransport(responses)
+    provider = observed_provider(transport, retry_received_408_once=outcome.startswith("408_"))
+    fixture = make_engine(tmp_path / "authority", provider, handler_calls=[])
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    engine = compose_authoritative_agent_engine(
+        store=store,
+        provider=provider,
+        config=fixture.config,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+    run_request = request("observed")
+
+    def assert_durable_dispatch() -> None:
+        events = engine.journal.events(run_request.run_id)
+        assert events[-1].event_type == "model.attempt.dispatched"
+        assert events[-1].payload["method"] == "POST"
+        assert sum(event.event_type == "model.attempt.dispatched" for event in events) == (
+            transport.calls + 1
+        )
+
+    transport.before_request = assert_durable_dispatch
+    result = asyncio.run(engine.run(run_request))
+    assert result.status is (
+        RunStatus.COMPLETED if outcome in {"success", "408_regenerated"} else RunStatus.FAILED
+    )
+    assert transport.calls == (4 if outcome == "429_exhausted" else 3)
+    assert result.metrics is not None
+    assert result.metrics.provider_attempts == transport.calls
+    events = engine.journal.events(run_request.run_id)
+    completed = [event for event in events if event.event_type == "model.turn.completed"]
+    failures = [event for event in events if event.event_type == "model.turn.failed"]
+    expected_latency = sum(cast(float, event.payload["latency_ms"]) for event in completed)
+    expected_latency += sum(cast(float, event.payload["elapsed_latency_ms"]) for event in failures)
+    assert result.metrics.latency_ms == expected_latency
+    assert expected_latency > 0
+    attempts = [event for event in events if event.event_type.startswith("model.attempt.")]
+    assert len(attempts) == transport.calls * 2
+    assert attempts[2].payload["request_id"] == attempts[4].payload["request_id"]
+    assert attempts[2].payload["physical_attempt"] == 1
+    assert attempts[4].payload["physical_attempt"] == 2
+    if outcome.startswith("408_"):
+        diagnostic = cast(dict[str, object], attempts[3].payload["failure"])
+        assert diagnostic["generation_state"] == "unknown"
+        assert diagnostic["retry_disposition"] == "authorized_regeneration"
+    assert "PRIVATE-ERROR-BODY" not in json.dumps([event.to_dict() for event in events])
+    assert "PRIVATE-CREDENTIAL" not in json.dumps([event.to_dict() for event in events])
+    with sqlite3.connect(store.index_path) as connection:
+        signatures = connection.execute(
+            "SELECT privileged_signature FROM events WHERE event_type LIKE 'model.%'"
+        ).fetchall()
+    assert signatures and all(len(signature[0]) == 64 for signature in signatures)
+    assert result.terminal_store_hash is not None
+    assert (
+        reopen_authoritative_agent_terminal(
+            journal=RunJournal.authoritative(store),
+            artifact_store=store.artifacts,
+            run_id=result.run_id,
+            status=result.status,
+            finished_at=NOW,
+            terminal_artifact_hash=result.terminal_store_hash,
+        )
+        == result.judgment
+    )
+    replay = compose_authoritative_agent_engine(
+        store=store,
+        provider=observed_provider(ObservedFixtureTransport([])),
+        config=fixture.config,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+    assert asyncio.run(replay.run(run_request)) == result
+    usage = UsageLedger(tmp_path / "usage.sqlite")
+    usage.append(
+        UsageRecord.from_result(
+            experiment_id="diagnostic",
+            arm_id="fixture",
+            recorded_at=NOW,
+            provider_profile_id="fixture",
+            provider_profile_hash="1" * 64,
+            execution_binding_hash=engine.execution_binding(
+                run_request, runtime_ref="fixture-runtime"
+            ).binding_hash,
+            run_journal_hash=engine.journal.journal_hash(result.run_id),
+            result=result,
+        )
+    )
+    assert UsageLedger(usage.path).records()[0].record.metrics == result.metrics
+
+
+@pytest.mark.parametrize(
+    "crash_at",
+    [
+        "model.turn.started",
+        "model.attempt.dispatched",
+        "model.attempt.succeeded",
+        "transport",
+        "response_artifact",
+    ],
+)
+def test_observed_crash_never_resends_without_durable_turn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    crash_at: str,
+) -> None:
+    response = observed_response(final_turn(proposal()))
+    transport = ObservedFixtureTransport(
+        [SimulatedCrash("process exited") if crash_at == "transport" else response]
+    )
+    engine = make_engine(tmp_path, observed_provider(transport), handler_calls=[])
+    original_append = engine.journal.append
+
+    def crash_after_append(
+        *,
+        run_id: str,
+        event_id: str,
+        event_type: str,
+        observed_at: datetime,
+        payload: dict[str, object],
+    ) -> RuntimeEvent:
+        event = original_append(
+            run_id=run_id,
+            event_id=event_id,
+            event_type=event_type,
+            observed_at=observed_at,
+            payload=payload,
+        )
+        if event_type == crash_at:
+            raise SimulatedCrash("process exited")
+        return event
+
+    monkeypatch.setattr(engine.journal, "append", crash_after_append)
+    if crash_at == "response_artifact":
+        original_put = engine.artifact_store.put_json
+
+        def crash_after_response_write(value: object):
+            artifact = original_put(value)
+            if value == response:
+                raise SimulatedCrash("response persisted without turn commit")
+            return artifact
+
+        monkeypatch.setattr(engine.artifact_store, "put_json", crash_after_response_write)
+    with pytest.raises(SimulatedCrash):
+        asyncio.run(engine.run(request("observed-crash")))
+    assert transport.calls == (
+        1 if crash_at in {"model.attempt.succeeded", "transport", "response_artifact"} else 0
+    )
+    replay_transport = ObservedFixtureTransport([])
+    replay = make_engine(tmp_path, observed_provider(replay_transport), handler_calls=[])
+    result = asyncio.run(replay.run(request("observed-crash")))
+    assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
+    assert replay_transport.calls == 0
+    assert result.metrics is not None
+    assert result.metrics.provider_attempts == 0
+    assert result.metrics.latency_ms == 0
+    assert result.metrics.input_tokens == result.metrics.output_tokens == 0
+    diagnostic = replay.journal.event("observed-crash.turn.1.interrupted")
+    assert diagnostic is not None
+    assert diagnostic.payload["accounting_state"] == "unknown"
+    assert diagnostic.payload["retry_disposition"] == "forbidden"
+    assert asyncio.run(replay.run(request("observed-crash"))) == result
+    if crash_at == "response_artifact":
+        assert replay.artifact_store.read_json(canonical_hash(response)) == response
+
+
+@pytest.mark.parametrize("crash_at", ["model.turn.failed", "run.failed"])
+def test_failure_commit_crash_preserves_accounting_without_resend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    crash_at: str,
+) -> None:
+    failure = TypedProviderFailure(
+        "private body", error_class="http", http_status=408, attempts=2, elapsed_latency_ms=1234.5
+    )
+    engine = make_engine(tmp_path, FixtureProvider([failure]), handler_calls=[])
+    original_append = engine.journal.append
+
+    def crash_after_append(
+        *,
+        run_id: str,
+        event_id: str,
+        event_type: str,
+        observed_at: datetime,
+        payload: dict[str, object],
+    ) -> RuntimeEvent:
+        event = original_append(
+            run_id=run_id,
+            event_id=event_id,
+            event_type=event_type,
+            observed_at=observed_at,
+            payload=payload,
+        )
+        if event_type == crash_at:
+            raise SimulatedCrash("process exited")
+        return event
+
+    monkeypatch.setattr(engine.journal, "append", crash_after_append)
+    with pytest.raises(SimulatedCrash):
+        asyncio.run(engine.run(request("failure-crash")))
+    provider = FixtureProvider([])
+    replay = make_engine(tmp_path, provider, handler_calls=[])
+    result = asyncio.run(replay.run(request("failure-crash")))
+    assert result.status.terminal
+    assert provider.requests == []
+    assert result.metrics is not None
+    assert result.metrics.provider_attempts == 2
+    assert result.metrics.latency_ms == 1234.5
+    assert (
+        sum(
+            event.event_type == "model.turn.failed"
+            for event in replay.journal.events(result.run_id)
+        )
+        == 1
+    )
+    assert asyncio.run(replay.run(request("failure-crash"))) == result
+
+
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        "model.turn.started",
+        "model.attempt.dispatched",
+        "model.attempt.failed",
+        "model.attempt.succeeded",
+    ],
+)
+def test_authoritative_attempt_diagnostics_reject_tampering(
+    tmp_path: Path,
+    event_type: str,
+) -> None:
+    transport = ObservedFixtureTransport(
+        [http_failure(429), observed_response(final_turn(proposal()))]
+    )
+    provider = observed_provider(transport)
+    fixture = make_engine(tmp_path / "authority", provider, handler_calls=[])
+    store = LocalDataSnapshotStore(tmp_path / "authority")
+    engine = compose_authoritative_agent_engine(
+        store=store,
+        provider=provider,
+        config=fixture.config,
+        tool_registry=fixture.tool_registry,
+        skill_registry=fixture.skill_registry,
+        clock=lambda: NOW,
+    )
+    run_request = request("tampered-observation")
+    assert asyncio.run(engine.run(run_request)).status is RunStatus.COMPLETED
+    with sqlite3.connect(store.index_path) as connection:
+        connection.execute(
+            "UPDATE events SET privileged_signature = ? WHERE event_type = ?",
+            ("0" * 64, event_type),
+        )
+    with pytest.raises(ValueError, match="signature is invalid"):
+        asyncio.run(engine.run(run_request))
+
+
+@pytest.mark.parametrize("dispatch", [False, True])
+def test_caller_cancellation_joins_children_before_releasing_run_claim(
+    tmp_path: Path,
+    dispatch: bool,
+) -> None:
+    class SuspendedProvider(FixtureProvider):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.entered = asyncio.Event()
+            self.cancelled = asyncio.Event()
+            self.allow_cleanup = asyncio.Event()
+            self.exited = asyncio.Event()
+            self.execution_task: asyncio.Task[object] | None = None
+
+        async def complete_with_observer(
+            self,
+            *,
+            messages: tuple[dict[str, object], ...],
+            tools: tuple[dict[str, object], ...],
+            temperature: float,
+            top_p: float,
+            max_output_tokens: int,
+            timeout_seconds: float,
+            attempt_observer: ProviderAttemptObserver,
+        ) -> ModelTurn:
+            self.execution_task = asyncio.current_task()
+            if dispatch:
+                attempt_observer(
+                    ProviderAttemptEvent(
+                        request_id="mia-suspended",
+                        method="POST",
+                        physical_attempt=1,
+                        phase=ProviderAttemptPhase.DISPATCHED,
+                        elapsed_latency_ms=0,
+                    )
+                )
+            self.entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.cancelled.set()
+                await self.allow_cleanup.wait()
+                raise
+            finally:
+                self.exited.set()
+            raise AssertionError("suspended Provider cannot complete")
+
+    class TrackedCancellation(CancellationToken):
+        waiter: asyncio.Task[object] | None = None
+
+        async def wait(self) -> None:
+            self.waiter = asyncio.current_task()
+            await super().wait()
+
+    async def exercise() -> None:
+        baseline_tasks = asyncio.all_tasks()
+        provider = SuspendedProvider()
+        token = TrackedCancellation()
+        engine = make_engine(tmp_path, provider, handler_calls=[])
+        run_request = request("caller-cancelled")
+        caller = asyncio.create_task(engine.run(run_request, cancellation=token))
+        replay_provider = FixtureProvider([])
+        replay = make_engine(tmp_path, replay_provider, handler_calls=[])
+        try:
+            await asyncio.wait_for(provider.entered.wait(), timeout=1)
+            caller.cancel()
+            await asyncio.wait_for(provider.cancelled.wait(), timeout=1)
+            with pytest.raises(RuntimeError, match="another caller owns"):
+                await replay.run(run_request)
+            assert not caller.done()
+            caller.cancel()
+            await asyncio.sleep(0)
+            assert not caller.done()
+            assert not provider.exited.is_set()
+            with pytest.raises(RuntimeError, match="another caller owns"):
+                await replay.run(run_request)
+        finally:
+            provider.allow_cleanup.set()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        assert provider.execution_task is not None and provider.execution_task.done()
+        assert token.waiter is not None and token.waiter.done()
+        assert provider.exited.is_set()
+        assert asyncio.all_tasks() == baseline_tasks
+        events = engine.journal.events(run_request.run_id)
+        assert sum(event.event_type == "model.attempt.dispatched" for event in events) == int(
+            dispatch
+        )
+        assert not any(event.event_type == "model.turn.completed" for event in events)
+        assert engine.journal.get_run(run_request.run_id).status is RunStatus.RUNNING
+        await asyncio.sleep(0)
+        assert engine.journal.events(run_request.run_id) == events
+        result = await replay.run(run_request)
+        assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
+        assert replay_provider.requests == []
+        assert result.metrics is not None
+        assert result.metrics.provider_attempts == 0
+        assert result.metrics.latency_ms == 0
+        assert result.metrics.input_tokens == result.metrics.output_tokens == 0
+        diagnostic = replay.journal.event("caller-cancelled.turn.1.interrupted")
+        assert diagnostic is not None and diagnostic.payload["accounting_state"] == "unknown"
+        assert result.terminal_store_hash is not None
+        assert (
+            reopen_authoritative_agent_terminal(
+                journal=replay.journal,
+                artifact_store=replay.artifact_store,
+                run_id=result.run_id,
+                status=result.status,
+                finished_at=NOW,
+                terminal_artifact_hash=result.terminal_store_hash,
+            )
+            is None
+        )
+        usage = UsageLedger(tmp_path / "usage.sqlite")
+        usage.append(
+            UsageRecord.from_result(
+                experiment_id="cancellation",
+                arm_id="fixture",
+                recorded_at=NOW,
+                provider_profile_id="fixture",
+                provider_profile_hash="1" * 64,
+                execution_binding_hash="2" * 64,
+                run_journal_hash=replay.journal.journal_hash(result.run_id),
+                result=result,
+            )
+        )
+        assert UsageLedger(usage.path).records()[0].record.metrics == result.metrics
+        assert await replay.run(run_request) == result
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("control", ["kill", "wall_timeout"])
+def test_control_cancellation_preserves_a_provider_result_settled_during_cleanup(
+    tmp_path: Path,
+    control: str,
+) -> None:
+    class SettlingProvider(FixtureProvider):
+        def __init__(self) -> None:
+            super().__init__([final_turn(proposal())])
+            self.entered = asyncio.Event()
+
+        async def complete(
+            self,
+            *,
+            messages: tuple[dict[str, object], ...],
+            tools: tuple[dict[str, object], ...],
+            temperature: float,
+            top_p: float,
+            max_output_tokens: int,
+            timeout_seconds: float,
+        ) -> ModelTurn:
+            self.entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                return await super().complete(
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    top_p=top_p,
+                    max_output_tokens=max_output_tokens,
+                    timeout_seconds=timeout_seconds,
+                )
+            raise AssertionError("fixture settles only on cancellation")
+
+    async def exercise() -> None:
+        baseline = asyncio.all_tasks()
+        provider = SettlingProvider()
+        config = runtime_config()
+        if control == "wall_timeout":
+            config = replace(config, budget=replace(config.budget, max_wall_seconds=0.01))
+        engine = make_engine(tmp_path, provider, handler_calls=[], config=config)
+        token = CancellationToken()
+        run_request = request("settled-cancellation")
+        task = asyncio.create_task(engine.run(run_request, cancellation=token))
+        await provider.entered.wait()
+        if control == "kill":
+            token.cancel()
+        result = await asyncio.wait_for(task, timeout=1)
+        assert result.status is RunStatus.COMPLETED
+        assert len(provider.requests) == 1
+        assert not any(
+            event.event_type == "run.failed" for event in engine.journal.events(result.run_id)
+        )
+        assert asyncio.all_tasks() == baseline
+        assert await engine.run(run_request) == result
+
+    asyncio.run(exercise())
 
 
 def test_non_research_authority_is_rejected_before_run(tmp_path: Path) -> None:

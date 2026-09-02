@@ -42,8 +42,13 @@ class ModelProviderProfile:
     pricing: ProviderPricing
     max_attempts: int
     retry_backoff_seconds: float
+    retry_received_408_once: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(cast(object, self.retry_received_408_once), bool):
+            raise TypeError("retry_received_408_once must be boolean")
+        if self.retry_received_408_once and self.adapter_kind != "cliproxyapi-openai-compatible":
+            raise ValueError("received-408 regeneration is accepted only for the CPA adapter")
         for name in (
             "adapter_kind",
             "provider_id",
@@ -103,6 +108,8 @@ class ModelProviderProfile:
         }
         if self.reasoning_effort is not None:
             payload["reasoning_effort"] = self.reasoning_effort
+        if self.retry_received_408_once:
+            payload["retry_received_408_once"] = True
         return payload
 
     def to_dict(self) -> dict[str, object]:
@@ -118,6 +125,7 @@ class ModelProviderProfile:
             top_p=self.top_p,
             budget=self.budget,
             pricing=self.pricing,
+            provider_profile_hash=self.profile_hash if self.retry_received_408_once else None,
         )
 
 
@@ -178,7 +186,7 @@ def model_provider_profile_from_dict(value: object) -> ModelProviderProfile:
         "max_attempts",
         "retry_backoff_seconds",
     }
-    allowed = required | {"reasoning_effort"}
+    allowed = required | {"reasoning_effort", "retry_received_408_once"}
     if not required <= set(payload) or not set(payload) <= allowed:
         raise ValueError("Model Provider Profile fields are invalid")
     if _string(payload, "schema_version") != MODEL_PROVIDER_PROFILE_SCHEMA:
@@ -240,6 +248,7 @@ def model_provider_profile_from_dict(value: object) -> ModelProviderProfile:
         ),
         max_attempts=_integer(payload, "max_attempts"),
         retry_backoff_seconds=_number(payload, "retry_backoff_seconds"),
+        retry_received_408_once=cast(bool, payload.get("retry_received_408_once", False)),
     )
     if result.to_dict() != payload:
         raise ValueError("Model Provider Profile does not match canonical contract")
@@ -309,6 +318,7 @@ def _build_cliproxyapi(profile: ModelProviderProfile) -> ModelProvider:
             models_path=profile.models_path,
             max_attempts=profile.max_attempts,
             retry_backoff_seconds=profile.retry_backoff_seconds,
+            retry_received_408_once=profile.retry_received_408_once,
         ),
     )
 

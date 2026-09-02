@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from hashlib import sha256
 from typing import Protocol, cast
 
@@ -44,6 +45,12 @@ from market_impact_agent.agent_runtime import (
 )
 from market_impact_agent.domain import require_aware
 from market_impact_agent.mcp_runtime import McpServerSnapshot
+from market_impact_agent.provider_reliability import (
+    ProviderAttemptEvent,
+    ProviderAttemptObserver,
+    ProviderAttemptPhase,
+    ProviderFailure,
+)
 from market_impact_agent.runtime_store import (
     ArtifactStore,
     RunJournal,
@@ -468,6 +475,11 @@ def _reconstruct_run_metrics(
     allowed_types = {
         "run.started",
         "run.failed",
+        "model.turn.started",
+        "model.turn.interrupted",
+        "model.attempt.dispatched",
+        "model.attempt.failed",
+        "model.attempt.succeeded",
         "model.turn.completed",
         "tool.call.completed",
         "model.turn.failed",
@@ -522,6 +534,7 @@ def _reconstruct_run_metrics(
             result_bytes += size
         elif event.event_type == "model.turn.failed":
             provider_attempts += _payload_integer(event.payload, "attempts")
+            latency_ms += _failed_turn_latency(event.payload)
     if require_completed_turn and turns == 0:
         raise ValueError("completed Judgment has no authoritative model turn")
     if completed_tool_events > tool_calls_requested:
@@ -589,6 +602,31 @@ class _RunCancelled(RuntimeError):
 
 class _BudgetExceeded(RuntimeError):
     pass
+
+
+class _ModelTurnInterrupted(RuntimeError):
+    pass
+
+
+class _AttemptObservableProvider(Protocol):
+    async def complete_with_observer(
+        self,
+        *,
+        messages: tuple[dict[str, object], ...],
+        tools: tuple[dict[str, object], ...],
+        temperature: float,
+        top_p: float,
+        max_output_tokens: int,
+        timeout_seconds: float,
+        attempt_observer: ProviderAttemptObserver,
+    ) -> ModelTurn: ...
+
+
+def _failed_turn_latency(payload: dict[str, object]) -> float:
+    # Historical attempts-only events do not prove any elapsed latency.
+    return (
+        _payload_number(payload, "elapsed_latency_ms") if "elapsed_latency_ms" in payload else 0.0
+    )
 
 
 @dataclass(slots=True)
@@ -922,6 +960,18 @@ class AgentEngine:
         *,
         cancellation: CancellationToken | None = None,
     ) -> AgentRunResult:
+        claim = self.journal.try_claim_run(request.run_id)
+        if claim is None:
+            raise RuntimeError("another caller owns this Agent run")
+        with claim:
+            return await self._run_claimed(request, cancellation=cancellation)
+
+    async def _run_claimed(
+        self,
+        request: AgentRunRequest,
+        *,
+        cancellation: CancellationToken | None = None,
+    ) -> AgentRunResult:
         if self.journal.promotion_eligible and self._privileged_event_sink is None:
             raise PermissionError(
                 "authoritative AgentEngine must be created by the Harness composition root"
@@ -995,6 +1045,9 @@ class AgentEngine:
                 "strategy_plan_artifact_hash": record.strategy_plan_artifact_hash,
             },
         )
+        terminal_event = self.journal.event(f"{request.run_id}.terminal.failed")
+        if terminal_event is not None:
+            return self._commit_failure_terminal(terminal_event)
         metrics = _MutableMetrics()
         try:
             return await self._run_with_control(
@@ -1015,6 +1068,10 @@ class AgentEngine:
                 RunStatus.BUDGET_EXHAUSTED,
                 exc,
                 metrics,
+            )
+        except _ModelTurnInterrupted as exc:
+            return self._finish_failure(
+                request.run_id, RunStatus.HUMAN_INPUT_REQUIRED, exc, metrics
             )
         except Exception as exc:
             return self._finish_failure(request.run_id, RunStatus.FAILED, exc, metrics)
@@ -1046,25 +1103,37 @@ class AgentEngine:
             )
         )
         cancellation_task = asyncio.create_task(cancellation.wait())
-        done, _pending = await asyncio.wait(
-            {execute_task, cancellation_task},
-            timeout=self.config.budget.max_wall_seconds,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if execute_task in done:
-            cancellation_task.cancel()
+        try:
+            done, _pending = await asyncio.wait(
+                {execute_task, cancellation_task},
+                timeout=self.config.budget.max_wall_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if execute_task in done:
+                return await execute_task
+            execute_task.cancel()
             with suppress(asyncio.CancelledError):
-                await cancellation_task
-            return await execute_task
-        execute_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await execute_task
-        if cancellation_task in done:
-            raise _RunCancelled("run was cancelled by the Harness kill control")
-        cancellation_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await cancellation_task
-        raise _BudgetExceeded("run exceeded its wall-time budget")
+                # A Provider may settle successfully while cancellation is in flight.
+                # Preserve that durable result instead of writing a second terminal.
+                return await execute_task
+            if cancellation_task in done:
+                raise _RunCancelled("run was cancelled by the Harness kill control")
+            raise _BudgetExceeded("run exceeded its wall-time budget")
+        finally:
+            # The run claim belongs to this owner until both children have stopped.
+            # Shield the join so repeated caller cancellation cannot release it early.
+            for task in (execute_task, cancellation_task):
+                if not task.done() and not task.cancelling():
+                    task.cancel()
+            drained = asyncio.gather(execute_task, cancellation_task, return_exceptions=True)
+            cancelled_during_join = False
+            while not drained.done():
+                try:
+                    await asyncio.shield(drained)
+                except asyncio.CancelledError:
+                    cancelled_during_join = True
+            if cancelled_during_join:
+                raise asyncio.CancelledError
 
     async def _execute(
         self,
@@ -1133,15 +1202,48 @@ class AgentEngine:
             event_id = f"{request.run_id}.turn.{turn_number}"
             existing = self.journal.event(event_id)
             if existing is None:
+                if (
+                    self.journal.event(f"{event_id}.started") is not None
+                    or self.journal.event(f"{request.run_id}.model-failure.{turn_number}")
+                    is not None
+                ):
+                    raise _ModelTurnInterrupted(
+                        "model turn has no durable completion; human input required"
+                    )
                 self._validate_active_provider_identity()
-                turn = await self.provider.complete(
-                    messages=ledger.messages(),
-                    tools=() if contract_corrections else model_tools,
-                    temperature=self.config.temperature,
-                    top_p=self.config.top_p,
-                    max_output_tokens=maximum_output,
-                    timeout_seconds=self.config.budget.max_wall_seconds,
+                observable = callable(getattr(self.provider, "complete_with_observer", None))
+                self._append_privileged_event(
+                    run_id=request.run_id,
+                    event_id=f"{event_id}.started",
+                    event_type="model.turn.started",
+                    observed_at=self._now(),
+                    payload={
+                        "turn_number": turn_number,
+                        "attempt_observation": "physical" if observable else "unavailable",
+                    },
                 )
+                if observable:
+                    observed_provider = cast(_AttemptObservableProvider, self.provider)
+                    turn = await observed_provider.complete_with_observer(
+                        messages=ledger.messages(),
+                        tools=active_tools,
+                        temperature=self.config.temperature,
+                        top_p=self.config.top_p,
+                        max_output_tokens=maximum_output,
+                        timeout_seconds=self.config.budget.max_wall_seconds,
+                        attempt_observer=partial(
+                            self._observe_attempt, request.run_id, turn_number
+                        ),
+                    )
+                else:
+                    turn = await self.provider.complete(
+                        messages=ledger.messages(),
+                        tools=active_tools,
+                        temperature=self.config.temperature,
+                        top_p=self.config.top_p,
+                        max_output_tokens=maximum_output,
+                        timeout_seconds=self.config.budget.max_wall_seconds,
+                    )
                 self._assert_no_secret(turn.raw_response)
                 turn = _sanitized_turn(turn, self.secret_values)
                 self._store_turn(
@@ -1292,6 +1394,30 @@ class AgentEngine:
             event_type=event_type,
             observed_at=observed_at,
             payload=payload,
+        )
+
+    def _observe_attempt(self, run_id: str, turn_number: int, event: ProviderAttemptEvent) -> None:
+        event_id = f"{run_id}.turn.{turn_number}.attempt.{event.physical_attempt}"
+        payload: dict[str, object] = {
+            "turn_number": turn_number,
+            "request_id": event.request_id,
+            "method": event.method,
+            "physical_attempt": event.physical_attempt,
+            "elapsed_latency_ms": event.elapsed_latency_ms,
+        }
+        if event.phase is not ProviderAttemptPhase.DISPATCHED:
+            dispatch = self.journal.event(f"{event_id}.dispatched")
+            if dispatch is None or dispatch.payload["request_id"] != event.request_id:
+                raise ValueError("Provider attempt outcome has no matching durable dispatch")
+            payload["dispatch_event_hash"] = dispatch.event_hash
+        if event.failure is not None:
+            payload["failure"] = event.failure.safe_fields()
+        self._append_privileged_event(
+            run_id=run_id,
+            event_id=f"{event_id}.{event.phase.value}",
+            event_type=f"model.attempt.{event.phase.value}",
+            observed_at=self._now(),
+            payload=cast(dict[str, object], _sanitize_json(payload, self.secret_values)),
         )
 
     def _store_turn(
@@ -1568,17 +1694,47 @@ class AgentEngine:
             and not isinstance(failed_attempts, bool)
             and failed_attempts > 0
         ):
-            metrics.provider_attempts += failed_attempts
             self._append_privileged_event(
                 run_id=run_id,
                 event_id=f"{run_id}.model-failure.{metrics.turns + 1}",
                 event_type="model.turn.failed",
                 observed_at=finished_at,
-                payload={"attempts": failed_attempts},
+                payload=(
+                    cast(dict[str, object], _sanitize_json(error.safe_fields(), self.secret_values))
+                    if isinstance(error, ProviderFailure)
+                    else {"attempts": failed_attempts}
+                ),
             )
-        frozen_metrics = metrics.freeze()
+        incomplete_turn = (
+            self.journal.event(f"{run_id}.turn.{metrics.turns + 1}.started") is not None
+            and self.journal.event(f"{run_id}.turn.{metrics.turns + 1}") is None
+            and self.journal.event(f"{run_id}.model-failure.{metrics.turns + 1}") is None
+        )
+        if incomplete_turn or isinstance(error, _ModelTurnInterrupted):
+            recorded_failure = self.journal.event(f"{run_id}.model-failure.{metrics.turns + 1}")
+            self._append_privileged_event(
+                run_id=run_id,
+                event_id=f"{run_id}.turn.{metrics.turns + 1}.interrupted",
+                event_type="model.turn.interrupted",
+                observed_at=finished_at,
+                payload={
+                    "turn_number": metrics.turns + 1,
+                    "generation_state": (
+                        recorded_failure.payload.get("generation_state", "unknown")
+                        if recorded_failure
+                        else "unknown"
+                    ),
+                    "retry_disposition": "forbidden",
+                    "accounting_state": ("recorded_failure" if recorded_failure else "unknown"),
+                },
+            )
+        frozen_metrics = self._metrics_from_journal(run_id)
         error_class = type(error).__name__
-        message = self._redacted_message(str(error)) or error_class
+        message = (
+            "Model Provider request failed; see sanitized Journal diagnostics."
+            if isinstance(error, ProviderFailure) or incomplete_turn
+            else self._redacted_message(str(error)) or error_class
+        )
         terminal_event = self._append_privileged_event(
             run_id=run_id,
             event_id=f"{run_id}.terminal.failed",
@@ -1592,17 +1748,28 @@ class AgentEngine:
                 "metrics": frozen_metrics.to_dict(),
             },
         )
+        return self._commit_failure_terminal(terminal_event)
+
+    def _commit_failure_terminal(self, terminal_event: RuntimeEvent) -> AgentRunResult:
+        run_id = terminal_event.run_id
+        status = RunStatus(_payload_string(terminal_event.payload, "status"))
+        finished_at = terminal_event.observed_at
+        frozen_metrics = self._metrics_from_journal(run_id)
         payload = {
             "schema_version": "market-impact.agent-run-error.v1",
             "run_id": run_id,
-            "status": status.value,
             "journal_hash": terminal_event.event_hash,
-            "finished_at": finished_at.isoformat().replace("+00:00", "Z"),
-            "error_class": error_class,
-            "message": message,
-            "metrics": frozen_metrics.to_dict(),
+            **terminal_event.payload,
         }
         artifact = self.artifact_store.put_json(payload)
+        reopen_authoritative_agent_terminal(
+            journal=self.journal,
+            artifact_store=self.artifact_store,
+            run_id=run_id,
+            status=status,
+            finished_at=finished_at,
+            terminal_artifact_hash=artifact.content_hash,
+        )
         write_strategy_case_terminal(
             journal=self.journal,
             artifact_store=self.artifact_store,
@@ -1771,6 +1938,7 @@ class AgentEngine:
                 metrics.result_bytes += size
             elif event.event_type == "model.turn.failed":
                 metrics.provider_attempts += _payload_integer(event.payload, "attempts")
+                metrics.latency_ms += _failed_turn_latency(event.payload)
         return metrics.freeze()
 
     @staticmethod

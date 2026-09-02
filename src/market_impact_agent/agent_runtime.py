@@ -140,8 +140,14 @@ class RuntimeConfig:
     top_p: float
     budget: RuntimeBudget
     pricing: ProviderPricing
+    provider_profile_hash: str | None = None
 
     def __post_init__(self) -> None:
+        if self.provider_profile_hash is not None and (
+            len(self.provider_profile_hash) != 64
+            or any(character not in "0123456789abcdef" for character in self.provider_profile_hash)
+        ):
+            raise ValueError("provider_profile_hash must be a SHA-256 digest")
         _trimmed(self.provider_id, "provider_id")
         _trimmed(self.model, "model")
         if self.context_window_tokens < 128:
@@ -158,7 +164,7 @@ class RuntimeConfig:
         return canonical_hash(self.to_dict())
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "provider_id": self.provider_id,
             "model": self.model,
             "context_window_tokens": self.context_window_tokens,
@@ -168,6 +174,9 @@ class RuntimeConfig:
             "budget": self.budget.to_dict(),
             "pricing": self.pricing.to_dict(),
         }
+        if self.provider_profile_hash is not None:
+            payload["provider_profile_hash"] = self.provider_profile_hash
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
