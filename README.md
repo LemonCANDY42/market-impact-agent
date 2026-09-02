@@ -482,7 +482,18 @@ rewritten independently of the 108 recorded runs. Terminal replay additionally r
 model-turn assistant payload and matches the Judgment proposal, raw response, transcript, and
 metrics to the hash-chained `judgment.validated` event.
 
-The report also reconciles every current append-only Usage Ledger by Run ID. The 70-ledger union has
+The follow-up `market-impact agent historical-readiness-pilot-run` reuses the same read-only
+Agent runtime for a single-use, opened Modeled-PIT input diagnostic. It binds exact news references,
+a research target and a five-session horizon, represents unavailable prior consensus as unknown,
+and compares two complete control/treatment pairs (a third only on decision disagreement).
+It grants no Signal, Intent or execution authority. The fixed three-case cohort, accounting
+limits and narrower claim boundary are in
+[Agent Effectiveness Acceptance](docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md#opened-historical-readiness-pilot--september-2026).
+That cohort completed 14 logical runs and 29 physical requests for a CPA estimate of USD 0.180401:
+13 abstentions and one down proposal, with no non-empty majority or positive effectiveness claim.
+Input semantics and method applicability must be repaired before broader validation.
+
+The earlier 18-checkpoint report also reconciled its append-only Usage Ledgers by Run ID. That 70-ledger union had
 528 unique terminal runs, zero duplicate or conflicting records, and $4.928324 total estimated
 model cost under the shared $20 cap. This corrects the earlier incomplete $2.436518 total; the new
 Modeled-PIT experiment contributed $0.991336 and one invalid-horizon diagnostic contributed

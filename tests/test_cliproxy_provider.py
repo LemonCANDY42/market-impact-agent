@@ -29,6 +29,8 @@ from market_impact_agent.provider_reliability import (
 )
 
 PROFILE = Path("examples/providers/cliproxyapi-luna-xhigh-v1.json")
+CPA_PROFILE = Path("examples/providers/cliproxyapi-luna-xhigh-cpa-v1.json")
+CPA_MAX_PROFILE = Path("examples/providers/cliproxyapi-luna-max-cpa-v1.json")
 
 
 class FixtureTransport(JsonHttpTransport):
@@ -135,13 +137,15 @@ def _completion() -> dict[str, object]:
     }
 
 
-def _provider(transport: JsonHttpTransport) -> CLIProxyLunaProvider:
+def _provider(
+    transport: JsonHttpTransport, *, reasoning_effort: str = "xhigh"
+) -> CLIProxyLunaProvider:
     return CLIProxyLunaProvider(
         api_key="dedicated-local-key",
         config=CLIProxyLunaConfig(
             origin="http://127.0.0.1:8317",
             model="gpt-5.6-luna",
-            reasoning_effort="xhigh",
+            reasoning_effort=reasoning_effort,
             retry_backoff_seconds=0,
         ),
         transport=transport,
@@ -158,6 +162,31 @@ def test_cliproxy_profile_freezes_luna_xhigh_and_zero_marginal_pricing() -> None
     assert profile.reasoning_effort == "xhigh"
     assert profile.credential_env == "MARKET_IMPACT_CLIPROXY_API_KEY"
     assert profile.pricing.input_microusd_per_million_tokens == 0
+
+
+def test_cliproxy_cpa_max_profile_has_a_new_identity_and_cost_cap() -> None:
+    xhigh_payload = json.loads(CPA_PROFILE.read_text(encoding="utf-8"))
+    max_payload = json.loads(CPA_MAX_PROFILE.read_text(encoding="utf-8"))
+    xhigh_profile = load_model_provider_profile(CPA_PROFILE)
+    max_profile = load_model_provider_profile(CPA_MAX_PROFILE)
+
+    assert validate_agent_contract(xhigh_payload, "model-provider-profile.schema.json") == ()
+    assert validate_agent_contract(max_payload, "model-provider-profile.schema.json") == ()
+    assert xhigh_profile.reasoning_effort == "xhigh"
+    assert max_profile.reasoning_effort == "max"
+    assert xhigh_profile.profile_id == f"model-provider-{xhigh_profile.profile_hash}"
+    assert max_profile.profile_id == f"model-provider-{max_profile.profile_hash}"
+    assert max_profile.profile_id != xhigh_profile.profile_id
+    assert max_profile.budget.max_turns == xhigh_profile.budget.max_turns
+    assert max_profile.budget.max_tool_calls == xhigh_profile.budget.max_tool_calls
+    assert max_profile.budget.max_input_tokens == xhigh_profile.budget.max_input_tokens
+    assert max_profile.budget.max_output_tokens == xhigh_profile.budget.max_output_tokens
+    assert max_profile.budget.max_wall_seconds == xhigh_profile.budget.max_wall_seconds
+    assert max_profile.budget.max_result_bytes == xhigh_profile.budget.max_result_bytes
+    xhigh_cost_cap = xhigh_profile.budget.max_estimated_cost_microusd
+    assert xhigh_cost_cap is not None
+    assert max_profile.budget.max_estimated_cost_microusd == xhigh_cost_cap * 3 // 2
+    assert max_profile.pricing == xhigh_profile.pricing
 
 
 def test_cliproxy_factory_uses_dedicated_environment_key(
@@ -352,6 +381,32 @@ def test_cliproxy_completion_sends_xhigh_and_preserves_tool_calls() -> None:
     assert headers["X-Market-Impact-Request-Id"].startswith("mia-")
 
 
+def test_cliproxy_completion_sends_max_unchanged_to_the_gateway() -> None:
+    transport = FixtureTransport([_completion()])
+    selected = _provider(transport, reasoning_effort="max")
+
+    asyncio.run(
+        selected.complete(
+            messages=({"role": "user", "content": "inspect ev-1"},),
+            tools=(),
+            temperature=0.1,
+            top_p=0.95,
+            max_output_tokens=256,
+            timeout_seconds=5,
+        )
+    )
+
+    assert transport.requests[0]["payload"] == {
+        "model": "gpt-5.6-luna",
+        "messages": [{"role": "user", "content": "inspect ev-1"}],
+        "temperature": 0.1,
+        "top_p": 0.95,
+        "max_tokens": 256,
+        "stream": False,
+        "reasoning_effort": "max",
+    }
+
+
 @pytest.mark.parametrize(
     ("error_class", "diagnostic_code"),
     [
@@ -464,6 +519,7 @@ def test_explicit_429_rejection_retries_with_retry_after_and_exponential_backoff
         ("https://127.0.0.1:8317", "gpt-5.6-luna", "xhigh"),
         ("http://127.0.0.1:8317", "gpt-5.6-terra", "xhigh"),
         ("http://127.0.0.1:8317", "gpt-5.6-luna", "high"),
+        ("http://127.0.0.1:8317", "gpt-5.6-luna", "low"),
     ],
 )
 def test_cliproxy_rejects_origin_model_or_effort_substitution(

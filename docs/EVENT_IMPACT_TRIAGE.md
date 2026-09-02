@@ -459,6 +459,25 @@ does not retroactively qualify history, and retrospective evidence does not auth
 
 ## Acceptance status
 
+### Actual-receipt coverage failure — 2026-09-02
+
+The first bounded-concurrent v13 operational batch contained 32 frozen versions and three Work
+Units (12/12/8 atoms). Two members completed. The middle member returned 11 routes for its 12
+atoms on all three bounded turns; each response was complete, strict JSON, and individually
+well-formed. Positional coverage still failed, so no Proposal or Decision was admitted. The generic
+`closed_output_contract_invalid` correction concealed the concrete expected/observed count. This
+is negative runtime/feedback evidence, not a semantic classification of the 32 news items and not
+a network-retry incident.
+
+Candidate Set `event-impact-triage-candidate-set-8ca1acc33a6ba7e622096236d4d45c033202e2a84a9d86b201add8070d2d08c9`
+and Work Plan `event-impact-triage-work-execution-plan-83af612c98b79dfeeadd48f3eb53d1950f59db0742a683f10d4a37e143714bde`
+remain frozen in the ignored private runtime. Five completed physical responses reconcile to three
+Usage records: 50,552 input / 52,509 output Tokens and 73,123 microusd. The failed active head cannot
+be skipped using a fresh root or batch size. Recovery must preserve its full denominator; any future
+correction contract must identify positional count errors without inventing a missing route,
+silently accepting a partial batch, or rewriting the old prompt transcript. No extra model call was
+made to inspect this failure.
+
 Implemented contract evidence:
 
 - complete Candidate Set freezing against a persisted prospective Data Snapshot and Readiness

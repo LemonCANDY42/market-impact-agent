@@ -16,7 +16,7 @@ from market_impact_agent.openai_chat_provider import (
 
 CLIPROXY_LOCAL_ORIGIN = "http://127.0.0.1:8317"
 CLIPROXY_LUNA_MODEL = "gpt-5.6-luna"
-CLIPROXY_LUNA_REASONING_EFFORT = "xhigh"
+CLIPROXY_LUNA_REASONING_EFFORTS = frozenset({"xhigh", "max"})
 CLIProxyProviderError = OpenAIChatProviderError
 
 
@@ -38,9 +38,10 @@ class CLIProxyLunaConfig:
             )
         if self.model != CLIPROXY_LUNA_MODEL:
             raise ValueError(f"CLIProxyAPI model must remain {CLIPROXY_LUNA_MODEL}")
-        if self.reasoning_effort != CLIPROXY_LUNA_REASONING_EFFORT:
+        if self.reasoning_effort not in CLIPROXY_LUNA_REASONING_EFFORTS:
             raise ValueError(
-                f"CLIProxyAPI reasoning_effort must remain {CLIPROXY_LUNA_REASONING_EFFORT}"
+                "CLIProxyAPI reasoning_effort must be one of "
+                f"{', '.join(sorted(CLIPROXY_LUNA_REASONING_EFFORTS))}"
             )
         for name in ("api_path", "models_path"):
             path = cast(str, getattr(self, name))

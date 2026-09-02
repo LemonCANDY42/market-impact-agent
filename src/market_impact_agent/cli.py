@@ -1075,6 +1075,30 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".market-impact/method-ablation-runs"),
     )
+    historical_pilot_parser = agent_subparsers.add_parser(
+        "historical-readiness-pilot-run",
+        help="Run one single-use opened historical diagnostic, two pairs plus a tie-break pair",
+    )
+    _add_agent_bundle_arguments(historical_pilot_parser)
+    historical_pilot_parser.add_argument("--method-catalog", required=True, type=Path)
+    historical_pilot_parser.add_argument("--method-evidence-declaration", required=True, type=Path)
+    historical_pilot_parser.add_argument("--provider-profile", required=True, type=Path)
+    historical_pilot_parser.add_argument("--experiment-id", required=True)
+    historical_pilot_parser.add_argument("--treatment-skill", required=True)
+    historical_pilot_parser.add_argument("--news-evidence-id", required=True)
+    historical_pilot_parser.add_argument("--news-content-hash", required=True)
+    historical_pilot_parser.add_argument("--target-id", required=True)
+    historical_pilot_parser.add_argument("--eligible-horizon-sessions", required=True, type=int)
+    historical_pilot_parser.add_argument("--market-state", default="unclassified")
+    historical_pilot_parser.add_argument("--narrative-salience", default="unavailable")
+    historical_pilot_parser.add_argument(
+        "--analysis-need", required=True, action="append", dest="analysis_needs"
+    )
+    historical_pilot_parser.add_argument("--max-total-cost-microusd", required=True, type=int)
+    historical_pilot_parser.add_argument("--state-root", required=True, type=Path)
+    historical_pilot_parser.add_argument(
+        "--skill-root", type=Path, default=_default_agent_skill_root()
+    )
     method_skill_ablation_parser = agent_subparsers.add_parser(
         "method-skill-ablation-run",
         help="Run a three-pair method Skill diagnostic with CPA cost preflight",
@@ -4859,6 +4883,74 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
+    if args.command == "agent" and args.agent_command == "historical-readiness-pilot-run":
+        try:
+            from market_impact_agent.historical_readiness_pilot import (
+                HistoricalReadinessBrief,
+                HistoricalReadinessInputs,
+                prepare_historical_readiness_pilot,
+                run_historical_readiness_pilot,
+            )
+            from market_impact_agent.method_skills import (
+                MethodRoutingContext,
+                load_method_evidence_declaration,
+            )
+            from market_impact_agent.paired_skill_ablation_runner import (
+                fetch_cpa_usage_keeper_pricing,
+            )
+
+            profile = load_model_provider_profile(args.provider_profile)
+            declaration = load_method_evidence_declaration(args.method_evidence_declaration)
+            registered_at = datetime.now(UTC)
+            prepared = prepare_historical_readiness_pilot(
+                experiment_id=args.experiment_id,
+                state_root=args.state_root,
+                inputs=HistoricalReadinessInputs(
+                    args.evidence_pack,
+                    args.evidence_documents,
+                    tuple(args.pattern_packs),
+                    args.method_evidence_declaration,
+                    args.method_catalog,
+                    args.provider_profile,
+                    args.skill_root,
+                ),
+                brief=HistoricalReadinessBrief(
+                    args.news_evidence_id,
+                    args.news_content_hash,
+                    args.target_id,
+                    args.eligible_horizon_sessions,
+                ),
+                treatment_skill=args.treatment_skill,
+                routing_context=MethodRoutingContext(
+                    args.market_state,
+                    args.narrative_salience,
+                    tuple(args.analysis_needs),
+                    declaration.available_evidence,
+                    True,
+                ),
+                pricing=fetch_cpa_usage_keeper_pricing(
+                    model=profile.model,
+                    captured_at=registered_at,
+                ),
+                max_total_cost_microusd=args.max_total_cost_microusd,
+                registered_at=registered_at,
+            )
+            result = asyncio.run(run_historical_readiness_pilot(prepared))
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            # Do not print exception prose: input/provider errors can contain licensed text/secrets.
+            print(
+                json.dumps(
+                    {
+                        "completed": False,
+                        "error": "historical pilot failed; inspect "
+                        "private artifacts before any further dispatch",
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["diagnostic_valid"] else 1
     if args.command == "agent" and args.agent_command == "method-skill-ablation-run":
         try:
             from market_impact_agent.method_skills import (

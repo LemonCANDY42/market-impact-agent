@@ -98,8 +98,9 @@ Mock path; an autonomous Paper mandate/risk/kill/reconciliation owner; and a pin
 Nautilus-to-IBKR Paper runtime candidate. These are engineering capabilities, not evidence that a
 strategy is effective or that the broker Provider is accepted.
 
-The evidence gates remain open. Strict historical PIT remains `0/18`; no three-case improved
-Modeled-PIT pilot or 24-case frozen holdout has yet produced an effectiveness result. A private,
+The evidence gates remain open. Strict historical PIT remains `0/18`; the new three-case opened
+input diagnostic completed but produced no positive effectiveness acceptance, and no 24-case frozen
+holdout has produced an effectiveness result. A private,
 mode-`0600` model environment and strict launcher now supply the existing CPA credential without
 exposing it to the collector or repository; effective model, endpoint, reasoning, price and budget
 remain frozen in each Profile and Run. Five Earnings candidates have now completed formal Triage.
@@ -132,6 +133,54 @@ and phase. Successful peers retain Usage even when a sibling raises, and ambigui
 in the aggregate status. This
 reduces wall time only. It does not increase frozen call/token/cost budgets, fix the failed policy
 contract, or authorize a second concurrently running Plan.
+
+The first real concurrent v13 material batch froze 32 later actual-receipt versions into three
+Work Units. Two members completed; the 12-atom middle member returned only 11 positional routes in
+each of three fully received responses. All three responses were valid JSON and their individual
+route structures passed validation. The closed coverage boundary correctly rejected the batch, but
+the correction prompt reduced this specific omission to `closed_output_contract_invalid`, leaving
+the Agent without the expected/observed count. This is an input-to-output coverage/feedback defect,
+not a transport failure or evidence that the events lack financial impact. The exact Run Journal
+and three Usage records reconcile to five physical attempts, 50,552 input / 52,509 output Tokens
+and 73,123 microusd. No Proposal, Decision, Trigger or trading permission was produced; the failed
+denominator and active head remain intact. Do not rerun it, synthesize the missing route, or treat
+the two completed members as an authorized partial Decision. The next operational recovery must
+preserve failed-batch history and repair precise coverage feedback under a new binding, not loosen
+the event gate or add another prompt-only blind study.
+
+At 04:41 UTC, fresh readiness still had four operational checkpoint families, with 166 policy and
+157 material unclassified versions in overlapping views; these are not 323 independent events.
+Earnings and NBS had no new trigger in the current epoch. Watch health is separate from collection
+readiness: seven Watches were active, four were backing off with `watch_snapshot_incomplete`, and
+one old Watch was rebaselined. No Wake existed. Therefore `4/4 operational` does not mean the full
+Watch-to-Judgment loop is healthy or complete.
+The four backing-off Watches share a 120-second/360-second collection policy. The read-only audit
+found two receipt intervals over that limit after 03:00 UTC, with a maximum around 410 seconds;
+their later frozen snapshots consequently report `journal_internal_coverage_gap`. The existing
+Watch re-freezes from its initial baseline on every poll, so a past gap does not disappear when
+current collection recovers. Any successor/rebaseline repair must address that exact policy and
+coverage lifetime without deleting receipts or inventing coverage; repeatedly rebaselining the same
+unsuitable policy is not a durable fix.
+
+The opened historical readiness lane has now run its fixed three-case cohort, not just its unit
+tests. All 14 logical runs completed with full frozen evidence/tool coverage and reconciled Usage:
+29 physical requests, 406,162 input / 82,630 output Tokens, and 180,401 microusd. Thirteen abstained;
+the risk-case treatment proposed down once and abstained twice, so no non-empty majority exists.
+This remains research-only, without executable targets, simulated holdings, fill/return evaluation,
+or a positive Skill claim. The exact cohort and report identities are in
+`docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md`. Do not expand the holdout or replay these opened inputs
+until target-alias semantics, lane-versus-economic gap interpretation, and method/input compatibility
+are repaired. The next user-requested protocol is two independent treatment analyses plus one
+conditional Judge on substantive disagreement, not a third vote; freeze its model/budget and
+decision rule in a new epoch, and retain Harness authority. It has not yet been implemented.
+
+Future new Luna epochs select the separate CPA `max` Profile, with the per-run estimated-cost cap
+raised from USD 0.20 to 0.30 and newly registered aggregate caps allowed to rise by 50 percent.
+Existing xhigh cohorts, callbacks and registrations retain their exact profile and budgets. Token,
+turn, tool, time, retry, concurrency and trading-risk limits do not increase by implication.
+A separate synthetic max canary completed two physical requests and five read-only tool calls for
+9,284 microusd, with authoritative terminal reopening and Usage reconciliation. This accepts the
+configured-max local request/tool path only, not a quality gain or real-market/execution result.
 
 The downstream account loop is specified in `docs/ACCOUNT_DECISION_LOOP.md`. Delivery stays
 incremental: read-only reconciled account/position context, then deterministic portfolio/sizing

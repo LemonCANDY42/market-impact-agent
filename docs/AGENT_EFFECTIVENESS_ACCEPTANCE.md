@@ -118,6 +118,96 @@ Repeated-digit placeholders, caller-selected lanes and copied admission artifact
 
 ## Frozen strategy epoch
 
+### Opened historical readiness pilot — September 2026
+
+The small historical-readiness runner is a diagnostic entry to the existing `AgentEngine`, not a
+second strategy evaluator. It reuses content-verified frozen research documents, the Pattern Pack,
+registered Method Skill routing, read-only tools, Run Journal and Usage Ledger. Its new question
+permits up/down/abstain over a declared horizon instead of inheriting the old long-only question.
+The original input and any mechanically derived question-only Evidence Pack are both bound; no
+source evidence, availability timestamp or prior result is edited. Prior expectation may be
+explicitly unknown. The model must cite its event-to-variable-to-target reasoning rather than be
+given an operator-authored financial conclusion.
+
+Before the first call, the initial opened-development cohort is fixed to these existing inputs:
+
+| Frozen checkpoint (UTC cutoff) | Operator-only coverage purpose | Treatment addition |
+| --- | --- | --- |
+| 2024-09-30 01:25 | Policy-stimulus opportunity assessment | `narrative-diffusion-assessment` |
+| 2020-02-03 01:25 | Epidemic-shock risk assessment | `expectations-base-rates` |
+| 2021-07-01 01:25 | No clear fresh catalyst / abstention assessment | `second-level-cycle-context` |
+
+These purposes are not answer labels and are withheld from the Agent. Every case uses the same
+five-trading-session research horizon and existing masked `broad-market-a` research target. Two
+complete control/treatment pairs run first; either-arm target/direction/abstain disagreement opens
+one third complete pair. Confidence is recorded, never used as a cutoff or quantity. A failed pair
+stops further pairs while started peers finish and are accounted for. Source, model, prompt, Skill,
+tool and budget bindings are frozen before dispatch, with at most two active requests and a maximum
+of six bounded Agent runs per case. The three cases are not run as overlapping Plans.
+
+This cohort cannot produce an executable Intent: the target is a research index alias, not a
+tradable instrument, and the old documents do not establish current order rules, raw executable
+quotes, simulated holdings or strict historical authority. It can measure whether explicit
+horizon, source-grounded event reasoning and typed expectation absence improve the previous
+mechanical-abstention pattern. Even a completed non-empty Judgment does not demonstrate avoided
+loss, after-cost return, Skill incremental value or historical/paper parity. Report this narrower
+readiness evidence separately and do not substitute it for the executable pilots or holdout.
+
+The fixed cohort completed on 2026-09-02 under its original Luna xhigh Profile:
+
+| Checkpoint | Control decisions | Treatment decisions | Physical requests | CPA estimate (USD) |
+| --- | --- | --- | --- | --- |
+| 2024-09-30 | abstain, abstain | abstain, abstain | 9 | 0.055391 |
+| 2020-02-03 | abstain, abstain, abstain | down, abstain, abstain | 12 | 0.073308 |
+| 2021-07-01 | abstain, abstain | abstain, abstain | 8 | 0.051702 |
+
+All 14 logical runs completed, read the six Evidence Items and Pattern Pack, and reconciled to
+their three Usage Ledgers: 29 physical requests, 406,162 input / 82,630 output Tokens and
+180,401 microusd. The adaptive rule correctly used a third complete pair only for the risk case.
+There were 13 abstentions and one five-session down proposal, not a non-empty majority. The latter
+had decision confidence 0.55 and candidate confidence 0.56; neither changed admission or sizing.
+This is a completed diagnostic with no positive effectiveness acceptance or Skill promotion.
+It does not establish the executable-pilot gate or justify expanding the holdout.
+
+Private report identities are the registrations
+`ebc8c7ea2f914e970557c5a81d6bbf430030a737524b15852d5114c6405136b9`,
+`410902270ceea42edc4eb2038ac5779d8a6e19f8c661d700d090c80e5e198c1a`, and
+`dfd9aecfc2c78c964650b631da1dee78f94f7300627f0d05f4cc68404d62803f`, respectively.
+The corresponding Usage Ledger hashes are
+`ef8f52e7046baaf69ffaf124746ff734dac44bedd147878622d540569ca6c4f7`,
+`a27c253c95247a64d346504039b833470e142deb67d7f57f38fe2d6dd8007918`, and
+`edb1dbb8f000d47c59aeef6d0eae0ce3d3e5d8f6a6af1d1af2e573d4115d62eb`.
+No licensed source payload is included here.
+
+The next input repair must supply the alias's permitted market/benchmark semantics, distinguish
+claim-only Strict-PIT and execution limitations from economic decision blockers, and check that a
+selected method's prerequisites match the actual content rather than merely a source category.
+Generic critical-gap instructions and expectation-oriented methods create abstention pressure, but
+the one down proposal demonstrates this is not a deterministic prohibition. Metadata-only official
+context and genuine uncertainty about horizon persistence remain separate economic limitations.
+Do not weaken live/PIT authority or force a directional answer to improve a completion metric.
+
+### Proposed next epoch: two analysts with conditional adjudication
+
+The user's next-epoch direction is two independent treatment analyses, with one Judge invocation
+on substantive decision disagreement instead of a third treatment vote. This is not implemented
+or retroactively applied to the cohort above. The Judge receives the same frozen evidence and
+auditable conclusions, citations, counterarguments and uncertainties from both analyses, not future
+outcomes or private model reasoning. Adjudication is evidence-led, never majority voting: inspect
+the original sources and compare each analysis's factual claims, assumptions, transmission path,
+counterevidence and horizon. A minority view may prevail; both analyses may be rejected; a different
+supported conclusion within the original research scope is permitted. Vote count, model tier and
+self-reported confidence confer no decision authority. It may select or synthesize a supported
+conclusion, abstain, or request additional evidence for a separately frozen later decision. Its Profile is independently
+configurable, allowing a stronger accepted model without changing analyst identities.
+
+Register the exact disagreement rule, Judge Profile/prompt, total budget and final-decision rule
+before dispatch; use one Judge at most, no recursive debate or repeated adjudication until agreement.
+Analyst agreement is not evidence of correctness. The Judge is another bounded Judgment producer,
+not a source of facts, Trading Mandate authority or a replacement for Query/Policy/Execution gates.
+Account for the whole treatment pipeline when comparing cost and effect against the frozen control;
+the Judge does not create another independent Event Case. Input repair comes before this comparison.
+
 `StrategyValidationRegistration v1` remains the frozen registration payload; model Profile, prompt,
 Skill catalog, tool manifest, universe, cost model and fill model hashes; and the exact definition
 and executable configuration of the candidate and every named baseline. Candidate and baseline

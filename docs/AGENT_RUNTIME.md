@@ -19,8 +19,9 @@ The machine-local environment names are:
 - `MINIMAX_MODEL=MiniMax-M3`: explicit model identity with no silent substitution.
 - `MARKET_IMPACT_CLIPROXY_API_KEY`: a dedicated local project credential injected only into the
   experiment process;
-- CLIProxyAPI Profile values are fixed to `http://127.0.0.1:8317`, `gpt-5.6-luna`, and
-  `reasoning_effort=xhigh`; alternate origins, models, or effort values are rejected.
+- CLIProxyAPI Profile values are fixed to `http://127.0.0.1:8317` and `gpt-5.6-luna`;
+  `reasoning_effort=xhigh` and `reasoning_effort=max` are accepted, while alternate origins,
+  models, or effort values are rejected.
 
 On the accepted local host, private model values live in
 `~/.config/market-impact-agent/model.env` with mode `0600`. The
@@ -35,6 +36,23 @@ the Harness selects the registered profile and freezes the effective profile in 
 plan and Run record. An environment value may supply a credential or assert the expected MiniMax
 origin/model, but it may not silently override the frozen profile. This keeps the ordinary command
 simple without making old experiments unreproducible.
+
+New Luna epochs select the CPA `cliproxyapi-luna-max-cpa-v1.json` Profile; it
+has a distinct content-derived identity from the existing CPA xhigh Profile. Its 300,000
+micro-USD per-run estimated-cost cap is 1.5 times the CPA xhigh Profile's 200,000 cap, while its
+turn, tool, token, wall-time, retry, and pricing values remain the same. A future newly registered
+experiment may use a 1.5-times-prior aggregate cap. Active and frozen xhigh cohorts, including
+their registrations and pending callbacks, retain their old limits and identity and must not be
+relabeled. The [official Luna model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+lists `max` as a supported effort. A separate synthetic local CPA canary completed on 2026-09-02
+through this max Profile: two physical requests, five frozen read-only tool calls, 6,614 input /
+6,634 output Tokens and 9,284 microusd estimated cost. Its terminal artifact is
+`65158865b3b288f29fa38bd2501e94712ba5bd9f4b22d7fbb6c57775f2056dea`.
+Post-run Usage reconciliation reopened the authoritative terminal and Journal; the single-record
+ledger hash is `1c1ce5b0dc4fef310605368257b4f3d5faa39bf7e9d782e1bbdfa3eb7ce084e9`.
+This verifies a completed configured-max request/tool/Judgment path, not upstream reasoning
+internals, max-versus-xhigh quality, real-market correctness or execution readiness. It is separate
+from the three historical xhigh pilots and grants no new trading authority.
 
 `MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
 machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a
@@ -361,8 +379,9 @@ optional reasoning effort, retry policy, pricing, and per-run budgets. MiniMax a
 the first two concrete adapters. Both passed model discovery, exact-identity, text, function-tool,
 redirect/origin, and full synthetic Agent checks through the same Factory and `AgentEngine`.
 `agent run --provider-profile` is the uniform command entry; no Provider-specific runtime branch is
-needed. Historical registered MiniMax experiments remain bound to their original Profile, while
-new experiments may explicitly freeze the Luna xhigh Profile. This proves bounded runtime
+needed. Historical registered MiniMax experiments remain bound to their original Profile. Future
+new Luna epochs use the distinct CPA max Profile, while explicit legacy/replay work may use xhigh;
+existing frozen xhigh epochs retain their original identity. This proves bounded runtime
 portability, not equal model behavior or equivalent cost semantics.
 
 The first real-model comparison,
@@ -476,8 +495,9 @@ uv run market-impact agent validate \
 ```
 
 Run a new private real-model judgment only after the selected Profile's credential environment is
-present. The historical default remains the frozen MiniMax Profile; use the explicit Luna Profile
-for new Luna xhigh runs:
+present. The historical default remains the frozen MiniMax Profile. For a future new Luna epoch,
+select and freeze the distinct CPA max Profile; do not alter an active or frozen xhigh binding.
+The following historical example keeps using xhigh:
 
 ```bash
 uv run market-impact agent run \
@@ -515,10 +535,11 @@ bridge with identical result identity. The ensemble path revalidates all three a
 Artifacts and their frozen binding. Nautilus does not call the model.
 
 Current non-claims remain explicit: two adapters passed the bounded runtime surface, but one Luna
-run does not rank models or prove repeated behavioral equivalence; the synthetic energy case is
-pipeline evidence, not event-family calibration; Skills are installed, updated, or removed only
-through explicit user-authorized repository/filesystem changes, never by the model; and the
-current research runtime exposes read-only tools only.
+xhigh run does not rank models or prove repeated behavioral equivalence; the separate max canary
+does not establish a max-versus-xhigh quality advantage. The synthetic energy case is pipeline evidence, not event-family
+calibration; Skills are installed, updated, or removed only through explicit user-authorized
+repository/filesystem changes, never by the model; and the current research runtime exposes
+read-only tools only.
 
 The bounded local runtime gate is satisfied. It does not override the failed Phase 2
 trading-calibration gate and grants no paper or live capability.
