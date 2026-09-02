@@ -936,6 +936,10 @@ def build_parser() -> argparse.ArgumentParser:
     reassessment_parser.add_argument("--candidate-set-id")
     reassessment_parser.add_argument("--cluster-id")
     reassessment_parser.add_argument("--question-file", type=Path)
+    reassessment_parser.add_argument(
+        "--model-profile-alias",
+        help="Explicit bounded profile for a new registration; never overrides a frozen run",
+    )
     reassessment_parser.add_argument("--source-acceptance-report-hash", action="append", default=[])
     reassessment_parser.add_argument("--context-version-id", action="append", default=[])
     reassessment_parser.add_argument("--refs", type=Path)
@@ -3421,6 +3425,7 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
         run_reassessment_judgment,
     )
     from market_impact_agent.prospective_diagnostic import (
+        REASSESSMENT_PROFILE,
         RegisteredReassessment,
         build_reassessment_registration,
     )
@@ -3436,6 +3441,8 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
         store = LocalDataSnapshotStore(args.state_root)
         authority = EventImpactTriageDecisionStore(store.root)
         owner = ProspectiveTriggerAdmissionStore(store)
+        if args.model_profile_alias is not None and args.action != "register":
+            raise ValueError("model profile can only be selected when registering a new question")
         if args.action == "register":
             if args.original_registration is None or args.question_file is None:
                 raise ValueError("registration requires original registration and question file")
@@ -3445,6 +3452,7 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
             registration = build_reassessment_registration(
                 original_registration=original,
                 registered_at=datetime.now(UTC),
+                model_profile_id=args.model_profile_alias or REASSESSMENT_PROFILE,
                 subject=RegisteredReassessment(
                     original_registration_id=candidate.registration_id,
                     original_candidate_set_id=candidate.candidate_set_id,

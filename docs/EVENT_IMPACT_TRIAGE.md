@@ -619,6 +619,55 @@ remained identical, with its normal scheduler advancing to seven polls and zero 
 rerun, order or service restart was performed. A separately approved same-question diagnostic may
 start a new current-time registration; it must not merge the lost old response or promote this Run.
 
+The user subsequently approved at most one such same-question diagnostic with a USD 1 ceiling.
+Register it explicitly with `--model-profile-alias cliproxyapi-luna-max-cpa-reassessment-usd1-v1`
+and new registration/refs paths. This is the same Luna max/CPA/retry policy with only the estimated
+cost ceiling changed; the existing `0.30` registration and failed Run remain immutable. Prepare and
+run consume the frozen Profile rather than a CLI budget override. The old lost-response usage stays
+unknown and separate from the new diagnostic's usage. This approval is not a new blind sample,
+repeated-attempt authorization, trading permission or an upstream invoice cap.
+
+The authorized diagnostic actually completed with cutoff `2026-09-02T10:47:30.867021Z`, registration
+`77719aefb52f9b5d0b367f8556d67178f4a51cf9112070f0998eeade0ce9ed67`, Trigger
+`fbafa4745a86804060bdf21b677c0129a7785af913cb89bbf3c12aefb26c1ace` and passing Query Gate
+`47eee7a006ae75abb60b17fa871882a7ec972031c774d5cb83dd3d2c561e8027`. It retained the two original
+forecast versions and exact issuer master, selecting the actually received September 2 daily
+valuation instead of September 1. This is a new current-time diagnostic, not the old input replay.
+Run `prospective-reassessment-d2cf9ae1dec0ab111c2e48fc34b04f8615945f2621a94885f625655f18d97b12`
+completed three physical model requests with no retry: 28,580 input / 11,436 output Tokens, nine
+tool calls and 19,440 microusd ($0.019440). Terminal CAS is
+`6e815ce72b5cf11d7b08152d21a932c0faafae1dcbbd8a45ac9625c83b91a000`; its authoritative Journal
+matches Usage record `ec1fb2e87bac4f514e5e1af3ad466c4eac1594c550e645b8a569acb4f23cdfea`.
+Credential-removed replay returned the identical terminal without additional dispatch or Usage.
+The previous Run remains `human_input_required`, with its unknown second-response cost separate.
+
+**Result: delivery recovered, decision-input usability failed.** The terminal is `abstain`, with
+zero candidates and reported decision confidence 0.97; the confidence is not investment accuracy.
+All nine Agent queries returned zero records. Offline invocation of the exact same frozen tool
+handlers with `{}`, a single exact instrument filter, or the literal instrument code returned
+2 event records, 1 issuer record and 1 valuation record. Thus records were available, not lost.
+The Agent supplied natural-language search sentences and filled unknown optional filter values
+with the literal `"unknown"`. The handler performs literal substring matching and conjunctive exact
+filters, so these requests excluded the available records. Its description does not explain those
+search semantics. This is an input-access/Agent-tool interaction failure, not evidence of absent
+market events or ineffective investment reasoning. Query Gate proved availability and authorization,
+not that the Agent successfully retrieved the inputs. The retained abstention also cites economic
+uncertainties; no positive or negative strategy conclusion can be isolated from this run.
+
+The pinned [CPA Chat-to-Codex translator](https://github.com/router-for-me/CLIProxyAPI/blob/a7e3596b7e351d800e58ed29529fbca3d1c18737/internal/translator/codex/openai/chat-completions/codex_openai_request.go#L420-L443)
+passes function parameters through and copies `strict` only when supplied. This code inspection does
+not establish the effective upstream schema for these requests; do not claim the gateway forced
+the optional fields or assign the entire failure to model capability.
+
+Next acceptance must repair the frozen-input access surface before another model experiment:
+provide an unmistakable default read of the already selected evidence, explain literal search and
+AND-filter semantics for optional narrowing, and test the exact model-facing schema plus nonempty
+required reads against production-shaped inputs. Do not silently remove explicit filters, widen
+the frozen set, mix runtime HTTP into it, or rewrite the old tool manifest/Run. Changes require a new
+frozen execution binding; the single authorized diagnostic is finished and is not automatically
+repeated using its unspent budget. No Signal, Intent, Account, Watch resolution or Paper operation
+was created.
+
 ### Actual-receipt coverage failure — 2026-09-02
 
 The first bounded-concurrent v13 operational batch contained 32 frozen versions and three Work

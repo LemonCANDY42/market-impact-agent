@@ -47,6 +47,7 @@ from market_impact_agent.prospective_decision_pipeline import (
 )
 from market_impact_agent.prospective_diagnostic import (
     REASSESSMENT_PROFILE,
+    REASSESSMENT_USD1_PROFILE,
     ProspectiveDiagnosticRegistration,
     RegisteredReassessment,
     build_reassessment_registration,
@@ -94,6 +95,7 @@ def prepared_state(
     with_unrelated_row: bool = False,
     trade_date: object = "20260901",
     omit_trade_date: bool = False,
+    model_profile_id: str = REASSESSMENT_PROFILE,
 ) -> State:
     store = LocalDataSnapshotStore(tmp_path / "state")
     journal = ProspectiveDataJournal(store)
@@ -217,6 +219,7 @@ def prepared_state(
     registration = build_reassessment_registration(
         original_registration=original,
         registered_at=NOW - timedelta(minutes=1),
+        model_profile_id=model_profile_id,
         subject=RegisteredReassessment(
             original_registration_id=original.registration_id,
             original_candidate_set_id=candidate.candidate_set_id,
@@ -258,10 +261,12 @@ def admit(state: State):
 
 
 class Provider:
-    def __init__(self, response: ModelTurn | BaseException):
+    def __init__(
+        self, response: ModelTurn | BaseException, profile_alias: str = REASSESSMENT_PROFILE
+    ):
         self.response = response
         self.calls = 0
-        self.profile = load_builtin_model_provider_profile(REASSESSMENT_PROFILE)
+        self.profile = load_builtin_model_provider_profile(profile_alias)
 
     @property
     def provider_id(self):
@@ -307,8 +312,11 @@ def abstain_turn(event_id: str):
     )
 
 
-def test_exact_old_subject_current_context_and_single_judgment_replay(tmp_path: Path) -> None:
-    state = prepared_state(tmp_path)
+@pytest.mark.parametrize("profile_alias", [REASSESSMENT_PROFILE, REASSESSMENT_USD1_PROFILE])
+def test_exact_old_subject_current_context_and_single_judgment_replay(
+    tmp_path: Path, profile_alias: str
+) -> None:
+    state = prepared_state(tmp_path, model_profile_id=profile_alias)
     store, triage, _, registration, _, original_decision = state
     before = triage.get_context(original_decision.candidate_set_id)
     trigger = admit(state)
@@ -329,7 +337,7 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(tmp_path: 
     assert "not financial truth" in instruction
     inputs = materialize_checkpoint_decision_inputs(snapshot_set, store=store)
     assert len(inputs) == 4
-    provider = Provider(abstain_turn(pack.event_id))
+    provider = Provider(abstain_turn(pack.event_id), profile_alias)
     engine = engine_for(store, provider)
     refs, gate, request = prepare_reassessment_judgment(store=store, trigger=trigger, engine=engine)
     assert gate.model_run_eligible and provider.calls == 0
@@ -347,7 +355,7 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(tmp_path: 
     )
     assert result.status is RunStatus.COMPLETED
     assert provider.calls == 1
-    restarted_provider = Provider(AssertionError("terminal replay dispatched"))
+    restarted_provider = Provider(AssertionError("terminal replay dispatched"), profile_alias)
     replay = asyncio.run(
         run_reassessment_judgment(
             store=store,
@@ -364,6 +372,81 @@ def test_exact_old_subject_current_context_and_single_judgment_replay(tmp_path: 
         assert connection.execute("SELECT count(*) FROM strategy_window_events_v2").fetchone() == (
             0,
         )
+
+
+@pytest.mark.parametrize(
+    "profile_alias,limit",
+    [
+        (REASSESSMENT_PROFILE, "1.00"),
+        (REASSESSMENT_USD1_PROFILE, "0.30"),
+        (REASSESSMENT_USD1_PROFILE, "1.01"),
+        ("unregistered-profile", "1.00"),
+    ],
+)
+def test_reassessment_rejects_profile_budget_mismatch(
+    tmp_path: Path, profile_alias: str, limit: str
+) -> None:
+    registration = prepared_state(tmp_path)[3]
+    with pytest.raises(ValueError, match="bounded current-time"):
+        replace(registration, model_profile_id=profile_alias, aggregate_model_cost_limit_usd=limit)
+    payload = registration.to_dict()
+    payload.update(model_profile_id=profile_alias, aggregate_model_cost_limit_usd=limit)
+    assert validate_agent_contract(payload, "prospective-diagnostic-registration.schema.json")
+
+
+def test_cli_registers_explicit_budget_without_mutating_old_registration(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from market_impact_agent.cli import main
+
+    store, triage, original, old, _, _ = prepared_state(tmp_path)
+    assert old.reassessment is not None
+    original_path = tmp_path / "original.json"
+    question_path = tmp_path / "question.txt"
+    new_path = tmp_path / "usd1.json"
+    original_path.write_text(json.dumps(original.to_dict()), encoding="utf-8")
+    question_path.write_text(old.reassessment.research_question, encoding="utf-8")
+    before = triage.get_context(old.reassessment.original_candidate_set_id)
+    args = [
+        "agent",
+        "prospective-reassessment",
+        "--action",
+        "register",
+        "--registration",
+        str(new_path),
+        "--original-registration",
+        str(original_path),
+        "--question-file",
+        str(question_path),
+        "--candidate-set-id",
+        old.reassessment.original_candidate_set_id,
+        "--cluster-id",
+        old.reassessment.original_cluster_id,
+        "--state-root",
+        str(store.root),
+        "--model-profile-alias",
+        REASSESSMENT_USD1_PROFILE,
+    ]
+    for report_hash in old.reassessment.source_acceptance_report_hashes:
+        args.extend(["--source-acceptance-report-hash", report_hash])
+    assert main(args) == 0
+    assert json.loads(capsys.readouterr().out)["model_calls"] == 0
+    new = prospective_diagnostic_registration_from_dict(json.loads(new_path.read_text()))
+    assert new.model_profile_id == REASSESSMENT_USD1_PROFILE
+    assert new.aggregate_model_cost_limit_usd == "1.00"
+    assert new.registration_id != old.registration_id
+    assert new.reassessment == old.reassessment
+    assert old.aggregate_model_cost_limit_usd == "0.30"
+    assert triage.get_context(old.reassessment.original_candidate_set_id) == before
+    frozen_bytes = new_path.read_bytes()
+    assert main(args) == 1  # Existing registration is never overwritten.
+    capsys.readouterr()
+    assert new_path.read_bytes() == frozen_bytes
+    args[args.index("register")] = "run"
+    assert main(args) == 1
+    blocked = json.loads(capsys.readouterr().err)
+    assert blocked["error_type"] == "ValueError"
+    assert new_path.read_bytes() == frozen_bytes
 
 
 @pytest.mark.parametrize(
@@ -574,8 +657,51 @@ def test_shared_receipt_rows_are_not_exposed_by_checkpoint_tools(tmp_path: Path)
             return await selected.handler({})
 
         payload = asyncio.run(read(descriptor))
+        assert isinstance(payload, dict)
+        assert len(cast(list[object], payload["records"])) == (
+            2 if descriptor.name == "lookup_event_revelation" else 1
+        )
         assert "999999.SZ" not in json.dumps(payload)
     assert provider.calls == 0
+
+
+def test_frozen_lookup_literal_search_is_not_semantic_search(tmp_path: Path) -> None:
+    """Retain the real empty-read failure mechanism; never silently drop explicit filters."""
+    from market_impact_agent.prospective_checkpoint_sets import build_checkpoint_tool_descriptors
+
+    state = prepared_state(tmp_path)
+    store = state[0]
+    trigger = admit(state)
+    _, snapshot_set, _, _ = reassessment_inputs(store=store, trigger=trigger)
+    records = materialize_checkpoint_decision_inputs(snapshot_set, store=store)
+    descriptors = build_checkpoint_tool_descriptors(
+        snapshot_set,
+        store=store,
+        frozen_input=snapshot_set.frozen_input,
+        authorized_decision_input_ids=frozenset(cast(str, item["record_id"]) for item in records),
+        required_capability="market.read",
+    )
+    for descriptor in descriptors:
+
+        async def reads(selected: ToolDescriptor) -> None:
+            matching: tuple[dict[str, object], ...] = (
+                {},
+                {"filters": {"instrument_code": "000001.SZ"}},
+            )
+            for arguments in matching:
+                result = await selected.handler(arguments)
+                assert isinstance(result, dict)
+                assert len(cast(list[object], result["records"])) > 0
+            excluding: tuple[dict[str, object], ...] = (
+                {"query": "Find exact original records for the next five sessions"},
+                {"filters": {"instrument_code": "unknown"}},
+            )
+            for arguments in excluding:
+                result = await selected.handler(arguments)
+                assert isinstance(result, dict)
+                assert result["records"] == []
+
+        asyncio.run(reads(descriptor))
 
 
 def test_wrong_subject_or_unregistered_source_cannot_prepare(tmp_path: Path) -> None:
@@ -784,18 +910,20 @@ def test_cli_recovers_interrupted_dispatch_offline_and_accounts_once(
     assert provider.calls == 1
 
 
+@pytest.mark.parametrize("profile_alias", [REASSESSMENT_PROFILE, REASSESSMENT_USD1_PROFILE])
 def test_cli_fresh_dispatch_resolves_exact_profile_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    profile_alias: str,
 ) -> None:
     from market_impact_agent.cli import main
     from market_impact_agent.model_provider import ModelProviderFactory, ModelProviderProfile
 
-    state = prepared_state(tmp_path)
+    state = prepared_state(tmp_path, model_profile_id=profile_alias)
     store, _, _, registration, _, _ = state
     trigger = admit(state)
-    provider = Provider(abstain_turn(trigger.cluster_id))
+    provider = Provider(abstain_turn(trigger.cluster_id), profile_alias)
     refs, _, _ = prepare_reassessment_judgment(
         store=store, trigger=trigger, engine=engine_for(store, provider)
     )

@@ -209,6 +209,7 @@ packages = ["src/market_impact_agent"]
 "examples/providers/cliproxyapi-luna-xhigh-cpa-v1.json" = "market_impact_agent/builtin_provider_profiles/cliproxyapi-luna-xhigh-cpa-v1.json"
 "examples/providers/cliproxyapi-luna-max-cpa-v1.json" = "market_impact_agent/builtin_provider_profiles/cliproxyapi-luna-max-cpa-v1.json"
 "examples/providers/cliproxyapi-luna-max-cpa-retry408-v1.json" = "market_impact_agent/builtin_provider_profiles/cliproxyapi-luna-max-cpa-retry408-v1.json"
+"examples/providers/cliproxyapi-luna-max-cpa-reassessment-usd1-v1.json" = "market_impact_agent/builtin_provider_profiles/cliproxyapi-luna-max-cpa-reassessment-usd1-v1.json"
 "skills/energy-supply/SKILL.md" = "market_impact_agent/builtin_skills/energy-supply/SKILL.md"
 "skills/energy-supply/skill.json" = "market_impact_agent/builtin_skills/energy-supply/skill.json"
 "skills/evidence-core/SKILL.md" = "market_impact_agent/builtin_skills/evidence-core/SKILL.md"

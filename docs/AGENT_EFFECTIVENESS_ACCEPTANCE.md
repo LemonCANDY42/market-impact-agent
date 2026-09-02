@@ -80,6 +80,11 @@ retroactively resolve its parent Watch, or count as a new blind event. See the
 [initial Judgment boundary](EVENT_IMPACT_TRIAGE.md#current-time-reassessment-initial-judgment-boundary).
 Paired comparison, conditional-Judge arbitration and executable Decision Admission remain
 separate acceptance steps; a successful transport or one completed Judgment does not satisfy them.
+The September 2 USD 1 diagnostic further separates input availability from input use: its signed
+abstention followed empty Agent queries even though default reads exposed the frozen records.
+Retain this as input-access failure evidence, not an economic-abstention success or a verdict on
+investment quality. Repair and verify the model-facing read surface before another strategy run;
+do not silently change the completed Run's tools or reuse its unspent budget as rerun authority.
 
 `StrategyValidationAuthorityStore.evaluate(registration_id)` accepts no outcome, metric, selector,
 store, path, denominator row, or evidence-lane override. A v2 report binds the

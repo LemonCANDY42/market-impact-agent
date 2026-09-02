@@ -106,3 +106,22 @@ def test_received_408_policy_has_new_profile_and_runtime_identity(
     bad["profile_id"] = "model-provider-" + canonical_hash(bad)
     with pytest.raises(TypeError, match="boolean"):
         model_provider_profile_from_dict(bad)
+
+
+def test_reassessment_usd1_profile_changes_only_its_cost_cap() -> None:
+    old = load_builtin_model_provider_profile("cliproxyapi-luna-max-cpa-retry408-v1")
+    new = load_builtin_model_provider_profile("cliproxyapi-luna-max-cpa-reassessment-usd1-v1")
+    assert old.profile_id == (
+        "model-provider-720923464c56599263ec7f06beb1b353c26f41ed1c532b852f0e870ab2c414a8"
+    )
+    assert old.budget.max_estimated_cost_microusd == 300_000
+    expected = old.core_dict()
+    expected["budget"] = {
+        **old.budget.to_dict(),
+        "max_estimated_cost_microusd": 1_000_000,
+    }
+    assert new.core_dict() == expected
+    assert new.profile_id != old.profile_id
+    assert new.runtime_config().provider_profile_hash == new.profile_hash
+    assert new.runtime_config().budget.max_estimated_cost_microusd == 1_000_000
+    assert validate_agent_contract(new.to_dict(), "model-provider-profile.schema.json") == ()

@@ -74,6 +74,19 @@ attempt remains generation-unknown, fully traced and possibly billed; only its i
 is discarded. Repeated 408 or an interrupted process does not trigger an unbounded retry. See
 `MODEL_PROVIDER_RELIABILITY.md` for precise admission, accounting and no-trading boundaries.
 
+The separately authorized one-question Earnings diagnostic can explicitly select
+`cliproxyapi-luna-max-cpa-reassessment-usd1-v1` at registration. This Profile changes only the
+estimated-cost ceiling to 1,000,000 microusd; Luna max, CPA prices, token/tool/time limits and bounded
+received-408 retry stay unchanged. Its v5 registration derives the matching `1.00` aggregate cap.
+The default remains the original `0.30` Profile. A Profile alias cannot override a prepared or running
+registration, and this one-run approval does not authorize repeat diagnostics or raise other epochs'
+budgets. Old registration/Run identities and their known/unknown usage remain unchanged.
+The real USD 1 diagnostic completed for $0.019440 and exact offline terminal replay created no
+additional requests. Its abstention exposed a separate literal-query/optional-filter usability
+failure: all nine Agent reads were empty despite nonempty default reads. Availability, successful
+transport and signed completion are therefore not evidence that the Agent consumed the required
+data. See `EVENT_IMPACT_TRIAGE.md` for the fixed denominator and next input-access acceptance gate.
+
 `MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
 machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a
 new Triage Work Execution Plan before any request is dispatched. Changing the environment therefore

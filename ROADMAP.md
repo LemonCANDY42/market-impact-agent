@@ -165,9 +165,18 @@ and collection-finalization write transactions, retaining atomic duplicate/first
 revalidating lease/preparation inputs at commit. Four production-owner contention cases, rollback
 and takeover tests, independent review, packaging, all static checks and the final 1,753-test suite
 passed. Actual credential-removed terminal replay kept the same refs/terminal, two dispatches and
-one Usage record. No new diagnostic was launched: a separate current-time same-question run needs
-explicit approval; the interrupted run is not resumed or silently replaced. This is not initial
-Judgment acceptance. Exact identities and accounting are in `docs/EVENT_IMPACT_TRIAGE.md`.
+one Usage record. The user has now approved one separately registered current-time same-question
+diagnostic with a USD 1 ceiling. The new opt-in Profile changes only its estimated-cost cap; it does
+not resume/replace the interrupted Run or change any old budget. This diagnostic completed three
+physical requests and nine tool calls for $0.019440, with an authoritative `abstain` terminal and
+exact credential-removed replay. All nine tool queries returned zero rows: natural-language queries
+and literal `"unknown"` filters excluded the frozen data. Offline default/exact-instrument reads of
+the same handlers returned 2/1/1 event/issuer/valuation records. Delivery and accounting now have real
+acceptance evidence, but Agent input-access usability does not; this is not an investment-quality
+result. The next workslice is a clear default read of already frozen evidence, explicit optional
+literal/AND query semantics and production-shaped model-facing tool acceptance, preserving all old
+bindings and results. No further model call or trading authority is implied by the unspent budget.
+Exact identities and accounting are in `docs/EVENT_IMPACT_TRIAGE.md`.
 
 A later read-only runtime audit at September 2 10:03 UTC found three, not four, operational
 checkpoint families. The v7 material route is blocked by an internal receipt-coverage gap after

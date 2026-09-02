@@ -29,6 +29,11 @@ PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5 = (
 )
 REASSESSMENT_INITIAL = "reassessment_initial"
 REASSESSMENT_PROFILE = "cliproxyapi-luna-max-cpa-retry408-v1"
+REASSESSMENT_USD1_PROFILE = "cliproxyapi-luna-max-cpa-reassessment-usd1-v1"
+REASSESSMENT_PROFILE_BUDGETS = {
+    REASSESSMENT_PROFILE: "0.30",
+    REASSESSMENT_USD1_PROFILE: "1.00",
+}
 # Backward-compatible default; v2 must be selected explicitly.
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1
 _SUPPORTED_REGISTRATION_SCHEMAS = frozenset(
@@ -321,8 +326,9 @@ class ProspectiveDiagnosticRegistration:
                 or checkpoint.selection_rule != "registered_reassessment"
                 or checkpoint.cutoff.session_boundary != "harness_now"
                 or self.replicates_per_arm != 1
-                or self.model_profile_id != REASSESSMENT_PROFILE
-                or self.aggregate_model_cost_limit_usd != "0.30"
+                or self.model_profile_id not in REASSESSMENT_PROFILE_BUDGETS
+                or self.aggregate_model_cost_limit_usd
+                != REASSESSMENT_PROFILE_BUDGETS.get(self.model_profile_id)
                 or self.outcome_opening_rule != "opened_diagnostic_not_blind_or_paired"
             ):
                 raise ValueError("reassessment requires the bounded current-time initial Judgment")
@@ -524,8 +530,11 @@ def build_reassessment_registration(
     original_registration: ProspectiveDiagnosticRegistration,
     subject: RegisteredReassessment,
     registered_at: datetime,
+    model_profile_id: str = REASSESSMENT_PROFILE,
 ) -> ProspectiveDiagnosticRegistration:
     """Declare one opened diagnostic; retain original freshness limits for current context."""
+    if model_profile_id not in REASSESSMENT_PROFILE_BUDGETS:
+        raise ValueError("reassessment requires an accepted bounded model profile")
     if original_registration.registration_id != subject.original_registration_id:
         raise ValueError("reassessment subject names another original registration")
     original = next(
@@ -586,8 +595,8 @@ def build_reassessment_registration(
         checkpoints=(checkpoint,),
         paired_arms=(REASSESSMENT_INITIAL,),
         replicates_per_arm=1,
-        model_profile_id=REASSESSMENT_PROFILE,
-        aggregate_model_cost_limit_usd="0.30",
+        model_profile_id=model_profile_id,
+        aggregate_model_cost_limit_usd=REASSESSMENT_PROFILE_BUDGETS[model_profile_id],
         outcome_opening_rule="opened_diagnostic_not_blind_or_paired",
         stop_conditions=(
             "Stop after one terminal initial Judgment or failure; never silently rerun.",
