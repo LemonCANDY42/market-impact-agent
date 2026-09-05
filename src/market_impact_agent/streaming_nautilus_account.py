@@ -12,7 +12,7 @@ import json
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -93,6 +93,10 @@ class HistoricalInstrumentSpec:
     def venue(self) -> str:
         suffix = self.target_id.rsplit(".", 1)[1]
         return {"SH": "XSHG", "SZ": "XSHE"}.get(suffix, suffix)
+
+    def execution_rules_compatible(self, other: HistoricalInstrumentSpec) -> bool:
+        """Compare every rule and identity field, excluding only source provenance."""
+        return self == replace(other, source_ref=self.source_ref)
 
     @property
     def engine_id(self) -> InstrumentId:
@@ -313,7 +317,7 @@ class HistoricalStreamingAccount:
         if self._closed or self._poisoned:
             raise RuntimeError("closed/interrupted account")
         if spec.target_id in self.specs:
-            if self.specs[spec.target_id] != spec:
+            if not self.specs[spec.target_id].execution_rules_compatible(spec):
                 raise ValueError("registered historical instrument rules are immutable")
             return
         if any(existing.engine_id == spec.engine_id for existing in self.specs.values()):

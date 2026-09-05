@@ -1081,7 +1081,10 @@ def _session_ready(
         inputs.execution_ready
         and inputs.price_basis == "raw_unadjusted"
         and bool(inputs.source_record_hashes)
-        and (expected_spec is None or inputs.spec == expected_spec)
+        and (
+            expected_spec is None
+            or (inputs.spec is not None and expected_spec.execution_rules_compatible(inputs.spec))
+        )
     )
 
 
@@ -1093,7 +1096,9 @@ def _gaps(
         values.append("execution_price_basis_not_raw_unadjusted")
     if not inputs.source_record_hashes:
         values.append("source_record_hashes_missing")
-    if expected_spec is not None and inputs.spec != expected_spec:
+    if expected_spec is not None and (
+        inputs.spec is None or not expected_spec.execution_rules_compatible(inputs.spec)
+    ):
         values.append("historical_instrument_rule_changed_within_window")
     if inputs.spec is None:
         values.append("historical_instrument_spec_missing")

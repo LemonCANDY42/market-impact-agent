@@ -186,6 +186,26 @@ source paths, representing 45 potential tracks within the unchanged denominator
 of 72, not 45 completed tracks. Missing rules, company actions and execution gaps
 remain explicit.
 
+## Execution rule provenance and latest source recovery
+
+The v1 qualified COVID preflight was blocked at the March 13 rule-source revision.
+The frozen ETF execution parameters on both sides are identical; only provenance
+and effective intervals differ. The compatibility correction retains exact source
+and receipt bindings while allowing equivalent execution parameters in baseline,
+engine, BUY and initial-adoption paths. Actual rule changes remain blocked. The
+subsequent full suite passed 2,053 tests; final native runtime/adoption and ten
+policy-version checks cover the additional admission and v2/v3 isolation boundaries.
+Policy v3 preserves old reports and uses a distinct baseline-journal namespace.
+A new real source preflight remains required before changing eligibility counts.
+
+The actual-receipt v2 discovery batch incurred one completed Luna request costing
+USD 0.006559 before local range projection failed. Cumulative known cost is now
+USD 8.771052 across 164 requests, with the same USD 0.011769 prior unknown reserve.
+The cached populated interval and later empty suffix were both saved; an offline
+reconstruction reproduced the receipt-time mismatch without a source refetch.
+The batch is paused for verified local recovery. This is a Harness cache defect,
+not missing upstream data, a model judgment error or a completed account decision.
+
 ## Outstanding acceptance
 
 Actual historical model/trajectory results will be reported against the unchanged

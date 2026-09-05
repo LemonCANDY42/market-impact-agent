@@ -685,6 +685,15 @@ explicit no-fill/partial-fill reasons, cash, daily NAV and the existing canonica
 `AccountStateSnapshot`. Every held instrument needs a raw close for daily valuation.
 The adapter never generates research, changes a mandate or admits its own Agent orders.
 
+A validated effective rule may change its source reference while every execution
+parameter remains identical. `execution_rules_compatible` excludes only that
+reference at registration, baseline readiness, BUY bounds and initial adoption;
+identity, venue, class, tick, lot, price limits and all fees must still match.
+Ordinary spec equality, journal opening configuration and exact signed adoption
+receipts retain their provenance. Continuous experiment policy v3 gives the new
+comparison a distinct batch identity and isolates baseline journals from v2;
+previous reports and account prefixes are preserved.
+
 The default starting cash is CNY 100,000. `bootstrap_half_hs300` takes an explicit
 prior-session raw 510300 bar and buys approximately half the capital through the same
 engine. Fees reduce opening NAV; a missing, suspended or incompletely filled seed

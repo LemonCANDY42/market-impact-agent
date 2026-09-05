@@ -86,6 +86,8 @@ def native_network(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureReque
     "mode",
     [
         "safe",
+        "provenance_shift",
+        "execution_rule_shift",
         "unknown",
         "unsafe_buy",
         "fee_overrun",
@@ -408,7 +410,23 @@ def test_source_to_signed_recall_update_account_action_and_restart(
         assert day.bar is not None
         closed = engine.advance_session({"510300.SH": day.bar}, intents=orders)
         assert closed.positions == {} and len(closed.fills) == 1
+        if mode in {"provenance_shift", "execution_rule_shift"}:
+            current_spec = source.instrument_spec("000001.SZ", frames[1].cutoff)
+            assert current_spec is not None
+            prior_spec = replace(current_spec, source_ref="fixture:prior-rule-provenance")
+            if mode == "execution_rule_shift":
+                prior_spec = replace(prior_spec, commission_rate=D("0.0004"))
+            engine.register_instrument(prior_spec)
         second = await owner.decide(frames[1], first, "cutoff-2", frozenset({1}), False)
+        if mode == "execution_rule_shift":
+            assert isinstance(second, PendingReview)
+            assert second.reason == "opening_buy_bounds_not_admitted"
+            portfolio = owner._portfolio_authority(frames[1])  # pyright: ignore[reportPrivateUsage]
+            signed_order = portfolio.execution_admission("cutoff-2.portfolio").order
+            with pytest.raises(PermissionError, match="rules differ from source"):
+                owner._assert_opening_buy_bounds(signed_order, frames[1])  # pyright: ignore[reportPrivateUsage]
+            await provider.close()
+            return
         if mode in {"unsafe_buy", "fee_overrun"}:
             assert isinstance(second, PendingReview)
             assert second.reason == "opening_buy_bounds_not_admitted"
@@ -427,6 +445,9 @@ def test_source_to_signed_recall_update_account_action_and_restart(
         assert second.action == "open"
         destination = owner.admitted_intents(second, frames[1])
         assert destination[0].instrument_id == "000001.SZ"
+        if mode == "provenance_shift":
+            assert destination[0].side is Side.BUY
+            assert engine.specs["000001.SZ"].source_ref == "fixture:prior-rule-provenance"
         assert destination[0].client_order_id != orders[0].client_order_id
         assert budget.summary()["physical_requests"] == 5
         with pytest.raises(PermissionError, match="scope"):

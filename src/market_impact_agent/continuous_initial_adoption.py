@@ -94,7 +94,9 @@ def initial_economic_contract(
         spec = market.instrument_spec(symbol, frame.cutoff)
         if spec is None:
             raise PermissionError("initial adoption lacks effective execution rules")
-        if symbol in runtime.account.specs and runtime.account.specs[symbol] != spec:
+        if symbol in runtime.account.specs and not runtime.account.specs[
+            symbol
+        ].execution_rules_compatible(spec):
             raise PermissionError("initial adoption execution rules differ from frozen rules")
         specs[symbol] = asdict(spec)
     bootstrap = first.fills[0]

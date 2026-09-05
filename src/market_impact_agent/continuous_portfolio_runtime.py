@@ -1245,10 +1245,9 @@ class ContinuousPortfolioRuntime:
             or spec.source_ref.removeprefix("sha256:") not in target.source_record_hashes
         ):
             raise PermissionError("opening BUY lacks bound effective fee rules and upper limit")
-        if (
-            order.instrument_id in self.account.specs
-            and self.account.specs[order.instrument_id] != spec
-        ):
+        if order.instrument_id in self.account.specs and not self.account.specs[
+            order.instrument_id
+        ].execution_rules_compatible(spec):
             raise PermissionError("opening BUY execution fee/instrument rules differ from source")
         balances = tuple(item for item in inputs.account_state.cash or () if item.currency == "CNY")
         if len(balances) != 1:

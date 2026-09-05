@@ -308,7 +308,7 @@ def test_missing_sources_preserve_all_fixed_rows_without_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     require_private_continuous_study_inputs()
-    from market_impact_agent.continuous_experiment import run_continuous_experiment
+    from market_impact_agent import continuous_experiment as experiment
     from market_impact_agent.model_provider import load_model_provider_profile
 
     monkeypatch.setattr(
@@ -327,9 +327,31 @@ def test_missing_sources_preserve_all_fixed_rows_without_dispatch(
         profile = load_model_provider_profile(path)
         available[profile.profile_hash] = profile
     profiles = tuple(available[item.provider_profile_hash] for item in registration.model_profiles)
-    before = study_budget(study_root, "rolling").summary()
+    budget = study_budget(study_root, "rolling")
+    before = budget.summary()
+    original_registration = registration.to_dict()
+    legacy_policy = {
+        key: value
+        for key, value in experiment._POLICY.items()  # pyright: ignore[reportPrivateUsage]
+        if key != "instrument_rule_compatibility"
+    }
+    legacy_policy["version"] = "continuous-preopen-validated-comparisons-and-baselines-v2"
+    with monkeypatch.context() as legacy:
+        legacy.setattr(experiment, "_POLICY", legacy_policy)
+        previous = asyncio.run(
+            experiment.prepare_continuous_experiment(
+                study_root=study_root,
+                registration=registration,
+                selection_panel=panel,
+                windows=(),
+                profiles=profiles,
+            )
+        )
+    prior_events = budget.journal.events(budget.owner_run_id)
+    artifacts = LocalDataSnapshotStore(budget.journal.path.parent).artifacts
+    prior_artifact = artifacts.read_json(str(previous["artifact_hash"]))
     report = asyncio.run(
-        run_continuous_experiment(
+        experiment.run_continuous_experiment(
             study_root=study_root,
             registration=registration,
             selection_panel=panel,
@@ -342,6 +364,16 @@ def test_missing_sources_preserve_all_fixed_rows_without_dispatch(
     assert len(cast(list[object], report["initial"])) == 54
     assert len(cast(list[object], report["rolling"])) == 72
     assert study_budget(study_root, "rolling").summary() == before
+    current = cast(dict[str, object], report["preflight"])
+    assert current["batch_id"] != previous["batch_id"]
+    assert current["source_windows"] == previous["source_windows"]
+    assert current["registration_id"] == previous["registration_id"]
+    assert artifacts.read_json(str(previous["artifact_hash"])) == prior_artifact
+    assert budget.journal.events(budget.owner_run_id)[: len(prior_events)] == prior_events
+    assert registration.to_dict() == original_registration
+    assert len(registration.coverage_windows) == 18
+    assert len(registration.deep_cells) == 8
+    assert registration.budget.total_microusd == 40_000_000
 
 
 def test_after_close_cutoff_rejected_before_source_reopening(

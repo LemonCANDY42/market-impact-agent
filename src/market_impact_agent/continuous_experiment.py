@@ -64,7 +64,8 @@ from market_impact_agent.usage_ledger import UsageLedger
 
 _SEEDS = ("510300.SH", "510500.SH")
 _POLICY = {
-    "version": "continuous-preopen-validated-comparisons-and-baselines-v2",
+    "version": "continuous-preopen-validated-comparisons-and-baselines-v3",
+    "instrument_rule_compatibility": "all_fields_except_source_ref",
     "pre_open_cutoff": "09:25 Asia/Shanghai",
     "baseline_ids": list(CONTINUOUS_EXECUTABLE_BASELINE_IDS),
     "initial_cash": "100000",
@@ -259,9 +260,12 @@ async def prepare_continuous_experiment(
                 registered_window=matched_window,
                 historical_inputs=window.market,
                 account_seed=ContinuousBaselineAccountSeed("baseline-" + definition.window_id, key),
-                state_root=(study_root / "baseline-engine" / "qualified-matched-v1")
-                if qualified
-                else study_root / "baseline-engine",
+                state_root=(
+                    study_root
+                    / "baseline-engine"
+                    / str(_POLICY["version"])
+                    / ("qualified-matched-v1" if qualified else "registered-window")
+                ),
             )
             baselines.append(result)
             if result["status"] != "complete":

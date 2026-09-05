@@ -123,7 +123,10 @@ def _preflight(
 
     def baseline(**kwargs: Any) -> dict[str, object]:
         baseline_windows.append(kwargs["registered_window"])
-        return {"status": "complete" if baseline_complete else "incomplete_source_inputs"}
+        return {
+            "status": "complete" if baseline_complete else "incomplete_source_inputs",
+            "state_root": str(kwargs["state_root"]),
+        }
 
     monkeypatch.setattr(experiment, "evaluate_continuous_baseline_window", baseline)
     result = asyncio.run(
@@ -160,6 +163,30 @@ def test_optional_candidate_gap_preserved_without_blocking_qualified_preflight(
     scope = cast(dict[str, object], source["preflight_qualification"])
     assert scope["matched_outcome_window_end"] == "2025-01-06"
     assert scope["horizon_basis"] == "registered_deep_cell"
+
+
+@pytest.mark.parametrize("qualified", [True, False])
+def test_baseline_journals_are_isolated_from_previous_execution_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, qualified: bool
+) -> None:
+    old_root = tmp_path / "baseline-engine"
+    if qualified:
+        old_root /= "qualified-matched-v1"
+    old_root.mkdir(parents=True)
+    previous = old_root / "previous-account.jsonl"
+    previous.write_bytes(b"previous immutable baseline prefix\n")
+    report, _ = _preflight(tmp_path, monkeypatch, qualified=qualified)
+    expected = (
+        tmp_path
+        / "baseline-engine"
+        / "continuous-preopen-validated-comparisons-and-baselines-v3"
+        / ("qualified-matched-v1" if qualified else "registered-window")
+    )
+    assert all(
+        row["state_root"] == str(expected)
+        for row in cast(list[dict[str, object]], report["baselines"])
+    )
+    assert previous.read_bytes() == b"previous immutable baseline prefix\n"
 
 
 @pytest.mark.parametrize(

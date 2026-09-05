@@ -1,4 +1,5 @@
 # pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -119,6 +120,78 @@ def test_streaming_account_real_engine_t1_fees_and_dividend_recovery(tmp_path: P
     recovered = account(path)
     assert [r.result_hash for r in recovered.results] == expected
     recovered.close()
+
+
+def test_provenance_only_registration_preserves_engine_journal_and_replay(tmp_path: Path) -> None:
+    path = tmp_path / "provenance.jsonl"
+    a = account(path)
+    initial = a.specs[ETF]
+    a.bootstrap_half_hs300(bar(2))
+    engine_id = id(a.engine)
+    prefix = path.read_bytes()
+    revised = replace(initial, source_ref="fixture:etf-revised-provenance")
+    assert revised != initial
+    assert asdict(revised)["source_ref"] != asdict(initial)["source_ref"]
+    a.register_instrument(revised)
+    assert a.specs[ETF] is initial
+    assert id(a.engine) == engine_id
+    assert path.read_bytes() == prefix
+    second = bar(3)
+    result = a.advance_session(
+        {ETF: second}, intents=(intent(a, "trim", second, Side.SELL, "100"),)
+    )
+    assert len(result.fills) == 1
+    expected = [item.result_hash for item in a.results]
+    a.close()
+    recovered = account(path)
+    try:
+        recovered.register_instrument(revised)
+        assert recovered.specs[ETF] == initial
+        assert [item.result_hash for item in recovered.results] == expected
+    finally:
+        recovered.close()
+    with pytest.raises(ValueError, match="replay configuration differs"):
+        HistoricalStreamingAccount(
+            specs=(revised,),
+            journal_path=path,
+            account_reference="synthetic-test-arm",
+            account_reference_key=b"a" * 32,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("target_id", "510500.SH"),
+        ("target_id", "510300.SZ"),
+        ("instrument_class", "exchange_traded_fund"),
+        ("price_increment", D("0.001")),
+        ("lot_size", 200),
+        ("price_limit_ratio", D("0.20")),
+        ("commission_rate", D("0.0004")),
+        ("minimum_commission", D("6")),
+        ("sell_stamp_tax_rate", D("0.0005")),
+    ],
+)
+def test_execution_compatibility_rejects_every_non_provenance_change(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    original = HistoricalInstrumentSpec(ETF, "equity", "fixture:rules", sell_stamp_tax_rate=D(0))
+    changed = replace(original, **{field: value})
+    assert not original.execution_rules_compatible(changed)
+    assert not changed.execution_rules_compatible(original)
+    if field == "target_id":
+        return  # New target registration is supported; compatibility must still reject it.
+    a = account(tmp_path / "rules.jsonl")
+    a.register_instrument(replace(original, target_id=STOCK))
+    prefix = a.journal_path.read_bytes()
+    try:
+        with pytest.raises(ValueError, match="rules are immutable"):
+            a.register_instrument(replace(changed, target_id=STOCK))
+        assert a.specs[STOCK] == replace(original, target_id=STOCK)
+        assert a.journal_path.read_bytes() == prefix
+    finally:
+        a.close()
 
 
 def test_crash_after_durable_input_replays_no_models(

@@ -335,6 +335,52 @@ def test_matched_executable_baselines_use_real_seed_fees_and_source_bars(tmp_pat
     }
 
 
+@pytest.mark.parametrize("changed_tick", [False, True])
+def test_baseline_distinguishes_provenance_from_execution_rule_change(
+    tmp_path: Path, changed_tick: bool
+) -> None:
+    source = _source(tmp_path / "source")
+    seed_day = source.session("510300.SH", date(2025, 1, 2))
+    execution_day = source.session("510300.SH", date(2025, 1, 3))
+    assert execution_day.spec is not None
+    changed_spec = replace(execution_day.spec, source_ref="fixture:new-rule-source-version")
+    if changed_tick:
+        changed_spec = replace(changed_spec, price_increment=Decimal("0.01"))
+        assert changed_spec.price_increment != execution_day.spec.price_increment
+    inputs = {
+        date(2025, 1, 2): seed_day,
+        date(2025, 1, 3): replace(execution_day, spec=changed_spec),
+    }
+    reports = [
+        evaluate_continuous_baseline_window(
+            registration_id="fixture-registration",
+            baseline_id="same_initial_account_hold",
+            registered_window=_registered_window(sessions=(date(2025, 1, 3),)),
+            historical_inputs=source,
+            account_seed=_seed(),
+            state_root=tmp_path / "state",
+            source_sessions=inputs,
+        )
+        for _ in range(2)
+    ]
+    assert reports[0] == reports[1]
+    report = reports[0]
+    metrics = cast(dict[str, object], report["metrics"])
+    if changed_tick:
+        assert report["status"] == "incomplete_source_inputs"
+        assert metrics["observed_sessions"] == 0
+        gaps = cast(list[dict[str, object]], report["input_gaps"])
+        assert "historical_instrument_rule_changed_within_window" in cast(
+            list[str], gaps[0]["gaps"]
+        )
+    else:
+        assert report["status"] == "complete"
+        assert report["input_gaps"] == []
+        assert report["execution_gaps"] == []
+        assert metrics["observed_sessions"] == 1
+        assert metrics["residual_positions"] == {"510300.SH": "12500"}
+
+
 def test_buy_sizing_uses_cutoff_upper_limit_not_future_open(tmp_path: Path) -> None:
     window = _registered_window(sessions=(date(2025, 1, 3),))
     for baseline_id, source in (

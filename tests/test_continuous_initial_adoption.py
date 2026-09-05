@@ -8,12 +8,16 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from market_impact_agent import continuous_study_runner
 from market_impact_agent.continuous_decision import ContinuousDecision, ReviewFrame
-from market_impact_agent.continuous_initial_adoption import InitialAdoptionAuthority
+from market_impact_agent.continuous_initial_adoption import (
+    InitialAdoptionAuthority,
+    initial_economic_contract,
+)
 from market_impact_agent.continuous_portfolio_runtime import (
     ContinuousPortfolioRuntime,
     build_continuous_review_frame,
@@ -285,8 +289,11 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
             registration_id, "cn-2024-policy-melt-up", "luna_max", cadence
         )
         assert seed.spec is not None
+        registered_spec = seed.spec
+        if not rotation and not historical:
+            registered_spec = replace(seed.spec, source_ref="fixture:prior-seed-rule-provenance")
         engine = HistoricalStreamingAccount(
-            specs=(seed.spec,),
+            specs=(registered_spec,),
             journal_path=tmp_path / (cadence + ".jsonl"),
             account_reference=arm,
             account_reference_key=b"a" * 32,
@@ -383,6 +390,21 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
             )
             origin.research_episode_deadline = RETRIEVED + timedelta(hours=1)
             origin.acquisition_clock = lambda: RETRIEVED
+        if not rotation and not historical:
+            contract = initial_economic_contract(origin, frames[at])
+            execution_specs = cast(dict[str, dict[str, object]], contract["execution_specs"])
+            current_spec = source.instrument_spec("510300.SH", at)
+            assert current_spec is not None
+            assert execution_specs["510300.SH"]["source_ref"] == current_spec.source_ref
+            assert origin.account.specs["510300.SH"].source_ref != current_spec.source_ref
+            with monkeypatch.context() as changed_rules:
+                changed_rules.setitem(
+                    origin.account.specs,
+                    "510300.SH",
+                    replace(origin.account.specs["510300.SH"], commission_rate=D("0.0004")),
+                )
+                with pytest.raises(PermissionError, match="rules differ from frozen rules"):
+                    initial_economic_contract(origin, frames[at])
         first = await origin.decide(frames[at], None, "registered-initial", frozenset({1}), False)
         if historical:
             monkeypatch.delenv("CONTINUOUS_HISTORICAL")
