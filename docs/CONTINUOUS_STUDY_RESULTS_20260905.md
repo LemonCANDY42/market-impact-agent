@@ -4,27 +4,101 @@ This report separates implemented behavior from source qualification, actual mod
 observations and investment acceptance. The owning registration and claim contract
 is [CONTINUOUS_DECISION_STUDY.md](CONTINUOUS_DECISION_STUDY.md).
 
-## Latest running checkpoint: 2026-09-05 16:15 UTC
+## Final bounded batch result: 2026-09-05 23:36 UTC
+
+The resumed v4 process exited successfully after all trajectories reached their
+bounded terminal state. The study result is `incomplete`, not an accepted
+investment result. It preserves the original 54 initial diagnostics and 72
+intended trajectories; source gaps, model failures and budget stops are not removed
+from those denominators.
+
+| Stage | Completed | Incomplete | Pending |
+| --- | ---: | ---: | ---: |
+| Initial diagnostics (54) | 29 | 1 | 24 |
+| Continuous trajectories (72) | 6 | 54 | 12 |
+
+Sixty initialized trajectories produced 430 durable account-session results, with
+prefix lengths from one to ten sessions. Six trajectories completed the entire
+six-session policy window, 2024-09-24 through 2024-10-08. The 54 incomplete
+initialized trajectories comprise 39 rolling-budget stops and 15 model proposal
+or tool-reference failures. The 12 pending trajectories comprise nine from the
+unqualified deep window and three cadences without a valid Luna 2016 initial
+portfolio. All 30 source-qualified initial research theses validated; one initial
+portfolio failed, while 24 initial diagnostics remain source/baseline pending.
+
+Cumulative known cost is **USD 31.533271 across 806 physical requests**, including
+prior work. The unchanged prior unknown request retains USD 0.011769 reserved;
+there are no new unsettled requests. The rolling stage used USD 21.992732 across
+600 physical requests, with no remaining reservations. Its USD 22 cap could not
+cover another required reservation. The USD 40 parent cap and all stage caps
+remain unchanged; unused allocations were not transferred into rolling research.
+No live execution occurred.
+
+The private signed batch artifact is
+`2822a2c48e970c4cdb3eaaca539d11f9e9b12e111386bac914a489b9facd7ddd`.
+Its result is the acceptance authority; private source evidence and model responses
+remain outside version control.
+
+### Complete-window observations
+
+Only six trajectories passed full-window trajectory measurement. All are in the
+same six-session policy window. Returns include modeled execution fees in CNY;
+USD model costs are reported separately and are not deducted from CNY NAV.
+
+| Model | Review cadence | Window return | Rolling model cost (USD) |
+| --- | --- | ---: | ---: |
+| Luna Max | Expiry only | 11.8848% | 0.173183 |
+| Terra High | Expiry only | 16.9580% | 0.366604 |
+| Terra High | Event | 21.1773% | 0.383162 |
+| Sol High | Expiry only | 14.1374% | 0.375775 |
+| Sol High | Scheduled | 14.5288% | 1.171585 |
+| Sol High | Event | 16.5302% | 1.325860 |
+
+Three comparisons have both complete trajectories: Terra event versus expiry is
++4.2192 percentage points, Sol scheduled versus expiry is +0.3914 points, and Sol
+event versus expiry is +2.3928 points. Of 40 generated comparison records, 37 are
+`incomplete_pair`; eight other intended pairs lack initialized trajectories.
+No comparison from a partial long-window prefix is accepted. Each complete
+trajectory retains `investment_effectiveness_accepted=false`. The six-day sample,
+modeled historical PIT, limited news coverage, and lack of unseen validation
+prevent a general investment-effectiveness or causal-correction claim. Tail
+statistics remain descriptive small-sample values.
+
+### Recovery acceptance and retained model failures
 
 The original v4 batch resumed in a fresh process using commit `0581999`, the same
-frozen inputs, episode identities and shared USD 40 budget. All five observed
-pre-model Recall stops now have validated research, portfolio decisions and
-second-session account results. The sixth latent receipt collision passed the
-separate exact offline replay gate. Existing results and obsolete receipts remain
-preserved, and checked post-resume reservations target new research/portfolio Runs.
+frozen inputs, episode identities and shared budget. All five observed pre-model
+Recall stops subsequently validated research and portfolio decisions and completed
+the second account session. The sixth latent receipt collision passed exact offline
+replay. Existing results and obsolete receipts remain preserved; checked
+post-resume reservations target new research/portfolio Runs.
 
 The signed pre-dispatch cancellation also recovered through the original bounded
 Run chain. Its unchanged cancelled terminal has zero request reservations; the
 successor retains all 20 frozen snapshots and completed research, portfolio review
-and the account session in the new process. This closes the actual fresh-process
-acceptance gap for both recovery corrections.
+and the account session in the new process. Both recovery corrections passed
+independent review, exact replay, all 2,115 Python tests, Ruff, formatting and
+Pyright. The resumed process provides the previously pending fresh-process
+consumer evidence.
 
-At this checkpoint, 97 durable account-session results cover 60 trajectories;
-37 have reached at least their second session. The original denominators remain
-54 initial diagnostics and 72 intended trajectories. No full-window strategy
-comparison is accepted yet. Known cumulative cost is USD 14.376987
-across 320 physical requests, with USD 0.457409 reserved, including
-the unchanged USD 0.011769 prior unknown request. The batch is still running.
+The 15 initialized model failures consist of five policy rejections for mismatched
+position identity, six OPEN sizing-rule mismatches, three invalid portfolio
+evidence references, and one unknown Recall ID. Exact frozen-input replays
+confirmed the relevant refusals. OPEN proposals used the mandate permission class
+`unlevered_exchange_traded_fund` while frozen instrument rules require
+`exchange_traded_fund`; refusal occurs before Nautilus execution. Later invalid
+portfolio references include a truncated continuation ID and a price ID with an
+extra `300`. The Recall ID had never been returned by preceding tools. Original
+outputs, costs and successful account prefixes are retained. These observations
+do not establish a new Harness recovery or execution-engine defect.
+
+Several later reviews requested additional price evidence. Existing bounded
+acquisition continuations successfully obtained evidence and resumed research,
+including policy, 2015, COVID, rotation and ordinary-low-volatility reviews. Some
+required two continuations. Their intermediate `ResearchAcquisitionRequired`
+terminals are continuation transitions, not additional failed trajectories. A
+subsequent invalid portfolio proposal can still stop a trajectory whose evidence
+acquisition succeeded.
 
 ## Recovery pause and engineering acceptance
 
@@ -68,7 +142,7 @@ bounded successor Run chain, preserving the cancelled terminal and exact inputs.
 Independent review and rehydrated-runtime replay passed before the fresh-process
 resumption reported above. Both corrections passed all 2,115 Python
 tests, Ruff, formatting and Pyright. The USD 40 parent and stage caps remain
-unchanged. This is an interim checkpoint, not a final report.
+unchanged. These are historical interim observations; the final result is above.
 
 ## Reference check for the recovery boundary
 
@@ -346,14 +420,14 @@ Independent review passed. The real v4 source preflight completed with ten ready
 coverage windows, including seven deep cases (63 potential trajectories within
 the unchanged denominator of 72). The 2018 bear-market window now qualifies;
 all other prior blocks remain. Baselines contain 40 complete, 28 source-incomplete
-and four execution-incomplete results. Expanded paid execution has started under
-the original cumulative USD 40 authority and stage caps; these potential tracks
-are not completed results.
+and four execution-incomplete results. The bounded v4 execution reported above
+used the original cumulative USD 40 authority and stage caps; source-qualified
+potential trajectories are not equivalent to completed results.
 
 ## Outstanding acceptance
 
-Actual historical model/trajectory results will be reported against the unchanged
-54/72 denominators after qualified execution. Unseen cases, long-window strategy
+Actual historical model/trajectory results are reported above against the
+unchanged 54/72 denominators. Unseen cases, long-window strategy
 comparisons, volatility/industry executable baselines without qualified mappings,
 natural prospective account reviews and real IBKR Paper acceptance remain pending.
 IBKR preparation is offline only and cannot send an order.
