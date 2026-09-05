@@ -245,15 +245,27 @@ intact. Wait reports now support an append-only continuation under the original
 Episode; completed and non-wait terminal results retain exact replay. The focused
 50-test gate and independent review passed. Combined full-suite acceptance passed
 2,108 tests, Ruff, formatting, Pyright, TypeScript, four Node tests and the
-production runtime doctor. Paid successor decisions remain required.
+production runtime doctor. The original registration then resumed successfully:
+Terra completed research and reached the same current-source admission refusal
+as Luna; Sol exhausted its registered research continuation limit without a final
+thesis. Luna's completed result was reused unchanged. No portfolio decision or
+order was dispatched. The cumulative ledger now records 170 physical requests,
+USD 9.448644 known and the unchanged USD 0.011769 prior unknown reserve. The
+prospective stage has no unsettled request. Exact replay returned the identical
+batch and budget without additional requests; Luna's result remained byte-equivalent.
 
 The v4 qualified policy records a versioned, registered cash-only account inception
 and starts new baseline journals. A distribution with a record cutoff strictly
 before inception has zero account entitlement; later or unknown holdings still
 require evidence. Source qualification retains the actual record and payment
 dates, excludes the ex-date exemption, and preserves raw-price/factor checks.
-Independent review passed; the real source preflight is running before expanded
-paid dispatch.
+Independent review passed. The real v4 source preflight completed with ten ready
+coverage windows, including seven deep cases (63 potential trajectories within
+the unchanged denominator of 72). The 2018 bear-market window now qualifies;
+all other prior blocks remain. Baselines contain 40 complete, 28 source-incomplete
+and four execution-incomplete results. Expanded paid execution has started under
+the original cumulative USD 40 authority and stage caps; these potential tracks
+are not completed results.
 
 ## Outstanding acceptance
 
