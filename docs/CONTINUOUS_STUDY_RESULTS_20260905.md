@@ -4,9 +4,31 @@ This report separates implemented behavior from source qualification, actual mod
 observations and investment acceptance. The owning registration and claim contract
 is [CONTINUOUS_DECISION_STUDY.md](CONTINUOUS_DECISION_STUDY.md).
 
-## Latest paused checkpoint: 2026-09-05 14:52 UTC
+## Latest running checkpoint: 2026-09-05 16:15 UTC
 
-The v4 source-qualified run is paused for a confirmed Harness recovery defect;
+The original v4 batch resumed in a fresh process using commit `0581999`, the same
+frozen inputs, episode identities and shared USD 40 budget. All five observed
+pre-model Recall stops now have validated research, portfolio decisions and
+second-session account results. The sixth latent receipt collision passed the
+separate exact offline replay gate. Existing results and obsolete receipts remain
+preserved, and checked post-resume reservations target new research/portfolio Runs.
+
+The signed pre-dispatch cancellation also recovered through the original bounded
+Run chain. Its unchanged cancelled terminal has zero request reservations; the
+successor retains all 20 frozen snapshots and completed research, portfolio review
+and the account session in the new process. This closes the actual fresh-process
+acceptance gap for both recovery corrections.
+
+At this checkpoint, 97 durable account-session results cover 60 trajectories;
+37 have reached at least their second session. The original denominators remain
+54 initial diagnostics and 72 intended trajectories. No full-window strategy
+comparison is accepted yet. Known cumulative cost is USD 14.376987
+across 320 physical requests, with USD 0.457409 reserved, including
+the unchanged USD 0.011769 prior unknown request. The batch is still running.
+
+## Recovery pause and engineering acceptance
+
+The v4 source-qualified run was paused at 14:52 UTC for a confirmed Harness recovery defect;
 the sections below retain earlier milestones and failures. Ten coverage windows
 passed source/baseline qualification. All 30 initial research theses validated.
 Initial portfolio diagnostics contain 29 completed, one incomplete and 24
@@ -43,8 +65,8 @@ then the leader received a graceful interrupt. It exited with code 130; no furth
 physical request was recorded. Cancellation reached a newly frozen research Run
 before dispatch. A narrowly proven undispatched cancellation now uses the existing
 bounded successor Run chain, preserving the cancelled terminal and exact inputs.
-Independent review and rehydrated-runtime replay passed; actual fresh-process
-batch resumption remains the next gate. Both corrections passed all 2,115 Python
+Independent review and rehydrated-runtime replay passed before the fresh-process
+resumption reported above. Both corrections passed all 2,115 Python
 tests, Ruff, formatting and Pyright. The USD 40 parent and stage caps remain
 unchanged. This is an interim checkpoint, not a final report.
 
