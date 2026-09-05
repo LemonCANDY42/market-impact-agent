@@ -8,6 +8,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from market_impact_agent.continuous_baselines import (
     CONTINUOUS_EXECUTABLE_BASELINE_IDS,
     ContinuousBaselineAccountSeed,
@@ -29,6 +31,7 @@ from market_impact_agent.historical_ashare_inputs import (
     HistoricalSessionInputs,
 )
 from market_impact_agent.market_regimes import load_market_regime_dataset
+from market_impact_agent.streaming_nautilus_account import HistoricalStreamingAccount
 
 from .test_continuous_study import require_private_continuous_study_inputs
 from .test_historical_ashare_inputs import _capture, _source
@@ -415,14 +418,15 @@ def test_phase2_momentum_binding_reverses_to_cash_with_real_fees_and_t_plus_one(
     assert Decimal(str(metrics["execution_fees_cny"])) > Decimal("40")
 
 
-def test_unfilled_matched_cash_exit_remains_incomplete(tmp_path: Path) -> None:
+@pytest.mark.parametrize("bid_quantity", [0, 100])
+def test_unfilled_matched_cash_exit_remains_incomplete(tmp_path: Path, bid_quantity: int) -> None:
     source = _source(tmp_path / "source")
     seed_day = source.session("510300.SH", date(2025, 1, 2))
     execution_day = source.session("510300.SH", date(2025, 1, 3))
     assert execution_day.bar is not None
     unfillable = replace(
         execution_day,
-        bar=replace(execution_day.bar, open_bid_quantity=0),
+        bar=replace(execution_day.bar, open_bid_quantity=bid_quantity),
     )
     report = evaluate_continuous_baseline_window(
         registration_id="fixture-registration",
@@ -438,9 +442,9 @@ def test_unfilled_matched_cash_exit_remains_incomplete(tmp_path: Path) -> None:
     gaps = cast(list[dict[str, object]], report["execution_gaps"])
     assert report["status"] == "incomplete_execution"
     assert metrics["complete"] is True
-    assert metrics["residual_positions"] == {"510300.SH": "12500"}
+    assert metrics["residual_positions"] == {"510300.SH": str(12500 - bid_quantity)}
     assert gaps[0]["gap_id"] == "first_session_baseline_target_unfilled_or_partial"
-    assert gaps[0]["filled_quantity"] == "0"
+    assert gaps[0]["filled_quantity"] == str(bid_quantity)
 
     replayed = evaluate_continuous_baseline_window(
         registration_id="fixture-registration",
@@ -454,7 +458,7 @@ def test_unfilled_matched_cash_exit_remains_incomplete(tmp_path: Path) -> None:
     replayed_gaps = cast(list[dict[str, object]], replayed["execution_gaps"])
     assert replayed["status"] == "incomplete_execution"
     assert replayed_gaps[0]["gap_id"] == "first_session_baseline_target_unfilled_or_partial"
-    assert replayed_gaps[0]["reconstructed_from_persisted_result"] is True
+    assert replayed == report
 
 
 def test_missing_daily_source_keeps_the_registered_fixed_denominator(tmp_path: Path) -> None:
@@ -549,3 +553,79 @@ def test_full_registered_runner_retains_all_windows_when_source_is_not_captured(
         assert unsupported[baseline_id]["gap_id"] == "historical_tradable_sector_membership_missing"
         assert str(unsupported[baseline_id]["registered_policy_ref"]).startswith("regime_study.")
         assert "historical tradable sector membership" in str(unsupported[baseline_id]["reason"])
+
+
+def test_failed_seed_report_is_identical_after_restart(tmp_path: Path) -> None:
+    source = _source(tmp_path / "source")
+    seed_day = source.session("510300.SH", date(2025, 1, 2))
+    assert seed_day.bar is not None
+    failed_seed = replace(seed_day, bar=replace(seed_day.bar, open_ask_quantity=0))
+    source_sessions = {
+        date(2025, 1, 2): failed_seed,
+        date(2025, 1, 3): source.session("510300.SH", date(2025, 1, 3)),
+    }
+    for baseline_id in CONTINUOUS_EXECUTABLE_BASELINE_IDS:
+
+        def evaluate(baseline_id: str = baseline_id) -> dict[str, object]:
+            return evaluate_continuous_baseline_window(
+                registration_id="fixture-registration",
+                baseline_id=baseline_id,
+                registered_window=_registered_window(sessions=(date(2025, 1, 3),)),
+                historical_inputs=source,
+                account_seed=_seed(),
+                state_root=tmp_path / "state",
+                source_sessions=source_sessions,
+            )
+
+        first = evaluate()
+        assert first["status"] == "incomplete_execution"
+        assert cast(dict[str, object], first["metrics"])["observed_sessions"] == 0
+        assert evaluate() == first
+        # A previous faulty reader may already have advanced an unseeded account.
+        # Preserve that evidence, but never accept its curve as the registered seed.
+        journal = next((tmp_path / "state").glob(f"**/{baseline_id}/**/account.jsonl"))
+        assert seed_day.spec is not None
+        later_bar = source_sessions[date(2025, 1, 3)].bar
+        assert later_bar is not None
+        polluted = HistoricalStreamingAccount(
+            specs=(seed_day.spec,),
+            journal_path=journal,
+            account_reference=_seed().account_reference,
+            account_reference_key=_seed().account_reference_key,
+        )
+        try:
+            polluted.advance_session({"510300.SH": later_bar})
+        finally:
+            polluted.close()
+        prefix = journal.read_bytes()
+        assert evaluate() == first
+        assert journal.read_bytes() == prefix
+
+
+def test_unaffordable_broad_lot_gap_replays_identically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unaffordable(*args: object) -> Decimal:
+        return Decimal(0)
+
+    monkeypatch.setattr(
+        "market_impact_agent.continuous_baselines._maximum_affordable_lot",
+        unaffordable,
+    )
+    source = _source(tmp_path / "source")
+
+    def evaluate():
+        return evaluate_continuous_baseline_window(
+            registration_id="fixture-registration",
+            baseline_id="broad_etf_hold",
+            registered_window=_registered_window(sessions=(date(2025, 1, 3),)),
+            historical_inputs=source,
+            account_seed=_seed(),
+            state_root=tmp_path / "state",
+        )
+
+    first = evaluate()
+    assert first["execution_gaps"] == [
+        {"gap_id": "broad_etf_additional_lot_unaffordable", "session": "2025-01-03"}
+    ]
+    assert evaluate() == first

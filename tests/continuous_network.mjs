@@ -43,7 +43,7 @@ globalThis.fetch = async (input, init) => {
     assert.equal(data.inputs.mandate.currency, 'CNY');
     const hasPosition = data.inputs.account_state.positions.length > 0;
     answer = {...common, requested_action: hasPosition ? 'close' : 'open', rationale: 'Adjust this exact reconciled account.',
-      evidence_refs: ['account_state', 'exposure_view'], instrument_id: hasPosition ? '510300.SH' : '000001.SZ',
+      evidence_refs: ['account_state', 'exposure_view', ...(data.evidence_ids.includes('release') ? ['release'] : [])], instrument_id: hasPosition ? '510300.SH' : '000001.SZ',
       venue: hasPosition ? 'XSHG' : 'XSHE', instrument_class: hasPosition ? 'exchange_traded_fund' : 'equity',
       direction: 'long', target_gross_exposure_ratio: hasPosition ? '0' : (process.env.CONTINUOUS_BUY_RATIO ?? '0.30')};
     if (hasPosition && process.env.CONTINUOUS_INITIAL_ROTATE === '1') {

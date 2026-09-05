@@ -430,6 +430,37 @@ The rule check uses the raw daily reference price. An absent optional
 both sources supply a value. Reported limits that disagree with the exchange tick
 calculation still block, including older provider values rounded to cents.
 
+A separately selected `limit_basis="qualified_seed_etf_exchange_rule_v1"` is a
+**MODELED** normal-session scenario for `510300.SH` and `510500.SH` only. The
+default `reported_stk_limit` retains the behavior above and is omitted from policy
+serialization so existing frozen identities remain unchanged. The new basis is
+included in frame, research, experiment and baseline bindings and must use its own
+versioned policy/registration; it never grants StrictPIT or live authority.
+
+This scenario requires the effective source-backed rule to specify a 10% limit and
+CNY 0.001 tick. Its `qualified_limit_reference` object must carry
+`schema_version="market-impact.qualified-seed-etf-limit-reference.v1"`,
+`normal_session_assumption=true`, `domestic_equity_etf=true`, an ISO `listing_date`
+matching captured `etf_basic`, and `identity_source_artifact_hash` plus HTTPS
+`identity_source_url` for the captured historical issuer identity/listing evidence.
+The rule's existing source capture and effective interval remain required. The
+normal-session status is an explicit bounded assumption, not a verified claim that
+all exceptional regimes have been exhaustively ruled out.
+
+Admission and execution share a qualification check: the exact previous trading
+calendar session's positive, tick-aligned raw close must equal today's positive,
+tick-aligned `fund_daily.pre_close`. Bounds use that completed close with the
+existing exchange-rule `ROUND_HALF_UP` formula. Current-day OHLC and daily turnover
+remain outside the Agent view. Both session and admission diagnostics retain
+reported limits, optional reported reference, source-row hash, signed
+reported-minus-derived differences and an unresolved comparison status. Reported
+limit absence or disagreement alone does not block this scenario; it does not
+resolve the vendor discrepancy. Historical listing, calendar and halt gaps still
+block. Missing/nonpositive factors, an exact prior/current factor discontinuity,
+unknown action dates and ex-date through settlement sessions are excluded, even
+when the legacy scenario could model a same-day cash dividend. This conservative
+scenario adds no corporate-action or execution engine.
+
 The added [fund_adj](https://tushare.pro/document/2?doc_id=199),
 [fund_div](https://tushare.pro/document/2?doc_id=120) and
 [dividend](https://tushare.pro/document/2?doc_id=103) source templates preserve actual

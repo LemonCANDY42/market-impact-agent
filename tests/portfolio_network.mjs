@@ -1,18 +1,33 @@
 // Test-only network replacement. The actual pinned pi modules decode and run it.
 import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
 globalThis.fetch = async (input, init) => {
   const request = new Request(input, init);
   assert.equal(request.url, 'http://127.0.0.1:8317/v1/responses');
   const body = await request.json();
-  if (process.env.ROLE_TOOL_FIXTURE === '1') {
-    assert.ok(body.tools.some(tool => tool.name === 'read_frozen_fact'));
-    if (!body.input.some(item => item.type === 'function_call_output')) {
-      const item = {type: 'function_call', id: 'fc-read', call_id: 'read-1',
-        name: 'read_frozen_fact', arguments: '{}'};
+  if (process.env.PORTFOLIO_FIXTURE_REQUEST_PATH) {
+    writeFileSync(process.env.PORTFOLIO_FIXTURE_REQUEST_PATH, JSON.stringify(body));
+  }
+  if (process.env.ROLE_TOOL_FIXTURE) {
+    const queryRepair = process.env.ROLE_TOOL_FIXTURE === 'query_validation';
+    const name = queryRepair ? 'lookup_price_limits' : 'read_frozen_fact';
+    const results = body.input.filter(item => item.type === 'function_call_output');
+    if (queryRepair && results.length) {
+      assert.ok(JSON.stringify(results[0]).includes('invalid_query_arguments'));
+      assert.ok(JSON.stringify(results[0]).includes('do not combine'));
+    }
+    assert.ok(body.tools.some(tool => tool.name === name));
+    if (results.length < (queryRepair ? 2 : 1)) {
+      const argumentsJson = queryRepair ? JSON.stringify({
+        ts_code: '600000.SH', start_date: '20260827', end_date: '20260827',
+        ...(results.length === 0 ? {trade_date: '20260827'} : {}),
+      }) : '{}';
+      const item = {type: 'function_call', id: `fc-read-${results.length}`, call_id: `read-${results.length + 1}`,
+        name, arguments: argumentsJson};
       const frames = [
         {type: 'response.created', response: {id: 'role-tool-response'}},
         {type: 'response.output_item.added', output_index: 0, item: {...item, arguments: ''}},
-        {type: 'response.function_call_arguments.delta', output_index: 0, delta: '{}'},
+        {type: 'response.function_call_arguments.delta', output_index: 0, delta: argumentsJson},
         {type: 'response.output_item.done', output_index: 0, item},
         {type: 'response.completed', response: {id: 'role-tool-response', model: body.model,
           status: 'completed', output: [item], usage: {input_tokens: 100, output_tokens: 20,
@@ -21,7 +36,7 @@ globalThis.fetch = async (input, init) => {
       return new Response(frames.map(frame => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`).join(''),
         {headers: {'Content-Type': 'text/event-stream'}});
     }
-    assert.ok(JSON.stringify(body.input).includes('frozen-revenue'));
+    assert.ok(JSON.stringify(body.input).includes(queryRepair ? 'continuation_required' : 'frozen-revenue'));
   } else assert.ok(!body.tools?.length);
   let answer = process.env.PORTFOLIO_FIXTURE_ANSWER;
   assert.ok(answer);

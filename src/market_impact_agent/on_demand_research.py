@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
 
@@ -41,6 +41,11 @@ from market_impact_agent.tushare_observation import (
 from market_impact_agent.tushare_range_cache import TushareDailyRangeCache
 
 _PROJECTION_VERSION = "compact-facts-v2"
+
+
+class ResearchQueryValidationError(ValueError):
+    """Correctable model query arguments, never an authority or acquisition failure."""
+
 
 _ROUTES = {
     "daily": ("lookup_stock_prices", "Raw stock daily prices"),
@@ -187,23 +192,32 @@ class ResearchSourceTemplate:
         if not set(arguments) <= set(self.parameters) or not set(self.required_parameters) <= set(
             arguments
         ):
-            raise ValueError("research query accepts only its declared domain parameters")
+            raise ResearchQueryValidationError(
+                "research query accepts only its declared domain parameters"
+            )
         if any(not isinstance(value, str) or not value.strip() for value in arguments.values()):
-            raise ValueError("research domain parameters must be nonempty strings")
+            raise ResearchQueryValidationError(
+                "research domain parameters must be nonempty strings"
+            )
         if "ts_code" in arguments and "," in cast(str, arguments["ts_code"]):
-            raise ValueError("research query requires one instrument")
+            raise ResearchQueryValidationError("research query requires one instrument")
         if self.api_name == "stk_limit" and not (
             set(arguments) == {"ts_code", "trade_date"}
             or set(arguments) == {"ts_code", "start_date", "end_date"}
         ):
-            raise ValueError("price limits require one date or a bounded date interval")
+            raise ResearchQueryValidationError(
+                "price limits require ts_code with either trade_date or both start_date and "
+                "end_date; do not combine trade_date with the interval"
+            )
         if self.api_name == "index_member_all" and not set(arguments) & {
             "l1_code",
             "l2_code",
             "l3_code",
             "ts_code",
         }:
-            raise ValueError("industry membership requires an industry or company code")
+            raise ResearchQueryValidationError(
+                "industry membership requires an industry or company code"
+            )
         for name in (
             "trade_date",
             "ann_date",
@@ -219,7 +233,7 @@ class ResearchSourceTemplate:
             start = _parse_domain_date(cast(str, arguments["start_date"]), date_format)
             end = _parse_domain_date(cast(str, arguments["end_date"]), date_format)
             if start > end:
-                raise ValueError("research query start_date exceeds end_date")
+                raise ResearchQueryValidationError("research query start_date exceeds end_date")
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,7 +323,7 @@ class OnDemandResearch:
         if historical_inputs is not None:
             self.binding["historical_policy"] = {
                 "policy": {
-                    key: str(value) for key, value in asdict(historical_inputs.policy).items()
+                    key: str(value) for key, value in historical_inputs.policy.to_dict().items()
                 },
                 "base_snapshot_ids": list(historical_inputs.snapshot_ids),
                 "rule_artifact_hashes": list(historical_inputs.rule_artifact_hashes),
@@ -420,7 +434,18 @@ class OnDemandResearch:
             async def handler(
                 arguments: dict[str, object], template: ResearchSourceTemplate = template
             ) -> object:
-                return self._lookup(template, arguments, origin="agent_tool")
+                try:
+                    return self._lookup(template, arguments, origin="agent_tool")
+                except ResearchQueryValidationError as exc:
+                    return {
+                        "status": "validation_error",
+                        "error_kind": "invalid_query_arguments",
+                        "tool": template.tool_name,
+                        "message": str(exc),
+                        "retryable": True,
+                        "allowed_parameters": [*template.parameters, "offset", "limit"],
+                        "required_parameters": list(template.required_parameters),
+                    }
 
             result.append(
                 ToolDescriptor(
@@ -430,6 +455,7 @@ class OnDemandResearch:
                             "binding": self.binding,
                             "template": template.binding,
                             "projection_version": _PROJECTION_VERSION,
+                            "query_validation_version": "recoverable-domain-errors-v1",
                         }
                     ),
                     description=template.description
@@ -517,7 +543,9 @@ class OnDemandResearch:
     ) -> dict[str, object]:
         offset, limit = arguments.get("offset", 0), arguments.get("limit", 20)
         if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 100:
-            raise ValueError("research pagination requires nonnegative offset and limit 1..100")
+            raise ResearchQueryValidationError(
+                "research pagination requires nonnegative offset and limit 1..100"
+            )
         arguments = {
             key: value for key, value in arguments.items() if key not in {"offset", "limit"}
         }
@@ -901,7 +929,12 @@ def _continuation(value: dict[str, object]) -> ResearchContinuation:
 
 
 def _parse_domain_date(value: str, date_format: str) -> datetime:
-    parsed = datetime.strptime(value, date_format)
+    try:
+        parsed = datetime.strptime(value, date_format)
+    except ValueError as exc:
+        raise ResearchQueryValidationError(
+            f"research dates must use their declared exact format: {date_format}"
+        ) from exc
     if parsed.strftime(date_format) != value:
-        raise ValueError("research dates must use their declared exact format")
+        raise ResearchQueryValidationError("research dates must use their declared exact format")
     return parsed

@@ -388,6 +388,10 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
             monkeypatch.delenv("CONTINUOUS_HISTORICAL")
             assert isinstance(first, ContinuousDecision) and first.research_successor_ref
         assert isinstance(first, ContinuousDecision), first
+        if not historical:
+            portfolio = origin._portfolio_authority(frames[at])  # pyright: ignore[reportPrivateUsage]
+            parsed = portfolio.replay(first.portfolio_run_id)["parsed_proposal"]
+            assert isinstance(parsed, dict) and "release" in parsed["evidence_refs"]
         assert budget.summary()["physical_requests"] == before_requests + 2 + (
             2 if historical else 0
         )

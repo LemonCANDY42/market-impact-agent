@@ -77,6 +77,63 @@ recommended but are blocked at execution until their independent gates are accep
 """
 
 
+PORTFOLIO_PROMPT_PROJECTION_VERSION = "market-impact.portfolio-prompt-projection.v1"
+PORTFOLIO_EVIDENCE_SCOPE_VERSION = "market-impact.portfolio-evidence-scope.v2"
+PORTFOLIO_REVIEW_PROMPT_V2 = PORTFOLIO_REVIEW_PROMPT.replace(
+    "Never supply quantity, Run/proposal/approval IDs or hashes.",
+    "Never supply quantity or invent Run/proposal/approval IDs or hashes. "
+    "For evidence_refs and counterevidence_refs, select only from the supplied "
+    "evidence_ids list, including its research Run IDs and bound thesis evidence IDs.",
+)
+
+
+def portfolio_prompt_projection(binding: Mapping[str, object]) -> dict[str, object]:
+    """Derive model context; only explicit record-hash provenance is compacted.
+
+    Full inputs remain the validation authority. The artifact hash and JSON pointer
+    locate the original list for offline validator/replay reopening, not a model tool.
+    """
+    full_inputs = _object(binding["inputs"])
+    inputs_hash = canonical_hash(full_inputs)
+    inputs = dict(full_inputs)
+    rule_set = dict(_object(inputs["rule_set"]))
+    sources: list[dict[str, object]] = []
+    for index, raw in enumerate(cast(list[object], rule_set["source_documents"])):
+        source = dict(_object(raw))
+        if "source_record_hashes" in source:
+            if "source_record_hashes_provenance" in source:
+                raise ValueError("portfolio source has conflicting provenance projection")
+            hashes = source.pop("source_record_hashes")
+            if not isinstance(hashes, list):
+                raise ValueError("portfolio rule provenance must be a list of record hashes")
+            hashes = cast(list[object], hashes)
+            if any(not isinstance(item, str) for item in hashes):
+                raise ValueError("portfolio rule provenance must be a list of record hashes")
+            source["source_record_hashes_provenance"] = {
+                "content_hash": canonical_hash(hashes),
+                "count": len(hashes),
+                "inputs_artifact_hash": inputs_hash,
+                "json_pointer": f"/rule_set/source_documents/{index}/source_record_hashes",
+            }
+        sources.append(source)
+    rule_set["source_documents"] = sources
+    inputs["rule_set"] = rule_set
+    return {
+        "schema_version": PORTFOLIO_PROMPT_PROJECTION_VERSION,
+        "inputs": inputs,
+        "research": binding["research"],
+        "research_theses": binding["research_theses"],
+        "evidence_ids": sorted(
+            PortfolioReviewAuthority._evidence_ids(dict(binding))  # pyright: ignore[reportPrivateUsage]
+        ),
+        **(
+            {"rotation_completion": binding["rotation_completion"]}
+            if "rotation_completion" in binding
+            else {}
+        ),
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class PortfolioReviewInputs:
     account_state: AccountStateSnapshot
@@ -916,6 +973,83 @@ class PortfolioReviewAuthority:
             research_thesis_run_ids=(),
         )
 
+    def projection_recovery_run_id(self, original_run_id: str) -> str:
+        """Allow one projection repair only for a proven undispatched legacy attempt."""
+        try:
+            record = self.journal.get_run(original_run_id)
+        except KeyError:
+            return original_run_id
+        if record.status is not RunStatus.FAILED:
+            return original_run_id
+        terminal = self.replay(original_run_id)
+        binding = _object(self.store.artifacts.read_json(record.config_hash))
+        if terminal.get("reason") != "_BudgetExceeded" or "prompt_projection" in binding:
+            return original_run_id
+        self._projection_recovery_source(original_run_id)
+        return original_run_id + ".projection-recovery"
+
+    def _projection_recovery_source(
+        self, original_run_id: str
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        terminal = self.replay(original_run_id)
+        record = self.journal.get_run(original_run_id)
+        binding = _object(self.store.artifacts.read_json(record.config_hash))
+        allowed_events = {
+            "portfolio.review.frozen",
+            "pi.role.history.initial",
+            "pi.context.frozen",
+            "portfolio.review.incomplete",
+        }
+        if (
+            record.status is not RunStatus.FAILED
+            or terminal.get("reason") != "_BudgetExceeded"
+            or "prompt_projection" in binding
+            or "projection_recovery" in binding
+            or any(
+                event.event_type not in allowed_events
+                for event in self.journal.events(original_run_id)
+            )
+        ):
+            raise PermissionError("projection recovery requires an undispatched legacy failure")
+        owner = _object(binding["budget_owner"])
+        if Path(_string(owner, "journal_path")) != self.journal.path:
+            raise PermissionError("projection recovery requires the same budget journal")
+        if any(
+            event.event_type == "pi.budget.reserved"
+            and str(event.payload.get("request_key", "")).startswith(
+                original_run_id + ".pi-invocation."
+            )
+            for event in self.journal.events(_string(owner, "run_id"))
+        ):
+            raise PermissionError("projection recovery cannot retry an admitted request")
+        return binding, {
+            "run_id": original_run_id,
+            "binding_hash": record.config_hash,
+            "terminal_hash": record.terminal_artifact_id,
+            "physical_dispatches": 0,
+        }
+
+    def _verify_projection_recovery(self, binding: dict[str, object]) -> None:
+        reference = _object(binding["projection_recovery"])
+        original_id = _string(reference, "run_id")
+        old, expected = self._projection_recovery_source(original_id)
+        comparable = {
+            k: v
+            for k, v in binding.items()
+            if k
+            not in {
+                "run_id",
+                "prompt_projection",
+                "projection_recovery",
+            }
+        }
+        if (
+            reference != expected
+            or binding.get("run_id") != original_id + ".projection-recovery"
+            or comparable != {k: v for k, v in old.items() if k != "run_id"}
+        ):
+            raise PermissionError("projection recovery changed its original authority or budget")
+
     async def review(
         self,
         *,
@@ -926,6 +1060,7 @@ class PortfolioReviewAuthority:
         max_output_tokens: int | None = None,
         rotation_source_run_id: str | None = None,
         rotation_source_adoption_ref: str | None = None,
+        projection_recovery_of: str | None = None,
     ) -> dict[str, object]:
         output_limit = (
             provider.profile.reserved_output_tokens
@@ -1012,8 +1147,19 @@ class PortfolioReviewAuthority:
                     "binding": None if provider.budget is None else provider.budget.binding,
                 },
             }
+            if projection_recovery_of is None:
+                binding["evidence_scope_version"] = PORTFOLIO_EVIDENCE_SCOPE_VERSION
+                binding["prompt"] = cast(str, binding["prompt"]).replace(
+                    PORTFOLIO_REVIEW_PROMPT, PORTFOLIO_REVIEW_PROMPT_V2, 1
+                )
             if rotation_completion is not None:
                 binding["rotation_completion"] = rotation_completion
+            if projection_recovery_of is not None:
+                _, reference = self._projection_recovery_source(projection_recovery_of)
+                binding["projection_recovery"] = reference
+                self._verify_projection_recovery(binding)
+            self.store.artifacts.put_json(binding["inputs"])
+            binding["prompt_projection"] = portfolio_prompt_projection(binding)
             binding_hash = self.store.artifacts.put_json(binding).content_hash
             self.journal.start_run(run_id=run_id, config_hash=binding_hash, created_at=self.clock())
             self._events.append(
@@ -1038,17 +1184,7 @@ class PortfolioReviewAuthority:
                         {
                             "role": "user",
                             "content": json.dumps(
-                                {
-                                    "inputs": inputs.to_dict(),
-                                    "research": research,
-                                    "research_theses": research_theses,
-                                    "evidence_ids": sorted(evidence_ids),
-                                    **(
-                                        {"rotation_completion": rotation_completion}
-                                        if rotation_completion is not None
-                                        else {}
-                                    ),
-                                },
+                                binding["prompt_projection"],
                                 sort_keys=True,
                             ),
                         },
@@ -1231,6 +1367,14 @@ class PortfolioReviewAuthority:
             _string(_object(item), "run_id")
             for item in cast(list[object], binding.get("research_theses", []))
         )
+        scope = binding.get("evidence_scope_version")
+        if scope is not None:
+            if scope != PORTFOLIO_EVIDENCE_SCOPE_VERSION:
+                raise PermissionError("unsupported portfolio evidence scope")
+            for item in cast(list[object], binding.get("research_theses", [])):
+                thesis = _object(_object(item)["thesis"])
+                for field in ("evidence_refs", "counterevidence_refs"):
+                    refs.update(_strings(thesis.get(field, []), require_trimmed=True))
         return frozenset(refs)
 
     def replay(self, run_id: str) -> dict[str, object]:
@@ -1249,6 +1393,16 @@ class PortfolioReviewAuthority:
             or binding.get("run_id") != run_id
         ):
             raise PermissionError("portfolio review belongs to another root or run")
+        if "prompt_projection" in binding:
+            if binding["prompt_projection"] != portfolio_prompt_projection(binding):
+                raise PermissionError("portfolio prompt projection differs from frozen inputs")
+            if (
+                self.store.artifacts.read_json(canonical_hash(binding["inputs"]))
+                != binding["inputs"]
+            ):
+                raise PermissionError("portfolio prompt source artifact differs from frozen inputs")
+        if "projection_recovery" in binding:
+            self._verify_projection_recovery(binding)
         frozen = self.journal.event(f"{run_id}.portfolio.frozen")
         terminal_event = self.journal.event(f"{run_id}.portfolio.terminal")
         if (
@@ -1317,7 +1471,12 @@ class PortfolioReviewAuthority:
         return terminal
 
     def derive_initial_adoption(
-        self, *, parsed_proposal: object, binding_hash: str, research_run_id: str
+        self,
+        *,
+        parsed_proposal: object,
+        binding_hash: str,
+        research_run_id: str,
+        source_portfolio_run_id: str | None = None,
     ) -> tuple[PortfolioDecisionV3, OrderSizingDecisionV2 | None, PortfolioOrderIntent | None]:
         """Harness-only deterministic rebind; this creates no native model terminal."""
         inputs = self.input_source()
@@ -1337,6 +1496,29 @@ class PortfolioReviewAuthority:
                 *inputs.price_bases,
             }
         )
+        if source_portfolio_run_id is not None:
+            terminal = self.replay(source_portfolio_run_id)
+            source_binding = _object(
+                self.store.artifacts.read_json(
+                    self.journal.get_run(source_portfolio_run_id).config_hash
+                )
+            )
+            if (
+                terminal.get("status") != "completed"
+                or terminal.get("parsed_proposal") != parsed_proposal
+            ):
+                raise PermissionError("initial adoption differs from its signed source proposal")
+            if source_binding.get("evidence_scope_version") is not None:
+                # Scope comes from the signed source, never an arbitrary caller option.
+                bound_theses = cast(list[dict[str, object]], source_binding["research_theses"])
+                run_ids = tuple(_string(item, "run_id") for item in bound_theses)
+                if (
+                    research_run_id not in run_ids
+                    or self._research_theses(run_ids, inputs.cutoff) != bound_theses
+                ):
+                    raise PermissionError("initial adoption research differs from signed source")
+                scoped = {**source_binding, "inputs": inputs.to_dict()}
+                evidence_ids = self._evidence_ids(scoped)
         proposal = parse_portfolio_proposal_v5(
             parsed_proposal, binding_hash=binding_hash, evidence_ids=evidence_ids
         )

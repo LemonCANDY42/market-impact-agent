@@ -18,7 +18,13 @@ from market_impact_agent.account_state import opaque_account_reference_hash
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.continuous_metrics import measure_continuous_account
 from market_impact_agent.continuous_study import ContinuousStudyRegistration, ContinuousStudyWindow
-from market_impact_agent.domain import OrderIntent, OrderKind, Side, TradingEnvironment
+from market_impact_agent.domain import (
+    ExecutableOrder,
+    OrderIntent,
+    OrderKind,
+    Side,
+    TradingEnvironment,
+)
 from market_impact_agent.historical_ashare_inputs import (
     HistoricalAShareInputs,
     HistoricalSessionInputs,
@@ -373,10 +379,10 @@ def evaluate_continuous_baseline_window(
         initial_cash=account_seed.initial_cash,
     )
     measurement_initial_nav = account.initial_cash
+    seed_verified = False
     try:
-        if not account.results:
-            account.bootstrap_half_hs300(seed_inputs.bar)
-        seeded = account.results[0]
+        seeded = account.bootstrap_half_hs300(seed_inputs.bar)
+        seed_verified = True
         measurement_initial_nav = seeded.nav
         initial_account_hash = canonical_hash(
             {
@@ -430,7 +436,7 @@ def evaluate_continuous_baseline_window(
     except (RuntimeError, ValueError) as exc:
         # A failed engine prefix is unusable.  Preserve the full registered denominator
         # and let a fresh, separately repaired source binding run in another journal.
-        observed = _window_results(account, registered_window)
+        observed = _window_results(account, registered_window) if seed_verified else ()
         metrics = measure_continuous_account(
             initial_nav=measurement_initial_nav,
             sessions=observed,
@@ -529,7 +535,7 @@ def _advance_registered_window(
     results: list[HistoricalSessionResult] = []
     initial_spec = account.specs[_RAW_BROAD_ETF_SYMBOL]
     prior_results = _window_results(account, registered_window)
-    gaps = _persisted_execution_gaps(baseline_id, prior_results)
+    gaps = _persisted_execution_gaps(account, baseline_id, prior_results)
     results.extend(prior_results)
     next_index = len(results)
     for session in registered_window.sessions[next_index:]:
@@ -601,36 +607,37 @@ def _advance_registered_window(
 
 
 def _persisted_execution_gaps(
-    baseline_id: str, results: Sequence[HistoricalSessionResult]
+    account: HistoricalStreamingAccount,
+    baseline_id: str,
+    results: Sequence[HistoricalSessionResult],
 ) -> list[dict[str, object]]:
-    """Keep a durable account-prefix failure from becoming acceptable on replay."""
+    """Reproduce the same report from durable commands and reconciled results."""
 
-    gap_id = (
-        "continuous_momentum_target_unfilled_or_partial"
-        if baseline_id == _MOMENTUM_BASELINE_ID
-        else "first_session_baseline_target_unfilled_or_partial"
-    )
     gaps: list[dict[str, object]] = []
-    for result in results:
-        for no_fill in result.no_fills:
-            if not no_fill.order_id.startswith("continuous-baseline-"):
-                continue
+    for index, result in enumerate(results):
+        first_broad_session = baseline_id == "broad_etf_hold" and index == 0
+        if not first_broad_session and not any(
+            no_fill.order_id.startswith("continuous-baseline-") for no_fill in result.no_fills
+        ):
+            continue
+        intents = account.reopen_session_intents(result)
+        if first_broad_session and not intents:
             gaps.append(
                 {
-                    "gap_id": gap_id,
+                    "gap_id": "broad_etf_additional_lot_unaffordable",
                     "session": result.account_state.as_of.date().isoformat(),
-                    "baseline_order_id": no_fill.order_id,
-                    "no_fill_reasons": [no_fill.reason],
-                    "reconstructed_from_persisted_result": True,
                 }
             )
+        gaps.extend(
+            _unfilled_intent_gaps(baseline_id, result.account_state.as_of.date(), intents, result)
+        )
     return gaps
 
 
 def _unfilled_intent_gaps(
     baseline_id: str,
     session: date,
-    intents: Sequence[OrderIntent],
+    intents: Sequence[ExecutableOrder],
     result: HistoricalSessionResult,
 ) -> list[dict[str, object]]:
     gap_id = (
@@ -1144,16 +1151,7 @@ def _source_binding_hash(historical_inputs: HistoricalAShareInputs) -> str:
                 if historical_inputs.fund_halt_artifact_hashes
                 else {}
             ),
-            "policy": {
-                "policy_id": historical_inputs.policy.policy_id,
-                "daily_open_volume_fraction": str(
-                    historical_inputs.policy.daily_open_volume_fraction
-                ),
-                "lane": historical_inputs.policy.lane,
-                "opening_tick_validity_microseconds": (
-                    historical_inputs.policy.opening_tick_validity_microseconds
-                ),
-            },
+            "policy": historical_inputs.policy.to_dict(),
         }
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sqlite3
 from dataclasses import replace
 from datetime import timedelta
@@ -41,9 +42,12 @@ from market_impact_agent.portfolio_decision import (
     RawMarkedPositionV2,
 )
 from market_impact_agent.portfolio_review import (
+    PORTFOLIO_EVIDENCE_SCOPE_VERSION,
+    PORTFOLIO_PROMPT_PROJECTION_VERSION,
     PortfolioReviewAuthority,
     PortfolioReviewInputs,
     parse_portfolio_proposal_v4,
+    portfolio_prompt_projection,
     portfolio_proposal_text_normalizations,
 )
 from market_impact_agent.prospective_decision_pipeline import run_portfolio_review_pipeline
@@ -134,6 +138,8 @@ def native_portfolio(monkeypatch: pytest.MonkeyPatch) -> NativePortfolio:
     async def spawn(program: str, *args: str, **kwargs: Any):
         spawns.append(program)
         kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(answer[0])
+        if capture_path := os.environ.get("PORTFOLIO_FIXTURE_REQUEST_PATH"):
+            kwargs["env"]["PORTFOLIO_FIXTURE_REQUEST_PATH"] = capture_path
         return await original(
             program,
             "--import",
@@ -325,8 +331,9 @@ def test_native_cash_hold_replays_exactly_without_regeneration(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("reference, accepted", [("release", True), ("invented", False)])
 def test_dynamic_research_thesis_is_accepted_by_same_root_portfolio_review(
-    tmp_path: Path, native_portfolio: NativePortfolio
+    tmp_path: Path, native_portfolio: NativePortfolio, reference: str, accepted: bool
 ) -> None:
     profile, answer, _ = native_portfolio
     authority, _, _, _, _, _, _ = _setup(tmp_path)
@@ -334,7 +341,11 @@ def test_dynamic_research_thesis_is_accepted_by_same_root_portfolio_review(
     async def scenario() -> None:
         research_provider = PiRuntimeProvider(profile)
         try:
-            answer[0] = _thesis_answer()
+            answer[0] = {
+                **_thesis_answer(),
+                "evidence_refs": ["release"],
+                "counterevidence_refs": ["market"],
+            }
             thesis_authority = ResearchThesisAuthority(
                 authority.store,
                 experiment_id="dynamic-effectiveness-v1",
@@ -354,7 +365,11 @@ def test_dynamic_research_thesis_is_accepted_by_same_root_portfolio_review(
             )
             assert terminal["status"] == "completed"
             await research_provider.close()
-            answer[0] = _answer()
+            answer[0] = {
+                **_answer(),
+                "evidence_refs": [reference],
+                "counterevidence_refs": ["market"],
+            }
             portfolio_provider = PiRuntimeProvider(profile)
             try:
                 result = await authority.review(
@@ -363,7 +378,8 @@ def test_dynamic_research_thesis_is_accepted_by_same_root_portfolio_review(
                     research_run_ids=(),
                     research_thesis_run_ids=(thesis_run,),
                 )
-                assert result["status"] == "completed"
+                assert result["status"] == ("completed" if accepted else "incomplete")
+                assert authority.replay("portfolio-from-dynamic-thesis") == result
                 binding = cast(
                     dict[str, object],
                     authority.store.artifacts.read_json(
@@ -372,6 +388,20 @@ def test_dynamic_research_thesis_is_accepted_by_same_root_portfolio_review(
                 )
                 research_theses = cast(list[dict[str, object]], binding["research_theses"])
                 assert research_theses[0]["run_id"] == thesis_run
+                assert binding["evidence_scope_version"] == PORTFOLIO_EVIDENCE_SCOPE_VERSION
+                projected = cast(dict[str, object], binding["prompt_projection"])
+                assert "release" in cast(list[str], projected["evidence_ids"])
+                assert "invented" not in cast(list[str], projected["evidence_ids"])
+                legacy = {k: v for k, v in binding.items() if k != "evidence_scope_version"}
+                legacy_projection = portfolio_prompt_projection(legacy)
+                assert "release" not in cast(list[str], legacy_projection["evidence_ids"])
+                assert thesis_run in cast(list[str], legacy_projection["evidence_ids"])
+                with pytest.raises(ValueError, match="requires bound evidence"):
+                    parse_portfolio_proposal_v4(
+                        {**_answer(), "evidence_refs": ["release"]},
+                        binding_hash="legacy-binding",
+                        evidence_ids=frozenset(cast(list[str], legacy_projection["evidence_ids"])),
+                    )
             finally:
                 await portfolio_provider.close()
         finally:
@@ -960,5 +990,74 @@ def test_manual_review_revalidates_authority_and_releases_unsubmitted_reserves(
         finally:
             service.close()
             await model.close()
+
+    asyncio.run(scenario())
+
+
+def test_native_portfolio_compacts_only_large_record_lineage_and_replays(
+    tmp_path: Path, native_portfolio: NativePortfolio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    profile, _, spawns = native_portfolio
+    authority, inputs, _, _, _, _, _ = _setup(tmp_path)
+    hashes = [canonical_hash({"record": index}) for index in range(22000)]
+    sources = (
+        {
+            "symbol": TARGET,
+            "source_record_hashes": hashes,
+            "economic_metadata": {"lot_size": 100, "price_limit": "0.10"},
+        },
+    )
+    inputs[0] = replace(inputs[0], rule_set=replace(inputs[0].rule_set, source_documents=sources))
+    original = inputs[0].to_dict()
+    capture = tmp_path / "native-request.json"
+    monkeypatch.setenv("PORTFOLIO_FIXTURE_REQUEST_PATH", str(capture))
+
+    async def scenario() -> None:
+        provider = PiRuntimeProvider(profile)
+        try:
+            terminal = await authority.review_account(run_id="large-lineage", provider=provider)
+            assert terminal["status"] == "completed"
+            binding = cast(
+                dict[str, object],
+                authority.store.artifacts.read_json(
+                    authority.journal.get_run("large-lineage").config_hash
+                ),
+            )
+            projection = portfolio_prompt_projection(binding)
+            assert binding["prompt_projection"] == projection
+            assert projection["schema_version"] == PORTFOLIO_PROMPT_PROJECTION_VERSION
+            assert binding["inputs"] == original == inputs[0].to_dict()
+            projected_inputs = cast(dict[str, Any], projection["inputs"])
+            source = projected_inputs["rule_set"]["source_documents"][0]
+            compact = source["source_record_hashes_provenance"]
+            assert compact["count"] == 22000
+            assert compact["content_hash"] == canonical_hash(hashes)
+            reopened = authority.store.artifacts.read_json(compact["inputs_artifact_hash"])
+            assert reopened == original
+            assert compact["json_pointer"] == "/rule_set/source_documents/0/source_record_hashes"
+            restored_source = dict(source)
+            del restored_source["source_record_hashes_provenance"]
+            restored_source["source_record_hashes"] = hashes
+            assert restored_source == sources[0]
+            restored_inputs = dict(projected_inputs)
+            restored_inputs["rule_set"] = {
+                **projected_inputs["rule_set"],
+                "source_documents": [restored_source],
+            }
+            assert restored_inputs == original
+            # Assert the physical native request, not a test-only context estimate.
+            assert len(json.dumps(original).encode()) > 1_400_000
+            assert capture.stat().st_size < 30_000
+            native_request = json.loads(capture.read_text())
+            user = next(item for item in native_request["input"] if item.get("role") == "user")
+            content = user["content"]
+            text = (
+                content if isinstance(content, str) else "".join(item["text"] for item in content)
+            )
+            assert json.loads(text) == projection
+            assert authority.replay("large-lineage") == terminal
+            assert len(spawns) == 1
+        finally:
+            await provider.close()
 
     asyncio.run(scenario())

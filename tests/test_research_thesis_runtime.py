@@ -134,7 +134,7 @@ def thesis_network(monkeypatch: pytest.MonkeyPatch) -> tuple[ModelProviderProfil
         spawns.append(program)
         kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(_answer())
         if os.environ.get("ROLE_TOOL_FIXTURE"):
-            kwargs["env"]["ROLE_TOOL_FIXTURE"] = "1"
+            kwargs["env"]["ROLE_TOOL_FIXTURE"] = os.environ["ROLE_TOOL_FIXTURE"]
         return await original(
             program,
             "--import",
@@ -522,6 +522,139 @@ def test_readonly_role_recovers_after_durable_tool_without_reexecution(
                 == 2
             )
         finally:
+            await provider.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("crash_after_error, tool_limit", [(False, 2), (True, 2), (True, 1)])
+def test_native_research_corrects_query_error_with_durable_replay(
+    tmp_path: Path,
+    thesis_network: tuple[ModelProviderProfile, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    crash_after_error: bool,
+    tool_limit: int,
+) -> None:
+    from dataclasses import replace
+
+    from market_impact_agent.on_demand_research import OnDemandResearch, ResearchSourceTemplate
+    from market_impact_agent.pi_execution import PiInvocationContext, PiRoleJournal, execute_pi_once
+    from market_impact_agent.tushare_observation import (
+        TushareObservationProvider,
+        load_tushare_observation_source,
+    )
+
+    from .test_agent_engine import SimulatedCrash
+    from .test_on_demand_research import CONFIG, _setup  # pyright: ignore[reportPrivateUsage]
+    from .test_tushare_observation import TOKEN, FakeTransport
+
+    monkeypatch.setenv("ROLE_TOOL_FIXTURE", "query_validation")
+    profile, _ = thesis_network
+    value = profile.to_dict()
+    cast(dict[str, object], value["budget"])["max_tool_calls"] = tool_limit
+    value.pop("profile_id")
+    value["profile_id"] = f"model-provider-{canonical_hash(value)}"
+    profile = model_provider_profile_from_dict(value)
+    base, _ = _setup(tmp_path)
+    config = load_tushare_observation_source(
+        CONFIG.with_name("tushare-observation-stk-limit-v1.json")
+    )
+    transport = FakeTransport([])
+    source = TushareObservationProvider(TOKEN, (config,), transport=transport)
+    research = OnDemandResearch(
+        store=base.store,
+        parent_budget=base.budget,
+        episode_deadline=base.deadline,
+        run_id="episode",
+        cutoff=base.cutoff,
+        pit_lane=base.pit_lane,
+        templates=(ResearchSourceTemplate.from_tushare(source, config.source_id),),
+        clock=base.clock,
+    )
+    descriptor = research.descriptors()[0]
+    executed: list[dict[str, object]] = []
+
+    async def track(arguments: dict[str, object]) -> object:
+        executed.append(arguments)
+        return await descriptor.handler(arguments)
+
+    async def scenario() -> None:
+        authority = ResearchThesisAuthority(
+            base.store, experiment_id="query-repair", arm_id="luna", clock=base.clock
+        )
+        journal = cast(PiRoleJournal, PiRoleJournal.authoritative(base.store))
+        journal.bind(
+            run_id="episode",
+            writer=authority._events,  # pyright: ignore[reportPrivateUsage]
+        )
+        context = PiInvocationContext("episode", 1, journal, base.store.artifacts, clock=base.clock)
+        provider = PiRuntimeProvider(profile, budget=base.budget)
+        append = journal.append
+
+        def crash(**kwargs: Any):
+            event = append(**kwargs)
+            if kwargs["event_type"] == "pi.role.tool.completed":
+                raise SimulatedCrash()
+            return event
+
+        async def invoke():
+            return await execute_pi_once(
+                provider,
+                context=context,
+                messages=({"role": "user", "content": "Inspect the frozen price limits."},),
+                max_output_tokens=256,
+                timeout_seconds=20,
+                attempt_observer=lambda _: None,
+                readonly_tools=(replace(descriptor, handler=track),),
+            )
+
+        try:
+            if crash_after_error:
+                journal.append = crash
+                with pytest.raises(SimulatedCrash):
+                    await invoke()
+                journal.append = append
+                assert not any(
+                    event.event_type == "research.data.requested"
+                    for event in journal.events("episode")
+                )
+            if tool_limit == 1:
+                with pytest.raises(PermissionError, match="tool budget"):
+                    await invoke()
+                assert len(executed) == 1
+                assert not any(
+                    event.event_type == "research.data.requested"
+                    for event in journal.events("episode")
+                )
+                assert base.budget.summary()["physical_requests"] == 2
+                assert not transport.requests
+                return
+            result = await invoke()
+            assert not result.tool_calls
+            events = journal.events("episode")
+            completed = [e for e in events if e.event_type == "pi.role.tool.completed"]
+            assert len(completed) == 2
+            saved = cast(
+                dict[str, object],
+                base.store.artifacts.read_json(cast(str, completed[0].payload["artifact_hash"])),
+            )
+            error = cast(
+                dict[str, object],
+                base.store.artifacts.read_json(cast(str, saved["result_artifact_hash"])),
+            )
+            assert error["status"] == "validation_error"
+            assert error["error_kind"] == "invalid_query_arguments"
+            assert "do not combine" in cast(str, error["message"])
+            assert len(executed) == 2  # Replay does not rerun the rejected query.
+            assert sum(e.event_type == "research.data.requested" for e in events) == 1
+            assert base.budget.summary()["physical_requests"] == 3
+            assert base.budget.summary()["unsettled_requests"] == 0
+            assert not transport.requests
+            assert await invoke() == result
+            assert len(executed) == 2
+            assert base.budget.summary()["physical_requests"] == 3
+        finally:
+            journal.append = append
             await provider.close()
 
     asyncio.run(scenario())

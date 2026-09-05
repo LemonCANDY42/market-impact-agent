@@ -8,7 +8,7 @@ order or creates a replacement Run for interrupted unknown model work.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_CEILING, Decimal
 from typing import TYPE_CHECKING, cast
@@ -99,10 +99,7 @@ def continuous_frame_input_hash(
                 if market.fund_halt_artifact_hashes
                 else {}
             ),
-            "modeled_policy": {
-                key: str(value) if isinstance(value, Decimal) else value
-                for key, value in asdict(market.policy).items()
-            },
+            "modeled_policy": market.policy.to_dict(),
         }
     )
 
@@ -415,7 +412,7 @@ class ContinuousPortfolioRuntime:
         acquired: set[str] = set()
         executable_candidates = set(self.symbol_source(frame))
         expected_policy: dict[str, object] = {
-            "policy": {key: str(item) for key, item in asdict(market.policy).items()},
+            "policy": {key: str(item) for key, item in market.policy.to_dict().items()},
             "base_snapshot_ids": list(market.snapshot_ids),
             "rule_artifact_hashes": list(market.rule_artifact_hashes),
             **(
@@ -1142,11 +1139,16 @@ class ContinuousPortfolioRuntime:
             portfolio = operation_runtime._portfolio_authority(operation_frame)
         except _InputGap as gap:
             return PendingReview(str(gap), research_id)
+        original_portfolio_id = portfolio_id
+        portfolio_id = portfolio.projection_recovery_run_id(original_portfolio_id)
         review = await portfolio.review(
             run_id=portfolio_id,
             provider=self.portfolio_provider,
             research_run_ids=(),
             research_thesis_run_ids=(research_id,),
+            projection_recovery_of=(
+                original_portfolio_id if portfolio_id != original_portfolio_id else None
+            ),
             rotation_source_adoption_ref=(
                 prior.initial_adoption_ref
                 if prior is not None and prior.action == "rotate"

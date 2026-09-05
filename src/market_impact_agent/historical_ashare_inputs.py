@@ -39,8 +39,23 @@ class ModeledHistoricalPolicy:
     daily_open_volume_fraction: Decimal
     lane: str = "modeled_pit"
     opening_tick_validity_microseconds: int = 1
+    limit_basis: str = "reported_stk_limit"
+
+    def to_dict(self) -> dict[str, object]:
+        """Preserve legacy serialized identities when the new basis is not selected."""
+        result: dict[str, object] = {
+            "policy_id": self.policy_id,
+            "daily_open_volume_fraction": str(self.daily_open_volume_fraction),
+            "lane": self.lane,
+            "opening_tick_validity_microseconds": self.opening_tick_validity_microseconds,
+        }
+        if self.limit_basis != "reported_stk_limit":
+            result["limit_basis"] = self.limit_basis
+        return result
 
     def __post_init__(self) -> None:
+        if self.limit_basis not in {"reported_stk_limit", "qualified_seed_etf_exchange_rule_v1"}:
+            raise ValueError("unsupported modeled historical limit basis")
         if self.opening_tick_validity_microseconds != 1:
             raise ValueError("modeled venue facts cover exactly the opening tick")
         if not self.policy_id or self.lane != "modeled_pit":
@@ -64,6 +79,8 @@ class HistoricalSessionInputs:
     policy_id: str
     price_basis: str = "raw_unadjusted"
     liquidity_basis: str = "modeled_fraction_of_reported_daily_volume_not_observed_open_book"
+
+    limit_diagnostics: Mapping[str, object] | None = None
 
     @property
     def execution_ready(self) -> bool:
@@ -359,6 +376,158 @@ class HistoricalAShareInputs:
         """Reopen only the effective source-backed trading/fee rule, never outcome bars."""
         return self._rule(symbol, cutoff)[0]
 
+    def _qualified_limits(
+        self,
+        symbol: str,
+        day: date,
+        spec: HistoricalInstrumentSpec,
+        gaps: set[str],
+        hashes: set[str],
+    ) -> tuple[Decimal | None, Decimal | None, Mapping[str, object]]:
+        """One modeled reference for admission and the existing execution formula.
+
+        Today's pre_close is a qualification check only. The reference is the raw
+        close of the exact preceding calendar session; today's OHLC is never read.
+        """
+        if (
+            symbol not in {"510300.SH", "510500.SH"}
+            or spec.instrument_class != "exchange_traded_fund"
+            or spec.price_increment != Decimal("0.001")
+            or spec.price_limit_ratio != Decimal("0.1")
+        ):
+            gaps.add("qualified_limit_instrument_or_regime_unsupported")
+        rule = cast(
+            dict[str, Any], self.store.artifacts.read_json(spec.source_ref.removeprefix("sha256:"))
+        )
+        raw_qualification = rule.get("qualified_limit_reference")
+        qualification = (
+            cast(dict[str, object], raw_qualification)
+            if isinstance(raw_qualification, dict)
+            else {}
+        )
+        if (
+            qualification.get("schema_version")
+            != "market-impact.qualified-seed-etf-limit-reference.v1"
+            or qualification.get("normal_session_assumption") is not True
+            or qualification.get("domestic_equity_etf") is not True
+            or not str(qualification.get("identity_source_url", "")).startswith("https://")
+            or not qualification.get("identity_source_artifact_hash")
+            or not qualification.get("listing_date")
+        ):
+            gaps.add("qualified_limit_identity_and_normal_session_basis_missing")
+        else:
+            identity_hash = str(qualification["identity_source_artifact_hash"])
+            self.store.artifacts.get(identity_hash, media_type="application/octet-stream")
+            hashes.add(identity_hash)
+            listing = date.fromisoformat(str(qualification["listing_date"]))
+            basics = self._rows("etf_basic", symbol)
+            if (
+                listing >= day
+                or len(basics) != 1
+                or not basics[0][0].get("list_date")
+                or _day(basics[0][0]["list_date"]) != listing
+            ):
+                gaps.add("qualified_limit_historical_listing_mismatch")
+        calendar = [
+            pair
+            for pair in self._rows("trade_cal", None)
+            if pair[0].get("exchange") == "SSE"
+            and pair[0].get("cal_date") == day.strftime("%Y%m%d")
+        ]
+        prior_day = None
+        if len(calendar) == 1 and str(calendar[0][0].get("is_open")) == "1":
+            hashes.add(calendar[0][1])
+            if calendar[0][0].get("pretrade_date"):
+                prior_day = _day(calendar[0][0]["pretrade_date"])
+        if prior_day is None or prior_day >= day:
+            gaps.add("qualified_limit_prior_calendar_session_missing")
+            prior_day = None
+        prior = self._one("fund_daily", symbol, prior_day) if prior_day else None
+        current = self._one("fund_daily", symbol, day)
+        reference = _decimal(prior[0].get("close")) if prior else None
+        declared = _decimal(current[0].get("pre_close")) if current else None
+        if prior:
+            hashes.add(prior[1])
+        # The current record is provenance of the pre_close qualification, not an
+        # Agent-visible outcome observation. No current OHLC fields enter diagnostics.
+        if current:
+            hashes.add(current[1])
+        tick = spec.price_increment
+        if reference is None or reference <= 0 or reference % tick != 0:
+            gaps.add("qualified_limit_prior_raw_close_invalid")
+            reference = None
+        if declared is None or declared <= 0 or declared % tick != 0:
+            gaps.add("qualified_limit_session_pre_close_invalid")
+        if reference is not None and declared is not None and reference != declared:
+            gaps.add("qualified_limit_prior_close_pre_close_mismatch")
+        factors = (
+            self._one("fund_adj", symbol, prior_day) if prior_day else None,
+            self._one("fund_adj", symbol, day),
+        )
+        values = [_decimal(pair[0].get("adj_factor")) if pair else None for pair in factors]
+        hashes.update(pair[1] for pair in factors if pair)
+        if any(value is None or value <= 0 for value in values):
+            gaps.add("qualified_limit_factor_coverage_invalid")
+        elif values[0] != values[1]:
+            gaps.add("qualified_limit_factor_discontinuity")
+        if not _complete_scope(self._tables(), "fund_div", symbol, day, full_symbol=True):
+            gaps.add("corporate_action_event_coverage_missing")
+        for row, digest in self._rows("fund_div", symbol):
+            # Exclude reference-changing sessions even when capture announcement
+            # dating is incomplete or later revised. No cash settlement exception.
+            ex = _day(row["ex_date"]) if row.get("ex_date") else None
+            pay = _day(row["pay_date"]) if row.get("pay_date") else None
+            if ex is None or pay is None:
+                gaps.add("qualified_limit_corporate_action_dates_unverified")
+                hashes.add(digest)
+            elif ex <= day <= max(ex, pay):
+                gaps.add("qualified_limit_corporate_action_reference_excluded")
+                hashes.add(digest)
+        lower = upper = None
+        if reference is not None:
+            lower = (reference * (1 - spec.price_limit_ratio) / tick).quantize(
+                Decimal(1), rounding="ROUND_HALF_UP"
+            ) * tick
+            upper = (reference * (1 + spec.price_limit_ratio) / tick).quantize(
+                Decimal(1), rounding="ROUND_HALF_UP"
+            ) * tick
+        reported = self._one("stk_limit", symbol, day)
+        if reported:
+            hashes.add(reported[1])
+        reported_lower = _decimal(reported[0].get("down_limit")) if reported else None
+        reported_upper = _decimal(reported[0].get("up_limit")) if reported else None
+        reported_prior = _decimal(reported[0].get("pre_close")) if reported else None
+        diagnostics: dict[str, object] = {
+            "limit_basis": self.policy.limit_basis,
+            "pit_lane": "modeled_pit",
+            "strict_pit_accepted": False,
+            "normal_session_assumption": True,
+            "normal_session_assumption_scope": "seed_domestic_equity_etf_no_known_exception",
+            "reference_basis": "exact_prior_calendar_session_raw_close",
+            "prior_session": prior_day.isoformat() if prior_day else None,
+            "reference_close": str(reference) if reference is not None else None,
+            "derived_lower_limit": str(lower) if lower is not None else None,
+            "derived_upper_limit": str(upper) if upper is not None else None,
+            "reported_source_record_hash": reported[1] if reported else None,
+            "reported_pre_close": str(reported_prior) if reported_prior is not None else None,
+            "reported_lower_limit": str(reported_lower) if reported_lower is not None else None,
+            "reported_upper_limit": str(reported_upper) if reported_upper is not None else None,
+            "reported_minus_derived_lower": str(reported_lower - lower)
+            if reported_lower is not None and lower is not None
+            else None,
+            "reported_minus_derived_upper": str(reported_upper - upper)
+            if reported_upper is not None and upper is not None
+            else None,
+            "comparison_status": "agrees"
+            if reported_lower == lower
+            and reported_upper == upper
+            and lower is not None
+            and upper is not None
+            and reported_prior in {None, reference}
+            else "unresolved_reported_comparison",
+        }
+        return lower, upper, MappingProxyType(diagnostics)
+
     def reopen_security(self, symbol: str, cutoff: datetime) -> HistoricalSecurityEvidence | None:
         """Preopen view: prior completed close/volume plus modeled 09:00 venue facts.
 
@@ -445,6 +614,12 @@ class HistoricalAShareInputs:
             hashes.add(limits[1])
         else:
             gaps.add("daily_limits_unverified")
+        limit_diagnostics = None
+        if self.policy.limit_basis == "qualified_seed_etf_exchange_rule_v1":
+            gaps.discard("daily_limits_unverified")
+            lower, upper, limit_diagnostics = self._qualified_limits(
+                symbol, day, spec, gaps, hashes
+            )
         action_api = "fund_div" if api == "fund_daily" else "dividend"
         if not _complete_scope(tables, action_api, symbol, day, full_symbol=True):
             gaps.add("corporate_action_event_coverage_missing")
@@ -475,13 +650,16 @@ class HistoricalAShareInputs:
             lower_limit=lower,
             upper_limit=upper,
             turnover=amount * 1000 if amount is not None else None,
-            corporate_action_status="none"
+            corporate_action_status=(
+                "modeled_normal_session_assumption" if limit_diagnostics is not None else "none"
+            )
             if not any("corporate_action" in gap for gap in gaps)
             else None,
             buy_lot_size=spec.lot_size,
             price_tick=spec.price_increment,
             source_record_hashes=tuple(sorted(hashes)),
             gaps=tuple(sorted(gaps)),
+            limit_diagnostics=limit_diagnostics,
         )
 
     def session(self, symbol: str, session: date) -> HistoricalSessionInputs:
@@ -568,6 +746,16 @@ class HistoricalAShareInputs:
                         or _decimal(limits[0].get("down_limit")) != expected_down
                     ):
                         gaps.add("effective_rule_daily_limit_mismatch")
+        limit_diagnostics = None
+        if self.policy.limit_basis == "qualified_seed_etf_exchange_rule_v1":
+            gaps.difference_update(
+                {
+                    "daily_limits_unverified",
+                    "daily_limit_previous_close_mismatch",
+                    "effective_rule_daily_limit_mismatch",
+                }
+            )
+            _, _, limit_diagnostics = self._qualified_limits(symbol, session, spec, gaps, hashes)
         # Stable factors are anomaly evidence only; they never create cash or shares.
         factor_api = "fund_adj" if etf else "adj_factor"
         factor = self._one(factor_api, symbol, session)
@@ -678,6 +866,7 @@ class HistoricalAShareInputs:
             tuple(sorted(hashes)),
             tuple(sorted(gaps)),
             self.policy.policy_id,
+            limit_diagnostics=limit_diagnostics,
         )
 
 

@@ -130,6 +130,22 @@ all loss avoidance. Causal correction requires reopened thesis/trigger evidence.
 Small-sample tail statistics remain descriptive. USD model costs are reported
 separately from CNY NAV unless an explicit FX accounting rule is registered.
 
+The opt-in `qualified_seed_etf_exchange_rule_v1` scenario binds dated rule and
+issuer evidence and explicitly models normal-session ETF limits. It preserves
+reported-limit disagreements as diagnostics and never upgrades current receipts to
+strict historical PIT. Corporate-action reference changes, unsupported special
+sessions and missing required execution inputs remain blocking. The default
+reported-limit scenario and its previous evidence remain unchanged.
+
+For this qualified scenario, source gates and matched executable baselines use the
+registered deep observation horizon (including 120-session slow-bull and bear
+windows). The full original calendar remains bound as a separate diagnostic, rather
+than extending that matched horizon. Required initial 510300 holdings and complete
+matched baselines gate a case; optional candidate gaps are retained separately. A
+candidate still needs day-specific admission before an order, and a held candidate
+requires valid daily execution inputs. Qualified matched baselines have their own
+journal namespace so full-path and matched-path evidence cannot collide.
+
 Matched cash, unchanged initial account and broad ETF baselines use the same engine
 and fees. Full raw index paths are separately labeled non-executable diagnostics.
 The fourth executable baseline gives the existing Phase 2 four-adjusted-close
@@ -148,6 +164,9 @@ unaccepted. Actual new receipts and naturally due reviews are required for prosp
 acceptance; test fixtures cannot be promoted into natural events or broker orders.
 
 ## Current evidence location
+
+The dated [execution evidence report](CONTINUOUS_STUDY_RESULTS_20260905.md) records
+actual model outcomes, source qualification and remaining acceptance gaps separately.
 
 Private source receipts, study registration, 18 initial inputs and the eight daily
 input paths are under `.market-impact/continuous-20260905/`. Source payloads stay in

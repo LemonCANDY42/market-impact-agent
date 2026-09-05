@@ -134,8 +134,22 @@ The producer has two explicit entrances:
 - `review_account(...)` starts an independently admitted holdings review with no research Run IDs.
   The supplied account facts still require complete, fresh authority before model dispatch.
 
-The model sees the exact frozen input and bound research in one pi invocation, without a second
-retrieval loop. New dynamic-horizon Runs use `AgentPortfolioProposalV4`; v3 remains replayable.
+The model sees a versioned, immutable `market-impact.portfolio-prompt-projection.v1`
+and bound research in one pi invocation, without a second retrieval loop. The projection
+preserves all account, risk, price, operational rule and other source metadata fields;
+only `rule_set.source_documents[].source_record_hashes` becomes a digest, count and
+full-input CAS artifact/JSON pointer. Complete inputs remain frozen in the signed binding
+and reopenable CAS artifact as the validation authority. Replay reconstructs the projection
+and checks its source artifact; older bindings remain replayable. This business-context
+projection does not change the pi runtime or its route qualification.
+Fresh reviews bind `market-impact.portfolio-evidence-scope.v2`: permitted references
+also include only the evidence/counterevidence IDs of reopened, same-root signed
+research theses. The projection lists these permitted IDs explicitly; arbitrary thesis
+text cannot grant a reference. Initial adoption derives this scope from the signed
+source portfolio Run and reopens its bound research at the destination cutoff.
+Legacy bindings and projection-only recovery successors
+retain their original reference scope and prompt. Existing failed terminals remain
+failed; this change does not authorize another successor or model retry. New dynamic-horizon Runs use `AgentPortfolioProposalV4`; v3 remains replayable.
 V4 contains the account recommendation, target exposure, selected thesis horizon, priced-in
 assessment, transmission, review point, evidence, counterevidence and invalidation. Harness injects identities and
 computes quantities. Completion, raw native response, JSON normalization, physical Usage and
@@ -671,7 +685,10 @@ The adapter never generates research, changes a mandate or admits its own Agent 
 The default starting cash is CNY 100,000. `bootstrap_half_hs300` takes an explicit
 prior-session raw 510300 bar and buys approximately half the capital through the same
 engine. Fees reduce opening NAV; a missing, suspended or incompletely filled seed
-cannot be claimed as the required overnight allocation. Cash and positions then persist
+cannot be claimed as the required overnight allocation. Recovery validates the exact
+persisted opening input and complete fill before accepting that allocation; an existing
+journal alone is not readiness. Reopening an unsuccessful seed neither submits it again
+nor promotes later observations to an accepted seeded-account curve. Cash and positions then persist
 across all sessions. Overnight long inventory limits sales (including same-session
 buy/sell attempts), with full residual odd-lot liquidation supported. Suspension,
 zero volume, absent bid/ask liquidity and side-applicable daily limits yield explicit

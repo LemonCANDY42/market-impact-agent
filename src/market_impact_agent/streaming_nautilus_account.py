@@ -360,8 +360,6 @@ class HistoricalStreamingAccount:
         The supplied raw bar must precede the first decision session. This is an
         explicit historical opening allocation, not an Agent research signal.
         """
-        if self.results:
-            raise ValueError("opening allocation is only available before the first session")
         spec = self.specs.get("510300.SH") or self.specs.get("510300.XSHG")
         if spec is None or spec.instrument_class != "exchange_traded_fund":
             raise ValueError("opening allocation requires source-backed 510300 equity ETF")
@@ -381,10 +379,34 @@ class HistoricalStreamingAccount:
             created_at=prior_session_bar.session_open_at - timedelta(microseconds=1),
             expires_at=prior_session_bar.session_close_at,
         )
-        result = self.advance_session({spec.target_id: prior_session_bar}, intents=(intent,))
+        if self.results:
+            result = self.results[0]
+            expected = _json_value(
+                {
+                    "bars": {spec.target_id: asdict(prior_session_bar)},
+                    "intents": [intent.to_dict()],
+                    "actions": [],
+                }
+            )
+            if result.input_hash != canonical_hash(expected):
+                raise ValueError("persisted opening allocation differs from requested seed")
+        else:
+            result = self.advance_session({spec.target_id: prior_session_bar}, intents=(intent,))
         if sum((fill.quantity for fill in result.fills), Decimal(0)) != quantity:
             raise ValueError("opening allocation did not fill completely; account remains unready")
         return result
+
+    def reopen_session_intents(
+        self, result: HistoricalSessionResult
+    ) -> tuple[ExecutableOrder, ...]:
+        """Reopen commands from the same durable input used to reconstruct a result."""
+        if result not in self.results:
+            raise ValueError("session result does not belong to this account")
+        for line in self.journal_path.read_text().splitlines()[1:]:
+            record = json.loads(line)
+            if "bars" in record and canonical_hash(record) == result.input_hash:
+                return tuple(_intent(value) for value in record["intents"])
+        raise ValueError("session result is missing its persisted commands")
 
     def _replay_record(self, record: dict[str, Any]) -> None:
         if "register_instrument" in record:

@@ -589,3 +589,45 @@ def test_modeled_historical_route_refuses_current_metadata_and_incomplete_sessio
 
     asyncio.run(run())
     assert not any(transport.requests for transport in transports)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {**PARAMS, "start_date": "2026827"},
+        {**PARAMS, "start_date": "20260828"},
+        {**PARAMS, "ts_code": "510300.SH,510500.SH"},
+        {**PARAMS, "limit": 0},
+    ],
+)
+def test_agent_query_validation_is_recoverable_but_preparation_is_strict(
+    tmp_path: Path, invalid: dict[str, object]
+) -> None:
+    research, transport = _setup(tmp_path)
+    tool = research.descriptors()[0]
+
+    async def scenario() -> None:
+        result = cast(dict[str, object], await tool.handler(invalid))
+        assert result["status"] == "validation_error"
+        assert result["error_kind"] == "invalid_query_arguments"
+        with pytest.raises(ValueError):
+            await research.request(tool.name, invalid)
+        assert await research.fulfill_pending() == ()
+        registry = ToolRegistry(research.store.artifacts)
+        registry.register(tool)
+        with pytest.raises(PermissionError, match="capability is not allowed"):
+            await registry.execute(
+                ToolCall(call_id="unauthorized", name=tool.name, arguments=invalid),
+                access=ToolAccessContext(
+                    allowed_capabilities=frozenset(),
+                    allowed_side_effects=frozenset({ToolSideEffect.READ_ONLY}),
+                    allowed_tools=frozenset({tool.name}),
+                ),
+            )
+
+    asyncio.run(scenario())
+    assert not transport.requests
+    assert not any(
+        event.event_type == "research.data.requested"
+        for event in research.budget.journal.events("episode")
+    )

@@ -1,0 +1,115 @@
+# Continuous decision study evidence, 2026-09-05
+
+This report separates implemented behavior from source qualification, actual model
+observations and investment acceptance. The owning registration and claim contract
+is [CONTINUOUS_DECISION_STUDY.md](CONTINUOUS_DECISION_STUDY.md).
+
+## Delivered engineering
+
+Commit `6b4d40c` closes the reviewed pre-existing pi/runtime and portfolio changes.
+Commit `e3cc86d` connects cached on-demand research, dynamic A-share admission,
+continuous Nautilus accounts, scoped Recall, two-step rotation, study entry points,
+Watch review and offline IBKR preparation. Both commits were pushed. Unrelated
+research documents and private source evidence were excluded.
+
+The engineering node passed Ruff, formatting, Pyright, TypeScript/Node checks and
+1,956 Python tests, supplemented by targeted checks of the final source-cache and
+coverage changes. Independent read-only reviews covered the implementation
+boundaries. The subsequent recovery/qualification fixes passed 1,991 Python tests
+and 30 targeted final evidence-scope/adoption checks, plus Ruff, formatting,
+Pyright, TypeScript/Node and the zero-network runtime doctor. Independent reviews
+covered recovery, source qualification and evidence-scope changes. These checks do
+not establish completed real-model trajectories or broker acceptance.
+
+## Source and coverage qualification
+
+The frozen study has 18 coverage cases and eight deep cases, with 54 initial
+model/case diagnostics and 72 intended account trajectories. Three ordinary windows
+were selected from pre-start price features by the frozen hash order. News absence,
+historical dispersion and liquidity remain explicit coverage gaps where unsupported.
+
+The original reported-limit source preflight qualifies `cn-2024-policy-melt-up`
+for its six registered sessions. The other 17 coverage windows remain blocked by
+one or more source or executable-baseline gaps. Dominant gaps include dated trading
+rules, missing or conflicting daily limits and unsupported corporate-action
+entitlements/payment timing. The new opt-in qualified scenario separately binds dated exchange rules, issuer
+identity and a normal-session assumption; it retains reported-limit disagreements
+as diagnostics. It blocks unsupported corporate-action reference changes and
+special sessions. Current receipts do not gain strict historical PIT authority.
+
+Sixteen new rule artifacts cover both seed ETFs over eight effective periods. The
+2016 circuit-breaker interval remains an explicit qualification gap. Frozen input
+manifests retain all original research receipts and case identities. Matched
+source/baseline preflight uses each deep case's registered horizon; the full original
+price path remains a separate diagnostic. Qualification of an optional candidate
+does not replace the required initial holding's execution gate.
+
+Official SSE suspension responses are persisted and authenticated. Both seed ETFs
+have bounded full-history queries; absence is projected only from complete verified
+responses. A source reuse acceptance reopened one immutable source graph for all
+18 windows. Raw licensed inputs remain in the private authority store.
+
+## Actual prospective discovery
+
+The frozen batch uses actual newly collected news receipts and three independent
+model contexts. Its five physical requests cost USD 0.409447. Replay reproduced the
+entire report without another request or fee.
+
+| Model | Actual observation | Acceptance limit |
+|---|---|---|
+| Luna max | Completed a broad A-share research thesis; selected no concrete candidate through a native profile query. | No dynamic candidate or portfolio acceptance. |
+| Terra high | Independently queried an outside-seed company, acquired admission inputs and entered candidate research. | Continuation aborted on conflicting price-limit date arguments after two successful tool reads. This is a tool-contract failure, not an economic conclusion. |
+| Sol high | Independently queried the same outside-seed company, reused source facts and completed candidate research. | Dynamic trading admission refused missing historical security evidence; no portfolio or order was produced. |
+
+The shared candidate/source outcome did not arise from sharing another model's
+ranking or thesis: initial contexts were equal, while native query receipts and
+responses were independently bound. The company-specific response payloads remain
+private. The original failed Terra attempt and its cost are retained. A later
+corrective tool implementation cannot retroactively turn that attempt into success
+or reset its frozen two-Run Episode allowance.
+
+There is no accepted current Mock account/trading-rule authority in this production
+discovery entry. Natural Watch-triggered account review and real Mock execution
+remain unaccepted. Synthetic engineering acceptance is reported separately.
+
+## Recovery findings
+
+The first historical experiment dispatch stopped before model invocation because
+an immutable preflight changed on replay. A failed opening allocation had persisted
+an account result; the old caller treated the presence of results as a successful
+seed. Recovery now revalidates the exact original seed input and full fill before
+using any subsequent curve. Already-appended invalid observations remain evidence,
+not an accepted registered-account path. No historical model cost arose from this
+failed preflight.
+
+The prospective query failure is preserved separately from an admission refusal or
+`hold`. Correctable domain-argument errors must return actionable tool feedback
+through the existing durable pi loop, under the same Run and budget. Authority and
+source-integrity failures must continue to stop execution.
+
+The first eligible historical case completed three research theses. All three
+original portfolio attempts stopped before dispatch because repeated provenance
+hashes inflated the prompt to approximately 1.48 MB. The model projection now
+retains all economic fields and replaces only the repeated hash arrays with
+content-addressed references, reducing that input to approximately 15.4 KB.
+
+A single fixed successor may repair a signed legacy pre-dispatch failure only after
+verifying zero physical reservations and unchanged research, account, sources,
+profile and budget. Unknown requests are ineligible. In the actual recovery batch,
+two successors completed portfolio decisions; one received answer failed validation
+because it cited genuine nested thesis evidence that the old portfolio vocabulary
+did not accept. Fresh bindings now version that scope explicitly and allow only
+validated supporting/counterevidence refs from reopened signed theses. Initial
+adoption derives the same scope from its verified source Run. Legacy bindings and
+projection-recovery successors retain their original scope; the failed answer is
+not reclassified as a completed decision.
+The original failures and all costs remain preserved. Rolling acceptance is still
+reported from complete registered account paths, not these initial decisions.
+
+## Outstanding acceptance
+
+Actual historical model/trajectory results will be reported against the unchanged
+54/72 denominators after qualified execution. Unseen cases, long-window strategy
+comparisons, volatility/industry executable baselines without qualified mappings,
+natural prospective account reviews and real IBKR Paper acceptance remain pending.
+IBKR preparation is offline only and cannot send an order.

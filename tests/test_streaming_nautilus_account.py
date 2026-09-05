@@ -80,6 +80,7 @@ def test_streaming_account_real_engine_t1_fees_and_dividend_recovery(tmp_path: P
     assert first_result.cash == D("49985.00")
     assert first_result.nav == D("99985.00")
     assert first_result.positions == {ETF: D(12500)}
+    assert a.bootstrap_half_hs300(first) == first_result
     a.register_instrument(HistoricalInstrumentSpec(STOCK, "equity", "fixture:stock"))
     second = bar(3)
     stock = bar(3, "10.00")
@@ -184,3 +185,25 @@ def test_partial_fill_overnight_odd_lot_close_and_single_writer(tmp_path: Path) 
     assert not closed.positions and len(closed.fills) == 1
     assert closed.cash == D(99990)
     a.close()
+
+
+@pytest.mark.parametrize("quantity", [0, 100])
+def test_failed_opening_allocation_stays_unready_after_restart(
+    tmp_path: Path, quantity: int
+) -> None:
+    path = tmp_path / "failed-seed.jsonl"
+    seed = bar(2, open_ask_quantity=quantity)
+    a = account(path)
+    with pytest.raises(ValueError, match="did not fill completely"):
+        a.bootstrap_half_hs300(seed)
+    prefix = path.read_bytes()
+    a.close()
+    restored = account(path)
+    try:
+        with pytest.raises(ValueError, match="did not fill completely"):
+            restored.bootstrap_half_hs300(seed)
+        assert path.read_bytes() == prefix
+        with pytest.raises(ValueError, match="differs from requested seed"):
+            restored.bootstrap_half_hs300(bar(2))
+    finally:
+        restored.close()

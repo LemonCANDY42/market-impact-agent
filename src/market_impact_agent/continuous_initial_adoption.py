@@ -392,6 +392,7 @@ class InitialAdoptionAuthority:
             parsed_proposal=original["parsed_proposal"],
             binding_hash=binding_hash,
             research_run_id=source_decision.research_run_id,
+            source_portfolio_run_id=source_decision.portfolio_run_id,
         )
         source_orders = self.source_runtime.admitted_intents(source_decision, frame)
         if (order is None) != (not source_orders):

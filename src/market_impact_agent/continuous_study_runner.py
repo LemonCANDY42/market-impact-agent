@@ -518,6 +518,7 @@ def _daily_manifest_state(
                     _string(policy_value, "daily_open_volume_fraction")
                 ),
                 lane=_string(policy_value, "lane"),
+                limit_basis=str(policy_value.get("limit_basis", "reported_stk_limit")),
                 opening_tick_validity_microseconds=_integer(
                     policy_value, "opening_tick_validity_microseconds"
                 ),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
@@ -30,6 +31,7 @@ class HistoricalSecurityEvidence:
     source_record_hashes: tuple[str, ...]
     gaps: tuple[str, ...] = ()
     raw_price_observed_at: datetime | None = None
+    limit_diagnostics: Mapping[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -52,6 +54,11 @@ class HistoricalSecurityEvidence:
             "price_tick": None if self.price_tick is None else str(self.price_tick),
             "source_record_hashes": list(self.source_record_hashes),
             "gaps": list(self.gaps),
+            **(
+                {"limit_diagnostics": dict(self.limit_diagnostics)}
+                if self.limit_diagnostics is not None
+                else {}
+            ),
         }
 
 
@@ -140,7 +147,16 @@ class DynamicAShareAdmission:
                         gaps.add(name + "_unverified")
                 if evidence.halted is not False:
                     gaps.add("halted" if evidence.halted is True else "halt_status_unverified")
-                if evidence.corporate_action_status not in {"none", "cash_dividend_applied"}:
+                if evidence.corporate_action_status not in {
+                    "none",
+                    "cash_dividend_applied",
+                } and not (
+                    evidence.corporate_action_status == "modeled_normal_session_assumption"
+                    and evidence.limit_diagnostics is not None
+                    and evidence.limit_diagnostics.get("limit_basis")
+                    == "qualified_seed_etf_exchange_rule_v1"
+                    and evidence.limit_diagnostics.get("normal_session_assumption") is True
+                ):
                     gaps.add("corporate_action_semantics_unverified")
                 if type(evidence.buy_lot_size) is not int or evidence.buy_lot_size <= 0:
                     gaps.add("trading_rules_unverified")

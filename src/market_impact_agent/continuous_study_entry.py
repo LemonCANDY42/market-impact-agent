@@ -87,7 +87,9 @@ async def continuous_study_entry(
                 rule_artifact_hashes=rules,
                 fund_halt_artifact_hashes=halt_hashes,
                 policy=ModeledHistoricalPolicy(
-                    str(policy["policy_id"]), Decimal(str(policy["daily_open_volume_fraction"]))
+                    str(policy["policy_id"]),
+                    Decimal(str(policy["daily_open_volume_fraction"])),
+                    limit_basis=str(policy.get("limit_basis", "reported_stk_limit")),
                 ),
             )
             source_views[source_identity] = market

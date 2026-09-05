@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -179,6 +179,8 @@ async def prepare_continuous_experiment(
             )
     problems: list[dict[str, object]] = []
     frozen: list[dict[str, object]] = []
+    candidate_execution_gaps: list[dict[str, object]] = []
+    qualified_preflight = False
     baselines: list[dict[str, object]] = []
     estimates = {"analysis_coverage": 0, "portfolio_coverage": 0, "rolling": 0}
     worst = {key: 0 for key in estimates}
@@ -219,27 +221,46 @@ async def prepare_continuous_experiment(
             )
             for gap in frame.gaps:
                 problems.append({"window_id": definition.window_id, "reason": gap})
-        for day in (definition.observation_through_session, *registered_window.sessions):
-            for symbol in _SEEDS:
+        qualified = window.market.policy.limit_basis == "qualified_seed_etf_exchange_rule_v1"
+        qualified_preflight = qualified_preflight or qualified
+        matched_window = registered_window
+        if qualified and definition.window_id in deep:
+            end = deep[definition.window_id].outcome_window_end
+            matched_window = replace(
+                registered_window,
+                window=replace(definition, outcome_window_end=end),
+                sessions=tuple(day for day in registered_window.sessions if day <= end),
+            )
+        window_candidate_gaps: list[dict[str, object]] = []
+        symbols = (
+            tuple(dict.fromkeys(("510300.SH", *window.candidate_symbols))) if qualified else _SEEDS
+        )
+        for day in (definition.observation_through_session, *matched_window.sessions):
+            for symbol in symbols:
                 source = window.market.session(symbol, day)
                 if not source.execution_ready:
-                    problems.append(
-                        {
-                            "window_id": definition.window_id,
-                            "day": day.isoformat(),
-                            "symbol": symbol,
-                            "reason": "execution_source_incomplete",
-                            "gaps": list(source.gaps),
-                        }
-                    )
+                    source_gap: dict[str, object] = {
+                        "window_id": definition.window_id,
+                        "day": day.isoformat(),
+                        "symbol": symbol,
+                        "reason": "execution_source_incomplete",
+                        "gaps": list(source.gaps),
+                    }
+                    if qualified and symbol != "510300.SH":
+                        window_candidate_gaps.append(source_gap)
+                    else:
+                        problems.append(source_gap)
+        candidate_execution_gaps.extend(window_candidate_gaps)
         for baseline_id in CONTINUOUS_EXECUTABLE_BASELINE_IDS:
             result = evaluate_continuous_baseline_window(
                 registration_id=registration.registration_id,
                 baseline_id=baseline_id,
-                registered_window=registered_window,
+                registered_window=matched_window,
                 historical_inputs=window.market,
                 account_seed=ContinuousBaselineAccountSeed("baseline-" + definition.window_id, key),
-                state_root=study_root / "baseline-engine",
+                state_root=(study_root / "baseline-engine" / "qualified-matched-v1")
+                if qualified
+                else study_root / "baseline-engine",
             )
             baselines.append(result)
             if result["status"] != "complete":
@@ -260,9 +281,36 @@ async def prepare_continuous_experiment(
                 if window.market.fund_halt_artifact_hashes
                 else {}
             ),
-            "policy": _json(asdict(window.market.policy)),
+            "policy": _json(window.market.policy.to_dict()),
             "calendar": [day.isoformat() for day in window.calendar_dates],
             "candidate_symbols": list(window.candidate_symbols),
+            **(
+                {
+                    "preflight_qualification": {
+                        "version": "qualified-held-seed-and-registered-matched-horizon-v1",
+                        "required_seed_symbol": "510300.SH",
+                        "optional_candidates": "diagnostic_only_until_held_or_ordered",
+                        "later_held_or_ordered_source_gaps": "runtime_fail_closed",
+                        "horizon_basis": "registered_deep_cell"
+                        if definition.window_id in deep
+                        else "registered_coverage_window",
+                        "observation_through_session": (
+                            definition.observation_through_session.isoformat()
+                        ),
+                        "matched_outcome_window_end": (
+                            matched_window.window.outcome_window_end.isoformat()
+                        ),
+                        "matched_execution_sessions": [
+                            day.isoformat() for day in matched_window.sessions
+                        ],
+                        "full_registered_window": definition.to_dict(),
+                        "full_registered_calendar": "calendar",
+                    },
+                    "candidate_execution_gaps": window_candidate_gaps,
+                }
+                if qualified
+                else {}
+            ),
         }
         frozen.append(source_manifest)
         # One byte per input token is the conservative tokenizer-independent
@@ -299,6 +347,7 @@ async def prepare_continuous_experiment(
         "baselines": baselines,
         "problems": problems,
         "source_and_baseline_ready": not problems,
+        **({"candidate_execution_gaps": candidate_execution_gaps} if qualified_preflight else {}),
         "planning_estimated_microusd": estimates,
         "worst_case_role_caps_microusd": worst,
         "planning_assumptions": (
@@ -371,12 +420,11 @@ def _runtime(
         account_reference=arm,
         account_reference_key=_key(study_root),
     )
-    if not account.results:
-        try:
-            account.bootstrap_half_hs300(seed.bar)
-        except BaseException:
-            account.close()
-            raise
+    try:
+        account.bootstrap_half_hs300(seed.bar)
+    except BaseException:
+        account.close()
+        raise
     repositories = {
         frame.cutoff: repository
         for frame, repository in zip(window.frames, window.repositories, strict=True)

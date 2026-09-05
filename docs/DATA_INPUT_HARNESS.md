@@ -990,6 +990,14 @@ Industry, event and tradability placeholders return a typed gap only when their 
 family is not configured. Industry/company code filters allow a news-to-industry-to-new
 company research path; these observations do not approve instruments or orders.
 
+Invalid semantic query arguments return an actionable `validation_error` tool result
+(for example, price limits accept `trade_date` or a complete `start_date`/`end_date`
+interval, never both). Native role execution journals that result and charges the
+existing tool/result budgets, allowing correction in the same Run without acquiring
+data for the rejected query. Replay reuses the durable result. Only typed argument
+validation failures are recoverable; authority, authorization, and acquisition failures
+remain fail-closed. Public Harness preparation requests still raise invalid arguments.
+
 During the model Run, a tool reads only the snapshots captured in its constructor.
 Observation pages default to 20 rows; `offset` and `limit` (maximum 100) paginate the
 same authorized snapshot without changing the source query. A miss
