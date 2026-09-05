@@ -4,6 +4,32 @@ This report separates implemented behavior from source qualification, actual mod
 observations and investment acceptance. The owning registration and claim contract
 is [CONTINUOUS_DECISION_STUDY.md](CONTINUOUS_DECISION_STUDY.md).
 
+## Latest running checkpoint: 2026-09-05 14:15 UTC
+
+The v4 source-qualified run is still active; the sections below retain earlier
+milestones and failures. Ten coverage windows passed source/baseline qualification.
+All 30 initial research theses for these windows validated. Initial portfolio
+diagnostics contain 29 completed, one incomplete and 24 preflight-pending entries
+within the unchanged denominator of 54. The incomplete Luna 2016 proposal cited a
+nonexistent price-evidence ID; offline parsing reproduced the bound-evidence
+rejection. Its original response and cost remain intact.
+
+Sixty trajectories have completed their first registered trading session without
+an account execution error. The remaining 12 of 72 are unavailable because one
+deep window failed preflight and one model/case lacked a valid initial decision.
+Two trajectories have also completed their second session; the remaining daily
+frontier is in progress. No full-window strategy comparison is accepted yet.
+
+Actual continuous research has exercised the Recall correction: `read_current_thesis`
+returned a verified `already_supplied` reference of 620 UTF-8 bytes, retaining the
+original opinion as non-source evidence, and the successor research validated.
+The subsequent portfolio decision and second account session also completed.
+
+At this checkpoint, cumulative known cost is USD 12.145064 across 261 physical
+requests. USD 0.031550 is reserved, including the unchanged USD 0.011769 prior
+unknown request and an active request. The original USD 40 parent and stage caps
+remain enforced. This is an interim checkpoint, not the final experiment report.
+
 ## Delivered engineering
 
 Commit `6b4d40c` closes the reviewed pre-existing pi/runtime and portfolio changes.
@@ -21,7 +47,7 @@ Pyright, TypeScript/Node and the zero-network runtime doctor. Independent review
 covered recovery, source qualification and evidence-scope changes. These checks do
 not establish completed real-model trajectories or broker acceptance.
 
-The current source-qualified CNY/Recall node ran the complete 2,041-test Python
+The earlier source-qualified CNY/Recall node ran the complete 2,041-test Python
 suite: 2,039 passed and two test-contract regressions were identified. The historical
 Recall fixture still expected duplicate full text, and the source configuration
 allowlist omitted the three newly added documented APIs. After correcting these
