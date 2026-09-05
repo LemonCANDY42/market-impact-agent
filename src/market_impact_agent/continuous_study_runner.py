@@ -203,6 +203,16 @@ def preflight_continuous_study(root: Path) -> dict[str, object]:
                 window_id=window_id,
                 trade_date=trade_date,
                 authority_store=authority_store,
+                bootstrap_session=date.fromisoformat(
+                    _string(
+                        next(
+                            window
+                            for window in _list_of_objects(registration, "coverage_windows")
+                            if _string(window, "window_id") == window_id
+                        ),
+                        "observation_through_session",
+                    )
+                ),
             )
             state[manifest_state] += 1
         total_available += state["available"]
@@ -499,6 +509,7 @@ def _daily_manifest_state(
     window_id: str,
     trade_date: str,
     authority_store: LocalDataSnapshotStore,
+    bootstrap_session: date | None = None,
 ) -> str:
     if not path.is_file() or path.is_symlink():
         return "missing"
@@ -519,11 +530,20 @@ def _daily_manifest_state(
                 ),
                 lane=_string(policy_value, "lane"),
                 limit_basis=str(policy_value.get("limit_basis", "reported_stk_limit")),
+                cash_only_inception_at=(
+                    datetime.fromisoformat(str(policy_value["cash_only_inception_at"]))
+                    if policy_value.get("cash_only_inception_at") is not None
+                    else None
+                ),
                 opening_tick_validity_microseconds=_integer(
                     policy_value, "opening_tick_validity_microseconds"
                 ),
             ),
         )
+        if source.policy.cash_only_inception_at is not None:
+            if bootstrap_session is None:
+                return "unverified"
+            source.policy.validate_bootstrap(bootstrap_session)
         evidence = source.reopen_security(_string(value, "symbol"), expected_cutoff)
         source_record_hashes = tuple(sorted(_list_of_strings(value, "source_record_hashes")))
         if (

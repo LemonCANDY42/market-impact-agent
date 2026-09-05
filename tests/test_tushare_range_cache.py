@@ -231,8 +231,9 @@ def test_mixed_receipt_projection_preserves_physical_proof(
         "gap",
     ],
 )
+@pytest.mark.parametrize("saved_only", [False, True])
 def test_saved_only_recovery_reopens_evidence_and_never_fetches(
-    tmp_path: Path, damage: str
+    tmp_path: Path, damage: str, saved_only: bool
 ) -> None:
     config = load_tushare_observation_source(CONFIG)
     transport = FakeTransport([_response(config.fields, [])])
@@ -292,11 +293,33 @@ def test_saved_only_recovery_reopens_evidence_and_never_fetches(
         with pytest.raises(
             (ValueError, LookupError, OSError, AcquisitionPending, AcquisitionUncertain)
         ):
-            asyncio.run(_execute(reopened, query, saved_only=True))
+            asyncio.run(_execute(reopened, query, saved_only=saved_only))
     assert len(transport.requests) == 1
     if damage in {"missing_response", "corrupt_response", "missing_raw"}:
         with pytest.raises((ValueError, LookupError, OSError)):
             verify_range_projection(LocalDataSnapshotStore(tmp_path), snapshot)
+
+
+def test_new_request_uses_complete_uncertain_scope_without_reset(tmp_path: Path) -> None:
+    config = load_tushare_observation_source(CONFIG)
+    transport = FakeTransport([_response(config.fields, [])])
+    provider = TushareObservationProvider(
+        TOKEN, (config,), transport=transport, clock=lambda: RETRIEVED
+    )
+    store = LocalDataSnapshotStore(tmp_path)
+    cache = TushareDailyRangeCache(provider, store)
+    query = _query(
+        provider, config, {"ts_code": "510300.SH", "start_date": "20260825", "end_date": "20260825"}
+    )
+    original = asyncio.run(cache.acquire(query=query, source=query.sources[0]))
+    with store.authority_transaction() as connection:
+        connection.execute("UPDATE tushare_range_owners SET state = 'uncertain'")
+    assert asyncio.run(cache.acquire(query=query, source=query.sources[0])) == original
+    with store.authority_transaction() as connection:
+        assert connection.execute("SELECT state FROM tushare_range_owners").fetchone()[0] == (
+            "uncertain"
+        )
+    assert len(transport.requests) == 1
 
 
 def _legacy_range_response(

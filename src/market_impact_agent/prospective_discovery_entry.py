@@ -321,7 +321,11 @@ async def run_prepared_prospective_discovery(
 ) -> dict[str, object]:
     """Run each registered model with the same received facts and separate provenance."""
     from market_impact_agent.pi_runtime import PiRuntimeProvider
-    from market_impact_agent.prospective_discovery_runtime import run_prospective_discovery
+    from market_impact_agent.prospective_discovery_runtime import (
+        discovery_acquisition_wait,
+        latest_discovery_report,
+        run_prospective_discovery,
+    )
 
     budget = study_budget(study_root, "unseen_and_prospective")
     store = LocalDataSnapshotStore(budget.journal.path.parent)
@@ -390,20 +394,50 @@ async def run_prepared_prospective_discovery(
         arm = profile.profile_id
         episode_id = str(registration["registration_id"]) + "." + arm
         outcome_event_id = f"{budget.owner_run_id}.prospective.model." + canonical_hash(episode_id)
-        existing_outcome = budget.journal.event(outcome_event_id) if current_authority else None
+        existing_outcome = (
+            latest_discovery_report(budget.journal, outcome_event_id, "artifact_hash")
+            if current_authority
+            else None
+        )
+        used_runs = 0
         if existing_outcome is not None:
-            rows.append(
+            prior_row = cast(
+                dict[str, object],
+                store.artifacts.read_json(str(existing_outcome.payload["artifact_hash"])),
+            )
+            proof = (
                 cast(
                     dict[str, object],
-                    store.artifacts.read_json(str(existing_outcome.payload["artifact_hash"])),
+                    store.artifacts.read_json(str(prior_row["proof_artifact_hash"])),
                 )
+                if prior_row.get("status") == "incomplete" and "proof_artifact_hash" in prior_row
+                else {}
             )
-            continue
+            if not discovery_acquisition_wait(proof):
+                rows.append(prior_row)
+                continue
+            run_ids = cast(list[str], proof["research_run_ids"])
+            if (
+                run_ids
+                != [
+                    episode_id + ".research" + (f".continuation.{i}" if i else "")
+                    for i in range(len(run_ids))
+                ]
+                or not run_ids
+            ):
+                raise PermissionError("acquisition wait report differs from its original episode")
+            if any(not budget.journal.get_run(run_id).status.terminal for run_id in run_ids):
+                raise PermissionError("acquisition wait cannot reopen an active model Run")
+            used_runs = len(run_ids)
         composition = None
         if current_authority:
             allowance = cast(dict[str, int], registration["per_model_episode_allowance_microusd"])[
                 arm
             ]
+            # Sealed Runs are replayed, never regenerated or charged a second full allowance.
+            allowance = max(
+                0, allowance - used_runs * cast(int, profile.budget.max_estimated_cost_microusd)
+            )
             spent = budget.scope_summary()
             if spent["known_cost_microusd"] + spent["reserved_microusd"] + allowance > int(
                 str(registration["maximum_stage_cost_microusd"])
@@ -420,6 +454,9 @@ async def run_prepared_prospective_discovery(
                     }
                 )
                 pending = store.artifacts.put_json(rows[-1])
+                if existing_outcome is not None:
+                    # Budget pressure does not replace the durable resumable wait.
+                    continue
                 budget.journal.append(
                     run_id=budget.owner_run_id,
                     event_id=outcome_event_id,
@@ -511,12 +548,22 @@ async def run_prepared_prospective_discovery(
                 )
             if current_authority:
                 reported = store.artifacts.put_json(rows[-1])
+                payload: dict[str, object] = {"artifact_hash": reported.content_hash}
+                if existing_outcome is not None:
+                    if existing_outcome.payload["artifact_hash"] == reported.content_hash:
+                        continue
+                    outcome_event_id = (
+                        existing_outcome.event_id
+                        + ".revision."
+                        + str(existing_outcome.payload["artifact_hash"])
+                    )
+                    payload["previous_report_event_id"] = existing_outcome.event_id
                 budget.journal.append(
                     run_id=budget.owner_run_id,
                     event_id=outcome_event_id,
                     event_type="prospective.discovery.model.reported",
                     observed_at=datetime.now(UTC),
-                    payload={"artifact_hash": reported.content_hash},
+                    payload=payload,
                 )
         finally:
             await provider.close()

@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     from market_impact_agent.ashare_security_qualification import SourceBackedAShareRulePolicy
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
+CASH_ONLY_INCEPTION_BASIS = "qualified_seed_etf_cash_only_inception_v1"
+QUALIFIED_ETF_BASES = {"qualified_seed_etf_exchange_rule_v1", CASH_ONLY_INCEPTION_BASIS}
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class ModeledHistoricalPolicy:
     opening_tick_validity_microseconds: int = 1
     limit_basis: str = "reported_stk_limit"
     research_projection: str = "completed_raw_prices_v1"
+    cash_only_inception_at: datetime | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Preserve legacy serialized identities when the new basis is not selected."""
@@ -58,12 +61,26 @@ class ModeledHistoricalPolicy:
             result["limit_basis"] = self.limit_basis
         if self.research_projection != "completed_raw_prices_v1":
             result["research_projection"] = self.research_projection
+        if self.cash_only_inception_at is not None:
+            result["cash_only_inception_at"] = self.cash_only_inception_at.isoformat()
         return result
+
+    def validate_bootstrap(self, session: date) -> None:
+        if self.cash_only_inception_at is not None and self.cash_only_inception_at != _at(
+            session, time(9, 30)
+        ):
+            raise ValueError("cash-only inception differs from registered bootstrap open")
 
     def __post_init__(self) -> None:
         if self.research_projection not in {"completed_raw_prices_v1", "dynamic_ashare_sources_v1"}:
             raise ValueError("unsupported historical research projection")
-        if self.limit_basis not in {"reported_stk_limit", "qualified_seed_etf_exchange_rule_v1"}:
+        if (self.limit_basis == CASH_ONLY_INCEPTION_BASIS) != (
+            self.cash_only_inception_at is not None
+        ):
+            raise ValueError("cash-only inception requires its versioned qualified basis")
+        if self.cash_only_inception_at is not None:
+            require_aware(self.cash_only_inception_at, "cash_only_inception_at")
+        if self.limit_basis not in {"reported_stk_limit", *QUALIFIED_ETF_BASES}:
             raise ValueError("unsupported modeled historical limit basis")
         if self.opening_tick_validity_microseconds != 1:
             raise ValueError("modeled venue facts cover exactly the opening tick")
@@ -603,14 +620,16 @@ class HistoricalAShareInputs:
             gaps.add("corporate_action_event_coverage_missing")
         for row, digest in self._rows("fund_div", symbol):
             # Exclude reference-changing sessions even when capture announcement
-            # dating is incomplete or later revised. No cash settlement exception.
+            # dating is incomplete or later revised. Only proven zero entitlement
+            # can exempt post-ex-date cash settlement sessions.
             ex = _day(row["ex_date"]) if row.get("ex_date") else None
             pay = _day(row["pay_date"]) if row.get("pay_date") else None
             if ex is None or pay is None:
                 gaps.add("qualified_limit_corporate_action_dates_unverified")
                 hashes.add(digest)
             elif ex <= day <= max(ex, pay):
-                gaps.add("qualified_limit_corporate_action_reference_excluded")
+                if not self._zero_entitlement_distribution(row, day):
+                    gaps.add("qualified_limit_corporate_action_reference_excluded")
                 hashes.add(digest)
         lower = upper = None
         if reference is not None:
@@ -817,7 +836,7 @@ class HistoricalAShareInputs:
         else:
             gaps.add("daily_limits_unverified")
         limit_diagnostics = None
-        if self.policy.limit_basis == "qualified_seed_etf_exchange_rule_v1":
+        if self.policy.limit_basis in QUALIFIED_ETF_BASES:
             gaps.discard("daily_limits_unverified")
             lower, upper, limit_diagnostics = self._qualified_limits(
                 symbol, day, spec, gaps, hashes
@@ -831,7 +850,8 @@ class HistoricalAShareInputs:
             ex = _day(row["ex_date"]) if row.get("ex_date") else None
             pay = _day(row["pay_date"]) if row.get("pay_date") else None
             if ex is not None and pay is not None and ex <= day <= pay:
-                gaps.add("corporate_action_pending_settlement")
+                if api != "fund_daily" or not self._zero_entitlement_distribution(row, day):
+                    gaps.add("corporate_action_pending_settlement")
                 hashes.add(digest)
         for table in tables:
             if table.api in {"trade_cal", "suspend_d", "stk_limit", action_api}:
@@ -863,6 +883,32 @@ class HistoricalAShareInputs:
             source_record_hashes=tuple(sorted(hashes)),
             gaps=tuple(sorted(gaps)),
             limit_diagnostics=limit_diagnostics,
+        )
+
+    def _zero_entitlement_distribution(self, row: Mapping[str, Any], session: date) -> bool:
+        """Only a cash distribution recorded before this account existed is exempt."""
+        inception = self.policy.cash_only_inception_at
+        if (
+            inception is None
+            or row.get("div_proc") != "实施"
+            or not row.get("ann_date")
+            or _day(row["ann_date"]) > session
+        ):
+            return False
+        if not all(row.get(field) for field in ("record_date", "ex_date", "pay_date")):
+            return False
+        record, ex, pay = (_day(row[field]) for field in ("record_date", "ex_date", "pay_date"))
+        cash = _decimal(row.get("div_cash"))
+        return (
+            record < ex <= pay
+            and ex < session <= pay
+            and _at(record, time(15)) < inception <= _at(session, time(9, 30))
+            and cash is not None
+            and cash > 0
+            and all(
+                _decimal(row.get(field, 0)) == 0
+                for field in ("stk_div", "stk_bo_rate", "stk_co_rate")
+            )
         )
 
     def session(self, symbol: str, session: date) -> HistoricalSessionInputs:
@@ -950,7 +996,7 @@ class HistoricalAShareInputs:
                     ):
                         gaps.add("effective_rule_daily_limit_mismatch")
         limit_diagnostics = None
-        if self.policy.limit_basis == "qualified_seed_etf_exchange_rule_v1":
+        if self.policy.limit_basis in QUALIFIED_ETF_BASES:
             gaps.difference_update(
                 {
                     "daily_limits_unverified",
@@ -998,7 +1044,9 @@ class HistoricalAShareInputs:
                 hashes.add(digest)
                 if not etf or row.get("div_proc") != "实施":
                     gaps.add("corporate_action_settlement_unaccepted")
-                elif ex_date != pay_date or not row.get("record_date"):
+                elif (ex_date != pay_date or not row.get("record_date")) and not (
+                    self._zero_entitlement_distribution(row, session)
+                ):
                     gaps.add("corporate_action_delayed_payment_or_entitlement_unaccepted")
                 elif pay_date == session:
                     # Preserve payment terms; reopen record-date holdings in the engine.

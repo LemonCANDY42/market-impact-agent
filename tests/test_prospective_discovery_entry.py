@@ -289,3 +289,116 @@ def test_v2_preparation_and_fixed_denominator_budget_pending(
         "pending_budget"
     ] * 3
     assert receipts.acquisition.budget.summary()["physical_requests"] == 0
+
+
+def test_v2_wait_revises_same_episode_and_replays_terminal_without_provider(
+    receipts: ReceiptFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+    from typing import Any
+
+    from market_impact_agent import prospective_discovery_runtime as runtime
+    from market_impact_agent.runtime_store import RunStatus
+
+    from .test_ashare_security_qualification import accepted_policy
+
+    store = receipts.acquisition.store
+    journal = receipts.acquisition.budget.journal
+    policy = accepted_policy(store, RETRIEVED - timedelta(days=1))
+    prepared = entry.prepare_prospective_discovery(
+        study_root=receipts.root,
+        receipt_binding_path=receipts.binding_path,
+        receipt_report_path=receipts.report_path,
+        receipt_episode_id="received-news",
+        receipt_run_id="received-news.research",
+        templates=tuple(receipts.acquisition.templates.values()),
+        rule_policy_event_id=policy.acceptance_event_id,
+    )
+    path = receipts.root / "v2.json"
+    path.write_text(json.dumps(prepared))
+
+    def templates(**_: object) -> tuple[ResearchSourceTemplate, ...]:
+        return tuple(receipts.acquisition.templates.values())
+
+    monkeypatch.setattr(entry, "discovery_source_templates", templates)
+    calls: list[str] = []
+    bindings: dict[str, object] = {}
+    phase = [0]
+
+    class Provider:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def close(self) -> None:
+            pass
+
+    async def run(**kwargs: Any) -> SimpleNamespace:
+        acquisition = cast(OnDemandResearch, kwargs["acquisition"])
+        calls.append(acquisition.episode_id)
+        if phase[0] == 0:
+            bindings[acquisition.episode_id] = acquisition.binding
+            journal.start_run(
+                run_id=acquisition.run_id,
+                config_hash=canonical_hash("fixture"),
+                created_at=RETRIEVED,
+            )
+            journal.finish(
+                run_id=acquisition.run_id,
+                status=RunStatus.FAILED,
+                finished_at=RETRIEVED,
+                terminal_artifact_id=None,
+            )
+        else:
+            assert acquisition.binding == bindings[acquisition.episode_id]
+            assert kwargs["maximum_runs"] == 3
+        waiting = phase[0] == 0 and len(calls) == 1
+        # Other arms are generic terminal incompletes, which must never be resumed.
+        status = "incomplete" if phase[0] == 0 else "admission_refused"
+        proof = store.artifacts.put_json(
+            {
+                "status": status,
+                "research_run_ids": [acquisition.run_id],
+                "acquisitions": [{"status": "uncertain"}] if waiting else [],
+            }
+        )
+        row = {
+            "status": status,
+            "proof_artifact_hash": proof.content_hash,
+            "run_ids": [acquisition.run_id],
+        }
+        return SimpleNamespace(to_dict=lambda: row, portfolio_run_id=None)
+
+    def spent(_: ModelBudget) -> dict[str, int]:
+        return {
+            "physical_requests": 3,
+            "known_cost_microusd": 0 if phase[0] == 0 else 1_800_000,
+            "reserved_microusd": 0,
+            "unsettled_requests": 0,
+        }
+
+    monkeypatch.setattr(pi_runtime, "PiRuntimeProvider", Provider)
+    monkeypatch.setattr(runtime, "run_prospective_discovery", run)
+    monkeypatch.setattr(ModelBudget, "scope_summary", spent)
+
+    def execute() -> dict[str, object]:
+        return asyncio.run(
+            entry.run_prepared_prospective_discovery(
+                study_root=receipts.root, registration_path=path
+            )
+        )
+
+    first = execute()
+    phase[0] = 1
+    second = execute()
+    assert len(calls) == 4 and calls[-1] == calls[0]
+    assert cast(list[dict[str, object]], second["results"])[0]["status"] == "admission_refused"
+    assert cast(list[object], first["results"])[1:] == cast(list[object], second["results"])[1:]
+    events = [
+        event
+        for event in journal.events("study")
+        if event.event_type == "prospective.discovery.model.reported"
+    ]
+    assert len(events) == 4
+    assert events[-1].payload["previous_report_event_id"] == events[0].event_id
+    assert execute() == second
+    assert len(calls) == 4

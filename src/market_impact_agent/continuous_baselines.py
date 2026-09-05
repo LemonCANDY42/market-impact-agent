@@ -306,6 +306,9 @@ def evaluate_continuous_baseline_window(
         raise ValueError("unregistered continuous baseline id")
     if not registration_id or registration_id != registration_id.strip():
         raise ValueError("baseline registration id must be non-empty trimmed text")
+    historical_inputs.policy.validate_bootstrap(
+        registered_window.window.observation_through_session
+    )
     actual_source_hash = _source_binding_hash(historical_inputs)
     if source_binding_hash is not None and source_binding_hash != actual_source_hash:
         raise ValueError("baseline source identity differs from its exact frozen evidence")
@@ -377,6 +380,7 @@ def evaluate_continuous_baseline_window(
         account_reference=account_seed.account_reference,
         account_reference_key=account_seed.account_reference_key,
         initial_cash=account_seed.initial_cash,
+        cash_only_inception_at=historical_inputs.policy.cash_only_inception_at,
     )
     measurement_initial_nav = account.initial_cash
     seed_verified = False

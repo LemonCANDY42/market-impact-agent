@@ -166,6 +166,21 @@ strict historical PIT. Corporate-action reference changes, unsupported special
 sessions and missing required execution inputs remain blocking. The default
 reported-limit scenario and its previous evidence remain unchanged.
 
+The opt-in `qualified_seed_etf_cash_only_inception_v1` source policy binds
+`cash_only_inception_at` to each registered `observation_through_session` at
+09:30 Shanghai. It permits only provably zero entitlement for cash distributions
+recorded strictly before account inception, on sessions after ex-date. Payment
+actions retain their actual payment date and the engine independently credits
+zero. Unknown or possible entitlement, ex-date reference changes and all other
+qualified-price gaps remain blocking. The continuous comparison policy is
+`continuous-preopen-validated-comparisons-and-baselines-v4`; source-view caches,
+frozen source manifests and all four executable baseline source identities bind
+the window-specific inception. Agent and baseline account configuration persists
+the same timestamp, rejects pre-inception sessions, and rejects changed replay
+configuration. Entry, manifest reopening and baseline/runtime construction verify
+the timestamp against the registered bootstrap. Existing prepared source manifests
+without this field remain legacy; new manifests and baseline journals are distinct.
+
 For this qualified scenario, source gates and matched executable baselines use the
 registered deep observation horizon (including 120-session slow-bull and bear
 windows). The full original calendar remains bound as a separate diagnostic, rather

@@ -104,7 +104,12 @@ class TushareDailyRangeCache:
         if saved_only:
             rows = await asyncio.to_thread(self._saved_rows, scope_id)
         else:
-            rows = await asyncio.to_thread(self._claim, scope_id, token)
+            try:
+                rows = await asyncio.to_thread(self._claim, scope_id, token)
+            except AcquisitionUncertain:
+                # An uncertain writer forbids new I/O, not verified durable evidence.
+                # Keep its marker intact; the read-only path also rechecks active owners.
+                return await self.acquire(query=query, source=source, saved_only=True)
         try:
             selected: list[tuple[str, str, str, bool]] = []
             missing = [(start, end)]

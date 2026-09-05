@@ -461,6 +461,21 @@ unknown action dates and ex-date through settlement sessions are excluded, even
 when the legacy scenario could model a same-day cash dividend. This conservative
 scenario adds no corporate-action or execution engine.
 
+The separate opt-in `qualified_seed_etf_cash_only_inception_v1` basis requires an
+aware `cash_only_inception_at` timestamp equal to the registered bootstrap open.
+Only an implemented, positive cash distribution with `record_date < ex_date <=
+pay_date` and record-date 15:00 Shanghai strictly before that inception can exempt
+a post-ex-date session through payment. All prior-close/pre-close equality, tick,
+stable-factor, listing, calendar and halt checks still apply. Ex-date itself,
+unknown dates, and possible entitlement remain blocked. The source retains the
+distribution hashes and emits the actual payment-date action with its original
+record cutoff. The engine independently resolves missing pre-inception holdings
+to zero, even when the account bought shares after record date. It persists
+`cash-only-inception-v1` in its configuration and rejects earlier sessions or a
+changed inception on replay. Policies without inception retain their serialized
+identities and behavior. This exception adds no receivable accounting or historical
+backfill from current data.
+
 The added [fund_adj](https://tushare.pro/document/2?doc_id=199),
 [fund_div](https://tushare.pro/document/2?doc_id=120) and
 [dividend](https://tushare.pro/document/2?doc_id=103) source templates preserve actual
@@ -468,8 +483,8 @@ receipt semantics and private-research rights. `fund_div` exposes per-share cash
 record, ex-dividend and payment dates. A supported same-day ex/payment event pays
 actual cash through Nautilus against the persisted record-date position; recovery
 reopens that entitlement rather than using holdings on the payment date. Dividend
-reinvestment, bonus shares, splits and delayed ex/payment settlement remain explicit
-gaps. `fund_adj`/`adj_factor` are anomaly/research evidence only: unexplained changes
+reinvestment, bonus shares, splits and delayed ex/payment settlement with possible
+entitlement remain explicit gaps. `fund_adj`/`adj_factor` are anomaly/research evidence only: unexplained changes
 block; no adjusted factor can create shares or cash. Pending receivable valuation
 has not passed the pinned engine account contract, so a 120-day run crossing an
 unsupported event cannot be reported complete.

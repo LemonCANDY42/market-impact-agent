@@ -179,7 +179,7 @@ def test_baseline_journals_are_isolated_from_previous_execution_policy(
     expected = (
         tmp_path
         / "baseline-engine"
-        / "continuous-preopen-validated-comparisons-and-baselines-v3"
+        / "continuous-preopen-validated-comparisons-and-baselines-v4"
         / ("qualified-matched-v1" if qualified else "registered-window")
     )
     assert all(

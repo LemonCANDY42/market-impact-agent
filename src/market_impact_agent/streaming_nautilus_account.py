@@ -226,6 +226,7 @@ class HistoricalStreamingAccount:
         account_reference: str,
         account_reference_key: bytes,
         initial_cash: Decimal = Decimal("100000"),
+        cash_only_inception_at: datetime | None = None,
     ) -> None:
         if nautilus_trader.__version__ != "1.231.0":
             raise RuntimeError("historical streaming requires pinned NautilusTrader 1.231.0")
@@ -237,6 +238,9 @@ class HistoricalStreamingAccount:
         self.journal_path = journal_path
         self.account_reference = account_reference
         self.account_reference_key = account_reference_key
+        if cash_only_inception_at is not None and cash_only_inception_at.utcoffset() is None:
+            raise ValueError("cash-only inception must be timezone aware")
+        self.cash_only_inception_at = cash_only_inception_at
         self.initial_cash = initial_cash
         self.account_id = opaque_account_reference_hash(
             account_reference, key=account_reference_key
@@ -279,6 +283,11 @@ class HistoricalStreamingAccount:
                 "specs": [asdict(s) for s in specs],
             }
         )
+        if cash_only_inception_at is not None:
+            config["cash_only_inception"] = {
+                "version": "cash-only-inception-v1",
+                "at": cash_only_inception_at.isoformat(),
+            }
         journal_path.parent.mkdir(parents=True, exist_ok=True)
         self._journal_lock = journal_path.with_suffix(journal_path.suffix + ".lock").open("a")
         try:
@@ -364,6 +373,11 @@ class HistoricalStreamingAccount:
         The supplied raw bar must precede the first decision session. This is an
         explicit historical opening allocation, not an Agent research signal.
         """
+        if (
+            self.cash_only_inception_at is not None
+            and prior_session_bar.session_open_at != self.cash_only_inception_at
+        ):
+            raise ValueError("cash-only inception differs from bootstrap open")
         spec = self.specs.get("510300.SH") or self.specs.get("510300.XSHG")
         if spec is None or spec.instrument_class != "exchange_traded_fund":
             raise ValueError("opening allocation requires source-backed 510300 equity ETF")
@@ -474,6 +488,8 @@ class HistoricalStreamingAccount:
         opened, closed = next(iter(opens)), next(iter(closes))
         if opened.utcoffset() is None or closed.utcoffset() is None or opened >= closed:
             raise ValueError("session requires aware increasing timestamps")
+        if self.cash_only_inception_at is not None and opened < self.cash_only_inception_at:
+            raise ValueError("session precedes cash-only inception")
         if self._last_close is not None and (
             opened <= self._last_close
             or opened.astimezone(ZoneInfo("Asia/Shanghai")).date()
@@ -510,17 +526,26 @@ class HistoricalStreamingAccount:
                 )
             if not action.cash_per_share.is_finite() or action.cash_per_share < 0:
                 raise ValueError("invalid cash dividend")
+            if self.cash_only_inception_at is not None and action.entitlement_at is None:
+                raise ValueError("cash-only inception requires explicit record-date entitlement")
             entitled = quantities.get(action.target_id, Decimal(0))
             if action.entitlement_at is not None:
                 entitlement = next(
                     (r for r in self.results if r.account_state.as_of == action.entitlement_at),
                     None,
                 )
-                if entitlement is None or action.entitlement_at >= opened:
+                if (
+                    entitlement is None
+                    and self.cash_only_inception_at is not None
+                    and action.entitlement_at < self.cash_only_inception_at
+                ):
+                    entitled = Decimal(0)
+                elif entitlement is None or action.entitlement_at >= opened:
                     raise ValueError(
                         "corporate action record-date holdings are not in the persisted prefix"
                     )
-                entitled = entitlement.positions.get(action.target_id, Decimal(0))
+                else:
+                    entitled = entitlement.positions.get(action.target_id, Decimal(0))
             adjustments.append(
                 (_ns(opened), (entitled * action.cash_per_share).quantize(Decimal("0.01")))
             )

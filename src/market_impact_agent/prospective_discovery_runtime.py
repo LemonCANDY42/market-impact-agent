@@ -38,9 +38,37 @@ from market_impact_agent.research_thesis_runtime import (
     ResearchThesisRunInputs,
     reopen_completed_research_thesis,
 )
+from market_impact_agent.runtime_store import RunJournal, RuntimeEvent
 
 _POLICY = "native-profile-identity-successor-v1"
 _SEEDS = frozenset({"510300.SH", "510500.SH"})
+
+
+def latest_discovery_report(
+    journal: RunJournal, event_id: str, artifact_key: str
+) -> RuntimeEvent | None:
+    """Follow the single append-only revision chain of an original report."""
+    event = journal.event(event_id)
+    while event is not None:
+        successor = journal.event(event.event_id + ".revision." + str(event.payload[artifact_key]))
+        if successor is None:
+            return event
+        if (
+            successor.event_type != event.event_type
+            or successor.run_id != event.run_id
+            or successor.payload.get("previous_report_event_id") != event.event_id
+        ):
+            raise PermissionError("discovery report revision crosses its original authority")
+        event = successor
+    return None
+
+
+def discovery_acquisition_wait(proof: dict[str, object]) -> bool:
+    """Recognize existing v1 wait proofs without reopening generic model failures."""
+    return proof.get("status") == "incomplete" and any(
+        _object(item).get("status") in {"pending", "uncertain"}
+        for item in cast(list[object], proof.get("acquisitions", []))
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,10 +581,31 @@ async def run_prospective_discovery(
         "preparation_gaps": sorted(transform.gaps),
     }
     proof_hash = authority.store.artifacts.put_json(proof).content_hash
+    suffix = "prospective.discovery." + canonical_hash(acquisition.run_id)
+    previous = latest_discovery_report(
+        authority.journal,
+        acquisition.budget.owner_run_id + "." + suffix,
+        "proof_artifact_hash",
+    )
+    payload: dict[str, object] = {"proof_artifact_hash": proof_hash}
+    if previous is not None:
+        previous_hash = str(previous.payload["proof_artifact_hash"])
+        suffix = previous.event_id.removeprefix(acquisition.budget.owner_run_id + ".")
+        payload = previous.payload
+        if previous_hash != proof_hash:
+            if not discovery_acquisition_wait(
+                _object(authority.store.artifacts.read_json(previous_hash))
+            ):
+                raise PermissionError("only an acquisition wait report can be continued")
+            suffix += ".revision." + previous_hash
+            payload = {
+                "proof_artifact_hash": proof_hash,
+                "previous_report_event_id": previous.event_id,
+            }
     acquisition._append(  # pyright: ignore[reportPrivateUsage]
-        "prospective.discovery." + canonical_hash(acquisition.run_id),
+        suffix,
         "prospective.discovery.reported",
-        {"proof_artifact_hash": proof_hash},
+        payload,
     )
     return ProspectiveDiscoveryResult(
         status,

@@ -196,7 +196,18 @@ engine, BUY and initial-adoption paths. Actual rule changes remain blocked. The
 subsequent full suite passed 2,053 tests; final native runtime/adoption and ten
 policy-version checks cover the additional admission and v2/v3 isolation boundaries.
 Policy v3 preserves old reports and uses a distinct baseline-journal namespace.
-A new real source preflight remains required before changing eligibility counts.
+The v3 real source preflight completed: nine coverage windows are source-ready,
+including six registered deep cases (54 potential tracks, not completed tracks).
+The COVID window now qualifies. Baselines contain 36 complete, 32 source-incomplete
+and four execution-incomplete results. The unchanged 54/72 denominators still apply.
+The four execution-incomplete baselines belong to the 2024 post-rally whipsaw
+window: the registered opening allocation could not fill completely under the
+frozen execution rules. They are not treated as funded initial accounts.
+Its conservative planning estimates are USD 10.465150 analysis, USD 10.486534
+portfolio and USD 1,828.121736 rolling, assuming every later session reviews both
+roles with full output reserves. These are not incurred costs or realistic cadence
+forecasts; they demonstrate that full completion is not guaranteed by the USD 40
+cap. Fixed-order admission and typed budget exhaustion remain mandatory.
 
 The actual-receipt v2 discovery batch incurred one completed Luna request costing
 USD 0.006559 before local range projection failed. Cumulative known cost is now
@@ -217,6 +228,32 @@ The cache node passed 2,070 full-suite tests, 54 final targeted checks, Ruff,
 formatting, Pyright, TypeScript, four Node tests and the production runtime doctor.
 Independent read-only review found no concrete remaining issue. The paid discovery
 batch can resume using its original registration and shared budget authority.
+
+The resumed v2 batch finished with all three models discovering non-seed stocks.
+Luna completed candidate research for 000988.SZ but trading admission was refused
+for current-session, quote, company-action and opening-account source gaps. Terra
+selected 000988.SZ and Sol selected 002009.SZ; both stopped at acquisition waiting.
+None produced a portfolio decision or dispatched an order. These results establish
+candidate discovery, not completed dynamic account acceptance. The cumulative
+ledger now records 167 physical requests, USD 8.936382 known and USD 0.011769
+reserved for the same prior unknown request; this batch has no unknown request.
+
+Both waiting models requested the same already-saved seed-ETF range. Their exact
+requests subsequently recovered the same 22-record snapshot with transport disabled,
+identical replay and unchanged model budget. The old uncertain range owner remains
+intact. Wait reports now support an append-only continuation under the original
+Episode; completed and non-wait terminal results retain exact replay. The focused
+50-test gate and independent review passed. Combined full-suite acceptance passed
+2,108 tests, Ruff, formatting, Pyright, TypeScript, four Node tests and the
+production runtime doctor. Paid successor decisions remain required.
+
+The v4 qualified policy records a versioned, registered cash-only account inception
+and starts new baseline journals. A distribution with a record cutoff strictly
+before inception has zero account entitlement; later or unknown holdings still
+require evidence. Source qualification retains the actual record and payment
+dates, excludes the ex-date exemption, and preserves raw-price/factor checks.
+Independent review passed; the real source preflight is running before expanded
+paid dispatch.
 
 ## Outstanding acceptance
 

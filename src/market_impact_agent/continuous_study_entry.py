@@ -90,9 +90,15 @@ async def continuous_study_entry(
                     str(policy["policy_id"]),
                     Decimal(str(policy["daily_open_volume_fraction"])),
                     limit_basis=str(policy.get("limit_basis", "reported_stk_limit")),
+                    cash_only_inception_at=(
+                        datetime.fromisoformat(str(policy["cash_only_inception_at"]))
+                        if policy.get("cash_only_inception_at") is not None
+                        else None
+                    ),
                 ),
             )
             source_views[source_identity] = market
+        market.policy.validate_bootstrap(registered.window.observation_through_session)
         repositories: list[FrozenResearchRepository] = []
         frames: list[ReviewFrame] = []
         for record in records:

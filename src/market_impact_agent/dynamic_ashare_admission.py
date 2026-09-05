@@ -154,7 +154,10 @@ class DynamicAShareAdmission:
                     evidence.corporate_action_status == "modeled_normal_session_assumption"
                     and evidence.limit_diagnostics is not None
                     and evidence.limit_diagnostics.get("limit_basis")
-                    == "qualified_seed_etf_exchange_rule_v1"
+                    in {
+                        "qualified_seed_etf_exchange_rule_v1",
+                        "qualified_seed_etf_cash_only_inception_v1",
+                    }
                     and evidence.limit_diagnostics.get("normal_session_assumption") is True
                 ):
                     gaps.add("corporate_action_semantics_unverified")

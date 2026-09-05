@@ -1003,10 +1003,34 @@ verified historical reopening path.
 `acquire(saved_only=True)` can recover an exact fully covered request from durable physical
 segments after interruption. It performs no transport calls, refuses active owners, and
 leaves missing, corrupt or mismatched evidence unresolved. Recovery never resets a legacy
-uncertain source scope to idle or authorizes its missing intervals to fetch. For new work,
-physical acquisition releases ownership before projection, so a later projection failure
+uncertain source scope to idle or authorizes its missing intervals to fetch. A new request
+against an uncertain or expired owner also permits this same verified saved-only recovery before
+returning uncertainty; an active owner remains pending. Incomplete or damaged saved proof
+never falls through to a transport retry.
+For new work, physical acquisition releases ownership before projection, so a later projection failure
 does not imply an unknown external request. Generic providers gain no implicit range reuse;
 event-window reuse remains owned by the Journal's exact-policy receipt coverage.
+
+Prospective discovery reports are append-only. An `incomplete` report whose acquisition
+proof contains pending or uncertain receipts may continue under the original prepared
+registration and exact episode. Its runtime proof and per-model batch row gain linked
+revisions; the original report remains readable. Completed/admission-refused results and
+generic model failures remain terminal on replay. Sealed research Runs replay without model
+requests, and only the remaining registered Run allowances enter the stage affordability
+check; the original shared hard budget, absolute deadline, maximum Runs, frozen inputs and
+successor bindings still govern new work. Budget pressure leaves the wait resumable.
+
+To continue an authorized wait, use the existing entry with the **original** registration:
+
+```bash
+uv run market-impact agent prospective-discovery run \
+  --state-root PATH_TO_ORIGINAL_STUDY \
+  --registration PATH_TO_ORIGINAL_PREPARED_REGISTRATION
+```
+
+This can execute remaining model work within the existing authority. Do not prepare a new
+registration, extend the deadline, reset a cache owner, or clear reports to recover a wait.
+Missing or corrupt receipts stay unresolved; an expired deadline cannot authorize a successor.
 
 `on_demand_research.OnDemandResearch` supplies the executable semantic composition.
 Construct it with the existing authoritative parent `ModelBudget`, unchanged absolute

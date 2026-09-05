@@ -63,7 +63,8 @@ D = Decimal
 
 
 @pytest.mark.parametrize(
-    "mode", ["refused", "qualified", "watch", "account_missing", "no_candidate", "wrong_identity"]
+    "mode",
+    ["refused", "qualified", "watch", "account_missing", "no_candidate", "wrong_identity", "wait"],
 )
 def test_native_discovery_successor_and_source_admission(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
@@ -150,6 +151,22 @@ def test_native_discovery_successor_and_source_admission(
         else FrozenDataSnapshotInput(frozenset(historical.snapshot_ids)),
         clock=lambda: clock[0],
     )
+    if mode == "wait":
+        from market_impact_agent.data_acquisition import AcquisitionUncertain
+        from market_impact_agent.tushare_range_cache import TushareDailyRangeCache
+
+        persist = TushareDailyRangeCache._persist  # pyright: ignore[reportPrivateUsage]
+        interrupted = False
+
+        def interrupted_persist(self: TushareDailyRangeCache, *args: Any) -> str:
+            nonlocal interrupted
+            digest = persist(self, *args)
+            if not interrupted:
+                interrupted = True
+                raise AcquisitionUncertain("synthetic interruption after durable range receipt")
+            return digest
+
+        monkeypatch.setattr(TushareDailyRangeCache, "_persist", interrupted_persist)
     profile = pi_profile()
     monkeypatch.setenv(profile.credential_env, "synthetic-key")
 
@@ -344,6 +361,31 @@ def test_native_discovery_successor_and_source_admission(
                 portfolio_authority_factory=portfolio_source if qualified else None,
                 maximum_runs=4 if qualified else 2,
             )
+            if mode == "wait":
+                assert result.acquisition.status == "acquisition_wait"
+                assert result.acquisition.run_ids == ("prospective-initial",)
+                original_proof = result.proof_artifact_hash
+                assert budget.summary()["physical_requests"] == 1
+                received_calls = [len(t.requests) for t in transports]
+                result = await run_prospective_discovery(
+                    authority=authority,
+                    provider=provider,
+                    inputs=inputs,
+                    acquisition=acquisition,
+                    account_source=account_source,
+                    account_max_age=timedelta(days=2),
+                    admission_authority_factory=admission_source,
+                    maximum_runs=2,
+                )
+                assert [len(t.requests) for t in transports] == received_calls
+                reports = [
+                    event
+                    for event in journal.events(budget.owner_run_id)
+                    if event.event_type == "prospective.discovery.reported"
+                ]
+                assert len(reports) == 2
+                assert reports[0].payload["proof_artifact_hash"] == original_proof
+                assert reports[1].payload["previous_report_event_id"] == reports[0].event_id
             assert inputs.repository.evidence_pack.to_dict() == original_pack
             if mode in {"no_candidate", "wrong_identity"}:
                 assert result.status == "incomplete" and result.candidate is None

@@ -64,7 +64,7 @@ from market_impact_agent.usage_ledger import UsageLedger
 
 _SEEDS = ("510300.SH", "510500.SH")
 _POLICY = {
-    "version": "continuous-preopen-validated-comparisons-and-baselines-v3",
+    "version": "continuous-preopen-validated-comparisons-and-baselines-v4",
     "instrument_rule_compatibility": "all_fields_except_source_ref",
     "pre_open_cutoff": "09:25 Asia/Shanghai",
     "baseline_ids": list(CONTINUOUS_EXECUTABLE_BASELINE_IDS),
@@ -223,7 +223,11 @@ async def prepare_continuous_experiment(
             )
             for gap in frame.gaps:
                 problems.append({"window_id": definition.window_id, "reason": gap})
-        qualified = window.market.policy.limit_basis == "qualified_seed_etf_exchange_rule_v1"
+        window.market.policy.validate_bootstrap(definition.observation_through_session)
+        qualified = window.market.policy.limit_basis in {
+            "qualified_seed_etf_exchange_rule_v1",
+            "qualified_seed_etf_cash_only_inception_v1",
+        }
         qualified_preflight = qualified_preflight or qualified
         matched_window = registered_window
         if qualified and definition.window_id in deep:
@@ -404,6 +408,7 @@ def _runtime(
     definition = next(
         item for item in registration.coverage_windows if item.window_id == window.window_id
     )
+    window.market.policy.validate_bootstrap(definition.observation_through_session)
     seed = window.market.session("510300.SH", definition.observation_through_session)
     if not seed.execution_ready or seed.spec is None or seed.bar is None:
         raise ValueError("historical bootstrap source is incomplete")
@@ -424,6 +429,7 @@ def _runtime(
         journal_path=path,
         account_reference=arm,
         account_reference_key=_key(study_root),
+        cash_only_inception_at=window.market.policy.cash_only_inception_at,
     )
     try:
         account.bootstrap_half_hs300(seed.bar)
