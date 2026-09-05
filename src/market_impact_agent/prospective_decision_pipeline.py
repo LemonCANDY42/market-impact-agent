@@ -20,6 +20,10 @@ from market_impact_agent.agent_contracts import (
 from market_impact_agent.agent_engine import AgentEngine, AgentRunRequest, AgentRunResult
 from market_impact_agent.agent_runtime import ToolAccessContext, ToolSideEffect
 from market_impact_agent.authorized_decision_view import AuthorizedDecisionView
+from market_impact_agent.autonomous_paper import (
+    AutonomousPaperExecutionServiceV2,
+    AutonomousPaperOperation,
+)
 from market_impact_agent.checkpoint_market_universe import ExchangeInstrumentRuleSet
 from market_impact_agent.data_inputs import FrozenDataSnapshotInput, LocalDataSnapshotStore
 from market_impact_agent.decision_admission import (
@@ -38,6 +42,7 @@ from market_impact_agent.domain import (
     SignalIntent,
     TradingEnvironment,
 )
+from market_impact_agent.model_provider import ModelProvider
 from market_impact_agent.modeled_pit_readiness import (
     _materialize_modeled_pit_readiness_checkpoints,  # pyright: ignore[reportPrivateUsage]
     _record_pipeline_modeled_pit_readiness,  # pyright: ignore[reportPrivateUsage]
@@ -60,6 +65,7 @@ from market_impact_agent.portfolio_decision import (
     evaluate_portfolio_decision,
     size_portfolio_decision,
 )
+from market_impact_agent.portfolio_review import PortfolioReviewAuthority
 from market_impact_agent.prospective_checkpoint_sets import (
     ProspectiveCheckpointSnapshotSet,
     build_checkpoint_tool_descriptors,
@@ -323,7 +329,11 @@ def prepare_reassessment_judgment(
         run_id=f"prospective-reassessment-{identity}",
         evidence_pack=pack,
         research_instruction=instruction,
-        selected_skills=("earnings-reassessment-inputs",),
+        selected_skills=(
+            "earnings-reassessment-readers"
+            if registration.checkpoint_tool_version == "4"
+            else "earnings-reassessment-inputs",
+        ),
         tool_access=access,
     )
     plan = ProspectiveExecutionPlan.build(
@@ -399,6 +409,47 @@ async def run_reassessment_judgment(
         )
     )
     return result
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioReviewPipelineResult:
+    terminal: dict[str, object]
+    operation: AutonomousPaperOperation | None
+
+
+async def run_portfolio_review_pipeline(
+    *,
+    authority: PortfolioReviewAuthority,
+    provider: ModelProvider,
+    run_id: str,
+    research_run_ids: tuple[str, ...] = (),
+    paper_service: AutonomousPaperExecutionServiceV2 | None = None,
+) -> PortfolioReviewPipelineResult:
+    """Independent account or admitted-research review; never manufacture a Wake/Signal.
+
+    Supplying the manual service reserves a valid target as pending approval. It
+    never approves or dispatches, and this callable does not implement a scheduler.
+    """
+    if paper_service is not None and (
+        paper_service.portfolio_review_authority is not authority
+        or paper_service.harness_authority_id != authority.store.harness_authority_id
+    ):
+        raise PermissionError(
+            "portfolio pipeline requires the exact configured same-root authority"
+        )
+    terminal = await authority.review(
+        run_id=run_id, provider=provider, research_run_ids=research_run_ids
+    )
+    operation = None
+    decision = terminal.get("decision")
+    if (
+        paper_service is not None
+        and terminal.get("status") == "completed"
+        and isinstance(decision, dict)
+        and cast(dict[str, object], decision).get("outcome") == "ready_for_sizing"
+    ):
+        operation = paper_service.admit_portfolio_review(run_id)
+    return PortfolioReviewPipelineResult(terminal, operation)
 
 
 class ProspectiveDecisionPipelineStatus(StrEnum):

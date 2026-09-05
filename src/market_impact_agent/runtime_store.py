@@ -103,6 +103,19 @@ _PRIVILEGED_EVENT_TYPES = frozenset(
         "context.checkpointed",
         "judgment.contract_correction",
         "judgment.validated",
+        "portfolio.review.frozen",
+        "portfolio.review.validated",
+        "portfolio.review.incomplete",
+        "portfolio.model.attempt",
+        "research.thesis.frozen",
+        "research.thesis.validated",
+        "research.thesis.incomplete",
+        "research.thesis.model.attempt",
+        "pi.role.response.completed",
+        "pi.context.frozen",
+        "pi.response.received",
+        "pi.context.compacted",
+        "pi.agent.ended",
     }
 )
 
@@ -440,6 +453,7 @@ class RunJournal:
         payload_json = canonical_json_bytes(payload).decode()
         payload_hash = sha256(payload_json.encode()).hexdigest()
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             run = connection.execute(
                 "SELECT status, strategy_plan_artifact_hash FROM runs WHERE run_id = ?", (run_id,)
             ).fetchone()

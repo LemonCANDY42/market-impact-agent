@@ -1997,6 +1997,7 @@ class PaperExecutionService:
             or now >= _datetime(lease_expires_at)
             or approval_hash is None
             or actual != expected
+            or not isinstance(capability.order, OrderIntent)
             or canonical_hash(_order_dict(capability.order)) != capability.order_hash
         ):
             return False

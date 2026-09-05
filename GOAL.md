@@ -23,6 +23,16 @@ Given a target market and `as_of` time, the system can:
 7. route a paper Order Intent through hard policy, approval, execution, and
    reconciliation without duplicate submission.
 
+Market analysis and account action are distinct responsibilities. Research forms a time-bounded
+view; an account-aware portfolio Agent recommends desired exposure using holdings, cash and open
+orders; the Harness determines executable quantities, risk and approval; the accepted engine
+executes and reconciles. A completed portfolio recommendation includes justified maintenance
+(including cash) rather than an abstention action. Missing account authority is incomplete work,
+not a fabricated hold. The same bullish view can justify buying in one account and reducing an
+overconcentrated position in another. The canonical terms and current acceptance state live in
+[CONTEXT.md](CONTEXT.md#research-portfolio-target-and-execution-separation) and the
+[account loop](docs/ACCOUNT_DECISION_LOOP.md).
+
 NautilusTrader is the default foundational trading and backtest engine and the behavioral
 reference for engine integration. The Harness contract remains engine-neutral and does not
 expose NautilusTrader types. Historical replay through a Harness-owned Nautilus backtest

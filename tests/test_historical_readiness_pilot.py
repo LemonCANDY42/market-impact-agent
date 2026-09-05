@@ -22,7 +22,7 @@ from market_impact_agent.agent_contracts import (
     ProposedTransmissionStep,
     canonical_hash,
 )
-from market_impact_agent.agent_runtime import ModelTurn, ProviderUsage, ToolCall
+from market_impact_agent.agent_runtime import ModelProvider, ModelTurn, ProviderUsage, ToolCall
 from market_impact_agent.cli import main
 from market_impact_agent.historical_readiness_pilot import (
     HistoricalReadinessAdjudication,
@@ -35,6 +35,8 @@ from market_impact_agent.historical_readiness_pilot import (
 from market_impact_agent.method_skills import CPAUsageKeeperPricing, MethodRoutingContext
 from market_impact_agent.research import EvidenceTier, TransmissionDirectness
 from market_impact_agent.usage_ledger import UsageLedger
+
+from .runtime_fakes import BusinessModelFixture
 
 NOW = datetime(2026, 9, 2, tzinfo=UTC)
 PROFILE = Path("examples/providers/cliproxyapi-luna-xhigh-cpa-v1.json")
@@ -171,7 +173,7 @@ def _prepare(
     )
 
 
-class FakeProvider:
+class FakeProvider(BusinessModelFixture):
     provider_id = "cliproxyapi-openai-compatible"
     model = "gpt-5.6-luna"
 
@@ -183,9 +185,10 @@ class FakeProvider:
         self.in_flight = 0
         self.max_in_flight = 0
         self.completed = 0
+        self.closed = 0
         self.messages: list[tuple[dict[str, object], ...]] = []
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -273,7 +276,7 @@ class FullReadProvider(FakeProvider):
         super().__init__(decisions)
         self.inputs = inputs
 
-    async def complete(self, **kwargs: object) -> ModelTurn:
+    async def answer(self, **kwargs: object) -> ModelTurn:
         messages = cast(tuple[dict[str, object], ...], kwargs["messages"])
         if not any(message.get("role") == "tool" for message in messages):
             pack = json.loads(self.inputs.evidence_pack_path.read_text())
@@ -311,7 +314,7 @@ class FullReadProvider(FakeProvider):
                 ProviderUsage(100, 50),
                 {"message": assistant},
             )
-        return await super().complete(
+        return await super().answer(
             messages=messages,
             tools=cast(tuple[dict[str, object], ...], kwargs["tools"]),
             temperature=cast(float, kwargs["temperature"]),
@@ -319,6 +322,26 @@ class FullReadProvider(FakeProvider):
             max_output_tokens=cast(int, kwargs["max_output_tokens"]),
             timeout_seconds=cast(float, kwargs["timeout_seconds"]),
         )
+
+
+def _arm_providers(controller: FakeProvider) -> dict[str, ModelProvider]:
+    """Separate domain transports with a shared scripted answer/observation controller.
+
+    Production process isolation is tested separately through actual Node workers.
+    """
+
+    class ArmProvider(BusinessModelFixture):
+        provider_id = controller.provider_id
+        model = controller.model
+
+        async def answer(self, **kwargs: object) -> ModelTurn:
+            return await controller.answer(**kwargs)  # pyright: ignore[reportArgumentType]
+
+        async def close(self) -> None:
+            assert controller.in_flight == 0
+            controller.closed += 1
+
+    return {"control_provider": ArmProvider(), "treatment_provider": ArmProvider()}
 
 
 def _prepare_v2(
@@ -329,6 +352,8 @@ def _prepare_v2(
     cap: int = 3_000_000,
     judge_profile: Path = Path("examples/providers/cliproxyapi-luna-max-cpa-v1.json"),
     judge_pricing: CPAUsageKeeperPricing | None = None,
+    question_contrast: bool = False,
+    forecast_development: bool = False,
 ) -> PreparedHistoricalReadinessPilot:
     return prepare_historical_readiness_pilot(
         experiment_id="synthetic-adjudication",
@@ -352,6 +377,8 @@ def _prepare_v2(
             judge_profile,
             judge_pricing or _pricing(),
         ),
+        question_contrast=question_contrast,
+        forecast_development=forecast_development,
     )
 
 
@@ -397,7 +424,7 @@ def test_v2_agreement_stops_without_judge_and_keeps_scope_explicit(
         FullReadProvider(inputs, ()),
     )
     report = asyncio.run(
-        run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+        run_historical_readiness_pilot(prepared, **_arm_providers(provider), judge_provider=judge)
     )
     assert provider.calls == 4 and judge.calls == 0
     assert report["diagnostic_valid"] and report["protocol_complete"]
@@ -416,6 +443,121 @@ def test_v2_agreement_stops_without_judge_and_keeps_scope_explicit(
     assert not list(prepared.directory.glob("*-judge-inputs.json"))
 
 
+def test_question_only_contrast_reaches_each_analyst_and_its_judge_without_input_drift(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path, question_contrast=True)
+    control = FullReadProvider(inputs, ("up", "abstain"))
+    treatment = FullReadProvider(inputs, ("down", "abstain"))
+    judge = FullReadProvider(inputs, ("abstain", "up"))
+    report = asyncio.run(
+        run_historical_readiness_pilot(
+            prepared,
+            control_provider=control,
+            treatment_provider=treatment,
+            judge_provider=judge,
+        )
+    )
+    assert report["diagnostic_valid"] and report["protocol_complete"]
+    assert control.calls == treatment.calls == judge.calls == 2
+
+    def task(messages: tuple[dict[str, object], ...]) -> dict[str, object]:
+        return next(
+            json.loads(cast(str, msg["content"])) for msg in messages if msg["role"] == "user"
+        )
+
+    before, after = task(control.messages[0]), task(treatment.messages[0])
+    old = cast(str, before.pop("research_instruction"))
+    new = cast(str, after.pop("research_instruction"))
+    assert before == after  # Same exact evidence, question, targets, Skills and tools.
+    legacy = "If the mapping or horizon persistence is unresolved, abstain. "
+    assert legacy in old and legacy not in new
+    assert "not a guarantee of persistence on every intervening session" in new
+    assert "Do not invent target exposure, consensus or precise probabilities" in new
+    for worker, instruction in ((control, old), (treatment, new)):
+        assert all(
+            task(messages)["research_instruction"] == instruction for messages in worker.messages
+        )
+    for index, instruction in enumerate((old, new)):
+        judge_task = cast(str, task(judge.messages[index])["research_instruction"])
+        assert judge_task.startswith(instruction + "\nAdjudicate")
+        assert "Do not vote or average confidence" in judge_task
+    registration = json.loads((prepared.directory / "registration.json").read_text())
+    assert registration["schema_version"].endswith(".v3")
+    assert registration["arms"]["control"] == registration["arms"]["treatment"]
+    assert registration["arm_instruction_hashes"] == {
+        "control": canonical_hash(old),
+        "treatment": canonical_hash(new),
+    }
+    bindings = registration["execution_bindings"]
+    assert bindings["control"]["tool_surface_hash"] == bindings["treatment"]["tool_surface_hash"]
+    assert bindings["judge_template_control"] != bindings["judge_template_treatment"]
+    assert report["execution_capability"] == "none" and not report["promotion_eligible"]
+    with pytest.raises(ValueError, match="binding changed"):
+        asyncio.run(run_historical_readiness_pilot(replace(prepared, question_contrast=False)))
+    assert control.calls == treatment.calls == judge.calls == 2
+
+
+def test_question_only_contrast_rejects_simultaneous_skill_change(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match="identical Skills"):
+        _prepare_v2(
+            inputs, tmp_path, treatment="narrative-diffusion-assessment", question_contrast=True
+        )
+    assert not (tmp_path / "state").exists()
+
+
+@pytest.mark.parametrize("opinions", [("up", "up"), ("up", "abstain")])
+def test_forecast_development_uses_only_two_analysts_and_conditional_judge(
+    inputs: HistoricalReadinessInputs, tmp_path: Path, opinions: tuple[str, ...]
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path, forecast_development=True)
+    analyst = FullReadProvider(inputs, opinions)
+    judge = FullReadProvider(inputs, ("down",))
+    report = asyncio.run(
+        run_historical_readiness_pilot(prepared, analysis_provider=analyst, judge_provider=judge)
+    )
+    disagreement = opinions[0] != opinions[1]
+    assert analyst.calls == 2 and judge.calls == int(disagreement)
+    assert report["diagnostic_valid"] and report["protocol_complete"]
+    assert len(cast(list[object], report["runs"])) == 2 + int(disagreement)
+    finals = cast(dict[str, dict[str, object]], report["final_decisions"])
+    assert set(finals) == {"analysis"}
+    assert finals["analysis"]["direction"] == ("down" if disagreement else "up")
+    registration = json.loads((prepared.directory / "registration.json").read_text())
+    assert registration["schema_version"].endswith(".v4")
+    assert set(registration["arms"]) == {"analysis"}
+    assert registration["max_agent_runs"] == 3
+    assert registration["source_reference_policy"] == "opaque_original_source_hash_v1"
+    original = json.loads(inputs.evidence_pack_path.read_text())
+    assert registration["evidence_pack_hash"] == canonical_hash(original)
+    costs = registration["cost_preflight"]
+    assert costs["analyst_two_run_estimate"]["agent_run_count"] == 2
+    assert costs["judge_one_run_estimate"]["agent_run_count"] == 1
+    for worker in (analyst, judge):
+        for messages in worker.messages:
+            text = json.dumps(messages)
+            assert "not a guarantee of persistence on every intervening session" in text
+            assert "If the mapping or horizon persistence is unresolved, abstain." not in text
+            for item in original["evidence"]:
+                assert item["source_ref"] not in text
+                assert "frozen-source://" + canonical_hash(item["source_ref"]) in text
+    with pytest.raises(ValueError, match="binding changed"):
+        asyncio.run(run_historical_readiness_pilot(replace(prepared, forecast_development=False)))
+    assert analyst.calls == 2 and judge.calls == int(disagreement)
+
+
+def test_forecast_development_rejects_mixed_study_and_insufficient_budget(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match="distinct studies"):
+        _prepare_v2(inputs, tmp_path, forecast_development=True, question_contrast=True)
+    with pytest.raises(ValueError, match="two analysts and one conditional Judge"):
+        _prepare_v2(inputs, tmp_path, forecast_development=True, cap=500_000)
+    assert not (tmp_path / "state").exists()
+
+
 @pytest.mark.parametrize("decision", ["up", "down", "abstain"])
 def test_v2_judge_can_choose_either_reject_or_synthesize_without_vote(
     inputs: HistoricalReadinessInputs, tmp_path: Path, decision: str
@@ -424,7 +566,7 @@ def test_v2_judge_can_choose_either_reject_or_synthesize_without_vote(
     provider = FullReadProvider(inputs, ("abstain", "up", "abstain", "abstain"))
     judge = FullReadProvider(inputs, (decision,))
     report = asyncio.run(
-        run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+        run_historical_readiness_pilot(prepared, **_arm_providers(provider), judge_provider=judge)
     )
     assert provider.calls == 4 and judge.calls == 1
     assert report["diagnostic_valid"] and report["accounting_complete"]
@@ -465,7 +607,7 @@ def test_v2_each_arm_has_own_judge_and_no_recursive_debate(
     report = asyncio.run(
         run_historical_readiness_pilot(
             prepared,
-            provider=FullReadProvider(inputs, ("up", "up", "down", "abstain")),
+            **_arm_providers(FullReadProvider(inputs, ("up", "up", "down", "abstain"))),
             judge_provider=judge,
         )
     )
@@ -488,7 +630,7 @@ def test_v2_failed_or_unread_analysis_stops_before_judge(
     )
     judge = FullReadProvider(inputs, ())
     report = asyncio.run(
-        run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+        run_historical_readiness_pilot(prepared, **_arm_providers(provider), judge_provider=judge)
     )
     assert provider.calls == 2 and provider.in_flight == 0 and judge.calls == 0
     assert report["diagnostic_valid"] is False
@@ -504,7 +646,7 @@ def test_v2_failed_judge_is_not_replaced_or_majority_fallback(
     report = asyncio.run(
         run_historical_readiness_pilot(
             prepared,
-            provider=FullReadProvider(inputs, ("up", "up", "down", "down")),
+            **_arm_providers(FullReadProvider(inputs, ("up", "up", "down", "down"))),
             judge_provider=judge,
         )
     )
@@ -514,7 +656,7 @@ def test_v2_failed_judge_is_not_replaced_or_majority_fallback(
     with pytest.raises(ValueError, match="already dispatched"):
         asyncio.run(
             run_historical_readiness_pilot(
-                prepared, provider=FakeProvider(()), judge_provider=judge
+                prepared, **_arm_providers(FakeProvider(())), judge_provider=judge
             )
         )
 
@@ -530,7 +672,7 @@ def test_v2_judge_binding_and_scope_drift_deny_dispatch(
             asyncio.run(
                 run_historical_readiness_pilot(
                     replace(prepared, adjudication=replace(prepared.adjudication, **change)),
-                    provider=provider,
+                    **_arm_providers(provider),
                     judge_provider=judge,
                 )
             )
@@ -642,7 +784,7 @@ def test_v2_tampered_analyst_artifact_cannot_reach_judge(
         asyncio.run(
             run_historical_readiness_pilot(
                 prepared,
-                provider=FullReadProvider(inputs, ("up", "up", "down", "down")),
+                **_arm_providers(FullReadProvider(inputs, ("up", "up", "down", "down"))),
                 judge_provider=judge,
             )
         )
@@ -660,7 +802,7 @@ def test_v2_wrong_horizon_judge_fails_without_fallback(
     report = asyncio.run(
         run_historical_readiness_pilot(
             prepared,
-            provider=FullReadProvider(inputs, ("up", "up", "down", "down")),
+            **_arm_providers(FullReadProvider(inputs, ("up", "up", "down", "down"))),
             judge_provider=judge,
         )
     )
@@ -677,15 +819,17 @@ def test_v2_cancellation_drains_peers_without_later_runs(
         started, release = asyncio.Event(), asyncio.Event()
 
         class SlowProvider(FullReadProvider):
-            async def complete(self, **kwargs: object) -> ModelTurn:
+            async def answer(self, **kwargs: object) -> ModelTurn:
                 started.set()
                 await release.wait()
-                return await super().complete(**kwargs)
+                return await super().answer(**kwargs)
 
         provider = SlowProvider(inputs, ("up", "down"))
         judge = FullReadProvider(inputs, ())
         task = asyncio.create_task(
-            run_historical_readiness_pilot(prepared, provider=provider, judge_provider=judge)
+            run_historical_readiness_pilot(
+                prepared, **_arm_providers(provider), judge_provider=judge
+            )
         )
         await started.wait()
         task.cancel()
@@ -698,6 +842,114 @@ def test_v2_cancellation_drains_peers_without_later_runs(
     assert report["stop_reason"] == "caller_cancelled_after_peer_drain"
     assert report["final_decisions"] == {}
     assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == 2
+
+
+@pytest.mark.parametrize(
+    "injection", ["same", "control_only", "treatment_only", "wrong_treatment_identity"]
+)
+def test_arm_injection_must_be_a_distinct_complete_pair_before_dispatch(
+    inputs: HistoricalReadinessInputs, tmp_path: Path, injection: str
+) -> None:
+    prepared = _prepare(inputs, tmp_path)
+    provider = FakeProvider(())
+    treatment = FakeProvider(()) if injection == "wrong_treatment_identity" else provider
+    if injection == "wrong_treatment_identity":
+        treatment.model = "unregistered-model"
+    kwargs = {
+        "control_provider": provider if injection != "treatment_only" else None,
+        "treatment_provider": treatment if injection != "control_only" else None,
+    }
+    with pytest.raises(ValueError, match=r"distinct|supplied together|identity"):
+        asyncio.run(run_historical_readiness_pilot(prepared, **kwargs))
+    assert provider.calls == provider.closed == treatment.calls == treatment.closed == 0
+    assert not (prepared.directory / "dispatch.json").exists()
+
+
+def test_old_worker_policy_registration_cannot_dispatch(
+    inputs: HistoricalReadinessInputs, tmp_path: Path
+) -> None:
+    prepared = _prepare(inputs, tmp_path)
+    path = prepared.directory / "registration.json"
+    registration = json.loads(path.read_text())
+    assert registration.pop("analyst_worker_policy") == (
+        "distinct_arm_providers_reused_across_sequential_pairs_v1"
+    )
+    path.write_text(json.dumps(registration))
+    old = replace(prepared, registration_hash=canonical_hash(registration))
+    controller = FakeProvider(())
+    with pytest.raises(ValueError, match="binding changed"):
+        asyncio.run(run_historical_readiness_pilot(old, **_arm_providers(controller)))
+    assert controller.calls == 0
+    assert not (prepared.directory / "dispatch.json").exists()
+    assert json.loads(path.read_text()) == registration
+
+
+@pytest.mark.parametrize("finish", ["success", "failure", "cancel", "creation_failure"])
+def test_owned_workers_close_after_peer_drain_including_unused_judge(
+    inputs: HistoricalReadinessInputs,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    finish: str,
+) -> None:
+    prepared = _prepare_v2(inputs, tmp_path)
+
+    async def scenario() -> None:
+        started, release = asyncio.Event(), asyncio.Event()
+        entered = 0
+
+        class ControlledAnswers(FullReadProvider):
+            async def answer(self, **kwargs: object) -> ModelTurn:
+                nonlocal entered
+                entered += 1
+                if entered == 2:
+                    started.set()
+                if finish == "cancel":
+                    await release.wait()
+                return await super().answer(**kwargs)
+
+        controller = ControlledAnswers(
+            inputs, ("fail", "up") if finish == "failure" else ("up",) * 4
+        )
+        workers = list(_arm_providers(controller).values())
+        judge = FakeProvider(())
+        workers.append(judge)
+        created = 0
+
+        async def close_judge() -> None:
+            assert controller.in_flight == 0
+            judge.closed += 1
+
+        monkeypatch.setattr(judge, "close", close_judge)
+
+        def create(*_args: object) -> ModelProvider:
+            nonlocal created
+            if finish == "creation_failure" and created == 1:
+                raise RuntimeError("synthetic second worker creation failure")
+            worker = workers[created]
+            created += 1
+            return worker
+
+        monkeypatch.setattr(
+            "market_impact_agent.model_provider.ModelProviderFactory.create", create
+        )
+        task = asyncio.create_task(run_historical_readiness_pilot(prepared))
+        if finish == "creation_failure":
+            with pytest.raises(RuntimeError, match="creation failure"):
+                await task
+            assert controller.closed == 1 and judge.closed == 0
+            assert not (prepared.directory / "dispatch.json").exists()
+            return
+        if finish == "cancel":
+            await asyncio.wait_for(started.wait(), 5)
+            task.cancel()
+            release.set()
+        report = await task
+        assert created == 3 and controller.closed == 2 and judge.closed == 1
+        assert controller.calls == (4 if finish == "success" else 2)
+        assert report["diagnostic_valid"] is (finish == "success")
+        assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == controller.calls
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize(
@@ -716,7 +968,7 @@ def test_two_pairs_then_only_disagreement_adds_third(
 ) -> None:
     prepared = _prepare(inputs, tmp_path)
     provider = FakeProvider(decisions)
-    report = asyncio.run(run_historical_readiness_pilot(prepared, provider=provider))
+    report = asyncio.run(run_historical_readiness_pilot(prepared, **_arm_providers(provider)))
     assert provider.calls == expected
     assert provider.max_in_flight == 2
     assert report["diagnostic_valid"] is True
@@ -751,10 +1003,11 @@ def test_failed_peer_drains_and_records_both_terminals(
 ) -> None:
     prepared = _prepare(inputs, tmp_path)
     provider = FakeProvider(("fail", "down"))
-    report = asyncio.run(run_historical_readiness_pilot(prepared, provider=provider))
+    report = asyncio.run(run_historical_readiness_pilot(prepared, **_arm_providers(provider)))
     assert provider.calls == 2
     assert provider.completed == 1
     assert provider.in_flight == 0
+    assert provider.closed == 0
     records = UsageLedger(prepared.directory / "usage.sqlite3").records()
     assert len(records) == 2
     assert {item.record.status.value for item in records} == {"failed", "completed"}
@@ -776,13 +1029,13 @@ def test_reservation_and_dispatch_are_exclusive_and_changed_binding_denied(
         asyncio.run(
             run_historical_readiness_pilot(
                 replace(prepared, brief=replace(prepared.brief, horizon_sessions=2)),
-                provider=provider,
+                **_arm_providers(provider),
             )
         )
     assert provider.calls == 0
-    asyncio.run(run_historical_readiness_pilot(prepared, provider=provider))
+    asyncio.run(run_historical_readiness_pilot(prepared, **_arm_providers(provider)))
     with pytest.raises(ValueError, match="already dispatched"):
-        asyncio.run(run_historical_readiness_pilot(prepared, provider=provider))
+        asyncio.run(run_historical_readiness_pilot(prepared, **_arm_providers(provider)))
     assert provider.calls == 4
 
 
@@ -793,7 +1046,7 @@ def test_read_coverage_comes_from_executed_journal_tools(
     prepared = _prepare(inputs, tmp_path)
 
     class ReadingProvider(FakeProvider):
-        async def complete(
+        async def answer(
             self,
             *,
             messages: tuple[dict[str, object], ...],
@@ -834,7 +1087,7 @@ def test_read_coverage_comes_from_executed_journal_tools(
                     ProviderUsage(100, 50),
                     {"message": assistant},
                 )
-            return await super().complete(
+            return await super().answer(
                 messages=messages,
                 tools=tools,
                 temperature=temperature,
@@ -844,7 +1097,9 @@ def test_read_coverage_comes_from_executed_journal_tools(
             )
 
     report = asyncio.run(
-        run_historical_readiness_pilot(prepared, provider=ReadingProvider(("abstain",) * 4))
+        run_historical_readiness_pilot(
+            prepared, **_arm_providers(ReadingProvider(("abstain",) * 4))
+        )
     )
     assert report["protocol_complete"] is True
     assert report["provider_request_count"] == 8
@@ -900,7 +1155,7 @@ def test_wrong_horizon_is_invalid_not_an_extra_replica(
 ) -> None:
     prepared = _prepare(inputs, tmp_path)
     provider = FakeProvider(("up", "down"), horizon=2)
-    report = asyncio.run(run_historical_readiness_pilot(prepared, provider=provider))
+    report = asyncio.run(run_historical_readiness_pilot(prepared, **_arm_providers(provider)))
     assert provider.calls == 2
     assert report["diagnostic_valid"] is False
     assert report["stop_reason"] == "failed_pair"
@@ -916,7 +1171,7 @@ def test_protected_secret_redacted_in_error_artifacts_and_summary(
     prepared = _prepare(inputs, tmp_path)
     report = asyncio.run(
         run_historical_readiness_pilot(
-            prepared, provider=FakeProvider(("fail", "down"), secret=secret)
+            prepared, **_arm_providers(FakeProvider(("fail", "down"), secret=secret))
         )
     )
     assert secret not in json.dumps(report)
@@ -933,7 +1188,7 @@ def test_input_change_after_prepare_denies_dispatch(
     inputs.evidence_documents_path.write_text(json.dumps({"documents": {}}))
     provider = FakeProvider(("abstain",) * 4)
     with pytest.raises(ValueError, match="exactly match"):
-        asyncio.run(run_historical_readiness_pilot(prepared, provider=provider))
+        asyncio.run(run_historical_readiness_pilot(prepared, **_arm_providers(provider)))
     assert provider.calls == 0
     assert not (prepared.directory / "dispatch.json").exists()
 
@@ -945,14 +1200,14 @@ def test_caller_cancellation_drains_started_peers_and_stops_after_pair(
 ) -> None:
     prepared = _prepare(inputs, tmp_path)
     provider = FakeProvider(("up", "down"))
-    original = provider.complete
+    original = provider.answer
 
     async def scenario() -> dict[str, object]:
         started = asyncio.Event()
         release = asyncio.Event()
         observed = 0
 
-        async def complete(
+        async def answer(
             *,
             messages: tuple[dict[str, object], ...],
             tools: tuple[dict[str, object], ...],
@@ -975,8 +1230,10 @@ def test_caller_cancellation_drains_started_peers_and_stops_after_pair(
                 timeout_seconds=timeout_seconds,
             )
 
-        monkeypatch.setattr(provider, "complete", complete)
-        task = asyncio.create_task(run_historical_readiness_pilot(prepared, provider=provider))
+        monkeypatch.setattr(provider, "answer", answer)
+        task = asyncio.create_task(
+            run_historical_readiness_pilot(prepared, **_arm_providers(provider))
+        )
         await started.wait()
         task.cancel()
         release.set()
@@ -984,6 +1241,7 @@ def test_caller_cancellation_drains_started_peers_and_stops_after_pair(
 
     report = asyncio.run(scenario())
     assert provider.completed == 2
+    assert provider.closed == 0
     assert report["stop_reason"] == "caller_cancelled_after_peer_drain"
     assert report["diagnostic_valid"] is False
     assert len(UsageLedger(prepared.directory / "usage.sqlite3").records()) == 2
@@ -996,9 +1254,10 @@ def test_cli_uses_existing_provider_factory_and_prints_only_sanitized_summary(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     provider = FakeProvider(("up", "down", "up", "down"))
+    workers = iter(_arm_providers(provider).values())
 
-    def fake_create(*_args: object) -> FakeProvider:
-        return provider
+    def fake_create(*_args: object) -> ModelProvider:
+        return next(workers)
 
     async def fake_pricing(**_kwargs: object) -> CPAUsageKeeperPricing:
         return _pricing()

@@ -1,605 +1,354 @@
 # Agent Runtime Acceptance Boundary
 
-The historical-readiness v2 entry composes the existing runtime as two independent analysts per
-arm plus one conditional Judge on decision disagreement. It does not add a debate runtime, Agent
-execution capability or a new Judgment schema. The Judge uses an independently frozen accepted
-Provider Profile, receives reopened same-arm Judgment proposals and the original frozen source
-tools, and emits the ordinary JudgmentProposal. Its actual input/binding is persisted before
-dispatch and all usage is charged to the same case. See the historical-readiness v2 section in
-`AGENT_EFFECTIVENESS_ACCEPTANCE.md` for disagreement, scope, failure and evidence-claim rules.
-
 ## Status
 
-The bounded research-only Agent runtime passed its current local runtime gate. It includes
-redirect denial for credential-bearing requests, same-connection MCP snapshot revalidation,
-terminal-artifact/run/journal binding, exact tool execution-limit identity,
-optional-dependency isolation, and explicit compactor identity. Fresh private MiniMax M3 and
-CLIProxyAPI `gpt-5.6-luna` xhigh runs both completed against the same full synthetic Agent surface.
-This establishes bounded Model Provider substitution through the tool/Judgment/audit chain; it is
-not model quality, event-family quality, alpha, paper, or live acceptance. No model, Skill, MCP
-server, or tool receives broker credentials or a path around hard policy.
+The exact pi build `ad861366ae8b690df1964ad5558a11ea31e75e57e68a700bae4930d44b6ac400`
+was formally admitted on 2026-09-03 Singapore for CPA/Luna `max` Responses and
+MiniMax M3 Chat. Acceptance identity: `5222b963…`; evidence: `0629b958…`.
+All new model entry points use pinned pi 0.84.4 behind Python Harness callbacks.
+Old Python transports, protocol parsers, Agent loop, custom compactor and
+fallback registrations are removed. Historical behavior belongs in isolated
+offline Git versions, not the current execution tree.
 
-The machine-local environment names are:
+The final repaired-build qualification passed **6/6 cases with 9 requests**:
+two CPA concurrent continuations, completed-response restart without
+regeneration, MiniMax continuation, two successive compactions and evidence-led
+continuation on each route, and zero-dispatch cancellation. Report `00e8b2f3…`
+replayed exactly without model access; Journal/Usage reconciliation passed.
+The two old failed reports remain failed and immutable. Retained unaffected
+cache/tool evidence was explicitly reviewed against the bounded source delta,
+not presented as newly measured. Migration history is in [ADR 0006](adr/0006-use-pi-agent-runtime.md).
 
-- `MINIMAX_API_KEY`: secret, loaded from the user's Keychain-backed environment;
-- `MINIMAX_BASE_URL=https://api.minimaxi.com`: China API origin; the adapter appends the
-  versioned API path;
-- `MINIMAX_MODEL=MiniMax-M3`: explicit model identity with no silent substitution.
-- `MARKET_IMPACT_CLIPROXY_API_KEY`: a dedicated local project credential injected only into the
-  experiment process;
-- CLIProxyAPI Profile values are fixed to `http://127.0.0.1:8317` and `gpt-5.6-luna`;
-  `reasoning_effort=xhigh` and `reasoning_effort=max` are accepted, while alternate origins,
-  models, or effort values are rejected.
+Final local verification: Ruff, format, Pyright, TypeScript, **1,727 Python
+tests and four Node tests**; clean macOS source installation verified.
+Independent review's role-ordering finding was fixed and tested through the
+production entry. Empty-answer correction and invalid-summary/restart gates
+have deterministic fault evidence; this real sequence needed no retries or
+corrections and is not described as a real outage-recovery experiment.
 
-On the accepted local host, private model values live in
-`~/.config/market-impact-agent/model.env` with mode `0600`. The
-`market-impact-model` launcher parses only the allowlisted names above, exports them to one child
-process, and starts the project CLI. It does not source executable shell syntax and does not expose
-the model environment to the prospective collector. Callers therefore do not need to retrieve or
-inject a key for every run.
+New usage: 28,176 input / 13,754 output tokens, estimated **USD .023354**.
+Cumulative runtime authorization: **45 / 48 requests, USD .112342 / 3**,
+zero unsettled requests/reservations. The remaining three requests /
+USD 2.887658 do not authorize reopening a closed batch. CPA's retained cache
+groups lost 61.57 and .57 percentage points; the frozen repeated-degradation
+rule passed, but consistently high caching is **not** proven.
 
-Model identity, endpoint, reasoning effort, sampling, context limits, retry policy, pricing, and
-budgets remain in a content-identified Model Provider Profile. These are not secret setup burden:
-the Harness selects the registered profile and freezes the effective profile in each execution
-plan and Run record. An environment value may supply a credential or assert the expected MiniMax
-origin/model, but it may not silently override the frozen profile. This keeps the ordinary command
-simple without making old experiments unreproducible. A frozen Profile records Harness-requested
-settings, not proof of every upstream effective parameter. The 2026-09-02 local gateway audit
-confirmed that the Codex translator preserves Luna max but omits output-token caps, temperature and
-top-p upstream. Local admission/acceptance budgets are not an upstream billing ceiling; see
-`MODEL_PROVIDER_RELIABILITY.md` for the pinned source and observed boundary.
+Runtime admission does not grant investment or broker execution authority.
+The separately authorized USD 3 Earnings/pilot slice remains the next mainline
+task; its market calls have not run in this qualification. Collectors/Gateway
+are unchanged and Live remains closed.
 
-New Luna epochs select the CPA `cliproxyapi-luna-max-cpa-v1.json` Profile; it
-has a distinct content-derived identity from the existing CPA xhigh Profile. Its 300,000
-micro-USD per-run estimated-cost cap is 1.5 times the CPA xhigh Profile's 200,000 cap, while its
-turn, tool, token, wall-time, retry, and pricing values remain the same. A future newly registered
-experiment may use a 1.5-times-prior aggregate cap. Active and frozen xhigh cohorts, including
-their registrations and pending callbacks, retain their old limits and identity and must not be
-relabeled. The [official Luna model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
-lists `max` as a supported effort. A separate synthetic local CPA canary completed on 2026-09-02
-through this max Profile: two physical requests, five frozen read-only tool calls, 6,614 input /
-6,634 output Tokens and 9,284 microusd estimated cost. Its terminal artifact is
-`65158865b3b288f29fa38bd2501e94712ba5bd9f4b22d7fbb6c57775f2056dea`.
-Post-run Usage reconciliation reopened the authoritative terminal and Journal; the single-record
-ledger hash is `1c1ce5b0dc4fef310605368257b4f3d5faa39bf7e9d782e1bbdfa3eb7ce084e9`.
-This verifies a completed configured-max request/tool/Judgment path, not upstream reasoning
-internals, max-versus-xhigh quality, real-market correctness or execution readiness. It is separate
-from the three historical xhigh pilots and grants no new trading authority.
+The follow-on [bounded reliability ablation](MODEL_PROVIDER_RELIABILITY.md#bounded-reliability-ablation)
+also left this exact runtime build unchanged: 12 offline guard mutations detected,
+four real CPA synthetic evidence-ablation Runs completed and replayed, USD .016191
+new spend. MiniMax was not called. This adds targeted fault and missing-evidence
+handling evidence, not an unlimited stability, caching or investment claim.
 
-After the user's explicit received-408 retry authorization, new CPA runs use
-`cliproxyapi-luna-max-cpa-retry408-v1.json`: the same max effort, pricing, budgets and two-attempt
-ceiling, plus one bounded regeneration on an explicitly returned HTTP 408. Its Profile hash is
-also part of RuntimeConfig identity. Old max/xhigh registrations keep their old policy. The failed
-attempt remains generation-unknown, fully traced and possibly billed; only its incomplete answer
-is discarded. Repeated 408 or an interrupted process does not trigger an unbounded retry. See
-`MODEL_PROVIDER_RELIABILITY.md` for precise admission, accounting and no-trading boundaries.
+The later dynamic-effectiveness epoch separately qualified Luna `max`, Terra
+`high` and Sol `high` for its own registered CPA routes. All three Profiles use
+272,000 context tokens and request compaction at 258,000; same-model concurrency
+remains three and the study-wide cap is six. Sol's per-Run conservative reservation
+is USD .60 inside the USD 7 parent analysis stage, rather than an independent
+budget. This route qualification does not broaden the earlier runtime Acceptance
+or authorize new model names automatically.
 
-The separately authorized one-question Earnings diagnostic can explicitly select
-`cliproxyapi-luna-max-cpa-reassessment-usd1-v1` at registration. This Profile changes only the
-estimated-cost ceiling to 1,000,000 microusd; Luna max, CPA prices, token/tool/time limits and bounded
-received-408 retry stay unchanged. Its v5 registration derives the matching `1.00` aggregate cap.
-The default remains the original `0.30` Profile. A Profile alias cannot override a prepared or running
-registration, and this one-run approval does not authorize repeat diagnostics or raise other epochs'
-budgets. Old registration/Run identities and their known/unknown usage remain unchanged.
-The real USD 1 diagnostic completed for $0.019440 and exact offline terminal replay created no
-additional requests. Its abstention exposed a separate literal-query/optional-filter usability
-failure: all nine Agent reads were empty despite nonempty default reads. Availability, successful
-transport and signed completion are therefore not evidence that the Agent consumed the required
-data. See `EVENT_IMPACT_TRIAGE.md` for the fixed denominator and input-access acceptance gate.
-New reassessment registrations now bind checkpoint tool v3: explicit `{}` default reading,
-documented literal/AND narrowing, and authorized-record counts/pagination. The production-shaped
-offline test executes the offered tools through the actual Agent loop and checks the records in
-the next model request. Old registrations retain v2 and their frozen tool bindings. The separately
-authorized real CPA synthetic canary then failed: five model requests repeatedly supplied unsupported
-filters, twelve executed reads were empty, and the next three requested calls exceeded the tool
-budget. Cost was $0.012786, not the USD 1 ceiling; no Judgment was produced. Credential-free replay
-preserved the same terminal and Usage row. Offline availability is therefore still not real-model
-input-consumption acceptance. Re-examine the selected-evidence reader/search boundary and effective
-gateway schema before another authorized run; do not repeat the Earnings diagnostic or keep tuning
-descriptions against the same failure. Exact evidence is in `EVENT_IMPACT_TRIAGE.md`.
-
-`MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` is the sole non-secret execution default in the
-machine-local model environment. It defaults to `3`, is restricted to `1..8`, and is copied into a
-new Triage Work Execution Plan before any request is dispatched. Changing the environment therefore
-does not reinterpret an active or historical Plan. The ceiling applies only to independent members
-inside one phase: all map roles finish before partition, and partition finishes before classify.
-Independent members run in deterministic waves of at most the ceiling. The Harness waits for the
-admitted wave, records each exact Run/Usage identity, appends the hash-chained Usage Ledger serially
-(including successful peers when a sibling raises), and starts no later wave or phase after a
-terminal failure. Ambiguity takes precedence in the aggregate status. It neither
-retries an ambiguous dispatch nor grants additional budget or authority. Legacy v2-v11 Plans remain
-serial. Separate collector concurrency is unrelated and cannot dispatch model calls.
-The environment default is resolved only for the selected Triage command, and an explicit valid CLI
-value takes precedence; a malformed value does not break unrelated commands or help.
-
-MiniMax's official [M3 model page](https://www.minimax.io/models/text/m3),
-[OpenAI-compatible API guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
-[China/international endpoint guide](https://platform.minimax.io/docs/token-plan/cursor), and
-[pricing page](https://platform.minimax.io/subscribe/token-plan?tab=api-enterprise) are the
-Provider references. The API key never enters prompts, run artifacts, model history, tool
-arguments, logs, or committed configuration. The runtime records a versioned cost estimate;
-it is not an invoice and currently does not subtract automatic prompt-cache discounts.
-The CLIProxyAPI credential remains only in trusted mode-`0600` machine configuration and is not
-copied to the repository or global shell configuration. Codex OAuth is included usage with no asserted
-USD/token rate, so the Usage Ledger records Token and latency budgets while its marginal estimated
-USD cost is zero; that zero must not be read as unlimited quota or no resource consumption.
+One real completed response exposed harmless surrounding whitespace in a
+narrative array item. Current Research Thesis and Portfolio V4 parsing therefore
+perform a bounded trim only on narrative text and persist the affected field paths.
+They do not normalize evidence IDs, model identity, enums, tool calls or
+Harness-owned fields, and they never extract an answer from reasoning or mixed
+prose. This removes avoidable Provider-format friction without relaxing financial
+authority or replay evidence.
 
 ## Smallest complete runtime
 
-The Harness remains the single orchestration owner. An accepted runtime needs each boundary
-below; copying an entire coding-agent product is neither required nor sufficient.
+```text
+Frozen Harness input, tools, Skills and business validator
+  → shared request/budget admission
+  → reusable Node child: public pi Provider and Agent loop
+  → awaited native response and tool-result Journal callbacks
+  → business Judgment / Triage / EventAssessment / Portfolio output
+```
 
-### Model Provider
+The Harness is the sole authority for PIT, evidence, permission, experiments,
+budget, Journal, Usage, trading policy and reconciliation. pi supplies model
+protocols, opaque messages, the Agent loop and compaction. One-shot roles use the
+same loop with no tools and one turn, retaining their own business output
+contracts. Analyst, conditional Judge and delegated roles do not create a second
+model loop or receive independent spending/financial authority.
 
-- one typed Provider adapter with explicit origin, model, API/version, streaming mode,
-  timeout, retry, and maximum-output settings;
-- lossless preservation of assistant messages, tool calls/results, and Provider response
-  metadata required for a continued tool-calling turn;
-- normalized usage, latency, finish reason, error class, and request/response identities;
-- declared capability checks for tools, streaming, context size, and structured output;
-- no silent model or endpoint fallback; an unavailable configured model fails closed;
-- credential-bearing requests reject every HTTP redirect and recheck the exact adapter-specific
-  pinned origin at the network boundary, including the MiniMax China origin and CLIProxy loopback;
-- secret injection at process/request boundary only, plus redacted errors and traces.
+### Reuse-first runtime policy
+
+Maintained upstream implementations are the default for model invocation,
+management and Agent infrastructure. Depend on pinned packages through public
+extension points; do not maintain a private source fork or imitate isolated code
+shapes. The behavior being reused includes native protocols, tool continuity,
+reasoning metadata, cancellation, cache controls, usage and compaction/recovery.
+
+Before adding custom behavior, identify the exact requirement, evaluated upstream
+version, observed gap, why configuration or a public hook is insufficient, the
+smallest difference and its removal condition. Finance, language differences and
+existing custom code are not sufficient exceptions. The required thin
+process/admission/raw-usage differences are recorded in ADR 0006.
+
+No second Agent framework, generic fallback, retry owner, billing ledger or
+persistent session database is added. Unaccepted upstream capabilities never
+automatically become project permissions. Tests follow
+[requirement-driven selection](../CONTRIBUTING.md#test-quality-and-efficiency),
+not upstream test duplication or test-count targets.
+
+### Model Provider and configuration
+
+Model Profile v2 freezes endpoint, native API, model, effort, context/output
+limits, price schedule, capabilities, logical quota model, cache namespace and
+controlled Provider-specific options. Run configuration separately binds prompt,
+tools, Skills, budget and experiment identity.
+
+- `MARKET_IMPACT_MODEL_PROFILE` selects a registered alias or profile file.
+- Credentials are referenced by environment-variable name and captured once at
+  Provider construction. They never enter RPC, artifacts, logs or Git.
+- `MARKET_IMPACT_MODEL_STATE_ROOT` selects the single host/project admission
+  directory; all project workers must use the same value. The default is
+  `~/.local/state/market-impact-agent/model-runtime`.
+- `MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS` defaults to 3 and accepts only
+  1–3 under the current authorization.
+- Native API, returned model and supported effort must match the frozen Profile.
+  There is no protocol fallback or effort downgrade.
+- Provider options cannot override endpoint, auth, model, messages, tools,
+  sampling, cache/session ownership or admitted output budget.
+- Runtime Acceptance binds exact runtime build and model route/capability, not
+  every business prompt. A smaller budget or a newly authorized tool does not
+  require requalifying an unchanged model protocol.
+
+`ModelProviderFactory` registers only the two pi native API adapters. A v1
+Profile may remain as immutable financial experiment data, but cannot create a
+new network Provider. Adding an upstream-compatible model/tool is a Profile or
+tool registration plus focused acceptance, not a finance-core edit.
 
 ### Run lifecycle and durable state
 
-- stable run, turn, message, tool-call, and artifact identities;
-- append-only event journal plus content-identified checkpoints;
-- crash-safe resume, cancellation, bounded retries, and idempotent tool-result replay;
-- an exclusive existing Journal run claim and a durable logical-call guard before Provider
-  invocation; observer-capable adapters additionally record correlation-linked physical attempts;
-- no generation redispatch after an interrupted guarded call without a durable response; preserve
-  unknown accounting and require human input, even if an attempt-success diagnostic exists;
-- typed safe Provider diagnostics and cumulative failed-call latency in the existing Journal;
-  completed turns/final failures own accounting, not intermediate retry diagnostics;
-- explicit terminal states for completed, failed, cancelled, budget-exhausted, and
-  human-input-required runs;
-- wall-time, token, estimated-cost, tool-call, and recursion budgets enforced by the Harness;
-- read-only result replay after restart; mutating-tool duplicate-side-effect acceptance is
-  outside the current surface;
-- terminal replay revalidates the journal chain and binds the stored artifact to the exact run,
-  journal tail, terminal status, and run-row timestamps. A completed Judgment also has to match the
-  `judgment.validated` proposal, transcript, and metrics hashes plus the final model-turn assistant
-  payload and raw-response artifact; a separately rewritten canonical terminal object fails closed.
-  Every returned `ModelTurn.model` and replayed Judgment Provider/model identity must exactly match
-  the active frozen Provider Profile, including for replaceable custom Provider implementations.
+1. Freeze inputs and execution identity in the existing Run Journal.
+2. Acquire a same-model request lease; reserve parent budget and persist the
+   physical attempt before sending it.
+3. Persist the native result before projecting it into a business response or
+   executing a requested tool.
+4. Authorize each tool against its exact frozen descriptor; persist its result
+   before a dependent next model turn.
+5. Commit a compaction result before rebuilding model context.
+6. Finalize on `agent_end`; do not use a "prepare next turn" callback as proof
+   that the last turn completed.
 
-The same-root collector must keep expensive artifact preparation outside its SQL write lock; see
-`DATA_INPUT_HARNESS.md`. A returned response whose Journal write fails is not an unanswered request
-or permission to redispatch. Offline recovery preserves its incomplete dispatch and records
-`human_input_required`; completed-turn usage is a known subtotal, with unresolved dispatch usage
-reported separately as unknown, not zero. This boundary needs concurrent production-owner tests,
-not only an isolated Agent Journal test.
+Completed responses, tool results and summaries replay without regeneration.
+A started request without a durable response stays unknown and terminates for
+review; recovery does not need credentials or a Provider probe. A durable
+native result with a missing business projection is projected locally. A lost
+final IPC reply does not erase an already committed terminal.
 
-### Context and automatic compaction
+Run claims, content-addressed artifacts and the Journal remain the state owners.
+Terminal replay revalidates exact Run, prompt/tool/Skill/runtime bindings,
+Journal chain, proposal and metrics. New runtime identities cannot resume old
+unfinished contexts. Collection keeps expensive artifact work outside SQL write
+locks; see [data input ownership](DATA_INPUT_HARNESS.md).
 
-- an inspectable context ledger, not only one mutable prompt string;
-- deterministic inclusion priorities for system/policy, current mandate, task state, recent
-  turns, unresolved tool calls, pinned evidence, and referenced artifacts;
-- conservative complete-request estimation, identified in the run artifact, against the
-  Provider context bound and reserved output budget; no exact MiniMax tokenizer is claimed;
-- automatic compaction before overflow, with source-message ranges, compactor identity,
-  summary hash, and retained facts/decisions/unknowns;
-- compactor identity participates in the run specification and Judgment Artifact even when no
-  compaction occurs;
-- large tool output stored as a hash-bound artifact and replaced by a bounded typed summary;
-- no silent loss of policy, approvals, invalidation conditions, open tool calls, or user
-  corrections;
-- post-compaction continuation tests that reach the same decision and tool arguments as the
-  uncompacted control where the retained evidence is equivalent.
+### Concurrent requests, cost and failures
+
+All ordinary calls, one-shot roles, Judge calls, child work and summaries use
+`PiRequestBoundary`. Aliases sharing a logical model use OS-backed leases under
+the same project root, across workers and experiment directories. The limit is
+not a gateway-wide limit on unrelated projects. Queue waits are cancellable and
+bounded by the Run deadline; dependency barriers still belong to the business
+scheduler.
+
+`ModelBudget` records in-flight reservations in an existing parent Run Journal.
+A child or summary spends that parent's allowance; independent experiments have
+separate budgets. Reservation, dispatch, response and Usage are linked, not
+separate competing cost ledgers. Unknown generation retains its reservation
+and unknown usage is never represented as zero.
+
+Provider lifetime follows its creator: an EventAssessment runner closes its
+factory-created child on success, failure or cancellation. Caller-supplied
+shared Providers remain the caller's responsibility.
+
+pi/SDK retries are zero. Harness policy alone permits bounded pre-generation
+429 retry and the explicitly enabled one-time received-408 regeneration. Local
+timeouts, stream loss, cancellation, auth and quota errors are not generic
+retry permission. Closing a connection does not prove upstream generation
+stopped. See [failure and health ownership](MODEL_PROVIDER_RELIABILITY.md).
+
+### Context, cache and automatic compaction
+
+Business Run ID, conversation identity and cache namespace/key are distinct.
+Conversation IDs bind one isolated context; route-supported cache keys identify
+stable public prefixes. Independent experiment arms never share answers or
+private histories. Stable system/tool prefixes omit Run IDs, clocks and mutable
+statistics; variable evidence and task content stay in the variable portion.
+
+The admitted GPT-5.6 study Profiles use the route-recommended **272,000-token
+context window** and begin compaction at **258,000 estimated input tokens**.
+They reserve 8,192 output tokens, keeping compaction below the hard context
+edge. These values are frozen in the Model Profile, included in route identity,
+reported by `runtime doctor`, and enforced again by study registration;
+individual experiments cannot enlarge or postpone them. A Provider with a
+different verified limit needs its own Profile rather than inheriting this
+GPT-5.6 setting.
+
+Native tool-call/result pairs, reasoning signatures and continuation metadata
+remain opaque pi messages in private artifacts. Total input includes cached
+input only once; reasoning is not added again to output. Missing cache counters
+remain unknown. Cost uses frozen conservative input/output prices; measured
+Provider cache discounts are not invented.
+
+Compaction uses public pi `prepareCompaction`, `compact` and
+`buildSessionContext`: safe turn cuts, retained context and incremental
+summaries. Fixed authorization/PIT instructions and evidence entrances are
+repinned outside the summary. Original history is retained. Summaries are
+neither original evidence nor new permission. Summary calls share parent budget
+and cancellation; an incomplete summary never replaces history.
+
+High cache reuse is a measurement goal, not a guarantee. Compare the same pinned
+pi/model/route with matching prefixes and alternate execution order. Report
+cold, warm, expired and first-after-compaction calls separately. Missing counts
+cannot pass; two matched groups each losing over five percentage points fail.
+No irrelevant padding or extra calls are used to inflate a hit rate.
+
+### Output normalization
+
+Pinned `json-repair` handles minor JSON punctuation defects. The versioned
+answer wrapper accepts whitespace and a single whole-answer JSON Markdown
+fence. It does not extract a conclusion from mixed prose, thinking, several
+answers or truncated fences. Raw answer and transformation evidence are kept.
+Semantic evidence, required business facts and authorization validation are
+unchanged.
 
 ### Skills
 
-- manifest-based discovery with name, version, source, content hash, scope, dependencies,
-  conflicts, and required capabilities;
-- on-demand instruction loading; a Skill not selected for a turn does not consume context;
-- deterministic precedence among Harness policy, project guidance, user instruction, and
-  Skill instruction;
-- install/update/remove as separate user-authorized operations with provenance and rollback;
-- per-Skill tool/MCP allowlists, filesystem/network scope, and secret declarations;
-- validation for broken references, conflicting names, cycles, oversized assets, and stale
-  cached versions;
-- invocation and loaded-resource hashes in the run trace; a Skill grants no execution
-  authority by itself.
+The existing manifest registry owns discovery, scopes, dependencies, conflicts,
+tool/MCP allowlists and content hashes. Only selected instructions enter the
+context. Skills cannot grant account or execution access. Traces bind offered,
+loaded and Agent-reported use/influence to the actual Run and evidence; these
+observations do not prove incremental effectiveness.
 
-`JudgmentSkillTrace.v1` now defines the versioned sidecar for the fuller chain: offered or
-dependency-only, selected/rejected/dependency-loaded, exact manifest identity, route reason,
-evidence trigger, Agent-reported use, and reportedly influenced proposal paths. The Harness checks
-the Judgment, route, execution binding, Evidence Pack references, and proposal paths. The report is
-observational self-attribution, not causal Skill evidence, and cannot affect a Signal or execution.
-Automatic emission by each model adapter remains open; historical Judgment Artifact v2 identities
-are not rewritten.
-
-Outcome-opened multi-case Skill discovery is separately specified in
-`docs/SKILL_GOVERNANCE.md`. It may use bounded specialist decomposition, but specialists sharing one
-case remain one evaluation unit. A non-executable candidate requires two additional independent
-validation blocks and complete catalog conflict governance before any later active-Skill gate.
+Outcome-opened discovery and candidate conflict governance are owned by
+[Skill Governance](SKILL_GOVERNANCE.md). Strategy/Skill promotion is owned only by
+[Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md). Analyst/Judge
+composition uses the current historical pilot contract, not an unbounded debate.
 
 ### MCP and tools
 
-- versioned MCP configuration with server identity, transport, command/origin, environment
-  mapping, working directory, enabled state, and per-server permission envelope;
-- initialization and capability negotiation before tool discovery;
-- every tool handler is constructed from an exact verified server snapshot and, on each fresh
-  connection, re-lists and rehashes identity, protocol, tool surface, and schemas immediately
-  before invoking the handler;
-- closed tool schemas, stable tool identities, argument/result size limits, timeouts,
-  cancellation, bounded retry policy, and structured errors;
-- managed local-server process lifecycle and health, with no orphaned privileged process;
-- tool outputs treated as untrusted data, separated from instructions and checked for prompt
-  injection before later use;
-- side-effect classification: read-only, reversible local write, destructive local write,
-  external mutation, or execution-sensitive;
-- explicit human approval for authority-expanding or destructive calls;
-- artifact indirection for binary/large results, secret redaction, and complete audit links;
-- research acceptance configuration exposes no account, order, paper, or live capability.
+Selected evidence is exposed by zero-filter `read_selected_*()`; searching
+and authorized pagination are separate capabilities. Identity and Snapshot
+selection are injected by Harness, not guessed by the model.
 
-### Policy, security, and human control
+Durability orders dependent work, not the lifetime of every external task:
 
-- Harness hard policy is evaluated before and after model planning where relevant;
-- a model may propose Signal or Order Intent but cannot edit a Trading Mandate, mint approval,
-  access raw broker credentials, or call an execution Provider directly;
-- sandbox and filesystem/network scopes are least-privilege and explicit per tool/server;
-- untrusted evidence, retrieved text, tool output, and model-authored instructions retain
-  provenance labels;
-- prompt-injection, secret-exfiltration, confused-deputy, excessive-agency, and dependency
-  substitution cases are mandatory negative tests;
-- a kill/cancel control stops the runtime even when a model or tool is unresponsive.
+- ordinary query: persist the final result before the next dependent step;
+- background work: persist an accepted handle, let independent work continue,
+  and wait for separately committed completion when its result is needed;
+- continuous watch: persist subscription and deduplicated observations, then
+  schedule a new Wake/Run. Never inject future information into an old decision.
 
-### Observability, evaluation, and portability
+Implemented surfaces are ordinary negotiated MCP tools and the project's own
+Watch/Wake contracts. Generic MCP Tasks, resource subscriptions and arbitrary
+server callbacks are **not** part of this runtime acceptance. They require
+capability negotiation and lifecycle/duplicate/cancellation evidence before
+being exposed. Progress is not completion; pi support alone grants no permission.
 
-- structured traces link every output claim to messages, evidence, tool calls, configuration,
-  model identity, Skills, MCP servers, and compaction checkpoints;
-- local inspection and an append-only Usage Ledger report tokens, estimated cost, latency,
-  retries, context pressure, and terminal state for successful and failed runs without
-  exposing secrets or licensed payloads;
-- multi-experiment cost reports reconcile every supplied Usage Ledger by exact Run ID, reject
-  conflicting duplicate payloads, and bind the content hash, status counts, unique-run count, and
-  full estimated-cost union instead of accepting a caller-supplied historical total;
-- deterministic fixtures cover ordinary turns, multi-tool turns, tool errors, retry/resume,
-  cancellation, compaction, Skill activation, MCP failure, malformed output, and injection;
-- one locked MiniMax M3 acceptance corpus is run without broker reachability;
-- a second Provider adapter must pass the same engine-neutral acceptance before portability
-  is claimed; differences are explicit rather than hidden behind fallback;
-- model-quality evaluation and trading-research calibration are distinct gates.
+MCP handlers re-negotiate and verify server identity/schema before invocation.
+Tool results are untrusted data, bounded by time/size and stored with provenance.
+Research Runs expose read-only tools, not default shell/file tools, accounts,
+orders, paper execution or live execution. Watch/delegation admission is owned
+by the existing scope and callback contracts.
 
-TradingAgents, FinceptTerminal, daily_stock_analysis, Vibe-Trading, QuantDinger,
-TradingAgents-CN, last30days-skill, Codex, OpenCode, and Pi were reviewed as prior art. No
-whole project became a runtime dependency or vendored core. The implementation cleanly uses
-only narrow patterns: typed tools and scopes, append-only recovery, capability manifests,
-secret redaction, explicit process cancellation, and content-identified compaction. The
-official MCP Python SDK is the adopted Agent-protocol dependency. Model HTTP I/O now uses pinned
-`httpx2==2.12.0`, rather than a custom urllib opener in a worker thread. This is transport reuse,
-not adoption of an external Agent Runner. The reference comparison and cancellation/retry boundary
-are owned by [Model Provider Reliability](MODEL_PROVIDER_RELIABILITY.md#transport-reuse--2-september-2026).
+## Deployment, qualification and cutover
 
-## Acceptance gate
-
-The runtime requires all of the following current-identity evidence:
-
-1. [x] The no-secret deterministic fixture and a fresh hardened MiniMax M3 run finish under
-   the current identity.
-2. [x] Forced compaction preserves policy, task state, citations, and unresolved tool
-   continuity and reaches the same proposal as its uncompacted control.
-3. [x] A Skill is discovered, loaded only when selected, traced by hash, and denied an
-   undeclared capability;
-4. [x] An MCP server completes negotiation, schema-bound discovery, read-only success,
-   timeout, cancellation, crash, and restart cases;
-5. [x] Checkpoint/resume reproduces the same terminal artifact identity for a read-only run
-   and does not repeat its tool handler;
-6. [x] Injection, undeclared authority, malformed output, and secret-exfiltration fixtures
-   fail closed;
-7. [x] Token, estimated cost, latency, retries, contract corrections, and every tool call are
-   auditable; and
-8. [x] No paper/live/account capability is reachable in the acceptance configuration.
-
-The accepted run `acceptance-minimax-m3-energy-v4-final` used exact model `MiniMax-M3`,
-loaded the content-identified `energy-supply@1.0.0` Skill, called one frozen Pattern Pack tool
-and all four frozen Evidence Pack items. Its sealed v2 Judgment Artifact identity was
-`judgment-219d0c9822e7e5794e51af4b65dd41e04cd9162ad6f561695f6705c7f79a53c4`.
-The run used 20,581 input tokens, 4,353 output tokens, four Provider calls, five read-only tool
-calls, and 35.44 seconds of recorded Provider latency. Its 12 journal events revalidated as a
-complete hash chain; the terminal journal hash matched the Judgment Artifact, the Artifact
-matched the run identity and start/finish timestamps, passed its JSON Schema and typed parser,
-a direct private-state scan found no API key, and no broker/order/paper/live event was present.
-Reopening the same terminal run returned the same artifact with 12 unchanged events and no
-replayed tool calls. Current runtime code reconstructs the stored run metrics from those
-journal events rather than spending again. The estimated cost was 11,400 micro-USD under the versioned
-price assumption. Private state remains under the ignored
-`.market-impact/agent-runs/` directory.
-
-The earlier single-run v2 and v3 runs remain historical evidence only. Neither substitutes
-for the v4 artifact identity or recovery rules.
-
-## Five-replicate ensemble acceptance
-
-The Harness now freezes one execution-binding artifact before replicate one. It covers the
-runtime configuration, initial prompt, selected Skill hashes, tool manifests and model tool
-surface, MCP bindings, context estimator, and compactor. Five independent runs then use
-separate journals and artifact stores with no shared model context. A content-identified
-Ensemble Decision counts only one uniquely eligible candidate per valid replicate and requires
-exact three-of-five agreement on target, direction, and horizon. Reused Artifacts or any
-execution-binding drift force whole-ensemble abstention.
-
-The first private real-model attempt,
-`synthetic-minimax-m3-ensemble-20260826-v1`, is retained as negative runtime evidence. Two
-replicates failed the closed output contract and the three valid votes split between one- and
-three-session horizons, so the maximum agreement was two and the Ensemble Decision correctly
-abstained. Inspection showed an ambiguous pseudo-contract: MiniMax copied a metadata rule as
-an output field, overlapped supporting and counterevidence references, or omitted required
-empty arrays. The output contract was changed to an explicit metadata wrapper with exact
-required fields and disjoint support/counterevidence rules; the previous run was not overwritten.
-
-The fresh normal run `synthetic-minimax-m3-ensemble-20260826-v2` then completed all five
-replicates under frozen binding
-`3ed71b35946fcbe170fa08683dee3da3a3e94aca9f8b70485305c62c0eb909c0`.
-All five selected `600938.XSHG/up`; three selected one session and two selected three sessions.
-The resulting exact three-of-five decision is
-`agent-ensemble-a4b4cbdc8a740ca6ad01a4a948e3dacc452355d2cbbc0f7fcc2d428fbce984dc`.
-It used 41,319 input tokens, 20,921 output tokens, 25 read-only tool calls, 11 Provider
-attempts, and an estimated 37,506 micro-USD. The content-addressed decision artifact hash is
-`26d8aee3af54e3702b8c223e37e68c4861d2fed2aa18a8e2dce67fec3331c5c4`.
-Private state remains under ignored `.market-impact/agent-ensemble-runs/` and
-`.market-impact/agent-ensemble-decisions/` directories.
-
-This passes the synthetic-bundle ensemble runtime gate only. The selected target has no
-matching frozen replay snapshot in this acceptance slice, and the event itself is synthetic;
-therefore no return is reported and no model-quality, calibration, alpha, paper, or live claim
-follows. That historical run used the earlier two-target synthetic Evidence Pack, which also
-listed the non-selection-eligible `600028.XSHG` control. The study runner now rejects any
-Evidence Pack target outside the frozen selection-eligible Exposure Registry before checking
-the Provider or creating run state, and the committed fixture is narrowed to `600938.XSHG`.
-The historical run remains runtime evidence; it is not relabeled as a prospective study event.
-
-## Research Method Skills and four-arm ablation
-
-The separate evidence-gated public-investor method catalog and its first three-pair Luna xhigh
-diagnostic are documented in `docs/METHOD_SKILLS.md`. It adds five persona-free methods rather than
-five analyst identities. The Abqaiq recovery comparison changed only the appended
-`expectations-base-rates` Skill; both arms abstained 3/3 with complete evidence and Pattern Pack
-coverage. CPA observed 12 successful Provider requests costing $0.02276136, while the conservative
-project Usage Ledger recorded $0.030045. This is process and cost evidence only, not a method rank.
-The v2 registration corrects the original v1 `model_call_count=6` label to six Agent runs, prices
-input at the worst ordinary/cache rate, and records a separate Provider-request bound. It also
-replaces caller-reported evidence labels with a content-identified declaration of exact
-Evidence/Pattern refs. The original report remains immutable; a schema-validated correction and
-redacted content-addressed CPA event artifact preserve the repaired semantics.
-
-Stable work normally expressed as TradingAgents-style analyst, bull/bear, and risk roles or
-Vibe-Trading-style event teams is represented here as persona-free Research Method Skills.
-The committed catalog contains neutral point-in-time evidence discipline, event/market
-context, public-equity transmission, adversarial countercase, reusable-pattern review, and
-the existing physical-energy family method. A deterministic Skill Route selects only methods
-applicable to the frozen asset class, mechanism family, and available Pattern Pack; the route,
-reasons, manifests, tools, and capabilities are content identified before any model call.
-
-The separate `news-evidence-assessment` Skill is an optional general evidence-quality method,
-adapted from useful sample-size and source-disagreement checks in the external TradingAgents news
-pipeline. It inventories admitted news, separates facts from opinions, checks source/claim
-independence and timing, and reports only a qualitative coverage-assessment confidence. It depends
-on `evidence-core`, permits only `read_evidence`, cannot mint Evidence, and cannot set
-`CandidateImpact.confidence`, direction, weight, or execution. It is not inserted into the frozen
-four-arm result after the fact; any comparison must use a new content-bound paired registration.
-
-The first such private paired diagnostic used CLIProxyAPI `gpt-5.6-luna` xhigh and interleaved five
-replicates per attack/recovery state. All 20 runs completed; both control and treatment abstained in
-all ten state-replicates. Control used 70,535 input and 22,198 output Tokens; the optional Skill
-used 79,115 input and 23,454 output Tokens, increases of 12.2% and 5.7%. The final Judgments did not
-show a systematic new inventory of source count, lineage independence, fact/opinion mix, or
-coverage confidence. This sparse opened-development case therefore gives no reason to load the
-Skill by default. It remains available for a later genuinely multi-source News Observation Batch,
-where its declared precondition can be exercised. The private report is
-`private-news-ablation-report-8ad1284720331aa27ea05f85cfe9b03e72ba047c26f35f467504ab50bfea84cb`
-under Usage Ledger hash `4d999354ee7a9d923f4ab989e7cec02ed7ae1558deafb1eeb04bad6fd57c7f95`.
-
-The frozen comparison has four arms: neutral evidence; general methods; general methods plus
-Pattern Pack review; and those layers plus the energy-family method. The Pattern-enabled arms
-differ in both instructions and access: they receive `pattern.read`, `read_pattern_pack`, and the
-frozen Pattern Pack content, while the other arms do not. All arms share the same base Evidence
-Pack, model profile, action space, target universe, output contract, budget, and five replicates.
-Runs are interleaved by replicate round. All four execution bindings are frozen before Provider
-availability is checked, every terminal run enters a hash-chained Usage Ledger, and the report
-explicitly makes no market-outcome or alpha inference.
-
-This is a narrow adaptation, not copied role prompts or a vendored multi-agent framework.
-Sources reviewed include TradingAgents' [market analyst](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/agents/analysts/market_analyst.py),
-[news analyst](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/agents/analysts/news_analyst.py),
-and [provider factory](https://github.com/TauricResearch/TradingAgents/blob/main/tradingagents/llm_clients/factory.py),
-plus Vibe-Trading's pinned
-[event task force](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c28e856b20acae3d077ed9bd919ce/agent/src/swarm/presets/event_driven_task_force.yaml),
-[event-driven Skill](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c28e856b20acae3d077ed9bd919ce/agent/src/skills/event-driven/SKILL.md),
-and [Provider registry](https://github.com/HKUDS/Vibe-Trading/blob/5cd08ee1bd5c28e856b20acae3d077ed9bd919ce/agent/src/providers/llm_providers.json).
-Their outputs are prior art only; this Harness retains its own evidence, policy, and execution
-authority boundaries.
-
-Pinned TradingAgents `0.3.1` remains isolated outside the Harness. Its earlier strongly masked
-MiniMax smoke is retained only as a negative input-isolation and structured-degradation diagnostic.
-The current native-capability baseline instead supplies the real Abqaiq event and `601857.SH`
-target, registered news and Tushare market data no later than each historical cutoff, and preserves
-the project's native analyst, debate, risk, and model-prior methods on CLIProxyAPI Luna xhigh. It
-disables only cross-run memory, the pending-decision outcome resolver, post-cutoff/live retrieval,
-and broker reachability, and it rejects experiment-id reuse. This is an external behavior,
-stability, and resource-use baseline, not a Harness runtime dependency or a causal method arm. The
-deployment and news-source/post-processing findings are recorded in
-`docs/TRADINGAGENTS_EXTERNAL_BASELINE.md`.
-
-The native Luna xhigh comparison completed all ten interleaved runs with zero structured-output
-degradation. Attack ratings were four `Hold` and one `Sell`; recovery ratings were three `Hold` and
-two `Underweight`. All ten map to abstention in the Harness's one-sided long action space. The
-external graph used 174 model calls, 903,651 input and 376,799 output Tokens, and 7,531.109
-cumulative seconds. Inspected reports provided broad multi-role investment memoranda but also
-generated precise levels and sentiment values from sparse inputs and drifted from one session to
-weeks or months. This records native behavior rather than treating role count or report length as
-quality evidence.
-
-The Model Provider Profile is the single public model-entry contract. It binds adapter kind,
-exact origin and model, credential environment reference, context/output limits, sampling,
-optional reasoning effort, retry policy, pricing, and per-run budgets. MiniMax and CLIProxyAPI are
-the first two concrete adapters. Both passed model discovery, exact-identity, text, function-tool,
-redirect/origin, and full synthetic Agent checks through the same Factory and `AgentEngine`.
-`agent run --provider-profile` is the uniform command entry; no Provider-specific runtime branch is
-needed. Historical registered MiniMax experiments remain bound to their original Profile. Future
-new Luna epochs use the distinct CPA max Profile, while explicit legacy/replay work may use xhigh;
-existing frozen xhigh epochs retain their original identity. This proves bounded runtime
-portability, not equal model behavior or equivalent cost semantics.
-
-The first real-model comparison,
-`synthetic-method-ablation-minimax-m3-20260826-v1`, completed all 20 runs and retained them
-under one Usage Ledger hash
-`88d40d90b556e5e1517f751405658461f652abb82af595f67ad5712da6e58487`. Every run read all
-four Evidence Items; both Pattern-enabled arms read the referenced Pattern Pack in all five
-replicates. All four arms produced exact three-of-five proposals for `600938.XSHG/up`, but
-the selected horizon differed: neutral evidence and family-guided selected one session,
-while general methods and general-plus-pattern selected three sessions. Every split was only
-three-to-two. One general-plus-pattern replicate repeated one Evidence read, and one
-family-guided candidate omitted an explicit counterevidence reference despite reading the
-counterevidence item. These are process differences, not a quality ranking.
-
-The comparison used 295,538 input tokens, 105,996 output tokens, 57 Provider attempts, 91
-read-only tool calls, and an estimated 215,880 micro-USD in total. No run exceeded 18,029
-micro-USD, so the per-run ceiling did not fire. Arm estimates were 42,168 micro-USD for
-neutral evidence, 52,416 for general methods, 66,181 for general-plus-pattern, and 55,115 for
-family-guided. The content-identified diagnostic report is
-`method-ablation-report-2b59cdabd953f7e8550cde6384e828836fcc74b666b2642d538294647d6b6840`.
-Reopening the same experiment regenerated diagnostics from the stored journals without any
-new model turn or Usage Ledger row.
-
-## Opened real-event development run
-
-The first real outcome-opened development case uses the 2019 Abqaiq–Khurais attack and recovery.
-`examples/calibration/method-development-abqaiq-v1.json` content-binds the active v2
-benchmark/specification, Provider/model, catalog, strongly masked evidence, posthoc Pattern Pack,
-one target alias, and two one-session `601857.XSHG` Backtest Requests. Its schema and strict loader
-make `outcomes_known_to_builder=true`, `inference_eligible=false`, one Event Case, and no execution
-capability mandatory.
-
-Agent-visible evidence now coarsens quantities, facility and issuer names, restoration and shipment
-details, and shifts calendar dates away from the historical fingerprint. It preserves only the
-decision-relevant relative sequence and lag. This reduces easy linkage but does not authenticate a
-holdout; residual narrative linkage, model memorization, and target-role inference remain risks.
-
-The date-shifted replacement completed all 40 required runs. Attack-state proposal counts across
-`neutral_evidence`, `general_methods`, `general_pattern`, and `family_guided` were 1/5, 0/5, 1/5,
-and 0/5; all recovery-state counts were 0/5. Every three-of-five ensemble abstained. Both frozen
-Backtest Requests passed joint preflight before either outcome opened, and both one-session
-Nautilus replays repeated with identical result hashes. The fixed-long control was net negative in
-both states. Total Provider cost was 397,066 micro-USD. All earlier private reports, costs, replay
-results, and evaluations remain invalid.
-
-This accepts runtime binding, fail-closed completeness, deterministic replay, and one
-evidence-update diagnostic. One opened Event Case with no ensemble-level arm difference cannot
-rank methods or establish alpha, prospective validity, Provider portability, or execution
-readiness.
-
-A state can produce a
-method report only after all four interleaved arms have five completed runs with valid judgments;
-failed or budget-exhausted attempts are still recorded in the append-only Usage Ledger. The
-evaluator jointly preflights both normalized reports and both Backtest Requests, including exact
-arm route, execution binding, ensemble, replicate, and totals identities, before opening either
-outcome. Full design and non-claims are in
-`docs/ABQAIQ_DEVELOPMENT_BENCHMARK.md`.
-
-Run one state with a fresh experiment id:
+Source-checkout preparation:
 
 ```bash
-uv run market-impact agent method-development-run \
-  --case examples/calibration/method-development-abqaiq-v1.json \
-  --benchmark-registration examples/calibration/method-quality-benchmark-v2.json \
-  --evaluation-specification examples/calibration/method-quality-evaluation-specification-v2.json \
-  --method-catalog examples/research/research-method-catalog-v2.json \
-  --provider-profile examples/providers/minimax-m3-research-v1.json \
-  --state attack \
-  --evidence-pack examples/agent/abqaiq_development/evidence-pack-attack.json \
-  --evidence-documents examples/agent/abqaiq_development/evidence-documents-attack.json \
-  --pattern-pack examples/agent/abqaiq_development/pattern-pack.json \
-  --backtest-request examples/backtests/real-abqaiq-601857-attack-state-request-v1.json \
-  --experiment-id YOUR_UNIQUE_OPENED_DEVELOPMENT_ID
+uv sync
+uv run market-impact runtime prepare
+uv run market-impact runtime doctor --provider-profile examples/providers/pi-cpa-luna-max-v2.json --provider-profile examples/providers/pi-minimax-m3-v2.json
 ```
 
-Save each successful command's complete JSON output as the corresponding private method-report
-input. The evaluator accepts the exact runner-added `report_artifact_hash` and `state_directory`
-fields only when the artifact hash matches the canonical stored report; arbitrary additional keys
-or tampering fail closed. Outcome evaluation is a separate command and also requires two ignored
-Tushare snapshot paths. It rejects incomplete runs or mismatched case/report/request/decision
-bindings and reruns each replay twice before writing the private evaluation artifact.
+Doctor is read-only: Python/Node versions, locked packages, build identity,
+credential-presence booleans, shared admission directory and accepted routes.
+It does not test remote health or make model calls. Python installation alone
+does not install Node dependencies. `prepare` refuses while any project pi
+worker holds the build lease. This release targets a clean macOS source install;
+Linux uses the same preparation but remains unverified until actually tested.
+No standalone wheel/Node bundle is claimed.
 
-This one synthetic Evidence Pack has one eligible target and a long-only action space, so it
-cannot test target selection, direction, abstention quality, returns, or causal correctness.
-The next method-quality gate needs a frozen multi-case corpus containing supported positives,
-offset-dominant negatives, missing-critical-data abstentions, ambiguous targets, and several
-event families before the arms are used on future real-event outcomes.
+Qualification uses `agent pi-canary prepare|run|replay|accept`.
+Prepare requires bound full-check/clean-install/independent-review evidence and
+the two prior Usage roots. A bounded permit authorizes only the registered
+qualification Runs and shared budget. The direct upstream control executable is
+test-only and still uses the same physical admission/audit/budget; it is not a
+second production entry.
 
-Run the frozen local comparison with a new immutable experiment identifier:
+The explicitly authorized focused continuation is prepared with
+`agent pi-canary prepare --followup-of <closed-original-root> --state-root
+<new-followup-root> --verification <verified-checks.json>`; it derives cumulative
+prior usage instead of accepting caller-supplied counters. No recursive
+follow-ups are supported. A newer qualification coordinator may reopen old
+terminal reports only with the identical production build, no network dispatch
+and exact report equality; it cannot resume an unfinished old coordinator Run.
+The installed acceptance bundles both the retained failed parent report and
+the new scope's passing evidence. This is not a retroactive parent pass.
 
-```bash
-uv run market-impact agent method-ablation-run \
-  --ablation-registration examples/calibration/agent-method-ablation-v1.json \
-  --parent-registration examples/calibration/agent-physical-energy-prospective-v1.json \
-  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
-  --method-catalog examples/research/research-method-catalog-v1.json \
-  --provider-profile examples/providers/minimax-m3-research-v1.json \
-  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
-  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
-  --pattern-pack examples/agent/energy_supply/pattern-pack.json \
-  --experiment-id YOUR_UNIQUE_METHOD_ABLATION_ID
-```
+The separately approved changed-build qualification uses `--repair-of
+<closed-focused-root>` instead. It verifies retained registration/report hashes,
+case Journals, terminal artifacts and Usage Ledgers without executing the old
+runtime. Retained cache/tool evidence is applicable only after an independent
+review of the exact changed source files; it is never described as a fresh
+new-build cache measurement. The qualification registry and its host/project
+claim are single-use, and all four previous Usage roots remain in the cumulative
+denominator. Passing targeted evidence plus reviewed unchanged behavior may
+qualify the exact repaired build; no build inherits admission automatically.
 
-Validate the committed synthetic bundle without any model credential:
+A normal next model turn is not a transport retry. Qualification caps are
+checked before starting a fresh turn; completed responses may still replay
+when a cap is exhausted. This makes a zero-dispatch cap stop an explicit budget
+terminal rather than an invented unknown upstream response. Existing 408/429
+self-recovery remains bounded by the original deadline, physical-call budget
+and durable attempt accounting; no broker or mutating-tool retry is added.
 
-```bash
-uv run market-impact agent validate \
-  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
-  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
-  --pattern-pack examples/agent/energy_supply/pattern-pack.json
-```
+Required gates:
 
-Run a new private real-model judgment only after the selected Profile's credential environment is
-present. The historical default remains the frozen MiniMax Profile. For a future new Luna epoch,
-select and freeze the distinct CPA max Profile; do not alter an active or frozen xhigh binding.
-The following historical example keeps using xhigh:
+- actual pi production-entry tests for tool consumption, native state, failures,
+  budget/concurrency, summary/restart and extension;
+- temporary 0.84.3 → 0.84.4 upgrade rehearsal; no second installed production loop;
+- Ruff, format, Pyright, pytest, TypeScript and Node tests, clean macOS install,
+  then independent read-only review;
+- real CPA and MiniMax matched-cache/tool sequences, two incremental summaries
+  per route, isolated concurrent workers, completed-response restart and
+  pre-dispatch cancellation, all within remaining authorization;
+- exact physical attempts/native usage/Usage reconciliation, no unresolved
+  generation, no failed or replaced sample;
+- acceptance installation reopens every terminal and stores qualification
+  evidence by content hash, then atomically publishes exact build/route admission
+  only after active workers have drained. A same-build qualification adds or
+  replaces evidence only for its exact routes and preserves other already
+  accepted routes (for example MiniMax); a changed build must requalify routes
+  rather than carrying old-build evidence forward. The one-time v1-record
+  migration may re-derive route identities only from that record's immutable
+  same-build qualification artifact; it cannot translate an old Profile into a
+  different current Profile or preserve an unverified route string.
 
-```bash
-uv run market-impact agent run \
-  --provider-profile examples/providers/cliproxyapi-luna-xhigh-v1.json \
-  --run-id YOUR_UNIQUE_RUN_ID \
-  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
-  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
-  --pattern-pack examples/agent/energy_supply/pattern-pack.json
-```
+Old generic implementation is removed before freezing the final qualification
+build. Until that build passes, there is **no** fallback production runtime.
+Upgrades repeat targeted qualification before new Runs switch; never hot-update
+a running child or roll back Journal, Usage, Intent or broker facts.
 
-Each `run_id` is immutable: use a new ID for a new model-quality replicate. Re-running a
-terminal ID returns its stored result rather than spending tokens or duplicating tool calls.
+## Return to the market mainline
 
-Run the registered five-replicate synthetic acceptance with one new ensemble ID:
+After formal cutover, use the separate USD 3 authority for four fixed samples:
+one current-cutoff Earnings question and three Modeled-PIT pilots (opportunity,
+risk and reasonable abstention; hidden labels). Maximum USD .75 / 24 physical
+requests per sample, including both analysts and any conditional Judge.
 
-```bash
-uv run market-impact agent study-run-ensemble \
-  --registration examples/calibration/agent-physical-energy-prospective-v1.json \
-  --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
-  --evidence-pack examples/agent/energy_supply/evidence-pack.json \
-  --evidence-documents examples/agent/energy_supply/evidence-documents.json \
-  --pattern-pack examples/agent/energy_supply/pattern-pack.json \
-  --ensemble-run-id YOUR_UNIQUE_ENSEMBLE_RUN_ID
-```
-
-A completed command may legitimately return an abstaining Ensemble Decision with exit status
-zero; operational completion is distinct from three-of-five proposal agreement. Each replicate
-status, private state directory, terminal hash, metric set, frozen binding, and decision
-artifact is reported without exposing a credential or broker capability.
-
-The deterministic vertical integration translates either a validated candidate from one
-frozen Judgment Artifact or an exact three-of-five Ensemble Decision into the existing Signal
-Intent and Backtest Request, then replays that request twice through the unchanged Nautilus
-bridge with identical result identity. The ensemble path revalidates all three agreeing
-Artifacts and their frozen binding. Nautilus does not call the model.
-
-Current non-claims remain explicit: two adapters passed the bounded runtime surface, but one Luna
-xhigh run does not rank models or prove repeated behavioral equivalence; the separate max canary
-does not establish a max-versus-xhigh quality advantage. The synthetic energy case is pipeline evidence, not event-family
-calibration; Skills are installed, updated, or removed only through explicit user-authorized
-repository/filesystem changes, never by the model; and the current research runtime exposes
-read-only tools only.
-
-The bounded local runtime gate is satisfied. It does not override the failed Phase 2
-trading-calibration gate and grants no paper or live capability.
+Keep old missed windows and failures sealed. At least two historical pilots
+must cease abstaining merely because of the old input gaps before market sample
+expansion. No 24-case holdout, Skill promotion or alpha claim is authorized by
+this runtime test. Only genuine eligibility, required Query Gate, nonempty
+auditable Intent and existing risk/approval permit the Mock path. Runtime,
+investment effectiveness, Mock execution and broker readiness are separate
+claims.

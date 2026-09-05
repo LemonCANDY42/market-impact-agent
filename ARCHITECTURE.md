@@ -13,6 +13,19 @@ artifacts, and all promotion-capable mutations use `BEGIN IMMEDIATE`. An authori
 prospective denominator, and strategy validator share that exact root. A path-created legacy Run
 Journal, a fresh root, or artifacts copied from another root remain replayable but cannot promote.
 
+The account-aware core separates **research view, portfolio target, risk and execution**; see
+[the canonical responsibilities](CONTEXT.md#research-portfolio-target-and-execution-separation).
+Research may be uncertain, but a completed portfolio review must recommend how to handle the
+observed account, including holding cash. Transaction side comes from the authorized target delta,
+not a forced equality with the research direction. pi owns the upstream model/Agent mechanics,
+Nautilus owns accepted engine mechanics, and the Harness retains all financial authority. The
+[account-loop contract](docs/ACCOUNT_DECISION_LOOP.md) owns the connected migration and acceptance;
+no second Agent framework, risk ledger or execution engine is introduced.
+
+The earlier event-only diagnostic contract below remains replayable. Its directional Signal/Order
+binding is not sufficient for the new account-aware path (for example, a bullish concentration
+reduction), and is not silently relaxed during migration:
+
 ```text
 Observation adapters (aggregated discovery + direct sources)
     -> immutable raw/normalized observation bundle

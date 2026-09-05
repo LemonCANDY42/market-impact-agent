@@ -9,6 +9,18 @@ uv sync --python 3.13
 uv run market-impact status
 ```
 
+The pi runtime additionally requires Node >=22.19 and its local, locked dependencies:
+
+```bash
+cd runtime/pi
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+Return to the repository root for the Python checks below. Node tests exercise real pinned pi
+modules; Python pi integration tests replace network I/O only. Paid canaries are not part of pytest.
+
 ## Required local checks
 
 ```bash
@@ -46,6 +58,13 @@ GitHub Actions may repeat these checks but is never the only acceptance path.
   local checks above. Keep paid-model and broker acceptance separately authorized
   and budgeted. Offline passes do not establish real tool usability, investment
   effectiveness, or broker readiness.
+
+For a bounded runtime/financial guard audit, use
+`uv run python tests/reliability_ablation.py OUTPUT_DIRECTORY`. This optional,
+zero-model-cost mutation run reuses existing tests in disposable source copies;
+it is not another full suite or a production configuration. Inspect the exact
+assertion failures, not only the mutation detection count. See the
+[reliability scope and limitations](docs/MODEL_PROVIDER_RELIABILITY.md#bounded-reliability-ablation).
 
 ## Design rules
 

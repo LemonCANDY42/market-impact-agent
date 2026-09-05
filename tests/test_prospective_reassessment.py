@@ -67,6 +67,7 @@ from market_impact_agent.prospective_trigger_admission import (
 from market_impact_agent.runtime_store import RunStatus
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
+from .runtime_fakes import BusinessModelFixture
 from .test_agent_engine import SimulatedCrash, final_turn, tool_turn
 from .test_event_impact_triage import RecordingWorkRunAuthority
 from .test_prospective_checkpoint_sets import (
@@ -268,7 +269,7 @@ def admit(state: State):
     )
 
 
-class Provider:
+class Provider(BusinessModelFixture):
     def __init__(
         self, response: ModelTurn | BaseException, profile_alias: str = REASSESSMENT_PROFILE
     ):
@@ -287,7 +288,7 @@ class Provider:
     async def assert_model_available(self, *, timeout_seconds: float) -> None:
         pass
 
-    async def complete(self, **kwargs: object) -> ModelTurn:
+    async def answer(self, **kwargs: object) -> ModelTurn:
         self.calls += 1
         if isinstance(self.response, BaseException):
             raise self.response
@@ -693,7 +694,7 @@ def test_default_reads_reach_agent_without_exposing_shared_receipt_rows(tmp_path
     }
 
     class ReadingProvider(Provider):
-        async def complete(self, **kwargs: object) -> ModelTurn:
+        async def answer(self, **kwargs: object) -> ModelTurn:
             self.calls += 1
             if self.calls == 1:
                 offered = cast(tuple[dict[str, object], ...], kwargs["tools"])
@@ -765,6 +766,50 @@ def test_default_reads_reach_agent_without_exposing_shared_receipt_rows(tmp_path
     )
     assert result.status is RunStatus.COMPLETED
     assert provider.calls == 2
+
+
+def test_v4_selected_reader_search_and_cursor_restart(tmp_path: Path) -> None:
+    from market_impact_agent.prospective_checkpoint_sets import build_checkpoint_tool_descriptors
+
+    state = prepared_state(tmp_path, checkpoint_tool_version="4", with_unrelated_row=True)
+    store = state[0]
+    trigger = admit(state)
+    engine = engine_for(store, Provider(AssertionError("tool-only acceptance")))
+    _, gate, request = prepare_reassessment_judgment(store=store, trigger=trigger, engine=engine)
+    _, snapshot_set, _, _ = reassessment_inputs(store=store, trigger=trigger)
+    assert gate.model_run_eligible
+
+    async def query(name: str, args: dict[str, object], registry: ToolRegistry):
+        result = await registry.execute(ToolCall("read-v4", name, args), access=request.tool_access)
+        return cast(
+            dict[str, object], store.artifacts.read_json(result.result_artifact.content_hash)
+        )
+
+    reader = "read_selected_event_revelation"
+    selected = asyncio.run(query(reader, {}, engine.tool_registry))
+    records = cast(list[object], selected["records"])
+    assert len(records) == 2  # unrelated row in the shared receipt is still invisible
+    with pytest.raises(ValueError, match="schema validation"):
+        asyncio.run(query(reader, {"query": "guess"}, engine.tool_registry))
+    search = "search_event_revelation"
+    missed = asyncio.run(query(search, {"query": "not-a-literal-match"}, engine.tool_registry))
+    assert missed["records"] == []
+    assert cast(dict[str, object], missed["page"])["total_available"] == 2
+    first = asyncio.run(query(search, {"limit": 1}, engine.tool_registry))
+    cursor = cast(dict[str, object], first["page"])["next_cursor"]
+    restarted = ToolRegistry(store.artifacts)
+    for descriptor in build_checkpoint_tool_descriptors(
+        snapshot_set,
+        store=store,
+        frozen_input=gate.frozen_input,
+        authorized_decision_input_ids=gate.frozen_decision_input_ids,
+        required_capability="market.read",
+    ):
+        restarted.register(descriptor)
+    second = asyncio.run(query("read_next_event_revelation", {"cursor": cursor}, restarted))
+    assert first["records"] == records[:1] and second["records"] == records[1:]
+    with pytest.raises(ValueError, match="another evidence scope"):
+        asyncio.run(query("read_next_market_context", {"cursor": cursor}, restarted))
 
 
 def test_v3_paging_and_explicit_filters_preserve_authorized_record_boundary(tmp_path: Path) -> None:
@@ -910,10 +955,10 @@ def test_initial_dispatch_has_one_inflight_owner(tmp_path: Path) -> None:
     release = asyncio.Event()
 
     class BlockingProvider(Provider):
-        async def complete(self, **kwargs: object) -> ModelTurn:
+        async def answer(self, **kwargs: object) -> ModelTurn:
             entered.set()
             await release.wait()
-            return await super().complete(**kwargs)
+            return await super().answer(**kwargs)
 
     provider = BlockingProvider(abstain_turn(trigger.cluster_id))
     engine = engine_for(store, provider)
@@ -1136,12 +1181,6 @@ def test_cli_fresh_dispatch_resolves_exact_profile_once(
 def test_collector_preparation_does_not_block_signed_provider_response(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow_stage: str
 ) -> None:
-    from market_impact_agent.openai_chat_provider import (
-        OpenAIChatCompatibleProvider,
-        OpenAIChatProviderConfig,
-    )
-
-    from .test_agent_engine import ObservedFixtureTransport, observed_response
     from .test_prospective_collection_runtime import (
         START,
         _runtime,  # pyright: ignore[reportPrivateUsage]
@@ -1155,24 +1194,7 @@ def test_collector_preparation_does_not_block_signed_provider_response(
     assert runtime.index_path == store.index_path
     snapshot = _snapshot(collection_store, policy=policy, retrieved_at=START)
     profile = load_builtin_model_provider_profile(REASSESSMENT_PROFILE)
-    transport = ObservedFixtureTransport(
-        [observed_response(replace(abstain_turn(trigger.cluster_id), model=profile.model))]
-    )
-    provider = OpenAIChatCompatibleProvider(
-        api_key="synthetic-only",
-        provider_id=profile.provider_id,
-        provider_label="Fixture",
-        config=OpenAIChatProviderConfig(
-            origin="https://fixture.invalid",
-            model=profile.model,
-            api_path="/chat/completions",
-            models_path="/models",
-            max_attempts=1,
-            retry_backoff_seconds=0,
-        ),
-        completion_parameters={},
-        transport=transport,
-    )
+    provider = Provider(abstain_turn(trigger.cluster_id))
     engine = compose_authoritative_agent_engine(
         store=store,
         provider=provider,
@@ -1244,7 +1266,13 @@ def test_collector_preparation_does_not_block_signed_provider_response(
             )
             assert entered.wait(timeout=5)
 
-        transport.before_request = start_collection
+        original_answer = provider.answer
+
+        async def answer(**kwargs: object) -> ModelTurn:
+            start_collection()
+            return await original_answer(**kwargs)
+
+        monkeypatch.setattr(provider, "answer", answer)
         try:
             result = asyncio.run(
                 run_reassessment_judgment(store=store, refs=refs, engine=engine, usage_ledger=usage)
@@ -1258,7 +1286,7 @@ def test_collector_preparation_does_not_block_signed_provider_response(
                 if event.event_type.startswith("model.attempt.")
             ]
             assert attempts == ["model.attempt.dispatched", "model.attempt.succeeded"]
-            assert transport.calls == 1 and len(usage.records()) == 1
+            assert provider.calls == 1 and len(usage.records()) == 1
         finally:
             release.set()
         assert collection is not None
@@ -1273,6 +1301,7 @@ def test_reassessment_cli_sqlite_failure_is_sanitized_without_fabricated_termina
 ) -> None:
     from market_impact_agent import prospective_decision_pipeline
     from market_impact_agent.cli import main
+    from market_impact_agent.model_provider import ModelProviderFactory
 
     state = prepared_state(tmp_path)
     store, _, _, registration, _, _ = state
@@ -1289,7 +1318,11 @@ def test_reassessment_cli_sqlite_failure_is_sanitized_without_fabricated_termina
     async def failed_storage(**kwargs: object):
         raise sqlite3.OperationalError("private diagnostic SQL body")
 
+    def create_fixture(*_args: object) -> Provider:
+        return provider
+
     monkeypatch.setattr(prospective_decision_pipeline, "run_reassessment_judgment", failed_storage)
+    monkeypatch.setattr(ModelProviderFactory, "create", create_fixture)
     assert (
         main(
             [

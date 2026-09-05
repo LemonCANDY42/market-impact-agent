@@ -28,6 +28,42 @@ and one Harness Admission are sufficient. Existing Monitoring Scope, Retrieval P
 and Wake remain the durable authorities; no duplicate generic multi-Agent surface or callback state
 is added.
 
+Model invocation/management and Agent infrastructure follow the stronger
+[reuse-first runtime policy](docs/AGENT_RUNTIME.md#reuse-first-runtime-policy). Its scope includes
+Provider compatibility, the complete tool-calling lifecycle, prompt-cache continuity and context
+compaction, not only HTTP transport. That document owns adoption exceptions and acceptance criteria.
+
+## Research, portfolio target and execution separation
+
+The core operating responsibilities are:
+
+```text
+Research Agent: facts, forecasts, assumptions and risks
+  -> Portfolio Agent: account-aware recommendation and desired exposure
+  -> Harness: deterministic quantity, risk, mandate and approval
+  -> Nautilus / accepted adapter: execution mechanics
+  -> authoritative reconciliation and the next review
+```
+
+This borrows [LEAN's signal/portfolio/risk/execution separation](https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/portfolio-construction/key-concepts),
+not its engine or a second orchestration framework. pi remains the Agent runtime; Nautilus remains
+the default trading/backtest engine. The Harness owns evidence, permissions and business state.
+
+A market view is not a transaction side. A bullish view may support buying in a flat account,
+maintaining appropriate exposure, or selling part of an overconcentrated holding. Execution must
+follow the authorized portfolio target's delta, retaining the research and account provenance,
+not manufacture a contrary research Signal to satisfy a legacy side-equality check.
+
+Every completed portfolio review must recommend maintaining exposure (including cash), adding,
+reducing/closing or rotating, with reasons and review/invalidation conditions. Portfolio `abstain`
+and standalone `observe` are not allowed in the v3 producer. Research uncertainty remains valid
+input. Missing account authority, model failure or exhausted budget means an incomplete review,
+not a fabricated hold. No recommendation bypasses deterministic trading controls.
+
+The connected implementation and its exact acceptance state are owned by
+[Account decision loop](docs/ACCOUNT_DECISION_LOOP.md#current-agent-handoff-and-activation-boundary).
+Legacy research/Signal/Order contracts remain replayable without retrospective reinterpretation.
+
 ## Evidence and events
 
 **Evidence Item**:
@@ -1083,10 +1119,12 @@ security. It is not an instruction to trade.
 _Avoid_: Trade, recommendation
 
 **Portfolio Decision**:
-A content-identified Harness admission of one Agent portfolio-action proposal against exact Signal,
-Position/Account State Snapshots and conflicting open-order state. It may abstain, observe, hold,
-open, increase, reduce, close, rotate, cancel or replace, but does not choose an executable quantity
-or grant submission authority.
+A content-identified Harness admission of an account-aware recommendation against its exact
+research/review evidence, Position/Account State Snapshots and conflicting open-order state. The
+v3 recommendation contract permits hold (including cash), open/increase, reduce/close and rotate;
+no abstain or standalone observe. Legacy v1/v2 remain Signal-bound and retain their historical
+vocabulary for replay. The decision does not choose an executable quantity or grant submission
+authority; cancel/replace requests have their separate execution-operation controls.
 _Avoid_: Order, target weight, account mutation
 
 **Order Sizing Decision**:
@@ -1098,11 +1136,14 @@ _Avoid_: Agent confidence, suggested size, portfolio optimizer opinion
 
 **Order Intent**:
 An idempotently identified request to evaluate a specific order against policy
-and approval. It is not proof of broker acceptance.
+and approval. It is not proof of broker acceptance. Signal-origin v1 binds its Signal;
+portfolio-origin v2 (`PortfolioOrderIntent`) binds the completed Portfolio Decision and computed
+target delta, retaining research as evidence rather than equating forecast direction with order side.
 _Avoid_: Order, execution
 
 **Decision Admission**:
-A content-identified deterministic admission of one exact Decision Run Manifest. An abstaining
+A content-identified deterministic admission of one exact Decision Run Manifest in the retained
+Signal-origin experiment path; portfolio-origin v3 uses its signed completed review instead. An abstaining
 manifest produces an archived abstention with no Signal or Order. A treatment arm with the registered
 two-of-three target-and-direction agreement may produce one exact Signal Intent and paper Order
 Intent. The Signal is deterministically reconstructed from the exact agreeing treatment Judgments,

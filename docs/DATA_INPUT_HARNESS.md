@@ -894,5 +894,21 @@ current-time reassessment must be separately registered. See
 the [Earnings continuation boundary](EVENT_IMPACT_TRIAGE.md#earnings-continuation-boundary-audit--2026-09-02)
 for the provenance, non-run accounting and still-open reassessment boundary.
 
+The successor callback contract must repair that gap without creating another thesis store. It
+reopens the accepted `AgentWatchRequest`, parent Triage/EventAssessment terminal and prior research
+terminal, then supplies the original question, rationale, evidence references, counterevidence and
+invalidation conditions together with the exact new observation-version delta and Wake reason. If
+the parent contract lacks one of those fields, absence stays typed; the callback cannot infer it from
+later news. The resulting research Run may preserve, revise or invalidate the thesis and may request
+another bounded Watch, but it cannot mutate the earlier terminal or trade universe.
+
+News-driven Wake and scheduled portfolio review remain different admissions. A poll with no matching
+new version creates no model call; a scheduled review may still run from a fresh market/account
+Snapshot. When both become due at the same cutoff, the composition deduplicates them by the frozen
+decision-view identity rather than asking the model twice. Acceptance requires one actual-receipt
+delta to produce exactly one durable Wake, one bounded research terminal and, when account authority
+is present, one portfolio recommendation or a typed operational blocker. Replays and restarts must
+not refetch, regenerate or acknowledge a Wake before those bindings are durable.
+
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.market-impact-agent.local/dynamic-effectiveness-registration-v1.schema.json",
+  "title": "Dynamic horizon multi-model effectiveness registration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "registration_id", "experiment_id", "registered_at",
+    "runtime_identity_hash", "model_arms", "opened_cases", "stability_case_ids",
+    "analysis_topologies", "portfolio_scenarios", "cadence_case_roles", "cadence_arms",
+    "memory_sensitivity_pairs", "budget", "logical_model_concurrency",
+    "experiment_concurrency", "maximum_physical_requests_per_judgment",
+    "transient_retry_limit", "consecutive_provider_failure_pause", "judge_rule",
+    "outcomes_visible_to_agents", "live_execution"
+  ],
+  "properties": {
+    "schema_version": {"const": "market-impact.dynamic-effectiveness-registration.v1"},
+    "registration_id": {"type": "string", "pattern": "^dynamic-effectiveness-registration-v1-[0-9a-f]{64}$"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "runtime_identity_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "model_arms": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {"$ref": "#/$defs/model_arm"}
+    },
+    "opened_cases": {
+      "type": "array", "minItems": 8, "maxItems": 8,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "stability_case_ids": {
+      "const": ["2018-07-02", "2019-01-07", "2020-02-03"]
+    },
+    "analysis_topologies": {
+      "const": ["luna_max", "terra_high", "sol_high", "luna_terra_conditional_sol_judge"]
+    },
+    "portfolio_scenarios": {
+      "const": ["bullish_cash", "bullish_overconcentrated", "bearish_existing_long", "low_confidence_rangebound_cash"]
+    },
+    "cadence_case_roles": {
+      "const": ["shock_reversal_1", "shock_reversal_2", "trend_continuation", "state_transition_or_noise"]
+    },
+    "cadence_arms": {
+      "const": ["dynamic_horizon_one_shot", "scheduled_review", "material_event_driven_review"]
+    },
+    "memory_sensitivity_pairs": {
+      "type": "array", "maxItems": 4,
+      "items": {"$ref": "#/$defs/memory_pair"}
+    },
+    "budget": {"$ref": "#/$defs/budget"},
+    "logical_model_concurrency": {"const": 3},
+    "experiment_concurrency": {"const": 6},
+    "maximum_physical_requests_per_judgment": {"const": 4},
+    "transient_retry_limit": {"const": 1},
+    "consecutive_provider_failure_pause": {"const": 2},
+    "judge_rule": {"type": "string", "minLength": 1},
+    "outcomes_visible_to_agents": {"const": false},
+    "live_execution": {"const": false}
+  },
+  "$defs": {
+    "model_arm": {
+      "type": "object", "additionalProperties": false,
+      "required": ["topology", "model", "reasoning_effort", "provider_profile_id", "provider_profile_hash", "pricing_id"],
+      "properties": {
+        "topology": {"enum": ["luna_max", "terra_high", "sol_high"]},
+        "model": {"enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]},
+        "reasoning_effort": {"enum": ["max", "high"]},
+        "provider_profile_id": {"type": "string", "minLength": 1},
+        "provider_profile_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "pricing_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": ["case_id", "role", "frozen_input_hash", "event_year", "category"],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "role": {"const": "opened_development"},
+        "frozen_input_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "event_year": {"type": "integer", "minimum": 2000, "maximum": 2100},
+        "category": {"type": "string", "minLength": 1}
+      }
+    },
+    "memory_pair": {
+      "type": "object", "additionalProperties": false,
+      "required": ["case_id", "frozen_facts_hash", "presentations", "facts_unchanged", "outcomes_hidden", "inference_scope"],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "frozen_facts_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "presentations": {"const": ["true_date", "relative_offset"]},
+        "facts_unchanged": {"const": true},
+        "outcomes_hidden": {"const": true},
+        "inference_scope": {"const": "date-label sensitivity; not proof of training-data leakage"}
+      }
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["route_qualification_microusd", "analysis_ablation_microusd", "portfolio_ablation_microusd", "cadence_ablation_microusd", "unseen_and_prospective_microusd", "recovery_reserve_microusd", "total_microusd"],
+      "properties": {
+        "route_qualification_microusd": {"const": 1000000},
+        "analysis_ablation_microusd": {"const": 7000000},
+        "portfolio_ablation_microusd": {"const": 2500000},
+        "cadence_ablation_microusd": {"const": 5000000},
+        "unseen_and_prospective_microusd": {"const": 2500000},
+        "recovery_reserve_microusd": {"const": 2000000},
+        "total_microusd": {"const": 20000000}
+      }
+    }
+  }
+}

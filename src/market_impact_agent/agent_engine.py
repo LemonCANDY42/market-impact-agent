@@ -9,7 +9,6 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from functools import partial
 from hashlib import sha256
 from typing import Protocol, cast
 
@@ -23,11 +22,8 @@ from market_impact_agent.agent_contracts import (
     judgment_proposal_from_dict,
 )
 from market_impact_agent.agent_runtime import (
-    ContextCompactor,
     ContextEntry,
     ContextKind,
-    ContextLedger,
-    DeterministicContextCompactor,
     LoadedSkill,
     MessageRole,
     ModelProvider,
@@ -47,7 +43,6 @@ from market_impact_agent.domain import require_aware
 from market_impact_agent.mcp_runtime import McpServerSnapshot
 from market_impact_agent.provider_reliability import (
     ProviderAttemptEvent,
-    ProviderAttemptObserver,
     ProviderAttemptPhase,
     ProviderFailure,
 )
@@ -434,7 +429,7 @@ def reopen_authoritative_agent_terminal(
     if not {"policy", "task"} <= {cast(str, entry["kind"]) for entry in context_entries}:
         raise ValueError("completed Judgment transcript lacks pinned Agent context")
     turn_number = len(turns)
-    expected_assistant_entry = {
+    expectedassistant_context_entry = {
         "entry_id": f"{run_id}.assistant.{turn_number}",
         "role": "assistant",
         "kind": "turn",
@@ -447,7 +442,7 @@ def reopen_authoritative_agent_terminal(
             key: item for key, item in assistant.items() if key not in {"role", "content"}
         },
     }
-    expected_transcript = [*context_entries, expected_assistant_entry]
+    expected_transcript = [*context_entries, expectedassistant_context_entry]
     if transcript != expected_transcript:
         raise ValueError("Judgment transcript differs from ordered Agent Journal context")
     return judgment
@@ -483,9 +478,14 @@ def _reconstruct_run_metrics(
         "model.turn.completed",
         "tool.call.completed",
         "model.turn.failed",
-        "context.checkpointed",
         "judgment.contract_correction",
         "judgment.validated",
+        "pi.context.frozen",
+        "pi.budget.reserved",
+        "pi.budget.settled",
+        "pi.response.received",
+        "pi.context.compacted",
+        "pi.agent.ended",
     }
     for event in events:
         if event.event_type not in allowed_types:
@@ -537,6 +537,9 @@ def _reconstruct_run_metrics(
             latency_ms += _failed_turn_latency(event.payload)
     if require_completed_turn and turns == 0:
         raise ValueError("completed Judgment has no authoritative model turn")
+    physical = sum(event.event_type == "model.attempt.dispatched" for event in events)
+    if physical:
+        provider_attempts = physical
     if completed_tool_events > tool_calls_requested:
         raise ValueError("Agent Journal completes more tool calls than the model requested")
     if require_completed_turn and completed_tool_events != tool_calls_requested:
@@ -606,20 +609,6 @@ class _BudgetExceeded(RuntimeError):
 
 class _ModelTurnInterrupted(RuntimeError):
     pass
-
-
-class _AttemptObservableProvider(Protocol):
-    async def complete_with_observer(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-        attempt_observer: ProviderAttemptObserver,
-    ) -> ModelTurn: ...
 
 
 def _failed_turn_latency(payload: dict[str, object]) -> float:
@@ -791,7 +780,6 @@ class AgentEngine:
         tool_registry: ToolRegistry,
         skill_registry: SkillRegistry,
         token_counter: TokenCounter | None = None,
-        compactor: ContextCompactor | None = None,
         secret_values: tuple[str, ...] = (),
         mcp_snapshots: tuple[McpServerSnapshot, ...] = (),
         clock: Callable[[], datetime] | None = None,
@@ -806,7 +794,7 @@ class AgentEngine:
         self.tool_registry = tool_registry
         self.skill_registry = skill_registry
         self.token_counter = token_counter or Utf8TokenEstimator()
-        self.compactor = compactor or DeterministicContextCompactor()
+        self.compactor_id = "pi-upstream-0.84.4:" + canonical_hash(provider.runtime_identity)
         self.secret_values = tuple(value for value in secret_values if value)
         if len({item.server_id for item in mcp_snapshots}) != len(mcp_snapshots):
             raise ValueError("MCP snapshots must have unique server_id values")
@@ -832,7 +820,7 @@ class AgentEngine:
             loaded_skills,
             surface=surface,
             estimator_id=self.token_counter.counter_id,
-            compactor_id=self.compactor.compactor_id,
+            compactor_id=self.compactor_id,
         )
         return AgentExecutionBinding(
             runtime_ref=runtime_ref,
@@ -843,7 +831,7 @@ class AgentEngine:
             tool_surface_hash=surface.tool_surface_hash,
             mcp_server_hashes=surface.mcp_binding_hashes,
             context_estimator_id=self.token_counter.counter_id,
-            compactor_id=self.compactor.compactor_id,
+            compactor_id=self.compactor_id,
         )
 
     def assert_authoritative_completed_run(
@@ -865,7 +853,7 @@ class AgentEngine:
         if (
             execution_binding.runtime_config_hash != self.config.config_hash
             or execution_binding.context_estimator_id != self.token_counter.counter_id
-            or execution_binding.compactor_id != self.compactor.compactor_id
+            or execution_binding.compactor_id != self.compactor_id
         ):
             raise ValueError("Agent execution binding differs from the authoritative runtime")
         observed_binding = AgentExecutionBinding(
@@ -937,22 +925,28 @@ class AgentEngine:
                     "result_size_bytes",
                 ):
                     raise ValueError("Agent tool result artifact size differs from the Run Journal")
-            elif event.event_type == "context.checkpointed":
-                checkpoint = self.artifact_store.read_json(
-                    _payload_string(event.payload, "checkpoint_artifact_hash")
-                )
-                if not isinstance(checkpoint, dict):
-                    raise TypeError("Agent checkpoint artifact must be an object")
-                checkpoint_payload = cast(dict[str, object], checkpoint)
-                if checkpoint_payload.get("checkpoint_id") != _payload_string(
-                    event.payload,
-                    "checkpoint_id",
-                ):
-                    raise ValueError("Agent checkpoint artifact differs from the Run Journal")
             elif event.event_type == "judgment.contract_correction":
                 self.artifact_store.read_json(
                     _payload_string(event.payload, "invalid_response_hash")
                 )
+
+    def has_unresolved_model_dispatch(self, run_id: str) -> bool:
+        """A derived recovery check, not permission to redispatch or a second state owner."""
+        try:
+            events = self.journal.events(run_id)
+        except KeyError:
+            return False
+        for event in events:
+            if event.event_type != "model.turn.started":
+                continue
+            prefix = event.event_id.rsplit(".turn.", 1)[0]
+            number = event.payload["turn_number"]
+            if (
+                self.journal.event(f"{prefix}.turn.{number}") is None
+                and self.journal.event(f"{prefix}.pi.response.{number}") is None
+            ):
+                return True
+        return False
 
     async def run(
         self,
@@ -988,7 +982,7 @@ class AgentEngine:
             loaded_skills,
             surface=surface,
             estimator_id=self.token_counter.counter_id,
-            compactor_id=self.compactor.compactor_id,
+            compactor_id=self.compactor_id,
         )
         prompt_hash = canonical_hash([item.to_message() for item in prompt_entries])
         run_spec_hash = canonical_hash(
@@ -1001,7 +995,7 @@ class AgentEngine:
                 "execution_surface": surface.to_dict(),
                 "tool_access": _access_dict(request.tool_access),
                 "context_estimator_id": self.token_counter.counter_id,
-                "compactor_id": self.compactor.compactor_id,
+                "compactor_id": self.compactor_id,
                 "strategy_case_plan": (
                     None
                     if request.strategy_case_plan is None
@@ -1050,6 +1044,13 @@ class AgentEngine:
             return self._commit_failure_terminal(terminal_event)
         metrics = _MutableMetrics()
         try:
+            if self.has_unresolved_model_dispatch(request.run_id):
+                for event in self.journal.events(request.run_id):
+                    if event.event_type == "model.turn.completed":
+                        self._record_turn_metrics(metrics, self._load_turn(event, surface=surface))
+                raise _ModelTurnInterrupted(
+                    "model request has no durable completion; no regeneration"
+                )
             return await self._run_with_control(
                 request=request,
                 loaded_skills=loaded_skills,
@@ -1147,229 +1148,96 @@ class AgentEngine:
         cancellation: CancellationToken,
         metrics: _MutableMetrics,
     ) -> AgentRunResult:
-        ledger = ContextLedger()
-        for entry in prompt_entries:
-            ledger.append(entry)
-        checkpoint_number = 1
-        contract_corrections = 0
-        last_raw_response_hash: str | None = None
-        model_tools = surface.model_tools
-        for turn_number in range(1, self.config.budget.max_turns + 1):
-            self._check_cancel(cancellation)
-            try:
-                checkpoint = ledger.compact_if_needed(
-                    counter=self.token_counter,
-                    compactor=self.compactor,
-                    context_window_tokens=self.config.context_window_tokens,
-                    reserved_output_tokens=self.config.reserved_output_tokens,
-                    checkpoint_number=checkpoint_number,
-                    tools=() if contract_corrections else model_tools,
-                )
-            except RuntimeError as exc:
-                raise _BudgetExceeded(str(exc)) from exc
-            if checkpoint is not None:
-                artifact = self.artifact_store.put_json(checkpoint.to_dict())
-                self._append_privileged_event(
-                    run_id=request.run_id,
-                    event_id=f"{request.run_id}.checkpoint.{checkpoint_number}",
-                    event_type="context.checkpointed",
-                    observed_at=self._now(),
-                    payload={
-                        "checkpoint_artifact_hash": artifact.content_hash,
-                        "checkpoint_id": checkpoint.checkpoint_id,
-                    },
-                )
-                checkpoint_number += 1
-            remaining_input = self.config.budget.max_input_tokens - metrics.input_tokens
-            active_tools = () if contract_corrections else model_tools
-            estimated_input = self.token_counter.count_request(ledger.messages(), active_tools)
-            if remaining_input < estimated_input:
-                raise _BudgetExceeded("run lacks input-token budget for another model turn")
-            remaining_output = self.config.budget.max_output_tokens - metrics.output_tokens
-            if remaining_output < 1:
-                raise _BudgetExceeded("run exhausted its output-token budget")
-            maximum_output = min(self.config.reserved_output_tokens, remaining_output)
-            maximum_cost = self.config.budget.max_estimated_cost_microusd
-            if maximum_cost is not None:
-                remaining_cost = maximum_cost - metrics.estimated_cost_microusd
-                affordable_output = self.config.pricing.affordable_output_tokens(
-                    remaining_microusd=remaining_cost,
-                    estimated_input_tokens=estimated_input,
-                )
-                maximum_output = min(maximum_output, affordable_output)
-                if maximum_output < 1:
-                    raise _BudgetExceeded("run lacks estimated-cost budget for another model turn")
-            event_id = f"{request.run_id}.turn.{turn_number}"
-            existing = self.journal.event(event_id)
-            if existing is None:
-                if (
-                    self.journal.event(f"{event_id}.started") is not None
-                    or self.journal.event(f"{request.run_id}.model-failure.{turn_number}")
-                    is not None
-                ):
-                    raise _ModelTurnInterrupted(
-                        "model turn has no durable completion; human input required"
-                    )
-                self._validate_active_provider_identity()
-                observable = callable(getattr(self.provider, "complete_with_observer", None))
-                self._append_privileged_event(
-                    run_id=request.run_id,
-                    event_id=f"{event_id}.started",
-                    event_type="model.turn.started",
-                    observed_at=self._now(),
-                    payload={
-                        "turn_number": turn_number,
-                        "attempt_observation": "physical" if observable else "unavailable",
-                    },
-                )
-                if observable:
-                    observed_provider = cast(_AttemptObservableProvider, self.provider)
-                    turn = await observed_provider.complete_with_observer(
-                        messages=ledger.messages(),
-                        tools=active_tools,
-                        temperature=self.config.temperature,
-                        top_p=self.config.top_p,
-                        max_output_tokens=maximum_output,
-                        timeout_seconds=self.config.budget.max_wall_seconds,
-                        attempt_observer=partial(
-                            self._observe_attempt, request.run_id, turn_number
-                        ),
-                    )
-                else:
-                    turn = await self.provider.complete(
-                        messages=ledger.messages(),
-                        tools=active_tools,
-                        temperature=self.config.temperature,
-                        top_p=self.config.top_p,
-                        max_output_tokens=maximum_output,
-                        timeout_seconds=self.config.budget.max_wall_seconds,
-                    )
-                self._assert_no_secret(turn.raw_response)
-                turn = _sanitized_turn(turn, self.secret_values)
-                self._store_turn(
-                    request.run_id,
-                    turn_number,
-                    turn,
-                    surface=surface,
-                    context_before_turn=ledger.entries,
-                )
-            else:
-                turn = self._load_turn(existing, surface=surface)
-            self._record_turn_metrics(metrics, turn)
-            self._validate_active_provider_identity()
-            if turn.model != self.config.model:
-                raise ValueError("Model Provider returned an unexpected model identity")
-            _enforce_run_budgets(metrics, self.config)
-            last_raw_response_hash = canonical_hash(turn.raw_response)
-            ledger.append(_assistant_entry(request.run_id, turn_number, turn))
-            if turn.tool_calls:
-                metrics.tool_calls += len(turn.tool_calls)
-                if metrics.tool_calls > self.config.budget.max_tool_calls:
-                    raise _BudgetExceeded("run exceeded its tool-call budget")
-                for call in turn.tool_calls:
-                    self._check_cancel(cancellation)
-                    result = await self._execute_or_replay_tool(
-                        run_id=request.run_id,
-                        call=call,
-                        access=request.tool_access,
-                        surface=surface,
-                    )
-                    metrics.result_bytes += result.result_artifact.size_bytes
-                    if metrics.result_bytes > self.config.budget.max_result_bytes:
-                        raise _BudgetExceeded("run exceeded its cumulative tool-result budget")
-                    ledger.append(_tool_entry(request.run_id, turn_number, result))
-                continue
-            try:
-                proposal = _proposal_from_assistant(turn)
-                proposal.validate_against(request.evidence_pack)
-            except (TypeError, ValueError) as exc:
-                if contract_corrections >= 2:
-                    raise ValueError(
-                        "model failed the JudgmentProposal contract after two corrections"
-                    ) from exc
-                contract_corrections += 1
-                correction = _contract_correction_entry(
-                    request=request,
-                    correction_number=contract_corrections,
-                    error=exc,
-                )
-                ledger.append(correction)
-                self._append_privileged_event(
-                    run_id=request.run_id,
-                    event_id=(f"{request.run_id}.contract-correction.{contract_corrections}"),
-                    event_type="judgment.contract_correction",
-                    observed_at=self._now(),
-                    payload={
-                        "correction_number": contract_corrections,
-                        "error_class": type(exc).__name__,
-                        "error": self._redacted_message(str(exc)),
-                        "invalid_response_hash": last_raw_response_hash,
-                    },
-                )
-                continue
-            transcript_artifact = self.artifact_store.put_json(
-                [_context_entry_dict(entry) for entry in ledger.entries]
-            )
-            metrics_artifact = self.artifact_store.put_json(metrics.freeze().to_dict())
-            proposal_event = self._append_privileged_event(
-                run_id=request.run_id,
-                event_id=f"{request.run_id}.proposal.validated",
-                event_type="judgment.validated",
-                observed_at=self._now(),
-                payload={
-                    "proposal_hash": canonical_hash(proposal.to_dict()),
-                    "transcript_hash": transcript_artifact.content_hash,
-                    "metrics_hash": metrics_artifact.content_hash,
-                    "metrics": metrics.freeze().to_dict(),
-                },
-            )
-            finished_at = self._now()
-            judgment = JudgmentArtifact.build(
-                run_id=request.run_id,
-                evidence_pack_id=request.evidence_pack.pack_id,
-                provider_id=self.config.provider_id,
-                model=self.config.model,
-                runtime_config_hash=self.config.config_hash,
-                prompt_hash=prompt_hash,
-                skill_hashes=tuple(item.manifest.manifest_hash for item in loaded_skills),
-                tool_manifest_hashes=surface.tool_manifest_hashes,
-                tool_surface_hash=surface.tool_surface_hash,
-                mcp_server_hashes=surface.mcp_binding_hashes,
-                context_estimator_id=self.token_counter.counter_id,
-                compactor_id=self.compactor.compactor_id,
-                journal_hash=proposal_event.event_hash,
-                transcript_hash=transcript_artifact.content_hash,
-                raw_response_hash=last_raw_response_hash,
-                started_at=record.created_at,
-                finished_at=finished_at,
-                proposal=proposal,
-            )
-            terminal = self.artifact_store.put_json(judgment.to_dict())
-            write_strategy_case_terminal(
-                journal=self.journal,
-                artifact_store=self.artifact_store,
-                run_id=request.run_id,
-                status=RunStatus.COMPLETED,
-                finished_at=finished_at,
-                run_terminal_artifact_hash=terminal.content_hash,
-                judgment_artifact_hash=terminal.content_hash,
-            )
-            self.journal.finish(
-                run_id=request.run_id,
-                status=RunStatus.COMPLETED,
-                finished_at=finished_at,
-                terminal_artifact_id=terminal.content_hash,
-            )
-            return AgentRunResult(
-                run_id=request.run_id,
-                status=RunStatus.COMPLETED,
-                judgment=judgment,
-                terminal_store_hash=terminal.content_hash,
-                metrics=metrics.freeze(),
-                metrics_hash=metrics_artifact.content_hash,
-                validation_event=proposal_event,
-            )
-        raise _BudgetExceeded("run exhausted its model-turn budget")
+        from market_impact_agent.pi_execution import execute_pi
+
+        return await execute_pi(
+            self,
+            provider=self.provider,
+            request=request,
+            loaded_skills=loaded_skills,
+            prompt_entries=prompt_entries,
+            prompt_hash=prompt_hash,
+            surface=surface,
+            record=record,
+            cancellation=cancellation,
+            metrics=metrics,
+        )
+
+    def _finish_judgment(
+        self,
+        *,
+        request: AgentRunRequest,
+        loaded_skills: tuple[LoadedSkill, ...],
+        prompt_hash: str,
+        surface: _ExecutionSurface,
+        record: RunRecord,
+        metrics: _MutableMetrics,
+        proposal: JudgmentProposal,
+        entries: tuple[ContextEntry, ...],
+        last_raw_response_hash: str,
+    ) -> AgentRunResult:
+        transcript_artifact = self.artifact_store.put_json(
+            [_context_entry_dict(entry) for entry in entries]
+        )
+        metrics_artifact = self.artifact_store.put_json(metrics.freeze().to_dict())
+        proposal_event = self._append_privileged_event(
+            run_id=request.run_id,
+            event_id=f"{request.run_id}.proposal.validated",
+            event_type="judgment.validated",
+            observed_at=self._now(),
+            payload={
+                "proposal_hash": canonical_hash(proposal.to_dict()),
+                "transcript_hash": transcript_artifact.content_hash,
+                "metrics_hash": metrics_artifact.content_hash,
+                "metrics": metrics.freeze().to_dict(),
+            },
+        )
+        finished_at = self._now()
+        judgment = JudgmentArtifact.build(
+            run_id=request.run_id,
+            evidence_pack_id=request.evidence_pack.pack_id,
+            provider_id=self.config.provider_id,
+            model=self.config.model,
+            runtime_config_hash=self.config.config_hash,
+            prompt_hash=prompt_hash,
+            skill_hashes=tuple(item.manifest.manifest_hash for item in loaded_skills),
+            tool_manifest_hashes=surface.tool_manifest_hashes,
+            tool_surface_hash=surface.tool_surface_hash,
+            mcp_server_hashes=surface.mcp_binding_hashes,
+            context_estimator_id=self.token_counter.counter_id,
+            compactor_id=self.compactor_id,
+            journal_hash=proposal_event.event_hash,
+            transcript_hash=transcript_artifact.content_hash,
+            raw_response_hash=last_raw_response_hash,
+            started_at=record.created_at,
+            finished_at=finished_at,
+            proposal=proposal,
+        )
+        terminal = self.artifact_store.put_json(judgment.to_dict())
+        write_strategy_case_terminal(
+            journal=self.journal,
+            artifact_store=self.artifact_store,
+            run_id=request.run_id,
+            status=RunStatus.COMPLETED,
+            finished_at=finished_at,
+            run_terminal_artifact_hash=terminal.content_hash,
+            judgment_artifact_hash=terminal.content_hash,
+        )
+        self.journal.finish(
+            run_id=request.run_id,
+            status=RunStatus.COMPLETED,
+            finished_at=finished_at,
+            terminal_artifact_id=terminal.content_hash,
+        )
+        return AgentRunResult(
+            run_id=request.run_id,
+            status=RunStatus.COMPLETED,
+            judgment=judgment,
+            terminal_store_hash=terminal.content_hash,
+            metrics=metrics.freeze(),
+            metrics_hash=metrics_artifact.content_hash,
+            validation_event=proposal_event,
+        )
 
     def _append_privileged_event(
         self,
@@ -1491,6 +1359,16 @@ class AgentEngine:
             usage=ProviderUsage(
                 input_tokens=_payload_integer(usage, "input_tokens"),
                 output_tokens=_payload_integer(usage, "output_tokens"),
+                cache_read_tokens=(
+                    _payload_integer(usage, "cache_read_tokens")
+                    if "cache_read_tokens" in usage
+                    else None
+                ),
+                cache_write_tokens=(
+                    _payload_integer(usage, "cache_write_tokens")
+                    if "cache_write_tokens" in usage
+                    else None
+                ),
             ),
             raw_response=cast(dict[str, object], raw_response),
             latency_ms=_payload_number(payload, "latency_ms"),
@@ -1536,9 +1414,21 @@ class AgentEngine:
                 untrusted=True,
                 redacted=True,
             )
+        self._store_tool_result(run_id, call, result, access=access, surface=surface)
+        return result
+
+    def _store_tool_result(
+        self,
+        run_id: str,
+        call: ToolCall,
+        result: ToolExecutionResult,
+        *,
+        access: ToolAccessContext,
+        surface: _ExecutionSurface,
+    ) -> None:
         self._append_privileged_event(
             run_id=run_id,
-            event_id=event_id,
+            event_id=f"{run_id}.tool.{call.call_id}",
             event_type="tool.call.completed",
             observed_at=self._now(),
             payload={
@@ -1556,7 +1446,6 @@ class AgentEngine:
                 "mcp_binding_hashes": list(surface.mcp_binding_hashes),
             },
         )
-        return result
 
     def _load_tool_result(
         self,
@@ -1914,7 +1803,8 @@ class AgentEngine:
 
     def _metrics_from_journal(self, run_id: str) -> RunMetrics:
         metrics = _MutableMetrics()
-        for event in self.journal.events(run_id):
+        events = self.journal.events(run_id)
+        for event in events:
             if event.event_type == "model.turn.completed":
                 usage = _payload_mapping(event.payload, "usage")
                 turn_usage = ProviderUsage(
@@ -1939,6 +1829,9 @@ class AgentEngine:
             elif event.event_type == "model.turn.failed":
                 metrics.provider_attempts += _payload_integer(event.payload, "attempts")
                 metrics.latency_ms += _failed_turn_latency(event.payload)
+        physical = sum(event.event_type == "model.attempt.dispatched" for event in events)
+        if physical:
+            metrics.provider_attempts = physical
         return metrics.freeze()
 
     @staticmethod
@@ -2012,7 +1905,6 @@ def compose_authoritative_agent_engine(
     tool_registry: ToolRegistry,
     skill_registry: SkillRegistry,
     token_counter: TokenCounter | None = None,
-    compactor: ContextCompactor | None = None,
     secret_values: tuple[str, ...] = (),
     mcp_snapshots: tuple[McpServerSnapshot, ...] = (),
     clock: Callable[[], datetime] | None = None,
@@ -2043,7 +1935,6 @@ def compose_authoritative_agent_engine(
         tool_registry=tool_registry,
         skill_registry=skill_registry,
         token_counter=token_counter,
-        compactor=compactor,
         secret_values=secret_values,
         mcp_snapshots=mcp_snapshots,
         clock=clock,
@@ -2121,7 +2012,7 @@ def _build_prompt_entries(
     return tuple(entries)
 
 
-def _assistant_entry(run_id: str, turn_number: int, turn: ModelTurn) -> ContextEntry:
+def assistant_context_entry(run_id: str, turn_number: int, turn: ModelTurn) -> ContextEntry:
     content = turn.assistant_message.get("content")
     if content is not None and not isinstance(content, str):
         raise TypeError("assistant message content must be a string or null")
@@ -2142,7 +2033,7 @@ def _assistant_entry(run_id: str, turn_number: int, turn: ModelTurn) -> ContextE
     )
 
 
-def _tool_entry(run_id: str, turn_number: int, result: ToolExecutionResult) -> ContextEntry:
+def tool_context_entry(run_id: str, turn_number: int, result: ToolExecutionResult) -> ContextEntry:
     return ContextEntry(
         entry_id=f"{run_id}.tool-result.{turn_number}.{result.call_id}",
         role=MessageRole.TOOL,
@@ -2168,7 +2059,7 @@ def _proposal_from_assistant(turn: ModelTurn) -> JudgmentProposal:
     return judgment_proposal_from_dict(payload)
 
 
-def _contract_correction_entry(
+def contract_correction_entry(
     *,
     request: AgentRunRequest,
     correction_number: int,
@@ -2259,7 +2150,7 @@ def _judgment_proposal_contract() -> dict[str, object]:
     }
 
 
-def _sanitized_turn(turn: ModelTurn, secrets: tuple[str, ...]) -> ModelTurn:
+def sanitized_model_turn(turn: ModelTurn, secrets: tuple[str, ...]) -> ModelTurn:
     assistant = _sanitize_json(turn.assistant_message, secrets)
     raw_response = _sanitize_json(turn.raw_response, secrets)
     if not isinstance(assistant, dict) or not isinstance(raw_response, dict):
@@ -2333,7 +2224,13 @@ def _tool_call_from_dict(value: object) -> ToolCall:
     )
 
 
-def _enforce_run_budgets(metrics: _MutableMetrics, config: RuntimeConfig) -> None:
+def enforce_run_budgets(metrics: _MutableMetrics, config: RuntimeConfig) -> None:
+    if metrics.turns > config.budget.max_turns:
+        raise _BudgetExceeded("run exceeded its model-turn budget")
+    if metrics.tool_calls > config.budget.max_tool_calls:
+        raise _BudgetExceeded("run exceeded its tool-call budget")
+    if metrics.result_bytes > config.budget.max_result_bytes:
+        raise _BudgetExceeded("run exceeded its tool-result byte budget")
     if metrics.input_tokens > config.budget.max_input_tokens:
         raise _BudgetExceeded("provider-reported input tokens exceeded the run budget")
     if metrics.output_tokens > config.budget.max_output_tokens:

@@ -39,7 +39,6 @@ from market_impact_agent.agent_engine import (
     RunMetrics,
 )
 from market_impact_agent.agent_runtime import (
-    ModelProvider,
     ModelTurn,
     ProviderUsage,
     SkillRegistry,
@@ -141,6 +140,8 @@ from market_impact_agent.research import EvidenceTier, TransmissionDirectness
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
 from market_impact_agent.usage_ledger import UsageLedger
 
+from .runtime_fakes import BusinessModelFixture
+
 NOW = datetime(2026, 8, 30, 8, tzinfo=UTC)
 REGISTRATION_PATH = Path("examples/research/prospective-diagnostic-registration-v3.json")
 MODEL_PROFILE_PATH = Path("examples/providers/cliproxyapi-luna-xhigh-v1.json")
@@ -148,7 +149,7 @@ CPA_MODEL_PROFILE_PATH = Path("examples/providers/cliproxyapi-luna-xhigh-cpa-v1.
 MINIMAX_PROFILE_PATH = Path("examples/providers/minimax-m3-research-v1.json")
 
 
-class _DecisionRunFixtureProvider(ModelProvider):
+class _DecisionRunFixtureProvider(BusinessModelFixture):
     def __init__(
         self,
         *,
@@ -168,7 +169,7 @@ class _DecisionRunFixtureProvider(ModelProvider):
     def model(self) -> str:
         return self._model
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
-from typing import Protocol, cast
+from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_engine import AgentRunResult, RunMetrics
@@ -60,6 +60,7 @@ from market_impact_agent.model_provider import (
     load_builtin_model_provider_profile,
     model_provider_profile_from_dict,
 )
+from market_impact_agent.pi_execution import PiInvocationContext
 from market_impact_agent.prospective_diagnostic import (
     DiagnosticMechanism,
     ProspectiveDiagnosticRegistration,
@@ -1368,24 +1369,6 @@ class EventImpactTriageWorkRunResult:
     members: tuple[TriageWorkRunMember, ...]
 
 
-class _AttemptObservableProvider(Protocol):
-    async def complete_with_observer(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-        attempt_observer: Callable[[ProviderAttemptEvent], None],
-    ) -> ModelTurn: ...
-
-
-class _CallPreparedProvider(Protocol):
-    async def prepare_for_model_call(self) -> None: ...
-
-
 class EventImpactTriageWorkRunner:
     """Harness-owned map -> partition -> classify runtime over one frozen Work Manifest."""
 
@@ -2371,7 +2354,10 @@ class EventImpactTriageWorkRunner:
             metrics.add_metrics(recovered_metrics)
             budget_metrics.add_metrics(recovered_metrics)
             first_turn_number += 0 if prior_metrics is None else prior_metrics.turns
-        if self.provider_health_store is not None:
+        pending_native = self.journal.event(
+            f"{run_id}.pi-invocation.{first_turn_number}.pi.response.1"
+        )
+        if self.provider_health_store is not None and pending_native is None:
             admission = self.provider_health_store.admission(
                 self.provider.provider_id, now=self._now()
             )
@@ -2425,12 +2411,26 @@ class EventImpactTriageWorkRunner:
                 if maximum_output < 1:
                     raise _BudgetExceeded("triage work unit lacks estimated-cost budget")
                 prompt_hash = self.artifact_store.put_json(active_messages).content_hash
+                received_native = self.journal.event(
+                    f"{run_id}.pi-invocation.{turn_number}.pi.response.1"
+                )
                 attempt_offset = sum(
                     item.event_type == "model.request.dispatched"
                     and item.payload.get("prompt_hash") == prompt_hash
                     for item in self.journal.events(run_id)
                 )
                 physical_dispatches: dict[int, RuntimeEvent] = {}
+                if received_native is not None:
+                    # The native reply is durable but the business projection may
+                    # not be. Reuse its physical dispatch, never fabricate another.
+                    physical_dispatches = {
+                        _integer(item.payload, "physical_attempt"): item
+                        for item in self.journal.events(run_id)
+                        if item.event_type == "model.request.dispatched"
+                        and item.payload.get("provider_request_id")
+                        == received_native.payload["request_id"]
+                    }
+                    attempt_offset = 0
                 recorded_failure_attempts: set[int] = set()
                 provider_request_id: str | None = None
 
@@ -2500,10 +2500,8 @@ class EventImpactTriageWorkRunner:
                         )
 
                 try:
-                    prepare_for_call = getattr(self.provider, "prepare_for_model_call", None)
-                    if callable(prepare_for_call):
-                        await cast(_CallPreparedProvider, self.provider).prepare_for_model_call()
-                    observable_complete = getattr(self.provider, "complete_with_observer", None)
+                    if received_native is None:
+                        await self.provider.assert_model_available(timeout_seconds=30)
                 except Exception as exc:
                     return self._record_pre_dispatch_failure(
                         binding=binding,
@@ -2514,53 +2512,22 @@ class EventImpactTriageWorkRunner:
                         error=exc,
                         metrics=metrics.freeze(),
                     )
-                observable_provider = (
-                    cast(_AttemptObservableProvider, self.provider)
-                    if callable(observable_complete)
-                    else None
-                )
                 dispatch: RuntimeEvent | None = None
-                if observable_provider is None:
-                    dispatch = self.journal.append(
-                        run_id=run_id,
-                        event_id=f"{run_id}.request.{turn_number}.dispatched",
-                        event_type="model.request.dispatched",
-                        observed_at=self._now(),
-                        payload={
-                            "plan_id": self.plan.plan_id,
-                            "phase": binding.phase.value,
-                            "unit_id": unit_id,
-                            "role": binding.role.value,
-                            "prompt_hash": prompt_hash,
-                            "request_utf8_tokens": estimated_input,
-                            "max_output_tokens": maximum_output,
-                        },
-                    )
                 call_started = time.monotonic()
                 try:
-                    completion = (
-                        observable_provider.complete_with_observer(
-                            messages=active_messages,
-                            tools=(),
-                            temperature=self.plan.model_provider_profile.temperature,
-                            top_p=self.plan.model_provider_profile.top_p,
-                            max_output_tokens=maximum_output,
-                            timeout_seconds=(
-                                self.plan.model_provider_profile.budget.max_wall_seconds
-                            ),
-                            attempt_observer=observe_attempt,
-                        )
-                        if observable_provider is not None
-                        else self.provider.complete(
-                            messages=active_messages,
-                            tools=(),
-                            temperature=self.plan.model_provider_profile.temperature,
-                            top_p=self.plan.model_provider_profile.top_p,
-                            max_output_tokens=maximum_output,
-                            timeout_seconds=(
-                                self.plan.model_provider_profile.budget.max_wall_seconds
-                            ),
-                        )
+                    completion = self.provider.run_once(
+                        context=PiInvocationContext(
+                            run_id,
+                            turn_number,
+                            self.journal,
+                            self.artifact_store,
+                            self._now,
+                            self.secret_values,
+                        ),
+                        messages=active_messages,
+                        max_output_tokens=maximum_output,
+                        timeout_seconds=self.plan.model_provider_profile.budget.max_wall_seconds,
+                        attempt_observer=observe_attempt,
                     )
                     turn = await asyncio.wait_for(
                         completion,
@@ -2794,7 +2761,7 @@ class EventImpactTriageWorkRunner:
                 budget_metrics.add(turn, self.plan.model_provider_profile)
                 _assert_binding_budget(binding, budget_metrics.freeze())
                 self._validate_turn(turn)
-                if self.provider_health_store is not None:
+                if self.provider_health_store is not None and received_native is None:
                     self.provider_health_store.record_success(
                         provider_id=self.provider.provider_id,
                         request_id=provider_request_id,
@@ -2905,6 +2872,26 @@ class EventImpactTriageWorkRunner:
                 metrics=recovered_metrics,
             )
         if trailing:
+            received_native = self.journal.event(
+                f"{run_id}.pi-invocation.{len(groups) + 1}.pi.response.1"
+            )
+            if received_native is not None and all(
+                item.event_type in {"model.request.dispatched", "model.request.failed"}
+                for item in trailing
+            ):
+                # Pending native usage will be projected by run_once exactly once.
+                # Count only already-projected groups before replaying that reply.
+                projected_hashes = {
+                    item.event_hash
+                    for group in groups
+                    for item in (*group.dispatches, *group.failures, group.response)
+                }
+                projected = tuple(item for item in events if item.event_hash in projected_hashes)
+                return (
+                    active_messages,
+                    _metrics_from_events(projected, self.plan.model_provider_profile),
+                    len(groups) + 1,
+                )
             if _trailing_attempts_are_safe_rejections(trailing):
                 return active_messages, recovered_metrics, len(groups) + 1
             last = trailing[-1]
@@ -5190,6 +5177,13 @@ class _ModelTurnEvents:
 def _partition_model_turn_events(
     events: tuple[RuntimeEvent, ...],
 ) -> tuple[tuple[_ModelTurnEvents, ...], tuple[RuntimeEvent, ...]]:
+    # pi's durable native records are owned and verified by the runtime; this
+    # projection validates only the role's own dispatch/response chain.
+    events = tuple(
+        item
+        for item in events
+        if not item.event_type.startswith("pi.") and item.event_type != "model.turn.started"
+    )
     groups: list[_ModelTurnEvents] = []
     index = 0
     while index < len(events):
@@ -5248,11 +5242,18 @@ def _unresolved_model_dispatches(
         if event.event_type in resolving_types
         and isinstance((value := event.payload.get("dispatch_event_hash")), str)
     }
+    received_requests = {
+        request_id
+        for item in events
+        if item.event_type == "pi.response.received"
+        and isinstance((request_id := item.payload.get("request_id")), str)
+    }
     return tuple(
         event
         for event in events
         if event.event_type == "model.request.dispatched"
         and event.event_hash not in resolved_hashes
+        and event.payload.get("provider_request_id") not in received_requests
     )
 
 

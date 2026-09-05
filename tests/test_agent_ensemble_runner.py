@@ -42,13 +42,15 @@ from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.research import TransmissionDirectness
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 
+from .runtime_fakes import BusinessModelFixture
+
 ROOT = Path("examples/agent/energy_supply")
 REGISTRATION_PATH = Path("examples/calibration/agent-physical-energy-prospective-v1.json")
 REGISTRY_PATH = Path("examples/research/a-share-energy-exposure-registry-v1.json")
 SKILL_ROOT = Path("skills")
 
 
-class FakeAvailableProvider:
+class FakeAvailableProvider(BusinessModelFixture):
     def __init__(self, binding_root: Path | None = None) -> None:
         self.available_checked = False
         self.binding_root = binding_root
@@ -70,7 +72,7 @@ class FakeAvailableProvider:
             assert any(path.is_file() for root in artifact_roots for path in root.iterdir())
         self.available_checked = True
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],

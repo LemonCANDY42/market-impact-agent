@@ -8,7 +8,6 @@ import pytest
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_runtime import (
-    ModelProvider,
     ModelTurn,
     ProviderUsage,
     SkillRegistry,
@@ -59,6 +58,8 @@ from market_impact_agent.prospective_diagnostic import (
 from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
+
+from .runtime_fakes import BusinessModelFixture
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 8, 30, 6, tzinfo=UTC)
@@ -118,7 +119,7 @@ class FixtureComparisonAuthority:
         return self.total_cost
 
 
-class FixtureProvider(ModelProvider):
+class FixtureProvider(BusinessModelFixture):
     def __init__(self, responses: tuple[dict[str, object], ...]) -> None:
         self.responses = list(responses)
         self.requests: list[tuple[dict[str, object], ...]] = []
@@ -131,7 +132,7 @@ class FixtureProvider(ModelProvider):
     def model(self) -> str:
         return "gpt-5.6-luna"
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -167,7 +168,7 @@ class CrashOnceProvider(FixtureProvider):
         super().__init__((response,))
         self.crashed = False
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -181,7 +182,7 @@ class CrashOnceProvider(FixtureProvider):
             self.crashed = True
             self.requests.append(messages)
             raise SimulatedProcessCrash
-        return await super().complete(
+        return await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -192,7 +193,7 @@ class CrashOnceProvider(FixtureProvider):
 
 
 class OverBudgetProvider(FixtureProvider):
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -202,7 +203,7 @@ class OverBudgetProvider(FixtureProvider):
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> ModelTurn:
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,

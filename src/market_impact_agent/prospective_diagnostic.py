@@ -33,6 +33,7 @@ REASSESSMENT_USD1_PROFILE = "cliproxyapi-luna-max-cpa-reassessment-usd1-v1"
 REASSESSMENT_PROFILE_BUDGETS = {
     REASSESSMENT_PROFILE: "0.30",
     REASSESSMENT_USD1_PROFILE: "1.00",
+    "pi-cpa-luna-max-v2": "0.30",
 }
 # Backward-compatible default; v2 must be selected explicitly.
 PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA = PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V1
@@ -310,10 +311,10 @@ class ProspectiveDiagnosticRegistration:
         if self.schema_version not in _SUPPORTED_REGISTRATION_SCHEMAS:
             raise ValueError("unsupported prospective diagnostic registration schema")
         is_reassessment = self.schema_version == PROSPECTIVE_DIAGNOSTIC_REGISTRATION_SCHEMA_V5
-        if self.checkpoint_tool_version not in {"2", "3"} or (
-            self.checkpoint_tool_version == "3" and not is_reassessment
+        if self.checkpoint_tool_version not in {"2", "3", "4"} or (
+            self.checkpoint_tool_version in {"3", "4"} and not is_reassessment
         ):
-            raise ValueError("checkpoint tool v3 requires a new reassessment registration")
+            raise ValueError("checkpoint tool v3/v4 requires a new reassessment registration")
         if is_reassessment != (self.reassessment is not None):
             raise ValueError("only registration v5 requires a registered reassessment")
         if not is_reassessment and any(
@@ -541,12 +542,14 @@ def build_reassessment_registration(
     original_registration: ProspectiveDiagnosticRegistration,
     subject: RegisteredReassessment,
     registered_at: datetime,
-    model_profile_id: str = REASSESSMENT_PROFILE,
-    checkpoint_tool_version: str = "3",
+    model_profile_id: str = "pi-cpa-luna-max-v2",
+    checkpoint_tool_version: str | None = None,
 ) -> ProspectiveDiagnosticRegistration:
     """Declare one opened diagnostic; retain original freshness limits for current context."""
     if model_profile_id not in REASSESSMENT_PROFILE_BUDGETS:
         raise ValueError("reassessment requires an accepted bounded model profile")
+    if checkpoint_tool_version is None:
+        checkpoint_tool_version = "4" if model_profile_id == "pi-cpa-luna-max-v2" else "3"
     if original_registration.registration_id != subject.original_registration_id:
         raise ValueError("reassessment subject names another original registration")
     original = next(

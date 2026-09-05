@@ -58,6 +58,8 @@ from market_impact_agent.research import TransmissionDirectness
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
 
+from .runtime_fakes import BusinessModelFixture
+
 CATALOG = Path("examples/research/famous-method-skill-catalog-v1.json")
 PROFILE = Path("examples/providers/cliproxyapi-luna-xhigh-cpa-v1.json")
 RECOVERY = Path("examples/agent/abqaiq_development")
@@ -403,7 +405,7 @@ def test_prepared_paired_ablation_can_freeze_a_multi_session_horizon() -> None:
     assert "one-session persistence" not in prepared.research_instruction
 
 
-class _FakeAvailableProvider:
+class _FakeAvailableProvider(BusinessModelFixture):
     def __init__(self) -> None:
         self.available_checked = False
 
@@ -419,7 +421,7 @@ class _FakeAvailableProvider:
         assert timeout_seconds == 30
         self.available_checked = True
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -515,7 +517,7 @@ def test_paired_runner_records_exactly_six_terminal_runs(tmp_path: Path) -> None
     assert len(ledger.records()) == 6
 
 
-class _CompletedAvailableProvider:
+class _CompletedAvailableProvider(BusinessModelFixture):
     def __init__(self) -> None:
         self.available_checked = False
         self.call_count = 0
@@ -532,7 +534,7 @@ class _CompletedAvailableProvider:
         assert timeout_seconds == 30
         self.available_checked = True
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],

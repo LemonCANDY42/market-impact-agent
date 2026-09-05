@@ -38,8 +38,10 @@ from market_impact_agent.model_provider import (
     load_builtin_model_provider_profile,
     model_provider_profile_from_dict,
 )
+from market_impact_agent.pi_execution import PiInvocationContext
 from market_impact_agent.prospective_data import prospective_observation_version_id
 from market_impact_agent.prospective_diagnostic import ProspectiveDiagnosticRegistration
+from market_impact_agent.provider_reliability import ProviderAttemptEvent
 from market_impact_agent.research import EventArchetype, EventStage, TransmissionChannel
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus, RuntimeEvent
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
@@ -998,6 +1000,28 @@ class EventImpactTriageRunner:
         cancellation: CancellationToken,
     ) -> TriageAgentRunResult:
         run_id = f"triage-{self.plan.plan_id[-16:]}-{binding.role.value}"
+        claim = self.journal.try_claim_run(run_id)
+        if claim is None:
+            raise RuntimeError("triage role is already owned by another worker")
+        try:
+            return await self._run_role_claimed(
+                binding=binding,
+                contents=contents,
+                specialist_artifacts=specialist_artifacts,
+                cancellation=cancellation,
+            )
+        finally:
+            claim.release()
+
+    async def _run_role_claimed(
+        self,
+        *,
+        binding: TriageRoleBinding,
+        contents: tuple[TriageCandidateContent, ...],
+        specialist_artifacts: tuple[TriageSpecialistArtifact, ...],
+        cancellation: CancellationToken,
+    ) -> TriageAgentRunResult:
+        run_id = f"triage-{self.plan.plan_id[-16:]}-{binding.role.value}"
         messages = self._messages(binding, contents, specialist_artifacts)
         prompt_hash = canonical_hash(messages)
         execution_binding_hash = canonical_hash(
@@ -1030,20 +1054,22 @@ class EventImpactTriageRunner:
                 raise ValueError("existing triage run_id has a different execution binding")
             if existing.status.terminal:
                 return self._reopen_terminal(binding, existing, execution_binding_hash)
-            metrics = _metrics_from_events(
-                self.journal.events(run_id), self.plan.model_provider_profile
-            )
-            return self._seal_failure(
-                binding,
-                existing,
-                execution_binding_hash,
-                RunStatus.HUMAN_INPUT_REQUIRED,
-                _AmbiguousTriageRun(
-                    "interrupted triage inference has an ambiguous provider outcome; "
-                    "automatic retry is forbidden"
-                ),
-                metrics,
-            )
+            record = existing
+            events = self.journal.events(run_id)
+            if events and not any(item.event_type == "pi.response.received" for item in events):
+                return self._seal_failure(
+                    binding,
+                    existing,
+                    execution_binding_hash,
+                    RunStatus.HUMAN_INPUT_REQUIRED,
+                    _AmbiguousTriageRun(
+                        "interrupted triage inference has no durable native reply; "
+                        "automatic retry is forbidden"
+                    ),
+                    _metrics_from_events(events, self.plan.model_provider_profile),
+                )
+            # Re-run business validation from the beginning. run_once reopens each
+            # durable native turn, and refuses any started-but-unfinished request.
         metrics = _MutableTriageMetrics()
         active_messages: tuple[dict[str, object], ...] = messages
         try:
@@ -1073,14 +1099,36 @@ class EventImpactTriageRunner:
                 )
                 if maximum_output < 1:
                     raise _TriageBudgetExceeded("triage role lacks estimated-cost budget")
+
+                def observe_attempt(
+                    event: ProviderAttemptEvent, turn_number: int = turn_number
+                ) -> None:
+                    self.journal.append(
+                        run_id=run_id,
+                        event_id=f"{run_id}.request.{turn_number}.attempt.{event.physical_attempt}.{event.phase.value}",
+                        event_type=f"model.request.{event.phase.value}",
+                        observed_at=self._now(),
+                        payload={
+                            "request_id": event.request_id,
+                            "physical_attempt": event.physical_attempt,
+                            **({} if event.failure is None else event.failure.safe_fields()),
+                        },
+                    )
+
                 turn = await asyncio.wait_for(
-                    self.provider.complete(
+                    self.provider.run_once(
+                        context=PiInvocationContext(
+                            run_id,
+                            turn_number,
+                            self.journal,
+                            self.artifact_store,
+                            self._now,
+                            self.secret_values,
+                        ),
                         messages=active_messages,
-                        tools=(),
-                        temperature=self.plan.model_provider_profile.temperature,
-                        top_p=self.plan.model_provider_profile.top_p,
                         max_output_tokens=maximum_output,
                         timeout_seconds=self.plan.model_provider_profile.budget.max_wall_seconds,
+                        attempt_observer=observe_attempt,
                     ),
                     timeout=self.plan.model_provider_profile.budget.max_wall_seconds,
                 )

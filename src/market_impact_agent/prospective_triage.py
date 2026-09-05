@@ -3,15 +3,14 @@ from __future__ import annotations
 import asyncio
 import os
 import sqlite3
-from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Protocol, cast
+from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash
-from market_impact_agent.agent_runtime import ModelProvider, ModelTurn, SkillRegistry
+from market_impact_agent.agent_runtime import ModelProvider, SkillRegistry
 from market_impact_agent.data_inputs import DataSnapshot, LocalDataSnapshotStore
 from market_impact_agent.event_impact_triage import (
     EventImpactTriageBatchSelection,
@@ -69,6 +68,7 @@ from market_impact_agent.model_provider import (
     ModelProviderProfile,
     load_builtin_model_provider_profile,
 )
+from market_impact_agent.pi_runtime import PiRuntimeProvider
 from market_impact_agent.prospective_checkpoint_readiness import (
     ProspectiveCheckpointAdmissionStore,
     ProspectiveCheckpointRoutePlan,
@@ -83,126 +83,6 @@ from market_impact_agent.prospective_diagnostic import (
 from market_impact_agent.provider_reliability import ProviderHealthStore
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
-
-
-class _AvailabilityModelProvider(ModelProvider, Protocol):
-    async def assert_model_available(self, *, timeout_seconds: float) -> None: ...
-
-
-class _NoCallModelProvider:
-    def __init__(self, *, provider_id: str, model: str) -> None:
-        self._provider_id = provider_id
-        self._model = model
-
-    @property
-    def provider_id(self) -> str:
-        return self._provider_id
-
-    @property
-    def model(self) -> str:
-        return self._model
-
-    async def assert_model_available(self, *, timeout_seconds: float) -> None:
-        _ = timeout_seconds
-
-    async def complete(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-    ) -> ModelTurn:
-        _ = (messages, tools, temperature, top_p, max_output_tokens, timeout_seconds)
-        raise AssertionError("format recovery cannot call a Model Provider")
-
-
-class _LazyAvailabilityModelProvider:
-    """Resolve and probe a Provider only when a Work member needs a model call."""
-
-    def __init__(
-        self,
-        *,
-        profile: ModelProviderProfile,
-        provider: ModelProvider | None,
-        on_resolve: Callable[[], None] | None = None,
-    ) -> None:
-        self._profile = profile
-        self._provider = provider
-        self._available = False
-        self._availability_lock = asyncio.Lock()
-        self._on_resolve = on_resolve
-
-    @property
-    def provider_id(self) -> str:
-        return self._profile.provider_id
-
-    @property
-    def model(self) -> str:
-        return self._profile.model
-
-    def _resolve(self) -> ModelProvider:
-        provider = self._provider
-        if provider is None:
-            provider = ModelProviderFactory.with_builtin_adapters().create(self._profile)
-            self._provider = provider
-        if provider.provider_id != self.provider_id or provider.model != self.model:
-            raise ValueError("prospective triage Provider differs from the frozen profile")
-        if self._on_resolve is not None:
-            self._on_resolve()
-            self._on_resolve = None
-        return provider
-
-    async def _assert_available(self, provider: ModelProvider) -> None:
-        if self._available:
-            return
-        async with self._availability_lock:
-            if self._available:
-                return
-            await cast(_AvailabilityModelProvider, provider).assert_model_available(
-                timeout_seconds=30
-            )
-            self._available = True
-
-    async def prepare_for_model_call(self) -> None:
-        """Resolve and probe immediately before the Runner records a dispatch."""
-
-        await self._assert_available(self._resolve())
-
-    def __getattr__(self, name: str) -> object:
-        if name != "complete_with_observer":
-            raise AttributeError(name)
-        provider = self._resolve()
-        provider_complete = getattr(provider, name)
-
-        async def complete_with_observer(**kwargs: object) -> ModelTurn:
-            await self._assert_available(provider)
-            return cast(ModelTurn, await provider_complete(**kwargs))
-
-        return complete_with_observer
-
-    async def complete(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-    ) -> ModelTurn:
-        provider = self._resolve()
-        await self._assert_available(provider)
-        return await provider.complete(
-            messages=messages,
-            tools=tools,
-            temperature=temperature,
-            top_p=top_p,
-            max_output_tokens=max_output_tokens,
-            timeout_seconds=timeout_seconds,
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1185,10 +1065,7 @@ def authorize_prepared_prospective_triage_format_recovery(
     """Authorize one bounded old-plan parse recovery without a Provider request."""
 
     selected_provider = (
-        _NoCallModelProvider(
-            provider_id=prepared.profile.provider_id,
-            model=prepared.profile.model,
-        )
+        PiRuntimeProvider(prepared.profile, dispatch_allowed=False)
         if provider is None
         else provider
     )
@@ -1243,9 +1120,8 @@ async def run_prepared_prospective_triage_work(
         raise ValueError(
             "prospective triage Candidate Set is comparison-bound; use the comparison run"
         )
-    selected_provider = _LazyAvailabilityModelProvider(
-        profile=prepared.profile,
-        provider=provider,
+    selected_provider = provider or ModelProviderFactory.with_builtin_adapters().create(
+        prepared.profile
     )
     runner = _build_prospective_triage_runner(
         prepared=prepared,
@@ -1392,13 +1268,23 @@ async def run_prepared_prospective_triage_comparison(
         treatment_plan=prepared.plan,
     )
     comparison_artifact = protocol_store.put_json(comparison.to_dict())
-    selected_baseline_provider = _LazyAvailabilityModelProvider(
-        profile=prepared.profile,
-        provider=baseline_provider,
+    try:
+        EventImpactTriageDecisionStore(state_root).terminal_batch(
+            prepared.candidate_set.candidate_set_id
+        )
+    except KeyError:
+        terminal_only = False
+    else:
+        terminal_only = True
+    selected_baseline_provider = baseline_provider or (
+        PiRuntimeProvider(prepared.profile, dispatch_allowed=False)
+        if terminal_only
+        else ModelProviderFactory.with_builtin_adapters().create(prepared.profile)
     )
-    selected_treatment_provider = _LazyAvailabilityModelProvider(
-        profile=prepared.profile,
-        provider=treatment_provider,
+    selected_treatment_provider = treatment_provider or (
+        PiRuntimeProvider(prepared.profile, dispatch_allowed=False)
+        if terminal_only
+        else ModelProviderFactory.with_builtin_adapters().create(prepared.profile)
     )
     baseline_prepared = replace(
         prepared,

@@ -12,7 +12,7 @@ import json_repair
 from market_impact_agent.agent_contracts import canonical_hash
 
 JSON_REPAIR_VERSION = "0.63.4"
-MODEL_JSON_REPAIR_POLICY_ID = "json-repair-0.63.4-single-structural-edit-v1"
+MODEL_JSON_REPAIR_POLICY_ID = "json-repair-0.63.4-answer-wrapper-v2"
 _EVIDENCE_SCHEMA = "market-impact.model-json-parse-evidence.v1"
 _NUMBER = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 _PUNCTUATION = frozenset("{}[],: ") - {" "}
@@ -25,6 +25,7 @@ class ModelJsonParseEvidence:
     source_was_strict_json: bool
     repair_applied: bool
     structural_edits: tuple[dict[str, object], ...]
+    wrapper_removed: bool = False
     parser_id: str = f"json-repair-{JSON_REPAIR_VERSION}"
     policy_id: str = MODEL_JSON_REPAIR_POLICY_ID
     schema_version: str = _EVIDENCE_SCHEMA
@@ -39,6 +40,7 @@ class ModelJsonParseEvidence:
             "source_was_strict_json": self.source_was_strict_json,
             "repair_applied": self.repair_applied,
             "structural_edits": [dict(item) for item in self.structural_edits],
+            "wrapper_removed": self.wrapper_removed,
         }
 
 
@@ -55,10 +57,28 @@ class _Tokens:
 
 
 def load_model_json(content: str) -> ParsedModelJson:
-    """Parse through json-repair, accepting only one semantics-preserving punctuation repair."""
+    """Normalize one whole-answer wrapper, then use the pinned semantics-preserving parser.
 
-    if not content or content != content.strip():
-        raise ValueError("model JSON content must be a non-empty trimmed string")
+    This never extracts an answer from reasoning or surrounding prose. The original
+    bytes remain the parse-evidence identity, including whitespace and a code fence.
+    """
+
+    source = content
+    content = content.strip()
+    wrapper_removed = False
+    if content.startswith("```"):
+        lines = content.splitlines()
+        if (
+            len(lines) < 3
+            or lines[0] not in {"```", "```json"}
+            or lines[-1] != "```"
+            or any(line.strip().startswith("```") for line in lines[1:-1])
+        ):
+            raise ValueError("model JSON must contain exactly one whole-answer JSON fence")
+        content = "\n".join(lines[1:-1]).strip()
+        wrapper_removed = True
+    if not content:
+        raise ValueError("model JSON content must be non-empty")
     installed = version("json-repair")
     if installed != JSON_REPAIR_VERSION:
         raise RuntimeError(
@@ -80,11 +100,12 @@ def load_model_json(content: str) -> ParsedModelJson:
             raise ValueError("json-repair object differs from its repaired JSON text")
         edits = (_single_structural_edit(_tokenize(content), _tokenize(repaired)),)
     evidence = ModelJsonParseEvidence(
-        source_content_hash=sha256(content.encode()).hexdigest(),
+        source_content_hash=sha256(source.encode()).hexdigest(),
         parsed_content_hash=canonical_hash(decoded),
         source_was_strict_json=source_was_strict_json,
         repair_applied=not source_was_strict_json,
         structural_edits=edits,
+        wrapper_removed=wrapper_removed,
     )
     return ParsedModelJson(value=decoded, evidence=evidence)
 

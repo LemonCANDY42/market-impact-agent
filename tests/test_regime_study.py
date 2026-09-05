@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
@@ -18,8 +20,10 @@ from market_impact_agent.market_regimes import (
 from market_impact_agent.method_skills import load_method_skill_catalog
 from market_impact_agent.regime_study import (
     assess_regime_study_readiness,
+    evaluate_regime_case_baselines,
     evaluate_regime_study_baselines,
     load_regime_study_registration,
+    write_regime_study_baseline_report,
 )
 
 CATALOG = Path("examples/research/famous-method-skill-catalog-v1.json")
@@ -381,6 +385,7 @@ def test_long_horizon_baselines_use_daily_path_and_report_risk_metrics(tmp_path:
 
     report = evaluate_regime_study_baselines(dataset, _panel(dataset), registration)
 
+    assert report["schema_version"] == "market-impact.regime-study-baseline-report.v2"
     assert report["research_only"] is True
     assert report["agent_visible"] is False
     assert report["agent_effectiveness_claim_eligible"] is False
@@ -402,6 +407,62 @@ def test_long_horizon_baselines_use_daily_path_and_report_risk_metrics(tmp_path:
     assert cash["information_ratio_vs_primary"] is not None
 
 
+def test_report_writer_preserves_prior_evidence_and_replays_exact_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = _dataset()
+    registration = load_regime_study_registration(
+        _write_registration(tmp_path, dataset),
+        dataset=dataset,
+        method_catalog=load_method_skill_catalog(CATALOG),
+    )
+    report = evaluate_regime_study_baselines(dataset, _panel(dataset), registration)
+    panel_id = cast(str, report["panel_id"])
+    registration_id = registration.registration_id
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / ".market-impact" / "regime" / "comparisons"
+    root.mkdir(parents=True)
+    legacy = root / f"{panel_id}--{registration_id}.json"
+    legacy_content = json.dumps(
+        {**report, "schema_version": "market-impact.regime-study-baseline-report.v1"}
+    ).encode()
+    legacy.write_bytes(legacy_content)
+
+    destination = write_regime_study_baseline_report(
+        report, panel_id=panel_id, registration_id=registration_id
+    )
+    assert destination.name == f"{panel_id}--{registration_id}--{canonical_hash(report)}.json"
+    assert destination != legacy and legacy.read_bytes() == legacy_content
+    assert json.loads(destination.read_text()) == report
+    assert destination.stat().st_mode & 0o777 == 0o600
+    original = destination.read_bytes()
+    metadata = destination.stat()
+    replay = write_regime_study_baseline_report(
+        report, panel_id=panel_id, registration_id=registration_id
+    )
+    assert replay == destination and replay.read_bytes() == original
+    assert replay.stat().st_ino == metadata.st_ino
+    assert replay.stat().st_mtime_ns == metadata.st_mtime_ns
+
+    divergent = {**report, "provider_version": "synthetic-corrected-version"}
+    another = write_regime_study_baseline_report(
+        divergent, panel_id=panel_id, registration_id=registration_id
+    )
+    assert another != destination and json.loads(another.read_text()) == divergent
+    assert destination.read_bytes() == original and legacy.read_bytes() == legacy_content
+
+    # A conflicting file at the exact content-addressed destination fails closed;
+    # neither corruption nor a partially written artifact can be silently repaired.
+    conflicting_content = b"synthetic conflicting prior evidence\n"
+    destination.write_bytes(conflicting_content)
+    with pytest.raises(ValueError, match="already exists with different content"):
+        write_regime_study_baseline_report(
+            report, panel_id=panel_id, registration_id=registration_id
+        )
+    assert destination.read_bytes() == conflicting_content
+    assert legacy.read_bytes() == legacy_content
+
+
 def test_registration_example_covers_all_representative_cases() -> None:
     from market_impact_agent.market_regimes import load_market_regime_dataset
 
@@ -417,6 +478,60 @@ def test_registration_example_covers_all_representative_cases() -> None:
     assert {item.case_key for item in registration.cases} == {
         item.case_key for item in dataset.cases
     }
+
+
+@pytest.mark.parametrize(
+    ("switch", "fee_bps", "expected_cost", "expected_turnover"),
+    [
+        (False, "10", "0.00100000", "1.00000000"),
+        (True, "0", "0.00000000", "3.00000000"),
+        (True, "10", "0.00299800", "3.00000000"),
+        (True, "20", "0.00599200", "3.00000000"),
+    ],
+)
+def test_monthly_rotation_charges_each_traded_leg(
+    tmp_path: Path, switch: bool, fee_bps: str, expected_cost: str, expected_turnover: str
+) -> None:
+    dataset = _dataset()
+    registration = load_regime_study_registration(
+        _write_registration(tmp_path, dataset),
+        dataset=dataset,
+        method_catalog=load_method_skill_catalog(CATALOG),
+    )
+    case = replace(
+        dataset.cases[0],
+        path_start=date(2020, 1, 30),
+        tradable_start=date(2020, 1, 30),
+        end=date(2020, 2, 3),
+        required_industry_proxies=("a", "b"),
+    )
+    days = ("2020-01-28", "2020-01-29", "2020-01-30", "2020-01-31", "2020-02-03")
+    primary = _series("000300.SH", "market", "000300.SH", tuple((d, 10.0, 10.0) for d in days))
+    a = _series(
+        "a",
+        "industry",
+        "a",
+        tuple(zip(days, (10.0,) * 5, (10.0, 12.0, 10.0, 10.0, 10.0), strict=True)),
+    )
+    b = _series(
+        "b",
+        "industry",
+        "b",
+        tuple(
+            zip(days, (10.0,) * 5, (10.0, 10.0, 10.0, 11.0 if switch else 9.0, 10.0), strict=True)
+        ),
+    )
+    report = evaluate_regime_case_baselines(
+        case,
+        {s.series_id: s for s in (primary, a, b)},
+        replace(registration.baseline_protocol, transaction_cost_bps_one_way=Decimal(fee_bps)),
+    )
+    result = cast(dict[str, dict[str, object]], report["strategies"])["lagged_sector_momentum"]
+    # Entry is one leg. A complete A-to-B rotation sells A and buys B: two more legs.
+    # Held A is flat until rotation; the new B holding is flat after its opening purchase.
+    assert result["turnover"] == expected_turnover
+    assert result["modeled_cost"] == expected_cost
+    assert Decimal(str(result["total_return"])) == -Decimal(expected_cost)
 
 
 def test_cli_reports_source_readiness_without_claiming_agent_effectiveness(

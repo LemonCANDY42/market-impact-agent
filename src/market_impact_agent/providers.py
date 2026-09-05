@@ -1,24 +1,29 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.domain import (
+    ExecutableOrder,
     ExecutionReceipt,
     ExecutionStatus,
-    OrderIntent,
     TradingEnvironment,
     require_aware,
 )
+
+if TYPE_CHECKING:
+    from market_impact_agent.account_state import AccountPosition, AccountStateSnapshot, CashBalance
+    from market_impact_agent.paper_execution import PriceBasis
 
 
 class Capability(StrEnum):
@@ -223,7 +228,7 @@ _CANCELLATION_SEAL = object()
 class SubmissionCapability:
     """A provider input issued only after the harness approves an exact intent."""
 
-    order: OrderIntent
+    order: ExecutableOrder
     submission_id: str
     provider_id: str
     provider_version: str
@@ -241,7 +246,7 @@ class SubmissionCapability:
 
 def _issue_submission_capability(  # pyright: ignore[reportUnusedFunction]
     *,
-    order: OrderIntent,
+    order: ExecutableOrder,
     submission_id: str,
     provider_id: str,
     provider_version: str,
@@ -530,18 +535,42 @@ class MockExecutionProvider:
                     )
                     """
                 )
+                columns = {
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(mock_execution_receipts)")
+                }
+                if "order_json" not in columns:
+                    connection.execute(
+                        "ALTER TABLE mock_execution_receipts ADD COLUMN order_json TEXT"
+                    )
+                connection.execute(
+                    """CREATE TABLE IF NOT EXISTS mock_execution_fills (
+                        fill_id TEXT PRIMARY KEY, client_order_id TEXT NOT NULL,
+                        quantity TEXT NOT NULL, price TEXT NOT NULL, observed_at TEXT NOT NULL
+                    )"""
+                )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS mock_account_configuration "
+                    "(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), "
+                    "payload_json TEXT NOT NULL)"
+                )
             os.chmod(self._state_path, 0o600)
 
     @property
     def manifest(self) -> ProviderManifest:
+        account_capability = frozenset[Capability]()
+        if self._state_path is not None:
+            with self._connect() as connection:
+                if connection.execute("SELECT 1 FROM mock_account_configuration").fetchone():
+                    account_capability = frozenset({Capability.ACCOUNT})
         return ProviderManifest(
             schema_version="market-impact.provider-manifest.v1",
             provider_id="mock-execution",
             provider_version="0.1.0",
             transport=ProviderTransport.NATIVE,
             environments=frozenset({TradingEnvironment.PAPER}),
-            declared_capabilities=frozenset({Capability.PAPER_EXECUTION}),
-            verified_capabilities=frozenset({Capability.PAPER_EXECUTION}),
+            declared_capabilities=frozenset({Capability.PAPER_EXECUTION}) | account_capability,
+            verified_capabilities=frozenset({Capability.PAPER_EXECUTION}) | account_capability,
             markets=("SYNTHETIC",),
             order_types=("market", "limit"),
             supports_streaming=False,
@@ -590,15 +619,7 @@ class MockExecutionProvider:
                 rows = connection.execute(
                     "SELECT * FROM mock_execution_receipts ORDER BY client_order_id"
                 ).fetchall()
-            receipts = tuple(
-                ExecutionReceipt(
-                    client_order_id=cast(str, row["client_order_id"]),
-                    provider_order_id=cast(str, row["provider_order_id"]),
-                    status=ExecutionStatus(cast(str, row["status"])),
-                    observed_at=_provider_datetime(cast(str, row["observed_at"])),
-                )
-                for row in rows
-            )
+                receipts = tuple(self._durable_receipt(connection, row) for row in rows)
         observed_at = self._clock()
         require_aware(observed_at, "observed_at")
         return ReconciliationSnapshot.build(
@@ -647,6 +668,137 @@ class MockExecutionProvider:
         if self._submission_validator is None:
             self._submission_validator = validator
 
+    def record_simulated_fill(
+        self,
+        client_order_id: str,
+        *,
+        fill_id: str,
+        quantity: Decimal,
+        price: Decimal,
+    ) -> ExecutionReceipt:
+        """Record explicit simulated Provider facts, not a price/fill realism claim.
+
+        Durable orders only: old rows without an exact order payload cannot be
+        filled. No account ledger is updated; Harness reconciliation consumes the
+        resulting fill evidence separately.
+        """
+        if not fill_id or fill_id != fill_id.strip():
+            raise ValueError("simulated fill requires an explicit identity")
+        if not quantity.is_finite() or quantity <= 0 or not price.is_finite() or price <= 0:
+            raise ValueError("simulated fill quantity and price must be positive and finite")
+        observed_at = self._clock()
+        require_aware(observed_at, "observed_at")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM mock_execution_receipts WHERE client_order_id = ?",
+                (client_order_id,),
+            ).fetchone()
+            if row is None or row["order_json"] is None:
+                raise ValueError("simulated fill requires an exact accepted durable order")
+            order = cast(dict[str, object], json.loads(cast(str, row["order_json"])))
+            if canonical_hash(order) != row["order_hash"]:
+                raise ValueError("simulated fill order content differs from accepted identity")
+            prior = connection.execute(
+                "SELECT * FROM mock_execution_fills WHERE fill_id = ?", (fill_id,)
+            ).fetchone()
+            if prior is not None:
+                if (
+                    prior["client_order_id"] != client_order_id
+                    or Decimal(prior["quantity"]) != quantity
+                    or Decimal(prior["price"]) != price
+                ):
+                    raise ValueError("simulated fill identity already has different content")
+                return self._durable_receipt(connection, row)
+            if row["status"] not in {
+                ExecutionStatus.ACCEPTED.value,
+                ExecutionStatus.PARTIALLY_FILLED.value,
+            }:
+                raise ValueError("simulated fill requires an open accepted order")
+            if observed_at < _provider_datetime(cast(str, row["observed_at"])):
+                raise ValueError("simulated fill cannot precede the last Provider observation")
+            receipt = self._durable_receipt(connection, row)
+            total = receipt.filled_quantity + quantity
+            ordered = Decimal(cast(str, order["quantity"]))
+            if total > ordered:
+                raise ValueError("simulated fill would overfill the accepted order")
+            timestamp = observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+            connection.execute(
+                "INSERT INTO mock_execution_fills VALUES (?, ?, ?, ?, ?)",
+                (fill_id, client_order_id, str(quantity), str(price), timestamp),
+            )
+            status = (
+                ExecutionStatus.FILLED if total == ordered else ExecutionStatus.PARTIALLY_FILLED
+            )
+            connection.execute(
+                "UPDATE mock_execution_receipts SET status = ?, observed_at = ? "
+                "WHERE client_order_id = ?",
+                (status.value, timestamp, client_order_id),
+            )
+            updated = connection.execute(
+                "SELECT * FROM mock_execution_receipts WHERE client_order_id = ?",
+                (client_order_id,),
+            ).fetchone()
+            assert updated is not None
+            return self._durable_receipt(connection, updated)
+
+    def configure_simulated_account(
+        self,
+        *,
+        seed: str,
+        cash: tuple[CashBalance, ...],
+        positions: tuple[AccountPosition, ...],
+        instruments: Mapping[str, tuple[str, str]],
+        opened_at: datetime,
+    ) -> None:
+        """Bind immutable synthetic opening facts once, before any accepted orders."""
+        from market_impact_agent.mock_account import configure_simulated_account
+
+        configure_simulated_account(
+            self,
+            seed=seed,
+            cash=cash,
+            positions=positions,
+            instruments=instruments,
+            opened_at=opened_at,
+        )
+
+    def simulated_account_snapshot(
+        self,
+        *,
+        price_bases: Mapping[str, PriceBasis],
+    ) -> AccountStateSnapshot:
+        """Project configured opening state plus exact durable simulated order/fill facts."""
+        from market_impact_agent.mock_account import simulated_account_snapshot
+
+        return simulated_account_snapshot(self, price_bases=price_bases)
+
+    def simulated_fills(self, client_order_id: str) -> tuple[dict[str, object], ...]:
+        """Exact recorded Mock facts for Harness cash/position reconciliation."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM mock_execution_fills WHERE client_order_id = ? ORDER BY fill_id",
+                (client_order_id,),
+            ).fetchall()
+        return tuple(dict(row) for row in rows)
+
+    @staticmethod
+    def _durable_receipt(connection: sqlite3.Connection, row: sqlite3.Row) -> ExecutionReceipt:
+        fills = connection.execute(
+            "SELECT * FROM mock_execution_fills WHERE client_order_id = ? ORDER BY fill_id",
+            (row["client_order_id"],),
+        ).fetchall()
+        return ExecutionReceipt(
+            client_order_id=cast(str, row["client_order_id"]),
+            provider_order_id=cast(str, row["provider_order_id"]),
+            status=ExecutionStatus(cast(str, row["status"])),
+            observed_at=_provider_datetime(cast(str, row["observed_at"])),
+            filled_quantity=sum(
+                (Decimal(cast(str, item["quantity"])) for item in fills), Decimal(0)
+            ),
+            fill_ids=tuple(cast(str, item["fill_id"]) for item in fills),
+        )
+
     def bind_cancellation_validator(
         self,
         validator: Callable[[CancellationCapability], bool],
@@ -665,12 +817,7 @@ class MockExecutionProvider:
             if existing is not None:
                 if cast(str, existing["order_hash"]) != capability.order_hash:
                     raise ValueError("mock provider order identity conflict")
-                return ExecutionReceipt(
-                    client_order_id=cast(str, existing["client_order_id"]),
-                    provider_order_id=cast(str, existing["provider_order_id"]),
-                    status=ExecutionStatus(cast(str, existing["status"])),
-                    observed_at=_provider_datetime(cast(str, existing["observed_at"])),
-                )
+                return self._durable_receipt(connection, existing)
             count = cast(
                 int,
                 connection.execute("SELECT COUNT(*) FROM mock_execution_receipts").fetchone()[0],
@@ -684,8 +831,8 @@ class MockExecutionProvider:
             connection.execute(
                 """
                 INSERT INTO mock_execution_receipts (
-                    client_order_id, order_hash, provider_order_id, status, observed_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    client_order_id, order_hash, provider_order_id, status, observed_at, order_json
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order.client_order_id,
@@ -693,6 +840,7 @@ class MockExecutionProvider:
                     receipt.provider_order_id,
                     receipt.status.value,
                     receipt.observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                    json.dumps(order.to_dict(), sort_keys=True),
                 ),
             )
             return receipt

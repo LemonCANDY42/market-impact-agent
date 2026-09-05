@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact.local/schemas/order-intent-v2.schema.json",
+  "title": "Portfolio-origin order intent v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "client_order_id", "portfolio_decision_id", "account_id", "environment", "instrument_id", "side", "quantity", "order_kind", "limit_price", "created_at", "expires_at"],
+  "properties": {
+    "schema_version": {"const": "market-impact.order-intent.v2"},
+    "client_order_id": {"type": "string", "minLength": 1},
+    "portfolio_decision_id": {"type": "string", "pattern": "^portfolio-decision-v3-[a-f0-9]{64}$"},
+    "account_id": {"type": "string", "minLength": 1},
+    "environment": {"const": "paper"},
+    "instrument_id": {"type": "string", "minLength": 1},
+    "side": {"enum": ["buy", "sell"]},
+    "quantity": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+    "order_kind": {"const": "market"},
+    "limit_price": {"type": "null"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
+from urllib.parse import urlsplit
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_runtime import (
@@ -16,10 +17,9 @@ from market_impact_agent.agent_runtime import (
     RuntimeBudget,
     RuntimeConfig,
 )
-from market_impact_agent.cliproxy_provider import CLIProxyLunaConfig, CLIProxyLunaProvider
-from market_impact_agent.minimax_provider import MiniMaxOpenAIProvider, MiniMaxProviderConfig
 
 MODEL_PROVIDER_PROFILE_SCHEMA = "market-impact.model-provider-profile.v1"
+PI_MODEL_PROVIDER_PROFILE_SCHEMA = "market-impact.model-provider-profile.v2"
 ProviderBuilder = Callable[["ModelProviderProfile"], ModelProvider]
 
 
@@ -43,11 +43,16 @@ class ModelProviderProfile:
     max_attempts: int
     retry_backoff_seconds: float
     retry_received_408_once: bool = False
+    runtime: dict[str, object] | None = None
+    compaction_trigger_tokens: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(cast(object, self.retry_received_408_once), bool):
             raise TypeError("retry_received_408_once must be boolean")
-        if self.retry_received_408_once and self.adapter_kind != "cliproxyapi-openai-compatible":
+        if self.retry_received_408_once and self.adapter_kind not in {
+            "cliproxyapi-openai-compatible",
+            "pi-openai-responses",
+        }:
             raise ValueError("received-408 regeneration is accepted only for the CPA adapter")
         for name in (
             "adapter_kind",
@@ -65,6 +70,15 @@ class ModelProviderProfile:
             raise ValueError("Model Provider Profile context window is too small")
         if not 1 <= self.reserved_output_tokens < self.context_window_tokens:
             raise ValueError("reserved output tokens must fit the context window")
+        if self.compaction_trigger_tokens is not None and (
+            isinstance(self.compaction_trigger_tokens, bool)
+            or not self.reserved_output_tokens
+            <= self.context_window_tokens - self.compaction_trigger_tokens
+            or self.compaction_trigger_tokens < 128
+        ):
+            raise ValueError(
+                "compaction trigger must leave the reserved output inside the context window"
+            )
         if not 0 < self.temperature <= 1 or not 0 < self.top_p <= 1:
             raise ValueError("Model Provider Profile sampling values must be in (0, 1]")
         if self.reasoning_effort is not None:
@@ -76,6 +90,8 @@ class ModelProviderProfile:
             or not 0 <= self.retry_backoff_seconds <= 5
         ):
             raise ValueError("Model Provider Profile retry backoff must be between zero and five")
+        if self.runtime is not None:
+            self._validate_pi_runtime()
         if self.profile_id != self.expected_profile_id:
             raise ValueError("Model Provider Profile profile_id does not match content")
 
@@ -89,7 +105,11 @@ class ModelProviderProfile:
 
     def core_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
-            "schema_version": MODEL_PROVIDER_PROFILE_SCHEMA,
+            "schema_version": (
+                PI_MODEL_PROVIDER_PROFILE_SCHEMA
+                if self.runtime is not None
+                else MODEL_PROVIDER_PROFILE_SCHEMA
+            ),
             "adapter_kind": self.adapter_kind,
             "provider_id": self.provider_id,
             "origin": self.origin,
@@ -110,12 +130,126 @@ class ModelProviderProfile:
             payload["reasoning_effort"] = self.reasoning_effort
         if self.retry_received_408_once:
             payload["retry_received_408_once"] = True
+        if self.runtime is not None:
+            payload["runtime"] = self.runtime
+        if self.compaction_trigger_tokens is not None:
+            payload["compaction_trigger_tokens"] = self.compaction_trigger_tokens
         return payload
+
+    @property
+    def effective_compaction_trigger_tokens(self) -> int:
+        return self.compaction_trigger_tokens or (
+            self.context_window_tokens - self.reserved_output_tokens
+        )
+
+    @property
+    def native_api(self) -> str:
+        if self.runtime is None:
+            raise ValueError("new model dispatch requires a pi v2 Profile")
+        return cast(str, self.runtime["api"])
+
+    @property
+    def route_identity(self) -> str:
+        """Protocol acceptance is independent of a task's smaller budget and tools."""
+        return canonical_hash(
+            {
+                "provider": self.provider_id,
+                "origin": self.origin,
+                "api_path": self.api_path,
+                "model": self.model,
+                "effort": self.reasoning_effort,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "runtime": self.runtime,
+                "context_window_tokens": self.context_window_tokens,
+                "compaction_trigger_tokens": self.effective_compaction_trigger_tokens,
+            }
+        )
+
+    def _validate_pi_runtime(self) -> None:
+        assert self.runtime is not None
+        if set(self.runtime) != {
+            "api",
+            "supported_efforts",
+            "request_options",
+            "quota_model",
+            "cache_namespace",
+        }:
+            raise ValueError("pi Profile runtime fields are invalid")
+        api = self.runtime["api"]
+        if api not in {"openai-responses", "openai-completions"}:
+            raise ValueError("native API has no accepted public pi factory")
+        if self.adapter_kind != f"pi-{api}":
+            raise ValueError("Profile adapter must match its native API")
+        if not self.api_path.endswith(
+            "/responses" if api == "openai-responses" else "/chat/completions"
+        ):
+            raise ValueError("Profile endpoint does not match its native API")
+        origin = urlsplit(self.origin)
+        if (
+            origin.scheme not in {"http", "https"}
+            or not origin.hostname
+            or origin.path
+            or origin.query
+            or origin.fragment
+            or origin.username
+            or origin.password
+            or (
+                origin.scheme == "http" and origin.hostname not in {"127.0.0.1", "localhost", "::1"}
+            )
+        ):
+            raise ValueError("model origin must be exact HTTPS or local loopback HTTP")
+        efforts = self.runtime["supported_efforts"]
+        if not isinstance(efforts, list) or any(
+            item not in {"minimal", "low", "medium", "high", "xhigh", "max"}
+            for item in cast(list[object], efforts)
+        ):
+            raise ValueError("Profile effort capabilities are invalid")
+        if self.reasoning_effort is not None and self.reasoning_effort not in efforts:
+            raise ValueError("Profile does not support the requested effort")
+        for name in ("quota_model", "cache_namespace"):
+            _string(self.runtime, name)
+        options = _object(self.runtime["request_options"], "pi request options")
+        protected = {
+            "model",
+            "messages",
+            "input",
+            "instructions",
+            "tools",
+            "functions",
+            "tool_choice",
+            "function_call",
+            "stream",
+            "stream_options",
+            "max_tokens",
+            "max_output_tokens",
+            "max_completion_tokens",
+            "temperature",
+            "top_p",
+            "reasoning",
+            "reasoning_effort",
+            "api_key",
+            "headers",
+            "base_url",
+            "session_id",
+            "prompt_cache_key",
+        }
+        if options.keys() & protected:
+            raise ValueError("Provider options cannot override Harness-owned request fields")
+        if re.fullmatch(r"[A-Z][A-Z0-9_]*", self.credential_env) is None:
+            raise ValueError("credential reference must be an environment variable name")
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "profile_id": self.profile_id}
 
     def runtime_config(self) -> RuntimeConfig:
+        profile_hash = self.profile_hash if self.retry_received_408_once else None
+        if self.adapter_kind.startswith("pi-"):
+            from market_impact_agent.pi_runtime import runtime_identity
+
+            profile_hash = canonical_hash(
+                {"profile": self.profile_hash, "runtime": runtime_identity()}
+            )
         return RuntimeConfig(
             provider_id=self.provider_id,
             model=self.model,
@@ -125,7 +259,7 @@ class ModelProviderProfile:
             top_p=self.top_p,
             budget=self.budget,
             pricing=self.pricing,
-            provider_profile_hash=self.profile_hash if self.retry_received_408_once else None,
+            provider_profile_hash=profile_hash,
         )
 
 
@@ -136,8 +270,10 @@ class ModelProviderFactory:
     @classmethod
     def with_builtin_adapters(cls) -> ModelProviderFactory:
         factory = cls()
-        factory.register("minimax-openai-compatible", _build_minimax)
-        factory.register("cliproxyapi-openai-compatible", _build_cliproxyapi)
+        from market_impact_agent.pi_runtime import PiRuntimeProvider
+
+        factory.register("pi-openai-responses", PiRuntimeProvider)
+        factory.register("pi-openai-completions", PiRuntimeProvider)
         return factory
 
     def register(self, adapter_kind: str, builder: ProviderBuilder) -> None:
@@ -186,11 +322,19 @@ def model_provider_profile_from_dict(value: object) -> ModelProviderProfile:
         "max_attempts",
         "retry_backoff_seconds",
     }
-    allowed = required | {"reasoning_effort", "retry_received_408_once"}
+    allowed = required | {
+        "reasoning_effort",
+        "retry_received_408_once",
+        "runtime",
+        "compaction_trigger_tokens",
+    }
     if not required <= set(payload) or not set(payload) <= allowed:
         raise ValueError("Model Provider Profile fields are invalid")
-    if _string(payload, "schema_version") != MODEL_PROVIDER_PROFILE_SCHEMA:
+    schema = _string(payload, "schema_version")
+    if schema not in {MODEL_PROVIDER_PROFILE_SCHEMA, PI_MODEL_PROVIDER_PROFILE_SCHEMA}:
         raise ValueError("unsupported Model Provider Profile schema_version")
+    if (schema == PI_MODEL_PROVIDER_PROFILE_SCHEMA) != ("runtime" in payload):
+        raise ValueError("pi Profile v2 requires explicit runtime capabilities")
     budget_raw = _object(payload.get("budget"), "Model Provider Profile budget")
     pricing_raw = _object(payload.get("pricing"), "Model Provider Profile pricing")
     budget_expected = {
@@ -249,6 +393,12 @@ def model_provider_profile_from_dict(value: object) -> ModelProviderProfile:
         max_attempts=_integer(payload, "max_attempts"),
         retry_backoff_seconds=_number(payload, "retry_backoff_seconds"),
         retry_received_408_once=cast(bool, payload.get("retry_received_408_once", False)),
+        runtime=None if "runtime" not in payload else _object(payload["runtime"], "pi runtime"),
+        compaction_trigger_tokens=(
+            None
+            if "compaction_trigger_tokens" not in payload
+            else _integer(payload, "compaction_trigger_tokens")
+        ),
     )
     if result.to_dict() != payload:
         raise ValueError("Model Provider Profile does not match canonical contract")
@@ -256,7 +406,14 @@ def model_provider_profile_from_dict(value: object) -> ModelProviderProfile:
 
 
 def default_model_provider_profile_path() -> Path:
-    return builtin_model_provider_profile_path("minimax-m3-research-v1")
+    configured = os.environ.get("MARKET_IMPACT_MODEL_PROFILE")
+    if configured and re.fullmatch(r"[a-z0-9][a-z0-9-]*", configured):
+        return builtin_model_provider_profile_path(configured)
+    return (
+        Path(configured).expanduser().resolve()
+        if configured
+        else builtin_model_provider_profile_path("pi-minimax-m3-v2")
+    )
 
 
 def builtin_model_provider_profile_path(profile_alias: str) -> Path:
@@ -274,53 +431,6 @@ def builtin_model_provider_profile_path(profile_alias: str) -> Path:
 
 def load_builtin_model_provider_profile(profile_alias: str) -> ModelProviderProfile:
     return load_model_provider_profile(builtin_model_provider_profile_path(profile_alias))
-
-
-def _build_minimax(profile: ModelProviderProfile) -> ModelProvider:
-    if profile.reasoning_effort is not None:
-        raise ValueError("MiniMax Model Provider Profile cannot set reasoning_effort")
-    api_key = os.environ.get(profile.credential_env, "")
-    if not api_key:
-        raise ValueError(f"Model Provider credential is missing: {profile.credential_env}")
-    for name, expected in (
-        ("MINIMAX_BASE_URL", profile.origin),
-        ("MINIMAX_MODEL", profile.model),
-    ):
-        configured = os.environ.get(name)
-        if configured is not None and configured != expected:
-            raise ValueError(f"{name} does not match the frozen Model Provider Profile")
-    return MiniMaxOpenAIProvider(
-        api_key=api_key,
-        config=MiniMaxProviderConfig(
-            base_url=profile.origin,
-            model=profile.model,
-            api_path=profile.api_path,
-            models_path=profile.models_path,
-            max_attempts=profile.max_attempts,
-            retry_backoff_seconds=profile.retry_backoff_seconds,
-        ),
-    )
-
-
-def _build_cliproxyapi(profile: ModelProviderProfile) -> ModelProvider:
-    api_key = os.environ.get(profile.credential_env, "")
-    if not api_key:
-        raise ValueError(f"Model Provider credential is missing: {profile.credential_env}")
-    if profile.reasoning_effort is None:
-        raise ValueError("CLIProxyAPI Model Provider Profile requires reasoning_effort")
-    return CLIProxyLunaProvider(
-        api_key=api_key,
-        config=CLIProxyLunaConfig(
-            origin=profile.origin,
-            model=profile.model,
-            reasoning_effort=profile.reasoning_effort,
-            api_path=profile.api_path,
-            models_path=profile.models_path,
-            max_attempts=profile.max_attempts,
-            retry_backoff_seconds=profile.retry_backoff_seconds,
-            retry_received_408_once=profile.retry_received_408_once,
-        ),
-    )
 
 
 def _object(value: object, label: str) -> dict[str, object]:

@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Protocol, cast
 from urllib.parse import quote
 
+import httpx2
+
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_engine import (
     AgentEngine,
@@ -44,7 +46,6 @@ from market_impact_agent.model_provider import (
     ModelProviderProfile,
     load_model_provider_profile,
 )
-from market_impact_agent.openai_chat_provider import PinnedHttpxJsonTransport
 from market_impact_agent.paired_skill_ablation_contract import (
     ALLOWED_CAPABILITIES,
     ALLOWED_TOOLS,
@@ -112,31 +113,18 @@ async def fetch_cpa_usage_keeper_pricing(
     model: str,
     captured_at: datetime,
 ) -> CPAUsageKeeperPricing:
-    transport = PinnedHttpxJsonTransport(
-        allowed_origin=CPA_USAGE_KEEPER_ORIGIN,
-        provider_label="CPA Usage Keeper",
-    )
-    version = await transport.request_json(
-        method="GET",
-        url=f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/version",
-        headers={},
-        payload=None,
-        timeout_seconds=5.0,
-    )
-    pricing = await transport.request_json(
-        method="GET",
-        url=f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/pricing",
-        headers={},
-        payload=None,
-        timeout_seconds=5.0,
-    )
-    rules = await transport.request_json(
-        method="GET",
-        url=(f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/pricing/rules?model={quote(model, safe='')}"),
-        headers={},
-        payload=None,
-        timeout_seconds=5.0,
-    )
+    # Read-only pricing metadata is not a model transport. Keep the fixed origin
+    # and no redirects; HTTPX owns HTTP rather than a second Provider stack.
+    async with httpx2.AsyncClient(timeout=5.0, follow_redirects=False, trust_env=False) as client:
+        responses: list[dict[str, object]] = []
+        for path in ("version", "pricing", f"pricing/rules?model={quote(model, safe='')}"):
+            response = await client.get(f"{CPA_USAGE_KEEPER_ORIGIN}/api/v1/{path}")
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("CPA pricing metadata must be an object")
+            responses.append(cast(dict[str, object], payload))
+    version, pricing, rules = responses
     return CPAUsageKeeperPricing.from_api_payloads(
         model=model,
         captured_at=captured_at,

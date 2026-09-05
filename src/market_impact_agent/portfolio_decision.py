@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal
 from enum import StrEnum
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 from zoneinfo import ZoneInfo
 
 from market_impact_agent.account_state import PositionSnapshot
@@ -24,6 +24,9 @@ from market_impact_agent.domain import (
     TradingMandateV2,
     require_aware,
 )
+
+if TYPE_CHECKING:
+    from market_impact_agent.portfolio_review import PortfolioDecisionV3
 
 PORTFOLIO_DECISION_SCHEMA = "market-impact.portfolio-decision.v1"
 ORDER_SIZING_DECISION_SCHEMA = "market-impact.order-sizing-decision.v1"
@@ -1827,7 +1830,7 @@ class OrderSizingDecisionV2:
 
 def size_portfolio_decision_v2(
     *,
-    portfolio_decision: PortfolioDecisionV2,
+    portfolio_decision: PortfolioDecisionV2 | PortfolioDecisionV3,
     authorized_view: AuthorizedDecisionView,
     position_snapshot: PositionSnapshot,
     mandate: TradingMandateV2,
@@ -1841,6 +1844,8 @@ def size_portfolio_decision_v2(
     _strict_utc(decided_at, "Order Sizing Decision v2 decided_at")
     if portfolio_decision.outcome is not PortfolioDecisionOutcome.READY_FOR_SIZING:
         raise PermissionError("Order Sizing v2 requires a ready Portfolio Decision v2")
+    if portfolio_decision.proposal.target_gross_exposure_ratio is None:
+        raise PermissionError("actionable portfolio target requires a target ratio")
     exposure_view_authority.assert_authoritative_exposure_view(exposure_view)
     expected_bindings = (
         portfolio_decision.authorized_decision_view_id == authorized_view.view_id,

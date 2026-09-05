@@ -7,11 +7,133 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar, cast
 
 from market_impact_agent.domain import require_aware
+
+
+def http_diagnostic_code(status: int, body: str) -> str:
+    normalized = " ".join(body.lower().split())
+    if "bad record mac" in normalized or "decryption failed or bad record mac" in normalized:
+        return "tls_bad_record_mac"
+    if (
+        "stream disconnected before completion" in normalized
+        or "stream closed before response.completed" in normalized
+    ):
+        return "upstream_stream_incomplete"
+    if any(
+        marker in normalized
+        for marker in (
+            "auth_unavailable",
+            "auth unavailable",
+            "authentication unavailable",
+            "no available credential",
+            "no available account",
+            "no auth available",
+        )
+    ):
+        return "auth_unavailable"
+    if "authentication_failed" in normalized or "authentication failed" in normalized:
+        return "authentication_failed"
+    if (
+        "quota_exhausted" in normalized
+        or "quota exhausted" in normalized
+        or "insufficient_quota" in normalized
+        or "quota" in normalized
+    ):
+        return "quota_exhausted"
+    if status in {401, 403, 407}:
+        return "authentication_failed"
+    if status == 429:
+        return "rate_limited"
+    if 500 <= status < 600:
+        return "upstream_server_error"
+    return f"http_{status}"
+
+
+def http_generation_state(
+    method: str, status: int, diagnostic_code: str
+) -> ProviderGenerationState:
+    if diagnostic_code == "upstream_stream_incomplete":
+        return ProviderGenerationState.UNKNOWN
+    if method.upper() == "POST" and status == 408:
+        return ProviderGenerationState.UNKNOWN
+    if method.upper() != "POST" or status < 500:
+        return ProviderGenerationState.NOT_STARTED
+    if diagnostic_code in {"auth_unavailable", "authentication_failed", "quota_exhausted"}:
+        return ProviderGenerationState.NOT_STARTED
+    return ProviderGenerationState.UNKNOWN
+
+
+def http_retry_disposition(
+    method: str,
+    status: int,
+    diagnostic_code: str,
+    generation_state: ProviderGenerationState,
+) -> ProviderRetryDisposition:
+    if diagnostic_code in {"auth_unavailable", "authentication_failed", "quota_exhausted"}:
+        return ProviderRetryDisposition.TERMINAL
+    if method.upper() == "GET" and (status == 408 or status == 429 or 500 <= status < 600):
+        return ProviderRetryDisposition.SAFE
+    if (
+        method.upper() == "POST"
+        and status == 429
+        and diagnostic_code == "rate_limited"
+        and generation_state is ProviderGenerationState.NOT_STARTED
+    ):
+        return ProviderRetryDisposition.SAFE
+    if generation_state is ProviderGenerationState.UNKNOWN:
+        return ProviderRetryDisposition.FORBIDDEN
+    return ProviderRetryDisposition.TERMINAL
+
+
+def transport_generation_state(method: str) -> ProviderGenerationState:
+    return (
+        ProviderGenerationState.NOT_STARTED
+        if method.upper() == "GET"
+        else ProviderGenerationState.UNKNOWN
+    )
+
+
+def transport_retry_disposition(method: str) -> ProviderRetryDisposition:
+    return (
+        ProviderRetryDisposition.SAFE
+        if method.upper() == "GET"
+        else ProviderRetryDisposition.FORBIDDEN
+    )
+
+
+def retry_is_safe(method: str, failure: ProviderFailure) -> bool:
+    if failure.retry_disposition is not ProviderRetryDisposition.SAFE:
+        return False
+    if method.upper() != "POST":
+        return True
+    return (
+        failure.generation_state is ProviderGenerationState.NOT_STARTED
+        and failure.http_status == 429
+        and failure.diagnostic_code == "rate_limited"
+    )
+
+
+def retry_after_seconds(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            target = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=UTC)
+        seconds = (target - datetime.now(UTC)).total_seconds()
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
 
 
 class ProviderGenerationState(StrEnum):

@@ -28,7 +28,7 @@
         "schema_version": {
           "const": "market-impact.prospective-diagnostic-registration.v5"
         },
-        "checkpoint_tool_version": { "const": "3" },
+        "checkpoint_tool_version": { "enum": ["3", "4"] },
         "registration_id": {
           "type": "string",
           "pattern": "^prospective-diagnostic-registration-[0-9a-f]{64}$"
@@ -128,6 +128,14 @@
             "model_profile_id": { "const": "cliproxyapi-luna-max-cpa-reassessment-usd1-v1" },
             "aggregate_model_cost_limit_usd": { "const": "1.00" }
           }
+        },
+        {
+          "properties": {
+            "model_profile_id": { "const": "pi-cpa-luna-max-v2" },
+            "aggregate_model_cost_limit_usd": { "const": "0.30" },
+            "checkpoint_tool_version": { "const": "4" }
+          },
+          "required": ["checkpoint_tool_version"]
         }
       ]
     }

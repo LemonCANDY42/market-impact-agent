@@ -88,6 +88,12 @@ The registered retrospective cases and deterministic three-window market/industr
 defined in `docs/MARKET_REGIME_RESEARCH.md`. Case identity and realized labels remain evaluator-only;
 they cannot be inserted into Agent inputs or used to reopen the Phase 3 gate.
 
+The opened March–May 2026 US technology earnings diagnostic is documented in
+[`US_TECH_EARNINGS_AI_CAPEX_2026.md`](US_TECH_EARNINGS_AI_CAPEX_2026.md). It rejects a simple
+“revenue up but all stocks down because capex was high” cohort story and preregisters a narrower
+capex-change versus monetization-evidence ablation. Its known outcomes cannot enter the frozen
+eight-case cohort or become a Skill without later pristine paired evidence.
+
 Named-investor research procedures are separately represented by evidence-gated, persona-free
 Research Method Skills. Their point-in-time routing, allowed questions, explicit non-capabilities,
 and first small paired diagnostic are defined in `docs/METHOD_SKILLS.md`. A market-state label may
@@ -123,6 +129,13 @@ established. It selects `deep` for weak or disputed evidence and unknown transmi
 mappings. It selects `combined` for high-impact events or a market state that conflicts
 with the established mapping. Deep mode may enrich research but does not receive broader
 trading authority.
+
+Decision cadence is orthogonal to research depth. A one-shot event judgment, a scheduled daily
+account review and a material-evidence Watch Wake may use `fast`, `deep` or `combined`; none implies
+an order. The rolling experiment and its fixed-denominator/cost rules are defined in
+[`AGENT_EFFECTIVENESS_ACCEPTANCE.md`](AGENT_EFFECTIVENESS_ACCEPTANCE.md#one-shot-versus-rolling-reassessment-development),
+while the continuous account composition is owned by
+[`ACCOUNT_DECISION_LOOP.md`](ACCOUNT_DECISION_LOOP.md#review-triggers-and-action-cadence).
 
 ## First vertical slice
 

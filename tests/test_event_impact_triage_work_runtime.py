@@ -3,7 +3,6 @@
 import asyncio
 import json
 import sqlite3
-from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,7 +22,6 @@ from market_impact_agent.agent_runtime import (
     Utf8TokenEstimator,
 )
 from market_impact_agent.agent_schema import validate_agent_contract
-from market_impact_agent.cliproxy_provider import CLIProxyLunaConfig, CLIProxyLunaProvider
 from market_impact_agent.event_impact_triage import (
     EventImpactTriageCandidateSet,
     TriageAgentRole,
@@ -63,7 +61,6 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     TriageWorkRoleBinding,
     TriageWorkRunMember,
     _output_contract_for_binding,
-    _partition_model_turn_events,
     build_event_impact_triage_work_execution_plan,
     build_event_impact_triage_work_execution_plan_v3,
     build_event_impact_triage_work_execution_plan_v4,
@@ -79,10 +76,8 @@ from market_impact_agent.event_impact_triage_work_runtime import (
     event_impact_triage_work_execution_plan_from_dict,
 )
 from market_impact_agent.model_provider import (
-    ModelProviderFactory,
     load_builtin_model_provider_profile,
 )
-from market_impact_agent.openai_chat_provider import JsonHttpTransport, OpenAIChatProviderError
 from market_impact_agent.prospective_diagnostic import (
     ProspectiveDiagnosticRegistration,
     load_prospective_diagnostic_registration,
@@ -90,17 +85,17 @@ from market_impact_agent.prospective_diagnostic import (
 from market_impact_agent.prospective_triage import (
     PreparedProspectiveTriageWork,
     ProspectiveTriageActiveBatchStore,
-    _LazyAvailabilityModelProvider,
     run_prepared_prospective_triage_work,
 )
 from market_impact_agent.provider_reliability import (
     ProviderFailure,
     ProviderGenerationState,
-    ProviderHealthStore,
     ProviderRetryDisposition,
 )
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
+
+from .runtime_fakes import BusinessModelFixture
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 8, 30, 6, tzinfo=UTC)
@@ -118,7 +113,7 @@ class StaticResolver:
         return self.contents
 
 
-class ScriptedWorkProvider(ModelProvider):
+class ScriptedWorkProvider(BusinessModelFixture):
     def __init__(self, *, over_budget: bool = False) -> None:
         self.requests: list[tuple[dict[str, object], ...]] = []
         self.over_budget = over_budget
@@ -131,7 +126,7 @@ class ScriptedWorkProvider(ModelProvider):
     def model(self) -> str:
         return "gpt-5.6-luna"
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -300,7 +295,7 @@ class ConcurrencyTrackingProvider(ScriptedWorkProvider):
         self.peak = 0
         self.timeline: list[tuple[str, str]] = []
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -323,7 +318,7 @@ class ConcurrencyTrackingProvider(ScriptedWorkProvider):
         self.timeline.append(("start", phase))
         try:
             await asyncio.sleep(0.01)
-            return await super().complete(
+            return await super().answer(
                 messages=messages,
                 tools=tools,
                 temperature=temperature,
@@ -344,7 +339,7 @@ class OneConcurrentTerminalFailureProvider(ConcurrencyTrackingProvider):
         super().__init__()
         self.states = list(states)
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -376,7 +371,7 @@ class OneConcurrentTerminalFailureProvider(ConcurrencyTrackingProvider):
                 ),
                 attempts=1,
             )
-        return await super().complete(
+        return await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -516,7 +511,7 @@ class OneExtraBracketProvider(ScriptedWorkProvider):
         super().__init__()
         self.malformed_emitted = False
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -526,7 +521,7 @@ class OneExtraBracketProvider(ScriptedWorkProvider):
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> ModelTurn:
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -561,7 +556,7 @@ class OneExtraBracketProvider(ScriptedWorkProvider):
 
 
 class AlwaysExtraBracketProvider(ScriptedWorkProvider):
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -571,7 +566,7 @@ class AlwaysExtraBracketProvider(ScriptedWorkProvider):
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> ModelTurn:
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -608,98 +603,8 @@ class SimulatedProcessCrash(BaseException):
     pass
 
 
-class OneFailureTransport(JsonHttpTransport):
-    def __init__(self, failure: OpenAIChatProviderError) -> None:
-        self.failure = failure
-        self.requests: list[dict[str, object]] = []
-
-    async def request_json(
-        self,
-        *,
-        method: str,
-        url: str,
-        headers: Mapping[str, str],
-        payload: dict[str, object] | None,
-        timeout_seconds: float,
-    ) -> dict[str, object]:
-        self.requests.append(
-            {
-                "method": method,
-                "url": url,
-                "headers": dict(headers),
-                "payload": payload,
-                "timeout_seconds": timeout_seconds,
-            }
-        )
-        raise self.failure
-
-
-class SafeRetryTransport(JsonHttpTransport):
-    def __init__(self, failures: tuple[OpenAIChatProviderError, ...] | None = None) -> None:
-        self.requests: list[dict[str, object]] = []
-        self.failures = (
-            list(failures)
-            if failures is not None
-            else [
-                OpenAIChatProviderError(
-                    "rate limited before generation",
-                    error_class="http",
-                    diagnostic_code="rate_limited",
-                    http_status=429,
-                    generation_state=ProviderGenerationState.NOT_STARTED,
-                    retry_disposition=ProviderRetryDisposition.SAFE,
-                    attempts=1,
-                )
-            ]
-        )
-
-    async def request_json(
-        self,
-        *,
-        method: str,
-        url: str,
-        headers: Mapping[str, str],
-        payload: dict[str, object] | None,
-        timeout_seconds: float,
-    ) -> dict[str, object]:
-        assert payload is not None
-        self.requests.append(
-            {
-                "method": method,
-                "url": url,
-                "headers": dict(headers),
-                "payload": payload,
-                "timeout_seconds": timeout_seconds,
-            }
-        )
-        if self.failures:
-            raise self.failures.pop(0)
-        messages = cast(list[dict[str, object]], payload["messages"])
-        task = next(
-            decoded
-            for message in reversed(messages)
-            if message.get("role") == "user"
-            for decoded in (json.loads(str(message["content"])),)
-            if "phase" in decoded
-        )
-        output = ScriptedWorkProvider()._output(task)
-        content = canonical_json_bytes(output).decode()
-        response_id = f"safe-retry-{len(self.requests)}"
-        return {
-            "id": response_id,
-            "model": "gpt-5.6-luna",
-            "choices": [
-                {
-                    "message": {"role": "assistant", "content": content},
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {"prompt_tokens": 120, "completion_tokens": 80},
-        }
-
-
 class CrashAfterDispatchProvider(ScriptedWorkProvider):
-    async def complete(self, **kwargs: object) -> ModelTurn:
+    async def answer(self, **kwargs: object) -> ModelTurn:
         messages = kwargs.get("messages")
         assert isinstance(messages, tuple)
         self.requests.append(cast(tuple[dict[str, object], ...], messages))
@@ -707,7 +612,7 @@ class CrashAfterDispatchProvider(ScriptedWorkProvider):
 
 
 class InvalidThenCrashProvider(ScriptedWorkProvider):
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -720,7 +625,7 @@ class InvalidThenCrashProvider(ScriptedWorkProvider):
         if self.requests:
             self.requests.append(messages)
             raise SimulatedProcessCrash
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -741,7 +646,7 @@ class RemainingBudgetProvider(ScriptedWorkProvider):
         super().__init__()
         self.maximum_outputs: list[int] = []
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -752,7 +657,7 @@ class RemainingBudgetProvider(ScriptedWorkProvider):
         timeout_seconds: float,
     ) -> ModelTurn:
         self.maximum_outputs.append(max_output_tokens)
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -763,21 +668,6 @@ class RemainingBudgetProvider(ScriptedWorkProvider):
         return replace(
             turn,
             usage=ProviderUsage(input_tokens=120, output_tokens=max_output_tokens),
-        )
-
-
-class PreDispatchLegacy408Provider(ScriptedWorkProvider):
-    async def complete_with_observer(self, **kwargs: object) -> ModelTurn:
-        _ = kwargs
-        raise OpenAIChatProviderError(
-            "legacy pre-dispatch 408",
-            error_class="http",
-            diagnostic_code="http_408",
-            http_status=408,
-            generation_state=ProviderGenerationState.NOT_STARTED,
-            retry_disposition=ProviderRetryDisposition.TERMINAL,
-            request_id="mia-no-dispatch",
-            attempts=1,
         )
 
 
@@ -797,7 +687,7 @@ class CrashDuringValidationRunner(EventImpactTriageWorkRunner):
 
 
 class SlowFirstProvider(ScriptedWorkProvider):
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -808,7 +698,7 @@ class SlowFirstProvider(ScriptedWorkProvider):
         timeout_seconds: float,
     ) -> ModelTurn:
         await asyncio.sleep(0.05)
-        return await super().complete(
+        return await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -819,7 +709,7 @@ class SlowFirstProvider(ScriptedWorkProvider):
 
 
 class CorrectionOnceProvider(ScriptedWorkProvider):
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -842,7 +732,7 @@ class CorrectionOnceProvider(ScriptedWorkProvider):
                 raw_response={"id": "invalid-first", "content": content},
                 latency_ms=3.0,
             )
-        return await super().complete(
+        return await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -857,7 +747,7 @@ class InvalidResponseProvider(ScriptedWorkProvider):
         super().__init__()
         self.kind = kind
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -867,7 +757,7 @@ class InvalidResponseProvider(ScriptedWorkProvider):
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> ModelTurn:
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -1314,66 +1204,6 @@ def test_explicit_replacement_reuses_completed_work_and_preserves_ambiguous_run(
     assert len(healthy_provider.requests) == request_count
 
 
-def test_explicit_replacement_accepts_legacy_misclassified_http_408(
-    tmp_path: Path,
-) -> None:
-    replacement_store = EventImpactTriageWorkReplacementStore(
-        tmp_path / "replacement-authority.sqlite"
-    )
-    transport = OneFailureTransport(
-        OpenAIChatProviderError(
-            "legacy gateway 408",
-            error_class="http",
-            diagnostic_code="http_408",
-            http_status=408,
-            generation_state=ProviderGenerationState.NOT_STARTED,
-            retry_disposition=ProviderRetryDisposition.TERMINAL,
-            attempts=1,
-        )
-    )
-    provider = CLIProxyLunaProvider(
-        api_key="dedicated-local-key",
-        config=CLIProxyLunaConfig(
-            origin="http://127.0.0.1:8317",
-            model="gpt-5.6-luna",
-            reasoning_effort="xhigh",
-            retry_backoff_seconds=0,
-        ),
-        transport=transport,
-        request_id_factory=lambda: "mia-legacy-http-408",
-    )
-    runner, _, _, _, plan = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=2,
-        provider=cast(ScriptedWorkProvider, provider),
-        dialect="v6",
-        replacement_store=replacement_store,
-    )
-
-    blocked = asyncio.run(runner.run())
-    assert blocked.status is RunStatus.HUMAN_INPUT_REQUIRED
-    original = blocked.members[-1]
-    events = runner.journal.events(original.run_id)
-    assert events[-1].event_type == "model.request.rejected"
-    assert events[-1].payload["diagnostic_code"] == "http_408"
-    assert events[-1].payload["generation_state"] == "not_started"
-
-    grant = replacement_store.authorize_once(
-        plan_id=plan.plan_id,
-        phase=original.phase.value,
-        unit_id=original.unit_id,
-        role=original.role.value,
-        original_run_id=original.run_id,
-        authorized_at=NOW + timedelta(minutes=1),
-        journal=runner.journal,
-        artifact_store=runner.artifact_store,
-        usage_ledger=runner.usage_ledger,
-    )
-    assert grant.original_run_id == original.run_id
-    assert grant.replacement_run_id != original.run_id
-
-
 def test_replacement_consumes_original_turn_and_token_budgets(tmp_path: Path) -> None:
     replacement_store = EventImpactTriageWorkReplacementStore(
         tmp_path / "replacement-authority.sqlite"
@@ -1489,41 +1319,6 @@ def test_replacement_cannot_start_before_grant_authority(tmp_path: Path) -> None
         replacement_runner.journal.get_run(grant.replacement_run_id)
 
 
-def test_legacy_http_408_replacement_requires_real_preceding_dispatch(
-    tmp_path: Path,
-) -> None:
-    replacement_store = EventImpactTriageWorkReplacementStore(
-        tmp_path / "replacement-authority.sqlite"
-    )
-    runner, _, _, _, plan = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=2,
-        provider=PreDispatchLegacy408Provider(),
-        dialect="v6",
-        replacement_store=replacement_store,
-    )
-    blocked = asyncio.run(runner.run())
-    original = blocked.members[-1]
-    assert all(
-        event.event_type != "model.request.dispatched"
-        for event in runner.journal.events(original.run_id)
-    )
-
-    with pytest.raises(ValueError, match="unresolved ambiguous model dispatch"):
-        replacement_store.authorize_once(
-            plan_id=plan.plan_id,
-            phase=original.phase.value,
-            unit_id=original.unit_id,
-            role=original.role.value,
-            original_run_id=original.run_id,
-            authorized_at=NOW + timedelta(minutes=1),
-            journal=runner.journal,
-            artifact_store=runner.artifact_store,
-            usage_ledger=runner.usage_ledger,
-        )
-
-
 def test_ambiguous_replacement_cannot_be_replaced_again(tmp_path: Path) -> None:
     replacement_store = EventImpactTriageWorkReplacementStore(
         tmp_path / "replacement-authority.sqlite"
@@ -1620,400 +1415,11 @@ def test_sealed_legacy_v4_output_contracts_remain_replayable(tmp_path: Path) -> 
         assert canonical_hash(_output_contract_for_binding(legacy)) == output_contract_hash
 
 
-def test_provider_failure_journals_each_physical_post_with_sanitized_fields(
-    tmp_path: Path,
-) -> None:
-    secret = "SUPERSECRET-PROVIDER-BODY"
-    transport = OneFailureTransport(
-        OpenAIChatProviderError(
-            f"must not persist {secret}",
-            error_class="tls",
-            diagnostic_code="tls_bad_record_mac",
-            http_status=500,
-            generation_state=ProviderGenerationState.UNKNOWN,
-            retry_disposition=ProviderRetryDisposition.FORBIDDEN,
-            attempts=1,
-        )
-    )
-    provider = CLIProxyLunaProvider(
-        api_key="dedicated-local-key",
-        config=CLIProxyLunaConfig(
-            origin="http://127.0.0.1:8317",
-            model="gpt-5.6-luna",
-            reasoning_effort="xhigh",
-            retry_backoff_seconds=0,
-        ),
-        transport=transport,
-        request_id_factory=lambda: "mia-runtime-tls-1",
-    )
-    runner, _, _, _, _ = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=2,
-        provider=cast(ScriptedWorkProvider, provider),
-    )
-    runner.provider_health_store = ProviderHealthStore(tmp_path / "provider-health.sqlite")
-
-    result = asyncio.run(runner.run())
-
-    assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
-    assert len(transport.requests) == 1
-    events = runner.journal.events(result.members[-1].run_id)
-    assert sum(item.event_type == "model.request.dispatched" for item in events) == 1
-    failed = next(item for item in events if item.event_type == "model.request.failed")
-    assert failed.payload["error_class"] == "tls"
-    assert failed.payload["diagnostic_code"] == "tls_bad_record_mac"
-    assert failed.payload["http_status"] == 500
-    assert failed.payload["request_id"] == "mia-runtime-tls-1"
-    assert failed.payload["generation_state"] == "unknown"
-    assert failed.payload["retry_disposition"] == "forbidden"
-    assert failed.payload["attempts"] == 1
-    assert result.members[-1].metrics.provider_attempts == 1
-    assert result.members[-1].metrics.latency_ms >= 0
-    serialized_events = canonical_json_bytes([item.to_dict() for item in events])
-    assert secret.encode() not in serialized_events
-    assert not runner.provider_health_store.admission(provider.provider_id, now=NOW).allowed
-
-
-def test_safe_pre_generation_retry_is_authoritative_and_counts_physical_posts(
-    tmp_path: Path,
-) -> None:
-    transport = SafeRetryTransport()
-    provider = CLIProxyLunaProvider(
-        api_key="dedicated-local-key",
-        config=CLIProxyLunaConfig(
-            origin="http://127.0.0.1:8317",
-            model="gpt-5.6-luna",
-            reasoning_effort="xhigh",
-            retry_backoff_seconds=0,
-        ),
-        transport=transport,
-        request_id_factory=lambda: "mia-runtime-safe-retry",
-    )
-    runner, _, _, manifest, _ = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=2,
-        provider=cast(ScriptedWorkProvider, provider),
-        dialect="v4",
-    )
-
-    result = asyncio.run(runner.run())
-
-    assert result.status is RunStatus.COMPLETED
-    first = result.members[0]
-    assert first.metrics.provider_attempts == 2
-    events = runner.journal.events(first.run_id)
-    assert [item.event_type for item in events[:4]] == [
-        "model.request.dispatched",
-        "model.request.failed",
-        "model.request.dispatched",
-        "model.response.completed",
-    ]
-    assert result.partition is not None
-    expected_calls = len(manifest.work_units) + 1 + len(result.partition.clusters)
-    assert len(transport.requests) == expected_calls + 1
-    calls_before_reopen = len(transport.requests)
-    reopened = asyncio.run(runner.run())
-    assert reopened.status is RunStatus.COMPLETED
-    assert len(transport.requests) == calls_before_reopen
-
-
-def _received_408(diagnostic_code: str = "upstream_stream_incomplete") -> OpenAIChatProviderError:
-    return OpenAIChatProviderError(
-        "private incomplete response body",
-        error_class="http",
-        diagnostic_code=diagnostic_code,
-        http_status=408,
-        generation_state=ProviderGenerationState.UNKNOWN,
-        retry_disposition=ProviderRetryDisposition.FORBIDDEN,
-    )
-
-
-def _received_408_runtime(
-    tmp_path: Path,
-    *,
-    failures: tuple[OpenAIChatProviderError, ...],
-    runner_class: type[EventImpactTriageWorkRunner] = EventImpactTriageWorkRunner,
-):
-    alias = "cliproxyapi-luna-max-cpa-retry408-v1"
-    profile = load_builtin_model_provider_profile(alias)
-    transport = SafeRetryTransport(failures)
-    provider = CLIProxyLunaProvider(
-        api_key="fixture-only-key",
-        config=CLIProxyLunaConfig(
-            origin=profile.origin,
-            model=profile.model,
-            reasoning_effort="max",
-            max_attempts=profile.max_attempts,
-            retry_backoff_seconds=0,
-            retry_received_408_once=True,
-        ),
-        transport=transport,
-        request_id_factory=lambda: f"mia-408-{len(transport.requests)}",
-    )
-    runner, _, candidate_set, manifest, plan = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=2,
-        provider=cast(ScriptedWorkProvider, provider),
-        dialect="v4",
-        model_profile_alias=alias,
-        runner_class=runner_class,
-    )
-    return runner, transport, candidate_set, manifest, plan
-
-
-@pytest.mark.parametrize("diagnostic_code", ["http_408", "upstream_stream_incomplete"])
-def test_received_408_regeneration_reopens_completed_authority_and_usage(
-    tmp_path: Path,
-    diagnostic_code: str,
-) -> None:
-    runner, transport, candidate_set, manifest, _ = _received_408_runtime(
-        tmp_path,
-        failures=(_received_408(diagnostic_code),),
-    )
-    result = asyncio.run(runner.run())
-    assert result.status is RunStatus.COMPLETED
-    assert result.partition is not None and result.proposal is not None
-    assert result.run_evidence is not None
-    first = result.members[0]
-    events = runner.journal.events(first.run_id)
-    assert [event.event_type for event in events[:4]] == [
-        "model.request.dispatched",
-        "model.request.failed",
-        "model.request.dispatched",
-        "model.response.completed",
-    ]
-    failure = events[1]
-    assert failure.payload["generation_state"] == "unknown"
-    assert failure.payload["retry_disposition"] == "authorized_regeneration"
-    assert failure.payload["dispatch_event_hash"] == events[0].event_hash
-    assert failure.payload["request_id"] == events[2].payload["provider_request_id"]
-    assert transport.requests[0]["payload"] == transport.requests[1]["payload"]
-    assert first.metrics.provider_attempts == 2
-    assert first.metrics.latency_ms == events[3].payload["latency_ms"]
-    assert first.metrics.latency_ms >= 1000
-    assert first.metrics.input_tokens == 120 and first.metrics.output_tokens == 80
-    assert runner.usage_ledger.records()[0].record.metrics == first.metrics
-    assert b"private incomplete response body" not in canonical_json_bytes(
-        [event.to_dict() for event in events]
-    )
-    runner.assert_authoritative_completed_work_run(
-        candidate_set=candidate_set,
-        work_manifest=manifest,
-        digests=result.digests,
-        partition=result.partition,
-        proposal=result.proposal,
-        run_evidence=result.run_evidence,
-    )
-    calls_before = len(transport.requests)
-    assert asyncio.run(runner.run()) == result
-    assert len(transport.requests) == calls_before
-
-
-def test_second_received_408_stops_and_does_not_reopen_as_retryable(tmp_path: Path) -> None:
-    runner, transport, _, _, _ = _received_408_runtime(
-        tmp_path,
-        failures=(_received_408(), _received_408()),
-    )
-    result = asyncio.run(runner.run())
-    assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
-    assert len(transport.requests) == 2
-    first = result.members[0]
-    failures = [
-        event
-        for event in runner.journal.events(first.run_id)
-        if event.event_type == "model.request.failed"
-    ]
-    assert [event.payload["retry_disposition"] for event in failures] == [
-        "authorized_regeneration",
-        "forbidden",
-    ]
-    assert first.metrics.provider_attempts == 2
-    assert runner.usage_ledger.records()[0].record.metrics == first.metrics
-    assert asyncio.run(runner.run()) == result
-    assert len(transport.requests) == 2
-
-
-def test_received_408_retry_response_can_recover_validation_crash(tmp_path: Path) -> None:
-    runner, transport, candidate_set, manifest, plan = _received_408_runtime(
-        tmp_path,
-        failures=(_received_408(),),
-        runner_class=CrashDuringValidationRunner,
-    )
-    with pytest.raises(SimulatedProcessCrash):
-        asyncio.run(runner.run())
-    assert len(transport.requests) == 2
-    recovered = EventImpactTriageWorkRunner(
-        plan=plan,
-        candidate_set=candidate_set,
-        work_manifest=manifest,
-        registration=_registration(),
-        provider=runner.provider,
-        content_resolver=runner.content_resolver,
-        skills=runner.skills,
-        artifact_store=runner.artifact_store,
-        journal=runner.journal,
-        usage_ledger=runner.usage_ledger,
-        clock=lambda: NOW,
-    )
-    result = asyncio.run(recovered.run())
-    assert result.status is RunStatus.COMPLETED and result.partition is not None
-    assert len(transport.requests) == len(manifest.work_units) + len(result.partition.clusters) + 2
-    assert result.members[0].metrics.provider_attempts == 2
-
-
-def test_trailing_authorized_408_failure_is_never_resumed(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner, transport, _, _, _ = _received_408_runtime(tmp_path, failures=(_received_408(),))
-    append = runner.journal.append
-
-    def crash_after_failure(**kwargs: Any):
-        event = append(**kwargs)
-        if event.event_type == "model.request.failed":
-            raise SimulatedProcessCrash
-        return event
-
-    with monkeypatch.context() as patch:
-        patch.setattr(runner.journal, "append", crash_after_failure)
-        with pytest.raises(SimulatedProcessCrash):
-            asyncio.run(runner.run())
-    assert len(transport.requests) == 1
-    result = asyncio.run(runner.run())
-    assert result.status is RunStatus.HUMAN_INPUT_REQUIRED
-    assert result.members[0].metrics.provider_attempts == 1
-    assert len(transport.requests) == 1
-
-
-@pytest.mark.parametrize(
-    "misuse",
-    [
-        "opt_out",
-        "wrong_status",
-        "wrong_diagnostic",
-        "safe_unknown",
-        "not_started",
-        "request_id",
-        "next_request_id",
-        "attempt_number",
-        "output_budget",
-        "attempt_ceiling",
-        "second_regeneration",
-    ],
-)
-def test_recovered_received_408_proof_rejects_policy_misuse(tmp_path: Path, misuse: str) -> None:
-    alias = PROFILE_ALIAS if misuse == "opt_out" else "cliproxyapi-luna-max-cpa-retry408-v1"
-    profile = load_builtin_model_provider_profile(alias)
-    transport = SafeRetryTransport()
-    provider = CLIProxyLunaProvider(
-        api_key="fixture-only-key",
-        config=CLIProxyLunaConfig(
-            origin=profile.origin,
-            model=profile.model,
-            reasoning_effort="max",
-            retry_backoff_seconds=0,
-        ),
-        transport=transport,
-        request_id_factory=lambda: "mia-proof-fixture",
-    )
-    runner, _, _, _, _ = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=2,
-        provider=cast(ScriptedWorkProvider, provider),
-        dialect="v4",
-        model_profile_alias=alias,
-    )
-    result = asyncio.run(runner.run())
-    first = result.members[0]
-    events = runner.journal.events(first.run_id)
-    groups, _ = _partition_model_turn_events(events[:-1])
-    group = groups[0]
-    failure = group.failures[0]
-    payload = {
-        **failure.payload,
-        "http_status": 408,
-        "diagnostic_code": "http_408",
-        "generation_state": "unknown",
-        "retry_disposition": "authorized_regeneration",
-    }
-    overrides = {
-        "wrong_status": {"http_status": 500},
-        "wrong_diagnostic": {"diagnostic_code": "auth_unavailable"},
-        "safe_unknown": {"retry_disposition": "safe"},
-        "not_started": {"generation_state": "not_started"},
-        "request_id": {"request_id": "unbound-request"},
-        "attempt_number": {"physical_attempt": 2},
-    }
-    payload.update(overrides.get(misuse, {}))
-    group = replace(group, failures=(replace(failure, payload=payload),))
-    next_dispatch = group.dispatches[1]
-    if misuse in {"next_request_id", "output_budget"}:
-        field = "provider_request_id" if misuse == "next_request_id" else "max_output_tokens"
-        value = "different-request" if misuse == "next_request_id" else 1
-        group = replace(
-            group,
-            dispatches=(
-                group.dispatches[0],
-                replace(
-                    next_dispatch,
-                    payload={**next_dispatch.payload, field: value},
-                ),
-            ),
-        )
-    elif misuse in {"second_regeneration", "attempt_ceiling"}:
-        third = replace(
-            next_dispatch,
-            event_hash="3" * 64,
-            payload={**next_dispatch.payload, "physical_attempt": 3},
-        )
-        second_failure = replace(
-            failure,
-            payload={
-                **payload,
-                "dispatch_event_hash": next_dispatch.event_hash,
-                "physical_attempt": 2,
-                "attempts": 2,
-            },
-        )
-        if misuse == "attempt_ceiling":
-            second_failure = replace(
-                second_failure,
-                payload={
-                    **second_failure.payload,
-                    "http_status": 429,
-                    "diagnostic_code": "rate_limited",
-                    "generation_state": "not_started",
-                    "retry_disposition": "safe",
-                },
-            )
-        group = replace(
-            group, dispatches=(*group.dispatches, third), failures=(*group.failures, second_failure)
-        )
-    messages = tuple(
-        cast(
-            list[dict[str, object]],
-            runner.artifact_store.read_json(str(group.dispatches[0].payload["prompt_hash"])),
-        )
-    )
-    with pytest.raises(ValueError, match="not authorized by its Profile"):
-        runner._recovered_model_turn(
-            binding=runner.plan.binding(first.phase, first.role),
-            unit_id=first.unit_id,
-            active_messages=messages,
-            group=group,
-        )
-
-
 def test_lazy_availability_failure_stays_nonterminal_until_later_recovery(
     tmp_path: Path,
 ) -> None:
     provider = FailOnceAvailabilityProvider()
-    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
-    lazy_provider = _LazyAvailabilityModelProvider(profile=profile, provider=provider)
+    lazy_provider = provider
     runner, _, _, _, _ = _runtime(
         tmp_path,
         arm=TriageComparisonArm.BASELINE,
@@ -2055,72 +1461,6 @@ def test_lazy_availability_failure_stays_nonterminal_until_later_recovery(
     assert not any(event.event_type == "model.request.ambiguous" for event in recovered_events)
     assert len(runner.usage_ledger.records()) == 1
     assert runner.usage_ledger.records()[0].record.metrics.provider_attempts == 1
-
-
-def test_lazy_factory_failure_retries_only_on_later_invocation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    provider = FailOnceAvailabilityProvider()
-    provider.availability_calls = 1
-    factory_calls = 0
-
-    class FlakyFactory:
-        def create(self, _profile: object) -> ModelProvider:
-            nonlocal factory_calls
-            factory_calls += 1
-            if factory_calls == 1:
-                raise RuntimeError("fixture Provider factory is unavailable")
-            return provider
-
-    factory = FlakyFactory()
-
-    def build_factory(_cls: type[ModelProviderFactory]) -> FlakyFactory:
-        return factory
-
-    monkeypatch.setattr(
-        ModelProviderFactory,
-        "with_builtin_adapters",
-        classmethod(build_factory),
-    )
-    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
-    lazy_provider = _LazyAvailabilityModelProvider(profile=profile, provider=None)
-    runner, _, _, _, _ = _runtime(
-        tmp_path,
-        arm=TriageComparisonArm.BASELINE,
-        count=1,
-        provider=cast(ScriptedWorkProvider, lazy_provider),
-        dialect="v9",
-        registration=_material_registration(),
-        checkpoint_key="next-material-a-share-event",
-    )
-
-    first = asyncio.run(runner.run())
-
-    assert first.status is RunStatus.HUMAN_INPUT_REQUIRED
-    assert factory_calls == 1
-    assert provider.availability_calls == 1
-    assert provider.requests == []
-    assert first.members[0].metrics.provider_attempts == 0
-    assert runner.journal.get_run(first.members[0].run_id).status is RunStatus.RUNNING
-    assert runner.usage_ledger.records() == ()
-    assert [event.event_type for event in runner.journal.events(first.members[0].run_id)] == [
-        "provider.preparation.failed"
-    ]
-
-    recovered = asyncio.run(runner.run())
-
-    assert recovered.status is RunStatus.COMPLETED
-    assert factory_calls == 2
-    assert provider.availability_calls == 2
-    assert len(provider.requests) == 1
-    assert len(runner.usage_ledger.records()) == 1
-
-    reopened = asyncio.run(runner.run())
-
-    assert reopened.status is RunStatus.COMPLETED
-    assert factory_calls == 2
-    assert provider.availability_calls == 2
-    assert len(provider.requests) == 1
 
 
 def test_recovered_preparation_failure_completes_and_releases_active_batch(
@@ -2221,7 +1561,7 @@ def test_recovered_preparation_failure_completes_and_releases_active_batch(
     )
 
     assert recovered["status"] == RunStatus.COMPLETED.value
-    assert provider.availability_calls == 2
+    assert provider.availability_calls == 4
     assert active_store.active(**lookup) is None
 
 
@@ -3257,19 +2597,6 @@ def test_v12_bounds_concurrency_and_preserves_phase_barriers(tmp_path: Path) -> 
     assert last_map < first_partition < last_partition < first_classify
     replay = asyncio.run(runner.run())
     assert replay == result
-
-
-def test_lazy_provider_probes_availability_once_under_concurrency() -> None:
-    profile = load_builtin_model_provider_profile(PROFILE_ALIAS)
-    provider = SlowAvailabilityProvider()
-    wrapped = _LazyAvailabilityModelProvider(profile=profile, provider=provider)
-
-    async def prepare_all() -> None:
-        await asyncio.gather(*(wrapped.prepare_for_model_call() for _ in range(3)))
-
-    asyncio.run(prepare_all())
-
-    assert provider.availability_calls == 1
 
 
 def test_v13_material_ingress_uses_the_same_frozen_concurrency_ceiling(

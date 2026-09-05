@@ -46,7 +46,7 @@ CPA_ALIAS = "cliproxyapi-luna-xhigh-cpa-v1"
 
 
 class _RepairFixtureProvider(FixtureProvider):
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -56,7 +56,7 @@ class _RepairFixtureProvider(FixtureProvider):
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> ModelTurn:
-        turn = await super().complete(
+        turn = await super().answer(
             messages=messages,
             tools=tools,
             temperature=temperature,

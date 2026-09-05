@@ -63,14 +63,20 @@ from market_impact_agent.research import EventArchetype, EventStage, Transmissio
 from market_impact_agent.runtime_store import RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
 
+from .runtime_fakes import BusinessModelFixture
+
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 9, 1, 6, tzinfo=UTC)
 
 
-class FixtureProvider(ModelProvider):
+class FixtureProvider(BusinessModelFixture):
     def __init__(self, responses: tuple[dict[str, object], ...]) -> None:
         self.responses = list(responses)
         self.calls = 0
+        self.closed = 0
+
+    async def close(self) -> None:
+        self.closed += 1
 
     @property
     def provider_id(self) -> str:
@@ -83,7 +89,7 @@ class FixtureProvider(ModelProvider):
     async def assert_model_available(self, *, timeout_seconds: float) -> None:
         assert timeout_seconds == 30
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],
@@ -194,6 +200,7 @@ def test_event_assessment_run_is_durable_and_authoritative(tmp_path: Path) -> No
     assert first.metrics.provider_attempts == 1
     assert first.metrics.estimated_cost_microusd == 540
     assert provider.calls == 1
+    assert provider.closed == 0  # A caller-owned shared Provider outlives this runner.
     EventAssessmentRunAuthority(
         run_root=tmp_path / "runs",
         registration=registration,
@@ -229,6 +236,30 @@ def test_event_assessment_run_is_durable_and_authoritative(tmp_path: Path) -> No
             decision=decision,
             assessment=tampered,
         )
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_assessment_releases_its_factory_owned_provider_on_every_terminal(
+    tmp_path: Path, valid: bool
+) -> None:
+    registration, candidate, proposal, decision, cluster, contents = _inputs()
+    provider = FixtureProvider((_valid_response() if valid else {"invalid": True},))
+    runner = _runner(
+        tmp_path,
+        registration,
+        candidate,
+        proposal,
+        decision,
+        cluster,
+        contents,
+        None,
+        provider_factory=lambda: provider,
+    )
+    result = asyncio.run(runner.run())
+    assert result.status.terminal
+    assert provider.closed == 1
+    assert asyncio.run(runner.run()) == result
+    assert provider.calls == 1 and provider.closed == 1
 
 
 def test_empty_assessment_path_completes_as_watch_without_retry(tmp_path: Path) -> None:
@@ -511,7 +542,7 @@ def test_provider_health_open_circuit_blocks_dispatch(tmp_path: Path) -> None:
     assert result.terminal_artifact_hash is None
     assert provider.calls == 0
     assert any(
-        item.event_type == "provider.probe.failed"
+        item.event_type == "provider.admission.blocked"
         for item in RunJournal(tmp_path / "runs/runs.sqlite3").events(result.run_id)
     )
 

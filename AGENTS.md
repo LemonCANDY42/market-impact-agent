@@ -1,5 +1,8 @@
 # Project Guidance
 
+Global Codex guidance owns general execution, delegation, and verification
+behavior; this file adds project-specific authority and acceptance boundaries.
+
 ## Outcome
 
 Build the smallest auditable path to Agent-directed automated paper and live
@@ -24,6 +27,9 @@ execution phases remain fail-closed until their acceptance gates pass.
 ## Domain and documentation
 
 - Use the canonical terms in `CONTEXT.md`.
+- For model invocation/management and Agent infrastructure, follow
+  `docs/AGENT_RUNTIME.md#reuse-first-runtime-policy`: reuse a maintained upstream
+  implementation by default; custom behavior requires an evidence-backed exception.
 - Enforce only invariants that protect an owned boundary such as authority, PIT,
   budget, idempotency, risk, or replay. Do not require Agents or Providers to
   echo IDs, ordering, defaults, or optional fields the Harness can derive or

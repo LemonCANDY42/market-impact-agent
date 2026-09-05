@@ -1,0 +1,22 @@
+{
+  "name": "@market-impact/pi-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "upgrade:rehearsal": "node --experimental-strip-types test/upgrade-rehearsal.ts",
+    "start": "node --experimental-strip-types src/worker.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.84.4",
+    "@earendil-works/pi-agent-core": "0.84.4",
+    "openai": "6.40.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.0",
+    "typescript": "6.0.3"
+  }
+}

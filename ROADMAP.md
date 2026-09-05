@@ -5,11 +5,232 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 ## Current delivery lane
 
-The shortest accepted path to Agent-directed paper operation is:
+The dynamic-horizon/multi-model development path is implemented through its
+first non-executing evidence gates. New Research Thesis and Portfolio Proposal
+contracts support 1/3, 5/10 and 20/60-session horizons, priced-in versus
+incremental reasoning, counter-scenarios, invalidation and planned review.
+Decision Recall is a bounded, cutoff-correct projection over Research Theses bound
+to signed completed source Runs; a standalone content-addressed object is not
+admitted. Current account and portfolio facts remain in their dedicated authorities.
+Luna max, Terra high and Sol high Profiles freeze 272k context and a
+258k compaction trigger; model-specific prices and the approved USD 20 stage
+budgets remain separate. The opened analysis runner uses three reusable pi
+workers, conditional non-voting Sol Judge arbitration, same-model concurrency
+three and study concurrency six. The portfolio runner tests four account states
+while reusing the same bullish thesis for the two holdings contrasts; it creates
+no Mock execution by itself.
 
-0. keep the admitted v5 registration/v7 route epoch and supervisor healthy without resetting its
-   append-only misses, receipts or replacement history. Collection health is supporting
-   infrastructure, not the current experiment blocker;
+Dynamic outcome opening follows the thesis-selected horizon and keeps model
+inputs isolated from the price panel. It reports fixed denominators, signed
+return, adverse excursion, drawdown, stability, conditional-topology selection
+and a narrow true-date/relative-offset memory diagnostic. Pre- versus post-2026
+comparison remains pending actual post-2026 outcomes and cannot establish
+training leakage. Continuous-review admission now has a zero-cost exact-session
+preflight: the existing four sparse sequences do not yet contain all scheduled
+D1-through-D60 market/account observations plus the registered model-review
+snapshots, so they will not be relabeled or spend the USD 5 cadence budget.
+Every accepted horizon will nevertheless be scored as a complete daily path,
+including mark-to-market, risk, execution and reconciliation; one-shot means no
+new research call, not missing intermediate days.
+
+The three CPA routes passed the dynamic-study qualification on the final frozen
+candidate (3 requests / USD .032844). The selected v3 analysis produced 23/24
+base theses, three conditional Judges and nine stability repeats. Luna's one
+missing base answer was semantically valid but rejected for trailing whitespace;
+the bounded parser fix is prospective and the failed Run remains unchanged. The
+memory-sensitivity companion ended with unknown generation state and was not
+retried. Opened, correlated endpoint diagnostics were Luna +.99% over 7/8 scored
+cases, Terra +18.21% over 8/8, Sol +32.95% over 8/8, and the conditional topology
++8.48% over 7/8. Exact direction-and-horizon stability was respectively 1/3,
+3/3 and 1/3. These sums are not portfolio returns or Alpha; the common failure on
+2020-02-03 and 2020-03-23 confirms that already-priced shocks and reversals remain
+a material weakness.
+
+The portfolio ablation used 12 requests / USD .400923. Five Runs passed the
+then-current strict terminal contract. The other seven contained reasonable
+account-sensitive actions but were rejected because one evidence item appeared
+in both supporting and counterevidence lists. V4 now permits that economically
+valid competing interpretation and records only bounded narrative whitespace
+normalization; identity and frozen evidence references remain strict. No old
+terminal was rewritten or rerun, and no Mock order was created.
+
+Across route qualification, preserved failed analysis attempts, selected analysis
+and portfolio work, this epoch used 98 physical requests and USD 5.356905 known
+cost, with USD .011769 reserved for one unknown-generation request. The next
+dependency-closed slice is to build cutoff-correct daily market/news/account
+snapshots for every D1-through-Dn session, then run the one-shot/scheduled/event
+cadence comparison. Four unseen cases and actual-receipt prospective work remain
+separate confirmation gates; only a nonempty executable proposal may enter Mock.
+Live remains closed.
+
+The final read-only review also closed two authority gaps prospectively: future-dated
+evidence cannot be dispatched or imported into an earlier Portfolio cutoff, and a
+stored outcome report must reopen its signed 8x3 analysis ancestry and exact panel
+and recompute identically. A standalone self-hashed result is not replay evidence.
+
+The user-approved v3 forecast-question-only contrast completed 2/2 cases, registered as
+`9de4dbf5…` over two already-opened checkpoints (2020-03-02, 2024-11-18). Both arms keep identical
+inputs/model/Skills/tools and financial boundaries; the treatment changes only the unreasonable
+future-persistence proof requirement, including its own conditional Judge's inherited question.
+Control finals abstained; treatment finals were up and down respectively over five sessions.
+All nine Runs, 63 consumed tool results and Usage reconciled (`0d53f51c…`); independent review
+found both treatment finals adequately supported (`176beffd…`). A supporting analyst's one-session
+financing-date error remains recorded, so this is not zero-error or investment-effectiveness proof.
+New cost: 18 requests / USD .219847; total market known spend USD .477294 plus old USD .023480
+unknown reservation, leaving USD 2.499226 unspent/unreserved. No new outcomes or trades were opened.
+The subsequent eight-case preflight found outcome-characterizing archive labels in original
+model-facing source references. This limits v3 to a methodological diagnostic, not a clean blind
+forecasting contrast. V4 masks those references while retaining original provenance for audit.
+The eight-checkpoint development input inventory covers six existing regime families, not eight
+independent roots. The v4 production entry now runs only the current-question pipeline:
+two independent analysts plus a conditional Judge, without rerunning the obsolete control in each
+case. Registration `3db775df…` froze at most USD .30/12 requests per checkpoint, three active cases
+and shared model admission. It terminated with **3/8 complete, 3 incomplete and 2 not started**:
+2018-07-02 down, 2019-01-07 uncertain after Judge, 2020-02-03 down. Independent review `cd045305…`
+reopened seven completed-case Runs/49 consumed tool results; no concrete selected-final factual
+error was found, but one supporting analyst understated financing contraction. Each subsequent
+incomplete case received HTTP 500 with generation unknown; queued cases stopped and started peers
+drained. New usage: 23 requests, USD .239180 known plus USD .041940 reserved. Cumulative market
+known spend is USD .716474, reservations USD .065420, remaining unspent/unreserved USD 2.218106.
+No new future-price outcomes or paid portfolio canary were opened; there is no forecasting-accuracy
+or investment-effectiveness pass. Provider failure is not an investment judgment. See
+`docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md#eight-checkpoint-forecast-development-v4--2026-09-03`.
+
+The fixed eight inputs were subsequently completed through explicit versioned successors after the
+local CLIProxyAPI package was upgraded from 7.2.140 to 7.2.145. Old HTTP-500, timeout and non-run
+records remain immutable; no failed response was rewritten. The selected complete terminals are
+**8/8**, with five directional research forecasts and three uncertain/no-direction research views.
+Independent review opened the five-session outcomes only after all selected terminals were sealed:
+three of five directions agreed with the index endpoint and two did not. Both misses were sharp
+post-shock reversals (2020-02-03 and 2020-03-23), making already-priced damage and regime-transition
+evidence the next development target. This is correlated Modeled-PIT development evidence, not a
+portfolio return, Skill promotion, calibrated accuracy or Alpha claim. Selected terminals consumed
+36 requests / USD .429507; all attempts consumed 54 requests / USD .575996 known, while old
+unknown-generation failures retain reservations. See
+`docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md#eight-checkpoint-versioned-completion-and-outcomes--2026-09-04`.
+
+The next minimum-complete decision slice is now explicit: preserve broad rolling collection, pass
+the admitted Watch's original question/counterevidence/invalidation into its Wake Run, add one
+versioned trading-calendar portfolio-review schedule, and converge simultaneous event/scheduled
+triggers on one frozen Authorized Decision View. Daily review is not daily trading; the Portfolio
+Agent always recommends an account state when the review completes, while missing authority remains
+a typed blocker and deterministic change/friction/risk gates decide whether an order exists. Validate
+one-shot, horizon-matched scheduled and material-event-driven policies first on the eight opened development
+episodes, then on later pristine sequences. The primary diagnostic
+is whether rolling information corrects post-shock reversal errors after costs without excessive
+churn, not whether it manufactures more trades.
+
+The account-aware producer is now implemented: `PortfolioReviewAuthority` reopens completed
+same-root research or admits an explicit account-only review, invokes actual pi and binds its
+v3 recommendation to the exact account/view/mandate. No final portfolio `abstain` or standalone
+`observe`; cash hold is valid, missing account truth/model failure is incomplete. The connected
+`run_portfolio_review_pipeline` derives target delta and `PortfolioOrderIntent`, reusing v2 sizing
+and the existing durable execution owner with explicit `manual_each` approval. Positive research
+can yield a concentration-reducing sale without forging a bearish Signal. Mock fills and account
+reconciliation derive from immutable synthetic opening state and durable Provider facts.
+Local acceptance passed: 18 portfolio integration/authority cases use real pi with replaced network
+responses; full regression is **1,766 passed**, plus four Node tests, Ruff/format, Pyright and
+TypeScript. Independent review's two P2 findings are fixed: cancellation closes terminal/Usage
+without regeneration, and Mock concentration rejects non-per-share marks. This is not paid model
+allocation-quality or real broker evidence. The old paired prospective route is not silently switched: automatic terminal
+selection and scheduled activation require their own registration. Rotation, short execution and
+manual cancel/replace through this entry remain closed. Current boundaries:
+`docs/ACCOUNT_DECISION_LOOP.md#current-agent-handoff-and-activation-boundary`.
+
+The pi runtime prerequisite is complete for CPA/Luna max Responses and MiniMax M3 Chat:
+build `ad861366…`, acceptance `5222b963…`, formally admitted 2026-09-03 Singapore.
+All new model entries use public pi 0.84.4; former generic Python transports, parsers,
+loop and compactor are removed without fallback. Model Profile v2, separate
+Run/conversation/cache IDs, shared same-model leases, parent-Journal budget admission,
+JSON wrapping and runtime doctor remain the single current path.
+
+The authorized repaired-build qualification passed 6/6 cases with nine physical
+requests, including real overlap, no-regeneration completion restart, both-route
+history/compression continuation and zero-dispatch cancellation. Full local checks
+passed (1,727 Python tests, four Node tests, lint/format/types); exact offline terminal
+replay and Usage reconciliation passed. Two prior failed batches remain immutable.
+Cumulative runtime usage is 45/48 requests, USD .112342/3, zero unsettled requests;
+new usage was USD .023354. Prior cache results do not prove consistently high caching.
+See `docs/AGENT_RUNTIME.md` and ADR 0006 for accepted scope and evidence limitations.
+
+The subsequent bounded reliability ablation left that accepted build unchanged:
+12 isolated runtime/financial guard mutations were detected by 11 existing control
+tests; four CPA synthetic with/without-exposure Judgments consumed exact tool evidence,
+preserved known versus unknown shares, and replayed without extra calls. New spend:
+8 requests / USD .016191; MiniMax unused. All four abstained, so this is evidence
+handling and control reliability, not investment effectiveness. Full regression
+for that audit was 1,727 passed. Details and limitations: `docs/MODEL_PROVIDER_RELIABILITY.md`.
+
+The separately authorized **USD 3 market slice actually started on 2026-09-03**. The current-cutoff
+Earnings reassessment completed with abstention after using all selected evidence. The first
+historical pilot (2019-01-07) completed: both control and added cycle-context Skill abstained twice;
+all tool results appeared in subsequent native model input and terminal/Usage reopening passed.
+The original risk pilot (2020-03-02) did not complete: its first control abstained, while treatment hit the
+600-second local wall limit after spending about 238 seconds waiting for the same serial pi worker.
+No 408 was observed and the monetary cap was not exhausted. The third pilot (2024-11-18) was not
+started under the frozen stop rule. That original cohort remains **2/4 completed market samples
+and 1/3 completed historical cases**, not an effectiveness pass. Fourteen physical requests have known CPA estimated
+cost USD .091838; one request has unknown generation/usage and retains USD .023480 reservation.
+MiniMax was not used. Old failures, missed windows, denominator and reservations remain unchanged.
+
+The pilot composition's worker ownership is now corrected using the existing one-worker-per-arm
+pattern and common parent budget. Forty-two focused offline pilot tests passed, including actual
+Node/pi concurrent admission and accounting; pi's single-active-run lock and hard deadline were not
+loosened. The user subsequently authorized one bounded continuation of only the risk and unstarted
+third case, registered as `85989b15…`. It uses the original per-case parent allocations, including
+the old unknown reservation, and cannot reopen this closed cohort. Both new cases completed and
+passed terminal/context/Usage audit `8863b6e2…`: nine completed Runs, all 63 tool results consumed,
+maximum first-dispatch delay 0.498 seconds, no new unknown usage. New cost was USD .165609 for 18
+requests. Final decisions were all abstain; one control up/abstain disagreement was resolved by
+one evidence-led Judge. Separate semantic review identified an unjustified future-proof requirement
+in a selected treatment rationale, so structural completion is not semantic acceptance.
+
+Only then did outcome report `6b82c030…` open both five-session index paths (+4.2749%, -2.9232%) and
+recompute all 15 original comparator windows with normal/doubled costs. These abstentions omit
+both upside and downside; they do not prove useful risk timing. Added Skills did not improve final
+actions. Equal-sector buy-and-hold beat primary return in 8/15 cases and improved drawdown in 7/15;
+unconditional lagged momentum did so in only 6/15 and 2/15. Its Sharpe wins fell from 5/12 to 4/12
+under doubled fees. These are non-executable, opened index diagnostics, not Agent P&L or Alpha.
+The combined original-plus-continuation market spend is 32 requests / USD .257447 known estimate
+plus the old USD .023480 reservation; USD 2.719073 remains unspent/unreserved, not automatic new
+sample authority. Original failure remains 1/3; the separate continuation is 2/2 complete.
+
+Separately, an offline comparator audit corrected a one-way rotation-fee
+undercharge: new regime baseline reports are v2, while old v1 empirical reports remain marked with
+their fee limitation. Content-identified exclusive report writes prevent recomputation from
+overwriting earlier evidence. The incomplete cohort's outcome evaluator stopped before future-price
+opening and remains unchanged. The separately authorized continuation owns the new outcome reports.
+
+The research candidates are comparable-period Earnings revisions, directly exposed industry
+disruption/recovery, and market-breadth/financing risk review. They are hypotheses, not enabled
+Skills. The v3 question contrast above diagnoses the forecasting requirement while holding
+evidence/model/Skills fixed; next separately repair missing source facts where material, and only
+then test one added Skill on identical full inputs. Never require known future persistence to
+form a forecast, or turn abstention into a failure merely to produce trades. The next ablations and rejection criteria
+are in `docs/AGENT_EFFECTIVENESS_ACCEPTANCE.md#accepted-pi-market-resumption-attempt--2026-09-03`.
+Keep the at-least-two-of-three pilot readiness gate, existing promotion gates and separate budgets.
+No 24-case holdout, Skill promotion or Mock trade occurred. Mock still requires genuine eligibility
+and a nonempty audited Intent. The refreshed 2026-09-03 03:00 UTC readiness snapshot remains 2/4
+operational: Earnings/NBS waiting; policy/material cadence and receipt-coverage blockers remain
+(artifact `0446565d…`). At 03:01 UTC all 16 bound Jobs were active, but seven had nonzero lag;
+latest error kinds were four `collection_misfire`, one `duplicate_primary_key`, and eleven absent
+(health artifact `f1af8e27…`). Active is not equivalent to healthy. This is not evidence that
+collection is globally healthy or that no market event exists. Collection/Gateway services were
+not restarted or reconfigured. Live stays
+closed.
+
+After the market-slice engineering corrections, full local acceptance passed: **1,743 Python
+tests**, Ruff/format/Pyright, TypeScript and four Node tests. Independent review's report-overwrite
+finding was fixed and covered by the production-writer regression before the final full suite.
+The same checks were repeated during the authorized continuation: 1,743 Python tests passed in
+235.16 seconds, along with Ruff/format/Pyright, TypeScript and four Node tests. The accepted pi
+runtime build remains `ad861366…`; engineering checks do not establish investment effectiveness
+or broker acceptance.
+
+Previously frozen prospective contracts remain authoritative for their own epochs:
+
+0. keep the admitted v5 registration/v7 route epoch and supervisor healthy without resetting
+   append-only misses, receipts or replacement history;
 1. preserve the closed Triage authority boundaries: comparison-governed material-ingress v9/v10 is
    rejected by the ordinary run path before any Provider call, while v11/v13 may run only for a new
    non-comparison-bound actual-receipt batch; and
@@ -201,6 +422,16 @@ read-only review. Offline reconstruction also preserved the two real older reass
 registration, Snapshot Set, Evidence Pack and tool-manifest hashes exactly, with zero model calls.
 The canary evidence/documentation milestone separately passed all required static checks and the
 1,770-test full suite; independent read-only review found no concrete evidence or claim issue.
+
+The next runtime reuse slice follows the
+[reuse-first runtime policy](docs/AGENT_RUNTIME.md#reuse-first-runtime-policy): evaluate a pinned
+maintained model/Agent foundation as a complete subsystem, including Provider compatibility,
+tool-turn continuity, cache usage and compaction, then replace overlapping custom mechanisms through
+the smallest Harness adapter. HTTPX2 transport reuse alone does not meet this requirement. Any
+retained custom behavior needs a concrete documented exception. First demonstrate selected-evidence
+reading and Provider schema semantics, then continuation/retry/cancellation, measured warm-cache
+behavior and compaction/restart parity; no new paid market run is implied. Preserve old replay and
+one Harness authority, and return to the Earnings/Modeled-PIT/Mock mainline after that bounded gate.
 
 A later read-only runtime audit at September 2 10:03 UTC found three, not four, operational
 checkpoint families. The v7 material route is blocked by an internal receipt-coverage gap after
@@ -1270,14 +1501,33 @@ paper-provider/live authority.
   frozen latency calibration and build the first complete historical case. The accepted CSRC
   official-page extractor does not satisfy this news gate. Until then v2 admits no retrospective
   holdout, even when archive capture and internal receipt hashes are valid.
-- [ ] Build the remaining seven opened development cases across positive, offsetting, missing,
-  ambiguous, revision, and cross-mechanism paths. Separately, after publisher-time authority exists,
+- [x] Complete the fixed eight opened forecast-development checkpoints through versioned successors,
+  retain every failed attempt, perform blind semantic review, then open the registered five-session
+  diagnostic outcomes. Five forecasts produced three endpoint-direction agreements and two
+  post-shock reversal misses; this is development evidence only.
+- [ ] Build the next development cases across positive, offsetting, missing, ambiguous, revision,
+  cross-mechanism and already-priced/reversal paths. Separately, after publisher-time authority exists,
   freeze all 24 outcome-independent masked historical holdout cases with authenticated evidence and matching
   market snapshots and seals, and implement the overall promotion evaluator. That future evaluator
   must combine time, abstention, baselines, strata, concentration, drawdown, CVaR, and cost gates;
   the clustered paired interval alone is not an overall promotion decision; the implemented
   estimator must remain unusable for a claim until content-identified case and pair bindings exist
   in the pre-run seals/openings.
+- [x] Record the March–May 2026 US technology earnings/AI-capex episode as an opened diagnostic.
+  The coherent hyperscaler session split two declines and two gains, so neither revenue growth nor
+  capex level alone explains the reaction. Preserve Apple, Adobe and Nvidia as declared contrasts.
+- [ ] Register a separate capex-change/monetization-evidence development study before any new model
+  calls. Keep it outside the A-share eight-case cohort; freeze surprise, prior capex guidance,
+  monetization, margin/free-cash-flow, valuation/positioning and issuer-specific evidence as paired
+  information blocks, then validate on later pristine cases before proposing a limited Skill.
+- [ ] Complete the continuous reassessment composition: reopen the exact parent Watch question,
+  counterevidence and invalidation in the Wake callback; register scheduled account reviews; dedupe
+  simultaneous triggers by frozen decision-view identity; and reach the existing Portfolio Agent,
+  deterministic sizing and reconciliation path without per-tick LLM calls.
+- [ ] Run the pre-registered one-shot versus scheduled-daily versus material-event-driven rolling
+  ablation. Use chronological Snapshots and one root-event denominator; compare after-cost return,
+  drawdown, correction latency, model reviews, orders, turnover and forgone rebounds. Reject cadence
+  expansion if it merely adds churn or only fits the two already-opened reversal cases.
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,
   deterministic admission/non-admission, revision lineage, first-eligible separation,
   cohort limits, idempotency, and tamper detection.

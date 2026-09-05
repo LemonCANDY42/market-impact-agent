@@ -20,10 +20,12 @@ from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.domain import (
     ApprovalMode,
+    ExecutableOrder,
     ExecutionReceipt,
     ExecutionStatus,
     OrderIntent,
     OrderKind,
+    PortfolioOrderIntent,
     Side,
     TradingEnvironment,
     TradingMandateV2,
@@ -40,6 +42,13 @@ from market_impact_agent.portfolio_decision import (
     PortfolioExposureViewAuthorityV2,
     PortfolioExposureViewV2,
     PortfolioLegRole,
+)
+from market_impact_agent.portfolio_review import (
+    AgentPortfolioProposalV3,
+    AgentPortfolioProposalV4,
+    PortfolioDecisionV3,
+    PortfolioExecutionAdmissionV3,
+    PortfolioReviewAuthority,
 )
 from market_impact_agent.providers import (
     CancelExecutionProvider,
@@ -637,6 +646,7 @@ class AutonomousReconciliationAuthorityV2:
 
 
 class AutonomousOperationState(StrEnum):
+    PENDING_APPROVAL = "pending_approval"
     QUEUED = "queued"
     SUBMITTING = "submitting"
     UNKNOWN = "unknown"
@@ -765,6 +775,7 @@ class AutonomousPaperExecutionServiceV2:
         instrument_routes: Mapping[str, Mapping[str, str]],
         clock: Callable[[], datetime] | None = None,
         account_state_max_age: timedelta = timedelta(minutes=5),
+        portfolio_review_authority: PortfolioReviewAuthority | None = None,
     ) -> None:
         provider.manifest.assert_valid()
         if (
@@ -837,6 +848,12 @@ class AutonomousPaperExecutionServiceV2:
             raise PermissionError("instrument route map contains a market outside acceptance")
         self.clock = clock or (lambda: datetime.now(UTC))
         self.account_state_max_age = account_state_max_age
+        self.portfolio_review_authority = portfolio_review_authority
+        if portfolio_review_authority is not None and (
+            portfolio_review_authority.store.root.resolve() != store.root.resolve()
+            or portfolio_review_authority.store.harness_authority_id != store.harness_authority_id
+        ):
+            raise PermissionError("portfolio review authority belongs to another Harness root")
         self._runtime_activity_lock = Lock()
         self._closed = True
         self._cancellation_authority_call: ContextVar[_CancellationAuthorityCall | None] = (
@@ -857,6 +874,7 @@ class AutonomousPaperExecutionServiceV2:
             if isinstance(self.provider, CancelExecutionProvider):
                 self.provider.bind_cancellation_validator(self._validate_cancellation_capability)
             self._recover_interrupted_operations()
+            self.expire_pending_approvals()
             self._evaluate_current_risk(self._now(), fail_closed=False)
         except BaseException:
             self._closed = True
@@ -919,14 +937,32 @@ class AutonomousPaperExecutionServiceV2:
     def admit(
         self,
         *,
-        proposal: AgentPortfolioProposalV2,
-        portfolio_decision: PortfolioDecisionV2,
+        proposal: AgentPortfolioProposalV2 | AgentPortfolioProposalV3 | AgentPortfolioProposalV4,
+        portfolio_decision: PortfolioDecisionV2 | PortfolioDecisionV3,
         sizing_decision: OrderSizingDecisionV2,
         account_state: AccountStateSnapshot,
         exposure_view: PortfolioExposureViewV2,
         price_bases: Mapping[str, PriceBasis],
+        _review: PortfolioExecutionAdmissionV3 | None = None,
     ) -> tuple[AutonomousPaperOperation, ...]:
         self._assert_open()
+        manual = self.mandate.approval_mode is ApprovalMode.MANUAL_EACH
+        if manual:
+            if _review is None or self.portfolio_review_authority is None:
+                raise PermissionError("manual_each admission requires an actual portfolio review")
+            reopened = self.portfolio_review_authority.execution_admission(_review.run_id)
+            if reopened.to_dict() != _review.to_dict():
+                raise PermissionError("portfolio admission differs from its actual completed run")
+            if (
+                proposal.to_dict() != reopened.portfolio_decision.proposal.to_dict()
+                or portfolio_decision.to_dict() != reopened.portfolio_decision.to_dict()
+                or sizing_decision.to_dict() != reopened.sizing_decision.to_dict()
+            ):
+                raise PermissionError(
+                    "manual admission does not bind recomputed decision and sizing"
+                )
+        elif _review is not None or not isinstance(proposal, AgentPortfolioProposalV2):
+            raise PermissionError("portfolio-origin orders require explicit manual_each approval")
         now = self._now()
         risk_reduction = proposal.requested_action in {
             PortfolioAction.REDUCE,
@@ -987,6 +1023,10 @@ class AutonomousPaperExecutionServiceV2:
             "evaluated_at": _timestamp(now),
             "evaluator_version": "autonomous-paper-policy-v2",
         }
+        if _review is not None:
+            policy_payload["portfolio_execution_admission_hash"] = self.artifacts.put_json(
+                _review.to_dict()
+            ).content_hash
         policy_hash = self.artifacts.put_json(policy_payload).content_hash
         binding_payload = {
             "schema_version": AUTONOMOUS_MANDATE_BINDING_SCHEMA,
@@ -995,8 +1035,8 @@ class AutonomousPaperExecutionServiceV2:
             "sizing_decision_id": sizing_decision.decision_id,
             "trading_mandate_hash": mandate_hash,
             "provider_acceptance_hash": acceptance_hash,
-            "approval_mode": ApprovalMode.AUTONOMOUS.value,
-            "human_order_approval_required": False,
+            "approval_mode": self.mandate.approval_mode.value,
+            "human_order_approval_required": manual,
             "bound_at": _timestamp(now),
         }
         binding_hash = self.artifacts.put_json(binding_payload).content_hash
@@ -1006,7 +1046,7 @@ class AutonomousPaperExecutionServiceV2:
             "actor_ref": "autonomous-paper-v2",
             "policy_evaluation_hash": policy_hash,
             "mandate_binding_hash": binding_hash,
-            "approved": True,
+            "approved": not manual,
             "decided_at": _timestamp(now),
         }
         approval_hash = self.artifacts.put_json(approval_payload).content_hash
@@ -1033,18 +1073,24 @@ class AutonomousPaperExecutionServiceV2:
                 "mandate_id": self.mandate.mandate_id,
             }
             client_order_id = "autonomous-paper-order-" + canonical_hash(identity)
-            order = OrderIntent(
-                client_order_id=client_order_id,
-                signal_id=proposal.signal_id,
-                account_id=self.mandate.account_id,
-                environment=TradingEnvironment.PAPER,
-                instrument_id=decision_leg.instrument_id,
-                side=sized_leg.side,
-                quantity=sized_leg.quantity,
-                order_kind=OrderKind.MARKET,
-                created_at=now,
-                expires_at=min(self.mandate.valid_until, basis.valid_until),
-            )
+            order: ExecutableOrder
+            if _review is not None:
+                order = _review.order
+                client_order_id = order.client_order_id
+            else:
+                assert isinstance(proposal, AgentPortfolioProposalV2)
+                order = OrderIntent(
+                    client_order_id=client_order_id,
+                    signal_id=proposal.signal_id,
+                    account_id=self.mandate.account_id,
+                    environment=TradingEnvironment.PAPER,
+                    instrument_id=decision_leg.instrument_id,
+                    side=sized_leg.side,
+                    quantity=sized_leg.quantity,
+                    order_kind=OrderKind.MARKET,
+                    created_at=now,
+                    expires_at=min(self.mandate.valid_until, basis.valid_until),
+                )
             order_hash = self.artifacts.put_json(order.to_dict()).content_hash
             operation_id = "autonomous-paper-operation-" + canonical_hash(
                 {
@@ -1055,6 +1101,12 @@ class AutonomousPaperExecutionServiceV2:
                 }
             )
             signed_delta = sized_leg.delta_notional
+            if _review is not None:
+                signed_delta = (
+                    sized_leg.quantity
+                    * basis.price
+                    * (Decimal(1) if sized_leg.side is Side.BUY else Decimal(-1))
+                )
             target_signed = sized_leg.current_signed_notional + signed_delta
             gross_delta = abs(target_signed) - abs(sized_leg.current_signed_notional)
             turnover_reserved = sized_leg.quantity * basis.price
@@ -1120,7 +1172,11 @@ class AutonomousPaperExecutionServiceV2:
                             str(turnover_reserved),
                             str(cash_reserved),
                             position_count_delta,
-                            AutonomousOperationState.QUEUED.value,
+                            (
+                                AutonomousOperationState.PENDING_APPROVAL.value
+                                if manual
+                                else AutonomousOperationState.QUEUED.value
+                            ),
                             _timestamp(now),
                             _timestamp(now),
                         ),
@@ -1137,6 +1193,122 @@ class AutonomousPaperExecutionServiceV2:
             operations.append(self.get(client_order_id))
         return tuple(operations)
 
+    def admit_portfolio_review(self, run_id: str) -> AutonomousPaperOperation:
+        """Reserve one recomputed target without granting dispatch authority."""
+        self._assert_open()
+        authority = self.portfolio_review_authority
+        if self.mandate.approval_mode is not ApprovalMode.MANUAL_EACH or authority is None:
+            raise PermissionError("portfolio review requires a configured manual_each authority")
+        admission = authority.execution_admission(run_id)
+        with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT * FROM autonomous_operations WHERE client_order_id = ?",
+                (admission.order.client_order_id,),
+            ).fetchone()
+        if existing is not None:
+            if cast(str, existing["order_hash"]) != canonical_hash(admission.order.to_dict()):
+                raise PermissionError("existing portfolio order differs from actual review")
+            return _operation(existing)
+        inputs = authority.input_source()
+        operations = self.admit(
+            proposal=admission.portfolio_decision.proposal,
+            portfolio_decision=admission.portfolio_decision,
+            sizing_decision=admission.sizing_decision,
+            account_state=inputs.account_state,
+            exposure_view=inputs.exposure_view,
+            price_bases=inputs.price_bases,
+            _review=admission,
+        )
+        if len(operations) != 1:
+            raise PermissionError("portfolio admission did not yield one bounded operation")
+        return operations[0]
+
+    def decide_portfolio_approval(
+        self,
+        client_order_id: str,
+        *,
+        approved: bool,
+        actor_ref: str,
+    ) -> AutonomousPaperOperation:
+        self._assert_open()
+        if type(approved) is not bool:
+            raise TypeError("manual approval must be an explicit boolean decision")
+        if self.mandate.approval_mode is not ApprovalMode.MANUAL_EACH:
+            raise PermissionError("manual approval requires manual_each mode")
+        if not actor_ref or actor_ref != actor_ref.strip():
+            raise ValueError("manual approval requires an explicit actor reference")
+        with self._runtime_activity_lock:
+            self.expire_pending_approvals()
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT * FROM autonomous_operations WHERE client_order_id = ?",
+                    (client_order_id,),
+                ).fetchone()
+            if row is None or row["state"] != AutonomousOperationState.PENDING_APPROVAL.value:
+                raise PermissionError("order is not pending manual approval")
+            now = self._now()
+            if approved:
+                self._assert_dispatch_authorities(
+                    row,
+                    evaluated_at=now,
+                    risk_reduction=PortfolioAction(cast(str, row["action"]))
+                    in {PortfolioAction.REDUCE, PortfolioAction.CLOSE},
+                    require_approval=False,
+                )
+            payload = {
+                "schema_version": "market-impact.portfolio-manual-approval.v3",
+                "actor_kind": "human",
+                "actor_ref": actor_ref,
+                "approved": approved,
+                "order_hash": cast(str, row["order_hash"]),
+                "policy_evaluation_hash": cast(str, row["policy_evaluation_hash"]),
+                "mandate_binding_hash": cast(str, row["mandate_binding_hash"]),
+                "decided_at": _timestamp(now),
+            }
+            approval_hash = self.artifacts.put_json(payload).content_hash
+            with self._connect() as connection:
+                changed = connection.execute(
+                    """UPDATE autonomous_operations SET approval_hash = ?, state = ?,
+                       reservation_active = ?, updated_at = ?
+                       WHERE client_order_id = ? AND state = ?""",
+                    (
+                        approval_hash,
+                        AutonomousOperationState.QUEUED.value
+                        if approved
+                        else AutonomousOperationState.BLOCKED.value,
+                        int(approved),
+                        _timestamp(now),
+                        client_order_id,
+                        AutonomousOperationState.PENDING_APPROVAL.value,
+                    ),
+                )
+                if changed.rowcount != 1:
+                    raise PermissionError("pending approval changed concurrently")
+            return self.get(client_order_id)
+
+    def expire_pending_approvals(self) -> None:
+        """Release only unsubmitted reservations; unknown ACKs remain reserved."""
+        now = self._now()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM autonomous_operations WHERE state = ?",
+                (AutonomousOperationState.PENDING_APPROVAL.value,),
+            ).fetchall()
+            for row in rows:
+                order = _order_from_payload(self.artifacts.read_json(cast(str, row["order_hash"])))
+                if now >= order.expires_at:
+                    connection.execute(
+                        """UPDATE autonomous_operations SET state = ?, reservation_active = 0,
+                           updated_at = ? WHERE operation_id = ? AND state = ?
+                           AND submission_consumed = 0""",
+                        (
+                            AutonomousOperationState.BLOCKED.value,
+                            _timestamp(now),
+                            row["operation_id"],
+                            AutonomousOperationState.PENDING_APPROVAL.value,
+                        ),
+                    )
+
     def dispatch_next(self) -> AutonomousPaperOperation | None:
         self._assert_open()
         with self._runtime_activity_lock:
@@ -1144,6 +1316,7 @@ class AutonomousPaperExecutionServiceV2:
             return self._dispatch_next_owned()
 
     def _dispatch_next_owned(self) -> AutonomousPaperOperation | None:
+        self.expire_pending_approvals()
         now = self._now()
         try:
             current_exposure = self.exposure_view_source()
@@ -1289,6 +1462,8 @@ class AutonomousPaperExecutionServiceV2:
 
     def request_cancel(self, client_order_id: str) -> AutonomousCancellation:
         self._assert_open()
+        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH:
+            raise PermissionError("manual portfolio cancellation requires separate acceptance")
         now = self._now()
         if not isinstance(self.provider, CancelExecutionProvider):
             raise PermissionError("Provider does not expose accepted cancellation capability")
@@ -1326,6 +1501,8 @@ class AutonomousPaperExecutionServiceV2:
 
     def dispatch_next_cancellation(self) -> AutonomousCancellation | None:
         self._assert_open()
+        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH:
+            raise PermissionError("manual portfolio cancellation is not accepted")
         with self._runtime_activity_lock:
             self._assert_open()
             return self._dispatch_next_cancellation_owned()
@@ -1769,8 +1946,11 @@ class AutonomousPaperExecutionServiceV2:
         *,
         evaluated_at: datetime,
         risk_reduction: bool,
+        require_approval: bool = True,
     ) -> None:
         order = _order_from_payload(self.artifacts.read_json(cast(str, row["order_hash"])))
+        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH:
+            self._assert_portfolio_lineage(row, require_approval=require_approval)
         if not self.mandate.valid_from <= evaluated_at < self.mandate.valid_until:
             raise PermissionError("Trading Mandate v2 is not current at dispatch")
         if not order.created_at <= evaluated_at < order.expires_at:
@@ -1827,6 +2007,46 @@ class AutonomousPaperExecutionServiceV2:
             or not basis.observed_at <= evaluated_at < basis.valid_until
         ):
             raise PermissionError("raw Price Basis differs or is stale")
+
+    def _assert_portfolio_lineage(self, row: sqlite3.Row, *, require_approval: bool) -> None:
+        authority = self.portfolio_review_authority
+        if authority is None:
+            raise PermissionError("manual portfolio execution has no review authority")
+        policy = cast(
+            dict[str, object], self.artifacts.read_json(cast(str, row["policy_evaluation_hash"]))
+        )
+        admission_hash = policy.get("portfolio_execution_admission_hash")
+        if not isinstance(admission_hash, str):
+            raise PermissionError("manual order lacks portfolio-origin admission")
+        admission = cast(dict[str, object], self.artifacts.read_json(admission_hash))
+        reopened = authority.execution_admission(_string(admission, "run_id"))
+        if (
+            reopened.to_dict() != admission
+            or canonical_hash(reopened.order.to_dict()) != row["order_hash"]
+            or canonical_hash(reopened.portfolio_decision.to_dict())
+            != row["portfolio_decision_hash"]
+            or canonical_hash(reopened.portfolio_decision.proposal.to_dict())
+            != row["proposal_hash"]
+            or canonical_hash(reopened.sizing_decision.to_dict()) != row["sizing_decision_hash"]
+            or reopened.order.account_id != self.mandate.account_id
+        ):
+            raise PermissionError(
+                "manual order lineage differs from actual review and target sizing"
+            )
+        if require_approval:
+            approval = cast(
+                dict[str, object], self.artifacts.read_json(cast(str, row["approval_hash"]))
+            )
+            if (
+                approval.get("schema_version") != "market-impact.portfolio-manual-approval.v3"
+                or approval.get("approved") is not True
+                or approval.get("actor_kind") != "human"
+                or not approval.get("actor_ref")
+                or approval.get("order_hash") != row["order_hash"]
+                or approval.get("policy_evaluation_hash") != row["policy_evaluation_hash"]
+                or approval.get("mandate_binding_hash") != row["mandate_binding_hash"]
+            ):
+                raise PermissionError("portfolio order lacks exact explicit manual approval")
 
     def _assert_current_authorities(
         self,
@@ -2315,6 +2535,15 @@ class AutonomousPaperExecutionServiceV2:
         if row is None:
             return False
         action = PortfolioAction(cast(str, row["action"]))
+        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH:
+            try:
+                self._assert_dispatch_authorities(
+                    row,
+                    evaluated_at=evaluated_at,
+                    risk_reduction=action in {PortfolioAction.REDUCE, PortfolioAction.CLOSE},
+                )
+            except Exception:
+                return False
         try:
             reopened_lease = self.provider_lease_authority.resolve(self.provider_lease.lease_id)
         except (KeyError, OSError, TypeError, ValueError):
@@ -2684,7 +2913,7 @@ class AutonomousPaperExecutionServiceV2:
 def _assert_autonomous_mandate(mandate: TradingMandateV2) -> None:
     expected = (
         mandate.environment is TradingEnvironment.PAPER,
-        mandate.approval_mode is ApprovalMode.AUTONOMOUS,
+        mandate.approval_mode in {ApprovalMode.AUTONOMOUS, ApprovalMode.MANUAL_EACH},
         mandate.currency == "USD",
         mandate.gross_exposure_limit == 10_000,
         mandate.minimum_net_exposure == -10_000,
@@ -2710,8 +2939,8 @@ def _position_count_delta(*, current: Decimal, target: Decimal) -> int:
 
 def _assert_chain(
     *,
-    proposal: AgentPortfolioProposalV2,
-    portfolio_decision: PortfolioDecisionV2,
+    proposal: AgentPortfolioProposalV2 | AgentPortfolioProposalV3 | AgentPortfolioProposalV4,
+    portfolio_decision: PortfolioDecisionV2 | PortfolioDecisionV3,
     sizing_decision: OrderSizingDecisionV2,
     mandate: TradingMandateV2,
     exposure_view: PortfolioExposureViewV2,
@@ -2818,10 +3047,23 @@ def _order_payload(row: sqlite3.Row, artifacts: ArtifactStore) -> dict[str, obje
     return cast(dict[str, object], payload)
 
 
-def _order_from_payload(payload: object) -> OrderIntent:
+def _order_from_payload(payload: object) -> ExecutableOrder:
     if not isinstance(payload, dict):
         raise TypeError("Order Intent artifact must be an object")
     fields = cast(dict[str, object], payload)
+    if fields.get("schema_version") == "market-impact.order-intent.v2":
+        return PortfolioOrderIntent(
+            client_order_id=_string(fields, "client_order_id"),
+            portfolio_decision_id=_string(fields, "portfolio_decision_id"),
+            account_id=_string(fields, "account_id"),
+            environment=TradingEnvironment(_string(fields, "environment")),
+            instrument_id=_string(fields, "instrument_id"),
+            side=Side(_string(fields, "side")),
+            quantity=Decimal(_string(fields, "quantity")),
+            order_kind=OrderKind(_string(fields, "order_kind")),
+            created_at=_datetime(_string(fields, "created_at")),
+            expires_at=_datetime(_string(fields, "expires_at")),
+        )
     return OrderIntent(
         client_order_id=_string(fields, "client_order_id"),
         signal_id=_string(fields, "signal_id"),

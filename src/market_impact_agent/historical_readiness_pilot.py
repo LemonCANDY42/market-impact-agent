@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 from collections.abc import Awaitable
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
@@ -22,7 +23,6 @@ from market_impact_agent.agent_engine import (
 )
 from market_impact_agent.agent_runtime import (
     ModelProvider,
-    ModelTurn,
     SkillRegistry,
     ToolAccessContext,
     ToolRegistry,
@@ -51,6 +51,7 @@ from market_impact_agent.paired_skill_ablation_contract import (
 )
 from market_impact_agent.paired_skill_ablation_runner import CONTROL_SKILLS
 from market_impact_agent.paired_skill_execution_audit import validate_judgment_execution_binding
+from market_impact_agent.pi_runtime import PiRuntimeProvider
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
 
@@ -113,6 +114,8 @@ class PreparedHistoricalReadinessPilot:
     registered_at: datetime
     registration_hash: str
     adjudication: HistoricalReadinessAdjudication | None = None
+    question_contrast: bool = False
+    forecast_development: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +126,20 @@ class _Surface:
     arms: tuple[tuple[str, tuple[str, ...]], ...]
     registration: dict[str, object]
     judge_profile: ModelProviderProfile | None = None
+    treatment_instruction: str | None = None
+
+
+_LEGACY_FORECAST_RULE = "If the mapping or horizon persistence is unresolved, abstain. "
+_ANALYST_FORECAST_RULE = (
+    "Make the best defensible forecast of the target's direction at the end of the declared "
+    "horizon, not a guarantee of persistence on every intervening session. Distinguish observed "
+    "facts from reasonable, explicitly stated assumptions. Describe the main scenario, material "
+    "counter-scenario and evidence that would change your view in the existing thesis and "
+    "invalidation fields. Uncertain duration or unknown consensus alone does not require "
+    "abstention; do not require future realized prices to establish a forecast. Do not invent "
+    "target exposure, consensus or precise probabilities. Abstain when the available evidence "
+    "and plausible assumptions provide no defensible directional balance. "
+)
 
 
 _JUDGE_INSTRUCTION = (
@@ -141,24 +158,6 @@ _JUDGE_INSTRUCTION = (
 )
 
 
-class _NoCallProvider:
-    def __init__(self, profile: ModelProviderProfile) -> None:
-        self.provider_id = profile.provider_id
-        self.model = profile.model
-
-    async def complete(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-    ) -> ModelTurn:
-        raise AssertionError("prepare cannot call a provider")
-
-
 def prepare_historical_readiness_pilot(
     *,
     experiment_id: str,
@@ -171,6 +170,8 @@ def prepare_historical_readiness_pilot(
     max_total_cost_microusd: int,
     registered_at: datetime,
     adjudication: HistoricalReadinessAdjudication | None = None,
+    question_contrast: bool = False,
+    forecast_development: bool = False,
 ) -> PreparedHistoricalReadinessPilot:
     """Freeze without network access. A reserved ID cannot be prepared again, even after failure."""
     if not experiment_id or experiment_id != experiment_id.strip():
@@ -186,6 +187,8 @@ def prepare_historical_readiness_pilot(
         max_total_cost_microusd=max_total_cost_microusd,
         registered_at=registered_at,
         adjudication=adjudication,
+        question_contrast=question_contrast,
+        forecast_development=forecast_development,
     )
     directory = state_root / canonical_hash(experiment_id)
     directory.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -195,7 +198,9 @@ def prepare_historical_readiness_pilot(
         raise ValueError(
             "pilot already reserved; inspect existing history, do not redispatch"
         ) from None
-    bindings = _bindings(surface, inputs, directory, _NoCallProvider(surface.profile))
+    bindings = _bindings(
+        surface, inputs, directory, PiRuntimeProvider(surface.profile, dispatch_allowed=False)
+    )
     registration = {**surface.registration, "execution_bindings": bindings}
     registration_hash = canonical_hash(registration)
     _write_exclusive(directory / "registration.json", registration)
@@ -211,6 +216,8 @@ def prepare_historical_readiness_pilot(
         registered_at,
         registration_hash,
         adjudication,
+        question_contrast,
+        forecast_development,
     )
 
 
@@ -225,7 +232,15 @@ def _surface(
     max_total_cost_microusd: int,
     registered_at: datetime,
     adjudication: HistoricalReadinessAdjudication | None = None,
+    question_contrast: bool = False,
+    forecast_development: bool = False,
 ) -> _Surface:
+    if question_contrast and forecast_development:
+        raise ValueError("question contrast and forecast development are distinct studies")
+    if (question_contrast or forecast_development) and (
+        adjudication is None or treatment_skill != "none"
+    ):
+        raise ValueError("question-only contrast requires v2 and identical Skills (none added)")
     repository = FrozenResearchRepository.from_files(
         evidence_pack_path=inputs.evidence_pack_path,
         evidence_documents_path=inputs.evidence_documents_path,
@@ -251,7 +266,16 @@ def _surface(
         pattern_pack_ids=frozenset(item.pack_id for item in pack.pattern_packs),
         outcomes_opened=True,
     )
-    # Replace only the task question, never facts, availability, targets, or source history.
+    # Outcome-characterizing archive paths are audit metadata, not research evidence.
+    # V4 gives model-facing sources opaque aliases; the original pack remains frozen below.
+    visible_evidence = (
+        tuple(
+            replace(item, source_ref="frozen-source://" + canonical_hash(item.source_ref))
+            for item in pack.evidence
+        )
+        if forecast_development
+        else pack.evidence
+    )
     repository.evidence_pack = EvidencePack.build(
         event_id=pack.event_id,
         as_of=pack.as_of,
@@ -260,7 +284,7 @@ def _surface(
             f"{brief.horizon_sessions} trading sessions: propose up, propose down, or abstain. "
             "This is research-impact analysis without a confidence cutoff or execution authority."
         ),
-        evidence=pack.evidence,
+        evidence=visible_evidence,
         pattern_packs=pack.pattern_packs,
         allowed_targets=pack.allowed_targets,
         data_gaps=pack.data_gaps,
@@ -292,6 +316,9 @@ def _surface(
         ("control", CONTROL_SKILLS),
         ("treatment", CONTROL_SKILLS if no_addition else (*CONTROL_SKILLS, treatment_skill)),
     )
+    if forecast_development:
+        arms = (("analysis", CONTROL_SKILLS),)
+    analyst_count, judge_count = 2 * len(arms), len(arms)
     registry = SkillRegistry(inputs.skill_root)
     for _, names in arms:
         loaded = registry.load(names, allowed_capabilities=ALLOWED_CAPABILITIES)
@@ -316,7 +343,7 @@ def _surface(
         else estimate_bounded_agent_run_cost(
             pricing=pricing,
             profile=profile,
-            agent_run_count=4,
+            agent_run_count=analyst_count,
             safety_multiplier=Decimal("1.25"),
             max_total_cost_microusd=max_total_cost_microusd,
         )
@@ -331,8 +358,9 @@ def _surface(
         "the event, changed economic variable, and causal link to the allowed research target; "
         "cite the exact evidence IDs and test counterevidence. Do not invent a surprise relative "
         "to consensus: prior expectation is explicitly unknown unless exact frozen evidence "
-        "establishes it. If the mapping or horizon persistence is unresolved, abstain. "
-        "Return at most one candidate, either up or down, or abstain; there is no confidence "
+        "establishes it. "
+        + _LEGACY_FORECAST_RULE
+        + "Return at most one candidate, either up or down, or abstain; there is no confidence "
         "cutoff and no sizing. Use exactly the brief horizon and research target. A research "
         "proxy need not be executable; do not substitute tradability for research-impact analysis. "
         "No broker, orders, allocation, or execution authority is available. Shared brief: "
@@ -360,6 +388,7 @@ def _surface(
         "disagreement_key": "decision_target_direction_horizon_excluding_confidence",
         "max_agent_runs": 6,
         "max_simultaneous_requests": 2,
+        "analyst_worker_policy": "distinct_arm_providers_reused_across_sequential_pairs_v1",
         "cost_preflight": cost.to_dict(),
         "pricing_snapshot_hash": pricing.snapshot_hash,
         "claim_scope": "opened_modeled_pit_input_process_diagnostic_only",
@@ -375,7 +404,7 @@ def _surface(
         judge_cost = estimate_bounded_agent_run_cost(
             pricing=adjudication.judge_pricing,
             profile=judge_profile,
-            agent_run_count=2,
+            agent_run_count=judge_count,
             safety_multiplier=Decimal("1.25"),
             max_total_cost_microusd=max_total_cost_microusd,
         )
@@ -384,9 +413,14 @@ def _surface(
         if (
             judge_cap is None
             or not 1 <= max_total_cost_microusd <= 10_000_000
-            or max(4 * per_run_cap + 2 * judge_cap, guarded_cost) > max_total_cost_microusd
+            or max(analyst_count * per_run_cap + judge_count * judge_cap, guarded_cost)
+            > max_total_cost_microusd
         ):
-            raise ValueError("v2 budget must reserve four analysts and two conditional Judges")
+            raise ValueError(
+                "v4 budget must reserve two analysts and one conditional Judge"
+                if forecast_development
+                else "v2 budget must reserve four analysts and two conditional Judges"
+            )
         scope = {
             "target_id": brief.target_id,
             "definition": adjudication.target_description,
@@ -430,7 +464,57 @@ def _surface(
                 else "paired_method_pipeline",
             }
         )
-    return _Surface(repository, profile, instruction, arms, registration, judge_profile)
+        if forecast_development:
+            instruction = instruction.replace(_LEGACY_FORECAST_RULE, _ANALYST_FORECAST_RULE)
+            registration.update(
+                {
+                    "schema_version": "market-impact.historical-readiness-pilot.v4",
+                    "comparison_scope": "single_pipeline_opened_forecast_development",
+                    "forecast_question_version": "uncertainty-aware-endpoint.v1",
+                    "source_reference_policy": "opaque_original_source_hash_v1",
+                    "research_instruction_hash": canonical_hash(instruction),
+                    "max_agent_runs": 3,
+                    "max_simultaneous_requests": 1,
+                    "analyst_worker_policy": "one_worker_two_independent_sequential_runs_v1",
+                    "cost_preflight": {
+                        "analyst_two_run_estimate": cost.to_dict(),
+                        "judge_one_run_estimate": judge_cost.to_dict(),
+                        "mixed_three_run_guarded_microusd": guarded_cost,
+                        "reserved_runtime_caps_microusd": analyst_count * per_run_cap
+                        + judge_count * judge_cap,
+                        "hard_cap_microusd": max_total_cost_microusd,
+                    },
+                }
+            )
+    treatment_instruction = None
+    if question_contrast:
+        treatment_instruction = instruction.replace(_LEGACY_FORECAST_RULE, _ANALYST_FORECAST_RULE)
+        registration.update(
+            {
+                "schema_version": "market-impact.historical-readiness-pilot.v3",
+                "comparison_scope": "forecast_question_only_identical_input_model_skills",
+                "forecast_question_version": "uncertainty-aware-endpoint.v1",
+                "arm_instruction_hashes": {
+                    "control": canonical_hash(instruction),
+                    "treatment": canonical_hash(treatment_instruction),
+                },
+            }
+        )
+    return _Surface(
+        repository, profile, instruction, arms, registration, judge_profile, treatment_instruction
+    )
+
+
+def _arm_surface(surface: _Surface, arm: str) -> _Surface:
+    if arm == "treatment" and surface.treatment_instruction is not None:
+        return replace(surface, instruction=surface.treatment_instruction)
+    return surface
+
+
+def _judge_binding_key(surface: _Surface, arm: str) -> str:
+    return (
+        f"judge_template_{arm}" if surface.treatment_instruction is not None else "judge_template"
+    )
 
 
 def _request(surface: _Surface, names: tuple[str, ...], run_id: str) -> AgentRunRequest:
@@ -477,22 +561,30 @@ def _bindings(
     result: dict[str, object] = {}
     tool_hashes: set[str] = set()
     for arm, names in surface.arms:
-        engine = _engine(surface, inputs, directory / "bindings" / arm, provider)
+        active = _arm_surface(surface, arm)
+        engine = _engine(active, inputs, directory / "bindings" / arm, provider)
         binding = engine.execution_binding(
-            _request(surface, names, "binding"), runtime_ref=RUNTIME_REF
+            _request(active, names, "binding"), runtime_ref=RUNTIME_REF
         )
         result[arm] = binding.to_dict()
         tool_hashes.add(binding.tool_surface_hash)
     if len(tool_hashes) != 1:
         raise ValueError("control and treatment tool surfaces differ")
     if surface.judge_profile is not None:
-        judge = _judge_surface(surface)
-        engine = _engine(
-            judge, inputs, directory / "bindings" / "judge", _NoCallProvider(judge.profile)
-        )
-        result["judge_template"] = engine.execution_binding(
-            _request(judge, CONTROL_SKILLS, "binding"), runtime_ref=RUNTIME_REF
-        ).to_dict()
+        for arm, _ in surface.arms:
+            key = _judge_binding_key(surface, arm)
+            if key in result:
+                continue
+            judge = _judge_surface(_arm_surface(surface, arm))
+            engine = _engine(
+                judge,
+                inputs,
+                directory / "bindings" / key,
+                PiRuntimeProvider(judge.profile, dispatch_allowed=False),
+            )
+            result[key] = engine.execution_binding(
+                _request(judge, CONTROL_SKILLS, "binding"), runtime_ref=RUNTIME_REF
+            ).to_dict()
     return result
 
 
@@ -509,10 +601,20 @@ def _judge_surface(surface: _Surface) -> _Surface:
 async def run_historical_readiness_pilot(
     prepared: PreparedHistoricalReadinessPilot,
     *,
-    provider: ModelProvider | None = None,
+    control_provider: ModelProvider | None = None,
+    treatment_provider: ModelProvider | None = None,
     judge_provider: ModelProvider | None = None,
+    analysis_provider: ModelProvider | None = None,
 ) -> dict[str, object]:
     """Dispatch once. Incomplete/crashed state needs manual audit, never automatic redispatch."""
+    if (control_provider is None) != (treatment_provider is None):
+        raise ValueError("control and treatment providers must be supplied together")
+    if control_provider is not None and control_provider is treatment_provider:
+        raise ValueError("control and treatment require distinct provider objects")
+    if prepared.forecast_development and control_provider is not None:
+        raise ValueError("forecast development has one analysis pipeline, not two arms")
+    if analysis_provider is not None and not prepared.forecast_development:
+        raise ValueError("analysis provider requires forecast development")
     surface = _surface(
         experiment_id=prepared.experiment_id,
         inputs=prepared.inputs,
@@ -523,9 +625,14 @@ async def run_historical_readiness_pilot(
         max_total_cost_microusd=prepared.max_total_cost_microusd,
         registered_at=prepared.registered_at,
         adjudication=prepared.adjudication,
+        question_contrast=prepared.question_contrast,
+        forecast_development=prepared.forecast_development,
     )
     bindings = _bindings(
-        surface, prepared.inputs, prepared.directory, _NoCallProvider(surface.profile)
+        surface,
+        prepared.inputs,
+        prepared.directory,
+        PiRuntimeProvider(surface.profile, dispatch_allowed=False),
     )
     registration = {**surface.registration, "execution_bindings": bindings}
     if (
@@ -534,26 +641,57 @@ async def run_historical_readiness_pilot(
         != registration
     ):
         raise ValueError("prepared pilot binding changed; no dispatch allowed")
-    active_provider = provider or ModelProviderFactory.with_builtin_adapters().create(
-        surface.profile
-    )
-    if (active_provider.provider_id, active_provider.model) != (
-        surface.profile.provider_id,
-        surface.profile.model,
-    ):
-        raise ValueError("provider identity does not match the frozen pilot")
-    active_judge = None
-    if surface.judge_profile is not None:
-        active_judge = judge_provider or ModelProviderFactory.with_builtin_adapters().create(
-            surface.judge_profile
-        )
-        if (active_judge.provider_id, active_judge.model) != (
-            surface.judge_profile.provider_id,
-            surface.judge_profile.model,
-        ):
-            raise ValueError("Judge provider identity does not match the frozen pilot")
-    elif judge_provider is not None:
+    if surface.judge_profile is None and judge_provider is not None:
         raise ValueError("v1 does not authorize a Judge")
+    # The caller owns injected workers and any shared parent budget. Factory-created
+    # workers belong to this dispatch, and close only after the run's peer drain.
+    async with AsyncExitStack() as owned:
+
+        def create(profile: ModelProviderProfile) -> ModelProvider:
+            worker = ModelProviderFactory.with_builtin_adapters().create(profile)
+            owned.push_async_callback(worker.close)
+            return worker
+
+        if prepared.forecast_development:
+            providers = {
+                "analysis": analysis_provider
+                if analysis_provider is not None
+                else create(surface.profile)
+            }
+        else:
+            control = control_provider if control_provider is not None else create(surface.profile)
+            treatment = (
+                treatment_provider if treatment_provider is not None else create(surface.profile)
+            )
+            if control is treatment:
+                raise ValueError("control and treatment require distinct provider objects")
+            providers = {"control": control, "treatment": treatment}
+        for worker in providers.values():
+            if (worker.provider_id, worker.model) != (
+                surface.profile.provider_id,
+                surface.profile.model,
+            ):
+                raise ValueError("provider identity does not match the frozen pilot")
+        active_judge = None
+        if surface.judge_profile is not None:
+            active_judge = (
+                judge_provider if judge_provider is not None else create(surface.judge_profile)
+            )
+            if (active_judge.provider_id, active_judge.model) != (
+                surface.judge_profile.provider_id,
+                surface.judge_profile.model,
+            ):
+                raise ValueError("Judge provider identity does not match the frozen pilot")
+        return await _dispatch_pilot(prepared, surface, bindings, providers, active_judge)
+
+
+async def _dispatch_pilot(
+    prepared: PreparedHistoricalReadinessPilot,
+    surface: _Surface,
+    bindings: dict[str, object],
+    providers: dict[str, ModelProvider],
+    active_judge: ModelProvider | None,
+) -> dict[str, object]:
     try:
         _write_exclusive(
             prepared.directory / "dispatch.json",
@@ -565,9 +703,7 @@ async def run_historical_readiness_pilot(
     except FileExistsError:
         raise ValueError("pilot already dispatched; ambiguous calls must not be replayed") from None
     if active_judge is not None:
-        return await _run_adjudicated_pilot(
-            prepared, surface, bindings, active_provider, active_judge
-        )
+        return await _run_adjudicated_pilot(prepared, surface, bindings, providers, active_judge)
     ledger = UsageLedger(prepared.directory / "usage.sqlite3")
     rows: list[dict[str, object]] = []
     signatures: dict[str, list[tuple[object, ...]]] = {arm: [] for arm, _ in surface.arms}
@@ -578,7 +714,7 @@ async def run_historical_readiness_pilot(
         calls: list[tuple[str, Path, AgentEngine, AgentRunRequest, AgentExecutionBinding]] = []
         for arm, names in surface.arms:
             directory = prepared.directory / "runs" / arm / f"pair-{pair}"
-            engine = _engine(surface, prepared.inputs, directory, active_provider)
+            engine = _engine(surface, prepared.inputs, directory, providers[arm])
             request = _request(surface, names, f"{prepared.experiment_id}.{arm}.pair-{pair}")
             binding = engine.execution_binding(request, runtime_ref=RUNTIME_REF)
             if binding.to_dict() != bindings[arm]:
@@ -672,7 +808,7 @@ async def _run_adjudicated_pilot(
     prepared: PreparedHistoricalReadinessPilot,
     surface: _Surface,
     bindings: dict[str, object],
-    provider: ModelProvider,
+    providers: dict[str, ModelProvider],
     judge_provider: ModelProvider,
 ) -> dict[str, object]:
     ledger = UsageLedger(prepared.directory / "usage.sqlite3")
@@ -760,7 +896,18 @@ async def _run_adjudicated_pilot(
         member = f"pair-{pair}"
         complete = await drain(
             [
-                (arm, member, run_member(arm, member, surface, names, provider, bindings[arm]))
+                (
+                    arm,
+                    member,
+                    run_member(
+                        arm,
+                        member,
+                        _arm_surface(surface, arm),
+                        names,
+                        providers[arm],
+                        bindings[arm],
+                    ),
+                )
                 for arm, names in surface.arms
             ]
         )
@@ -773,17 +920,17 @@ async def _run_adjudicated_pilot(
                 finals[arm] = _final_reference(first, "analyst_agreement_first_terminal")
                 continue
             # Reopen, do not accept caller-edited summaries or raw reasoning transcripts.
-            judge = _judge_surface(surface)
+            judge = _judge_surface(_arm_surface(surface, arm))
             template_engine = _engine(
                 judge,
                 prepared.inputs,
                 prepared.directory / "bindings" / "judge",
-                _NoCallProvider(judge.profile),
+                PiRuntimeProvider(judge.profile, dispatch_allowed=False),
             )
             template = template_engine.execution_binding(
                 _request(judge, CONTROL_SKILLS, "binding"), runtime_ref=RUNTIME_REF
             )
-            if template.to_dict() != bindings["judge_template"]:
+            if template.to_dict() != bindings[_judge_binding_key(surface, arm)]:
                 raise ValueError("Judge template binding drifted")
             analyses: list[dict[str, object]] = []
             terminal_hashes: list[str] = []
@@ -859,7 +1006,7 @@ async def _run_adjudicated_pilot(
         "runs": rows,
         "final_decisions": finals if complete else {},
         "stop_reason": stopped,
-        "diagnostic_valid": complete and len(finals) == 2,
+        "diagnostic_valid": complete and len(finals) == len(surface.arms),
         "protocol_complete": complete and all(row["protocol_complete"] for row in rows),
         "accounting_complete": accounting,
         "recorded_totals_are_lower_bounds": not accounting,

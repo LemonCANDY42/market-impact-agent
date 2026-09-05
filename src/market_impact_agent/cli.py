@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import signal
+import subprocess
 import sys
 import tempfile
 import time
@@ -107,6 +108,7 @@ from market_impact_agent.method_benchmark import (
 from market_impact_agent.method_skills import load_method_skill_catalog
 from market_impact_agent.model_provider import (
     ModelProviderFactory,
+    ModelProviderProfile,
     default_model_provider_profile_path,
     load_model_provider_profile,
 )
@@ -252,18 +254,9 @@ class AvailableModelProvider(ModelProvider, Protocol):
 
 
 def _effective_model_request_concurrency(explicit: int | None) -> int:
-    raw = (
-        explicit
-        if explicit is not None
-        else os.environ.get("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", "3")
-    )
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise ValueError("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS must be an integer") from exc
-    if not 1 <= value <= 8:
-        raise ValueError("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS must be between 1 and 8")
-    return value
+    from market_impact_agent.pi_runtime import model_concurrency_limit
+
+    return model_concurrency_limit(explicit)
 
 
 @contextmanager
@@ -291,6 +284,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="market-impact")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("status", help="Print fail-closed runtime and provider status")
+    runtime_parser = subparsers.add_parser("runtime", help="Prepare or inspect the sole pi runtime")
+    runtime_parser.add_argument("action", choices=("prepare", "doctor"))
+    runtime_parser.add_argument("--provider-profile", type=Path, action="append", default=[])
 
     provider_parser = subparsers.add_parser("provider", help="Inspect provider manifests")
     provider_subparsers = provider_parser.add_subparsers(dest="provider_command", required=True)
@@ -835,6 +831,45 @@ def build_parser() -> argparse.ArgumentParser:
         "agent", help="Validate or run frozen Agent research without broker reachability"
     )
     agent_subparsers = agent_parser.add_subparsers(dest="agent_command", required=True)
+    pi_canary_parser = agent_subparsers.add_parser(
+        "pi-canary", help="Prepare/run/replay the fixed synthetic pi input-consumption stage"
+    )
+    pi_canary_parser.add_argument("action", choices=("prepare", "run", "replay", "accept"))
+    pi_canary_parser.add_argument("--state-root", required=True, type=Path)
+    pi_canary_parser.add_argument("--prior-state-root", type=Path, action="append", default=[])
+    pi_canary_parser.add_argument("--verification", type=Path)
+    pi_canary_parser.add_argument("--followup-of", type=Path)
+    pi_canary_parser.add_argument("--repair-of", type=Path)
+    pi_canary_parser.add_argument("--skill-root", type=Path, default=_default_agent_skill_root())
+    dynamic_effectiveness_parser = agent_subparsers.add_parser(
+        "dynamic-effectiveness",
+        help="Qualify and run the frozen dynamic-horizon multi-model development study",
+    )
+    dynamic_effectiveness_parser.add_argument(
+        "action",
+        choices=(
+            "prepare-qualification",
+            "run-qualification",
+            "accept-qualification",
+            "prepare-study",
+            "run-opened-analysis",
+            "run-portfolio-ablation",
+            "preflight-cadence",
+            "open-analysis-outcomes",
+            "replay-opened-analysis",
+        ),
+    )
+    dynamic_effectiveness_parser.add_argument("--state-root", required=True, type=Path)
+    dynamic_effectiveness_parser.add_argument("--verification", type=Path)
+    dynamic_effectiveness_parser.add_argument("--inputs-root", type=Path)
+    dynamic_effectiveness_parser.add_argument(
+        "--pattern-pack", type=Path, action="append", default=[]
+    )
+    dynamic_effectiveness_parser.add_argument("--panel-directory", type=Path)
+    dynamic_effectiveness_parser.add_argument("--index-proxy", default="000300.SH")
+    dynamic_effectiveness_parser.add_argument(
+        "--provider-profile", type=Path, action="append", default=[]
+    )
     agent_validate_parser = agent_subparsers.add_parser(
         "validate", help="Validate one frozen Evidence Pack and its bound local content"
     )
@@ -961,7 +996,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     triage_watch_admit_parser.add_argument(
         "--model-profile-alias",
-        default="cliproxyapi-luna-xhigh-cpa-v1",
+        default="pi-cpa-luna-max-v2",
     )
     triage_watch_admit_parser.add_argument("--match-field-path", default="record.content")
     triage_watch_admit_parser.add_argument("--admitted-at", type=_aware_timestamp)
@@ -982,7 +1017,7 @@ def build_parser() -> argparse.ArgumentParser:
     watch_wake_run_parser.add_argument("--registration", required=True, type=Path)
     watch_wake_run_parser.add_argument(
         "--model-profile-alias",
-        default="cliproxyapi-luna-xhigh-cpa-v1",
+        default="pi-cpa-luna-max-v2",
     )
     watch_wake_run_parser.add_argument("--dispatched-at", type=_aware_timestamp)
     watch_wake_run_parser.add_argument("--maximum-callbacks", type=int, default=4)
@@ -1107,6 +1142,16 @@ def build_parser() -> argparse.ArgumentParser:
     historical_pilot_parser.add_argument("--provider-profile", required=True, type=Path)
     historical_pilot_parser.add_argument("--experiment-id", required=True)
     historical_pilot_parser.add_argument("--treatment-skill", required=True)
+    historical_pilot_parser.add_argument(
+        "--question-contrast",
+        action="store_true",
+        help="Compare forecasting requirements only; requires Judge and --treatment-skill none",
+    )
+    historical_pilot_parser.add_argument(
+        "--forecast-development",
+        action="store_true",
+        help="Current forecast question with two analysts and conditional Judge, no legacy arm",
+    )
     historical_pilot_parser.add_argument(
         "--judge-provider-profile",
         type=Path,
@@ -1350,18 +1395,25 @@ def default_registry() -> ProviderRegistry:
 
 
 def status_payload() -> dict[str, object]:
+    from market_impact_agent.pi_deployment import installed_permit
+    from market_impact_agent.pi_runtime import runtime_identity, shared_admission_root
+
+    build = runtime_identity()
+    permit = installed_permit(shared_admission_root())
+    accepted = permit is not None and permit.build_hash == canonical_hash(build)
     return {
         "project": "market-impact-agent",
         "version": __version__,
         "python": platform.python_version(),
         "live_trading": "disabled",
         "agent_runtime": {
-            "status": "accepted_local_research_v2",
-            "provider": "minimax-openai-compatible",
-            "model": "MiniMax-M3",
+            "status": "accepted" if accepted else "awaiting_runtime_acceptance",
+            "implementation": "pi",
+            "build": build,
+            "accepted_routes": list(permit.route_identities) if accepted and permit else [],
             "tool_authority": "read_only",
             "broker_reachability": False,
-            "provider_portability": "not_established",
+            "provider_portability": "accepted_routes_only",
         },
         "providers": [manifest.to_dict() for manifest in default_registry().manifests()],
         "observation_providers": [
@@ -3419,19 +3471,15 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
     from market_impact_agent.agent_engine import compose_authoritative_agent_engine
     from market_impact_agent.event_impact_triage_store import EventImpactTriageDecisionStore
     from market_impact_agent.model_provider import load_builtin_model_provider_profile
+    from market_impact_agent.pi_runtime import PiRuntimeProvider
     from market_impact_agent.prospective_decision_pipeline import (
         FrozenProspectiveDecisionRefs,
         prepare_reassessment_judgment,
         run_reassessment_judgment,
     )
     from market_impact_agent.prospective_diagnostic import (
-        REASSESSMENT_PROFILE,
         RegisteredReassessment,
         build_reassessment_registration,
-    )
-    from market_impact_agent.prospective_triage import (
-        _LazyAvailabilityModelProvider,  # pyright: ignore[reportPrivateUsage]
-        _NoCallModelProvider,  # pyright: ignore[reportPrivateUsage]
     )
     from market_impact_agent.prospective_trigger_admission import ProspectiveTriggerAdmissionStore
     from market_impact_agent.usage_ledger import UsageLedger
@@ -3452,7 +3500,7 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
             registration = build_reassessment_registration(
                 original_registration=original,
                 registered_at=datetime.now(UTC),
-                model_profile_id=args.model_profile_alias or REASSESSMENT_PROFILE,
+                model_profile_id=args.model_profile_alias or "pi-cpa-luna-max-v2",
                 subject=RegisteredReassessment(
                     original_registration_id=candidate.registration_id,
                     original_candidate_set_id=candidate.candidate_set_id,
@@ -3496,7 +3544,7 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
         profile = load_builtin_model_provider_profile(registration.model_profile_id)
         engine = compose_authoritative_agent_engine(
             store=store,
-            provider=_NoCallModelProvider(provider_id=profile.provider_id, model=profile.model),
+            provider=PiRuntimeProvider(profile, dispatch_allowed=False),
             config=profile.runtime_config(),
             tool_registry=ToolRegistry(store.artifacts),
             skill_registry=SkillRegistry(args.skill_root),
@@ -3532,17 +3580,10 @@ def _run_prospective_reassessment_command(args: argparse.Namespace) -> int:
                 terminal_replay = engine.journal.get_run(request.run_id).status.terminal
             except KeyError:
                 terminal_replay = False
-            if not terminal_replay:
-
-                def bind_model_secrets() -> None:
-                    credential = os.environ.get(profile.credential_env, "")
-                    engine.secret_values = (credential,) if credential else ()
-
-                engine.provider = _LazyAvailabilityModelProvider(
-                    profile=profile,
-                    provider=None,
-                    on_resolve=bind_model_secrets,
-                )
+            if not terminal_replay and not engine.has_unresolved_model_dispatch(request.run_id):
+                credential = os.environ.get(profile.credential_env, "")
+                engine.secret_values = (credential,) if credential else ()
+                engine.provider = ModelProviderFactory.with_builtin_adapters().create(profile)
             result = asyncio.run(
                 run_reassessment_judgment(
                     store=store,
@@ -3702,6 +3743,23 @@ def _run_watch_wake_command(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "runtime":
+        from market_impact_agent.pi_deployment import prepare_runtime, runtime_doctor
+
+        try:
+            if args.action == "prepare":
+                prepare_runtime()
+            result = runtime_doctor(
+                tuple(load_model_provider_profile(path) for path in args.provider_profile)
+            )
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+            print(
+                json.dumps({"ready": False, "error": str(cast(BaseException, exc))}),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["ready"] else 1
     if args.command == "status":
         print(json.dumps(status_payload(), indent=2, sort_keys=True))
         return 0
@@ -5011,6 +5069,168 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
+    if args.command == "agent" and args.agent_command == "pi-canary":
+        from market_impact_agent.pi_canary import (
+            prepare_pi_canary,
+            prepare_pi_canary_followup,
+            prepare_pi_canary_repair,
+            run_pi_canary,
+        )
+
+        try:
+            if args.action == "prepare":
+                if args.verification is None:
+                    raise ValueError("prepare requires offline verification")
+                if args.repair_of is not None:
+                    if args.followup_of is not None or args.prior_state_root:
+                        raise ValueError("repair derives prior usage from its frozen predecessor")
+                    registration = prepare_pi_canary_repair(
+                        args.state_root, parent_root=args.repair_of, verification=args.verification
+                    )
+                elif args.followup_of is not None:
+                    if args.prior_state_root:
+                        raise ValueError("follow-up derives prior usage from its frozen parent")
+                    registration = asyncio.run(
+                        prepare_pi_canary_followup(
+                            args.state_root,
+                            parent_root=args.followup_of,
+                            verification=args.verification,
+                            skill_root=args.skill_root,
+                        )
+                    )
+                else:
+                    if not args.prior_state_root:
+                        raise ValueError("prepare requires both prior state roots")
+                    registration = prepare_pi_canary(
+                        args.state_root,
+                        prior_roots=tuple(args.prior_state_root),
+                        verification=args.verification,
+                    )
+                result = {"registration_hash": registration["registration_hash"], "model_calls": 0}
+            elif args.action == "accept":
+                from market_impact_agent.pi_deployment import accept_runtime
+
+                result = asyncio.run(accept_runtime(args.state_root, args.skill_root))
+            else:
+                result = asyncio.run(
+                    run_pi_canary(
+                        args.state_root, args.skill_root, replay_only=args.action == "replay"
+                    )
+                )
+        except (OSError, RuntimeError, ValueError, KeyError) as exc:
+            print(
+                json.dumps(
+                    {"stage_passed": False, "error_class": type(cast(BaseException, exc)).__name__}
+                )
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result.get("stage_passed", result.get("accepted", True)) else 1
+    if args.command == "agent" and args.agent_command == "dynamic-effectiveness":
+        from market_impact_agent.dynamic_effectiveness_runner import (
+            accept_dynamic_route_qualification,
+            load_verified_opened_analysis_report,
+            prepare_dynamic_effectiveness_study,
+            prepare_dynamic_route_qualification,
+            run_dynamic_route_qualification,
+            run_opened_analysis_ablation,
+            run_portfolio_ablation,
+        )
+
+        try:
+            profiles = tuple(load_model_provider_profile(path) for path in args.provider_profile)
+            if args.action in {"prepare-qualification", "prepare-study"} and len(profiles) != 3:
+                raise ValueError("prepare requires exactly three preregistered provider profiles")
+            if args.action == "prepare-qualification":
+                if args.verification is None:
+                    raise ValueError("qualification preparation requires offline verification")
+                result = prepare_dynamic_route_qualification(
+                    args.state_root,
+                    profiles=cast(
+                        tuple[
+                            ModelProviderProfile,
+                            ModelProviderProfile,
+                            ModelProviderProfile,
+                        ],
+                        profiles,
+                    ),
+                    verification_path=args.verification,
+                )
+            elif args.action == "run-qualification":
+                result = asyncio.run(run_dynamic_route_qualification(args.state_root))
+            elif args.action == "accept-qualification":
+                result = accept_dynamic_route_qualification(args.state_root)
+            elif args.action == "prepare-study":
+                if args.inputs_root is None or not args.pattern_pack:
+                    raise ValueError("study preparation requires inputs root and pattern pack")
+                result = prepare_dynamic_effectiveness_study(
+                    args.state_root,
+                    inputs_root=args.inputs_root,
+                    pattern_pack_path=tuple(args.pattern_pack),
+                    profiles=cast(
+                        tuple[
+                            ModelProviderProfile,
+                            ModelProviderProfile,
+                            ModelProviderProfile,
+                        ],
+                        profiles,
+                    ),
+                )
+            elif args.action == "replay-opened-analysis":
+                report = args.state_root / "opened-analysis-report.json"
+                if not report.is_file():
+                    raise ValueError("no opened analysis terminal exists to replay")
+                result = load_verified_opened_analysis_report(args.state_root)
+            elif args.action == "run-portfolio-ablation":
+                result = asyncio.run(run_portfolio_ablation(args.state_root))
+            elif args.action == "preflight-cadence":
+                from market_impact_agent.dynamic_effectiveness_cadence import (
+                    preflight_cadence_evidence,
+                )
+
+                if args.inputs_root is None or args.panel_directory is None:
+                    raise ValueError("cadence preflight requires inputs root and panel directory")
+                result = preflight_cadence_evidence(
+                    args.state_root,
+                    inputs_root=args.inputs_root,
+                    panel_directory=args.panel_directory,
+                    index_proxy=args.index_proxy,
+                )
+            elif args.action == "open-analysis-outcomes":
+                from market_impact_agent.dynamic_effectiveness_outcomes import (
+                    open_dynamic_analysis_outcomes,
+                )
+
+                if args.panel_directory is None:
+                    raise ValueError("outcome opening requires a panel directory")
+                result = open_dynamic_analysis_outcomes(
+                    args.state_root,
+                    panel_directory=args.panel_directory,
+                    index_proxy=args.index_proxy,
+                    reviewed_at=datetime.now(UTC),
+                )
+            else:
+                if args.inputs_root is None or not args.pattern_pack:
+                    raise ValueError("opened analysis requires inputs root and pattern pack")
+                result = asyncio.run(
+                    run_opened_analysis_ablation(
+                        args.state_root,
+                        inputs_root=args.inputs_root,
+                        pattern_pack_path=tuple(args.pattern_pack),
+                    )
+                )
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+            print(
+                json.dumps(
+                    {
+                        "stage_passed": False,
+                        "error_class": type(cast(BaseException, exc)).__name__,
+                    }
+                )
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result.get("stage_passed", True) else 1
     if args.command == "agent" and args.agent_command == "run":
         try:
             result = asyncio.run(
@@ -5165,6 +5385,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 max_total_cost_microusd=args.max_total_cost_microusd,
                 registered_at=registered_at,
                 adjudication=adjudication,
+                question_contrast=args.question_contrast,
+                forecast_development=args.forecast_development,
             )
             result = asyncio.run(run_historical_readiness_pilot(prepared))
         except (KeyError, OSError, RuntimeError, TypeError, ValueError):

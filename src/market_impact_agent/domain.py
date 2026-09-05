@@ -139,6 +139,54 @@ class OrderIntent:
 
 
 @dataclass(frozen=True, slots=True)
+class PortfolioOrderIntent:
+    """An order derived from a portfolio target, never a synthetic research Signal."""
+
+    client_order_id: str
+    portfolio_decision_id: str
+    account_id: str
+    environment: TradingEnvironment
+    instrument_id: str
+    side: Side
+    quantity: Decimal
+    order_kind: OrderKind
+    created_at: datetime
+    expires_at: datetime
+    limit_price: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        require_aware(self.created_at, "created_at")
+        require_aware(self.expires_at, "expires_at")
+        if not self.portfolio_decision_id.startswith("portfolio-decision-v3-"):
+            raise ValueError("portfolio order requires its portfolio decision origin")
+        if self.expires_at <= self.created_at:
+            raise ValueError("expires_at must be after created_at")
+        if not self.quantity.is_finite() or self.quantity <= 0:
+            raise ValueError("quantity must be finite and positive")
+        if self.order_kind is not OrderKind.MARKET or self.limit_price is not None:
+            raise ValueError("portfolio orders currently support market orders only")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "market-impact.order-intent.v2",
+            "client_order_id": self.client_order_id,
+            "portfolio_decision_id": self.portfolio_decision_id,
+            "account_id": self.account_id,
+            "environment": self.environment.value,
+            "instrument_id": self.instrument_id,
+            "side": self.side.value,
+            "quantity": str(self.quantity),
+            "order_kind": self.order_kind.value,
+            "limit_price": None,
+            "created_at": _timestamp(self.created_at),
+            "expires_at": _timestamp(self.expires_at),
+        }
+
+
+type ExecutableOrder = OrderIntent | PortfolioOrderIntent
+
+
+@dataclass(frozen=True, slots=True)
 class TradingMandate:
     mandate_id: str
     account_id: str

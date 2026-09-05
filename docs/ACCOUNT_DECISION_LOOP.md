@@ -1,24 +1,25 @@
 # Account decision loop
 
-This document owns the path from a sealed Agent judgment to a controlled account action. It does
+This document owns the path from admitted research or a holdings review to a controlled account action. It does
 not grant paper or live capability. The Harness remains the only orchestration, portfolio-policy,
 approval, execution-state and reconciliation authority.
 
 ## Smallest complete loop
 
 ```text
-Trigger Admission / scheduled review
-  -> frozen evidence and Authorized Decision View
-  -> Agent Judgment and portfolio-action proposal
-  -> Harness Portfolio Decision
-  -> Signal Intent
+Trigger Admission / independently admitted account review
+  -> frozen research evidence and authoritative account view
+  -> analytical view (facts, forecast, assumptions, risk)
+  -> portfolio Agent (current holdings/cash/orders -> desired exposure)
+  -> Harness-validated Portfolio Decision
   -> deterministic Order Sizing Decision
   -> Order Intent
   -> hard policy and Trading Mandate
   -> approval
   -> durable submit / cancel / replace request
-  -> Provider
+  -> Nautilus / accepted Provider
   -> complete order / fill / position / cash reconciliation
+  -> next admitted review
 ```
 
 The two event entrances remain different only before `Trigger Admission`:
@@ -32,6 +33,12 @@ After admission they use the same evidence, Judgment, portfolio, policy, approva
 boundaries. A missing optional input is visible degradation; missing authority for a trigger,
 tradable target, raw price basis, account reconciliation, mandate, approval or execution state is a
 hard blocker at that owning boundary.
+
+A research Signal is an optional upstream expression of the market thesis, not a compulsory
+fiction between a portfolio decision and its order. An independently admitted account review may
+start without one. The new portfolio-origin order binds the actual completed review and target;
+the legacy Signal-origin path keeps its old replay contract. Scheduled operation is a separate
+activation gate: a callable review does not by itself establish a running scheduler.
 
 ## Continuous market and account sensing
 
@@ -52,9 +59,10 @@ and request a bounded Watch. A holdings review starts from every current positio
 conflict before considering new exposure. Both may request accepted local-first retrieval, but only
 the Harness can collect, journal and freeze new data for a fresh Run.
 
-The event path has concrete runtime owners; the independently registered current-time/scheduled
-review entrance is not yet an accepted executable Trigger. It must not be simulated by relabeling
-old news as newly received or manufacturing a Watch Wake. The user-approved delayed-review policy
+The event path has concrete runtime owners. `PortfolioReviewAuthority.review_account` now provides
+an explicit account-only invocation; a periodic scheduler or automatic event-route activation is
+still a separate gate. Neither may be simulated by relabeling old news as newly received or
+manufacturing a Watch Wake. The user-approved delayed-review policy
 keeps the original missed-window sample and opens a separate current-time judgment. Its accumulated
 subject evidence retains original receipt/authority times; fresh contextual inputs use the new
 Harness cutoff. Subject age is not the same as a stale current price or account snapshot. A
@@ -64,14 +72,43 @@ The first reassessment increment is deliberately Judgment-only; its
 [input and terminal boundary](EVENT_IMPACT_TRIAGE.md#current-time-reassessment-initial-judgment-boundary)
 does not implement the scheduled portfolio loop or inherit any account/Signal authority.
 
+The minimum continuous-loop activation still has three unfinished bindings. A Wake callback must
+reopen the parent Watch question, prior thesis, counterevidence and invalidation conditions; a
+versioned scheduler must admit recurring portfolio reviews; and either trigger must reach the same
+account-aware Portfolio Review and sizing composition. The current callable components and tested
+recovery paths do not by themselves prove that this loop is operating continuously. The first real
+acceptance must start from an actual new receipt or a due scheduled review and end in exactly one
+reconciled `hold` or controlled Intent without duplicated model or Provider work.
+
 The Agent keeps three conclusions distinct:
 
 1. **Market/company thesis:** what changed, confirming and disconfirming evidence, catalyst and
    invalidation conditions.
 2. **Security readiness:** whether the mapped stock or ETF is liquid, tradable, valued and timed well
    enough to consider.
-3. **Portfolio action:** whether the exact reconciled account should observe, hold, reduce, close,
+3. **Portfolio action:** whether the exact reconciled account should hold, reduce, close,
    rotate or add exposure.
+
+### Review triggers and action cadence
+
+Continuous operation has two complementary decision triggers:
+
+- **event-driven review:** a Watch receives a new material version, contradiction, confirmation or
+  registered invalidation observation and wakes a fresh research Run; and
+- **scheduled account review:** a versioned market-calendar schedule freezes the latest authorized
+  news, market and account state even when no single new headline is material.
+
+The same cutoff and same frozen inputs converge on one review identity; a restart or simultaneous
+trigger cannot generate a second recommendation. Every changed cutoff creates a fresh Snapshot and
+Run rather than appending mutable news or prices to an earlier decision. Collection may continue at
+minute-level cadence, but the LLM is invoked only on an admitted event or scheduled review. Nautilus
+may execute frozen intraday rules between reviews; tick data does not cause per-tick model calls.
+
+“Review every trading day” does not mean “trade every trading day.” The Portfolio Agent must still
+return an affirmative account recommendation, including `hold`, while the Harness creates an order
+only when the deterministically sized target change clears the versioned tolerance, friction,
+turnover, risk and Mandate gates. This permits a later review to correct an earlier thesis while
+preventing small narrative changes from causing churn.
 
 There is no requirement to trade every day and no universal model-authored score. Missing optional
 context is visible; missing or stale account truth can still support a risk alert or reduction
@@ -80,6 +117,188 @@ separation prevents a valid macro thesis from silently becoming an unsuitable or
 account.
 
 ## Authorized Decision View
+
+### Current Agent handoff and activation boundary
+
+`PortfolioReviewAuthority` now supplies the account-aware model producer through the existing pi
+single-invocation path. `run_portfolio_review_pipeline` connects its completed recommendation to
+deterministic sizing and optional durable Mock admission. The Harness-configured input source
+freezes the complete Account State, Position Snapshot, Authorized Decision View, signed exposure
+view, Mandate, raw prices and trading rules. No second Agent framework or account ledger is added.
+
+The producer has two explicit entrances:
+
+- `review(..., research_run_ids=...)` reopens every selected, completed same-root research terminal,
+  including its validated Judgment and cutoff. An uncertain research view is a legitimate input;
+  it does not fabricate a directional Signal or suppress the account recommendation.
+- `review_account(...)` starts an independently admitted holdings review with no research Run IDs.
+  The supplied account facts still require complete, fresh authority before model dispatch.
+
+The model sees the exact frozen input and bound research in one pi invocation, without a second
+retrieval loop. New dynamic-horizon Runs use `AgentPortfolioProposalV4`; v3 remains replayable.
+V4 contains the account recommendation, target exposure, selected thesis horizon, priced-in
+assessment, transmission, review point, evidence, counterevidence and invalidation. Harness injects identities and
+computes quantities. Completion, raw native response, JSON normalization, physical Usage and
+signed terminal ancestry persist before execution admission. A completed Run replays rather than
+regenerates; an interrupted unknown request remains blocked for reconciliation.
+Cancellation after dispatch closes an incomplete/cancelled terminal and Usage before propagating
+the cancellation; its unknown-generation reservation stays open. Signed-terminal-before-finish
+recovery preserves the cancelled state without another request.
+
+The first paid four-scenario/three-model portfolio ablation completed 5/12 Runs
+under its frozen strict contract. All seven rejected raw answers proposed an
+action within the preregistered reasonable set, but reused one frozen evidence
+item as both support and counterevidence. That is a valid way to express competing
+interpretations, so the current V4 contract permits overlap while still requiring
+every reference to belong to the frozen input. Research Thesis and Portfolio V4
+also trim only surrounding whitespace in bounded narrative fields and record the
+normalization paths; evidence identities and Harness-owned fields remain strict.
+The old terminals remain incomplete and no Mock action was produced from the
+diagnostic replay.
+
+The corresponding `ResearchThesisV1` is an analytical answer, not an order. It
+chooses one of 1/3, 5/10 or 20/60 trading sessions; the Harness derives the
+corresponding `immediate`/`tactical`/`swing` band rather than asking the model
+to echo that redundant classification. It states `up`, `down` or
+`rangebound`; distinguishes incremental information from what appears priced
+in; and records a counter-scenario, observable invalidation and suggested review
+offset. It has no `abstain` action. Missing optional evidence becomes a typed
+unknown; missing PIT identity or required account authority makes the Run
+incomplete. The Portfolio Agent still maps every completed thesis to
+`hold/open/increase/reduce/close/rotate` for the exact account, while only
+deterministic Harness sizing may produce order quantity.
+
+`Decision Recall v1` is a rebuildable projection over signed Research Thesis
+artifacts in the existing Journal, not another decision ledger. Its
+zero-parameter current-thesis read and bounded search only navigate; a prior
+thesis can influence a Run only after the original artifact is reopened,
+hash-checked, tied to its signed completed source Run, and rebound to its own cutoff.
+The projection cannot admit a standalone CAS object, even when that object has a
+valid content hash and thesis-shaped JSON. Current account and portfolio state
+still come from their dedicated authorities rather than this disposable index.
+Search is capped at eight candidates and 12,000 injected tokens, enforces the
+new Run's `as_of`, and excludes secrets, account identifiers, paid-news bodies
+and hidden outcomes. pi summaries may navigate this history but never replace
+its evidence.
+
+Scheduled review must use exact trading-session offsets for the selected
+horizon. Sparse historical checkpoints may be event-review candidates, but
+cannot be relabeled as D1/D3/D5 scheduled reviews. The cadence study therefore
+performs a zero-cost evidence preflight and refuses paid calls until each
+required cutoff is reconstructable without future information.
+
+The selected horizon is the duration of a complete trading experiment, not a
+jump from its first session to its last. Every D1 through Dn session must have a
+point-in-time market/account observation, mark-to-market portfolio state,
+deterministic risk/stop evaluation and simulated execution/reconciliation
+result. A one-shot thesis remains active across that daily path; “one-shot” only
+means the research model is not called again. Scheduled and material-event arms
+may replace the active thesis at their admitted review points, after which the
+new target applies to subsequent daily states. Thus drawdown, stopped loss,
+missed rebound, turnover and costs come from the full path even on days when the
+LLM is not invoked.
+
+The current four historical successor sequences do not yet meet that admission:
+they have sparse event snapshots at offsets 20/35, 28/58, 4/5 and 30/59 rather
+than complete daily decision-state packs. The existing daily outcome prices are
+kept on the scoring side of the PIT boundary. The next implementation slice must
+materialize each day's cutoff-correct market/news/account inputs before the paid
+one-shot/scheduled/event comparison can run.
+
+This is a callable composition, not silent activation of the existing experiment route.
+`ProspectiveDecisionPipeline.run` retains its frozen Signal-origin behavior and caller-selected
+action for old experiments. Automatically selecting a control/treatment terminal, creating a
+scheduled review, or consuming a real news event requires an explicit route/selection registration.
+Neither historical arms nor their answers may be silently combined. The conditional research Judge
+resolves disagreement; it is not the portfolio Agent. Real-market portfolio effectiveness and
+broker Paper execution have not been established by this implementation.
+
+#### Required portfolio recommendation; no abstention action
+
+The v3/v4 portfolio producers do not expose `abstain` or a standalone `observe` action.
+Every completed, admitted portfolio review must explain what to do with the supplied
+account: maintain exposure (including remaining in cash), open/increase, reduce/close, or rotate.
+Uncertain research is an input to that decision, not permission to omit the recommendation.
+`hold` is an affirmative decision to maintain the observed exposure, not a renamed refusal to
+analyze. Its rationale must explain why changing exposure is less appropriate and state the next
+review or invalidation condition. A Watch or a retrieval need may accompany any recommendation;
+neither substitutes for one. Use existing rationale, horizon and invalidation fields where they
+suffice rather than adding ceremonial fields or scores.
+
+For example, the same uncertain outlook may justify retaining cash for a flat account, maintaining
+a suitably diversified position, or reducing an excessive concentration. These are possible
+outcomes to test, not hard-coded answers: compare opportunity cost, downside, existing orders and
+the applicable mandate. A positive forecast alone does not require buying, and the absence of a
+new positive forecast does not require selling.
+
+Missing authoritative account state, model failure or exhausted runtime budget is an incomplete
+review/operational blocker, not an accepted portfolio `hold`. The Harness may request missing
+information and prevent execution; an Agent may describe a conditional risk response but cannot
+invent holdings, cash or order status. A valid recommendation also does not authorize execution:
+mandate, kill, sizing, approval and reconciliation gates remain independent.
+
+V3 whole-account `hold` omits target fields and supports remaining in cash. Historical v1/v2
+artifacts retain their original vocabulary and Signal binding; they are not silently reinterpreted.
+Current research experiments also retain their registered up/down/abstain forecast contract.
+
+`PortfolioOrderIntent` (order-intent v2) binds the genuine completed portfolio review and computed
+delta, not a research-side equality test. Thus positive research can result in selling an
+overconcentrated long holding without inventing bearish research. The existing
+`AutonomousPaperExecutionServiceV2` owns this path under either its accepted autonomous mode or
+explicit `manual_each`; this slice does not activate either mode against a broker.
+Manual admission reserves the rounded executable notional but cannot dispatch. Explicit approval
+reopens review/sizing/current-account authority; rejection or expiry releases unsent reservations.
+Dispatch still verifies Mandate, kill, freshness, Provider identity and durable operation ownership.
+Unknown acknowledgement cannot regenerate an order. The legacy manual service rejects the new
+intent type instead of accidentally skipping its portfolio ancestry.
+
+Account/review evidence binds directly to the frozen view. `risk_observation_ready` alone is not
+enough: a completed v3 review currently requires fresh cash, positions, open orders and fills,
+matching projections and no account observation gaps. Missing facts can support a preliminary
+risk alert, not a completed recommendation or an executable order. Rotation, bearish openings,
+short-position execution and manual cancel/replace through this new entry remain blocked until
+their specific acceptance; the existing legacy lifecycle does not automatically accept them.
+
+The production-shaped integration tests use the real pi modules with only model network responses
+replaced, then the real portfolio/sizing/manual execution/Mock owners. They exercise cash hold,
+positive research with concentrated holdings and reduction, uncertain research with an independent
+account recommendation, restart/explicit approval, partial and duplicate fills, final account
+reconciliation, changed-account refusal, expiry, unknown generation/ACK and forged-terminal refusal.
+These demonstrate wiring and safety, not spontaneous model allocation quality. The 2026-09-03
+acceptance has 18 focused portfolio cases; the full checkout passed 1,766 Python tests, four Node
+tests, Ruff/format, Pyright and TypeScript. Independent review identified cancelled-request Usage
+omission and a mark-unit ambiguity; both are fixed and exercised through the owning production
+paths, including a cancelled terminal-before-finish recovery. No paid portfolio-model request or
+broker operation was made in this acceptance.
+
+Mock account truth is derived from one immutable synthetic opening configuration and its durable
+order/fill facts, with explicit current raw per-share marks; lot or unknown units are rejected
+before computing marked concentration. It is not a second mutable account authority.
+Simulated fills are explicitly recorded and duplicate-checked, not inferred from an ACK. This
+first fixture uses immediate USD settlement and no fees; it is not a historical execution/settlement
+model, broker fact, or investment P&L claim. Market and portfolio ablations must register the
+appropriate costs, settlement and fill assumptions separately.
+
+Measure each layer's contribution separately. First assess research direction, horizon, factual
+support and invalidation under a fixed portfolio rule. Then compare that same frozen research and
+account view with a simple deterministic allocation versus the portfolio Agent; keep mandate,
+costs, fill rules and execution identical. The extra model must justify its cost through better
+net outcomes or lower downside without excessive forgone upside, not merely produce a longer
+explanation. Finally audit execution against the admitted target: rejected, delayed, partial and
+unfilled orders are execution outcomes, not rewritten research forecasts. These are sequential
+ablation questions, not a large all-combinations experiment or new permission to trade.
+
+This adopts the separation of signal, portfolio target, risk and execution found in maintained
+systems ([LEAN portfolio construction](https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/portfolio-construction/key-concepts)),
+without adopting a second trading engine. Execution quality includes fees, slippage and delay,
+separately from the quality of the investment view ([CFA Trade Strategy and Execution](https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/trade-strategy-execution)).
+For LLM-specific role separation, [TradingAgents v3](https://arxiv.org/html/2412.20138v3)
+is a secondary reference for analyst-to-trader synthesis, not a reason to copy every debate role.
+Its reported January–March 2024 simulation does not establish this project's multi-regime or
+prospective effectiveness. Here the portfolio Agent remains a proposal producer; neither a model
+acting as risk manager nor a fund-manager persona can replace Harness hard controls.
+
+### Current read-only tool view
 
 An Agent run may discover and call every registered read-only capability authorized for that task:
 
@@ -100,11 +319,13 @@ submission capability or mutable account ledger.
 
 ## Portfolio actions and authority
 
-The Agent may propose only trading-related dispositions:
+The v3 account-aware Agent proposes hold/open/increase/reduce/close/rotate. The table also shows
+separate operational controls, not additional actions in that proposal schema. Persisted v1/v2
+parsers retain historical vocabulary; do not reinterpret old abstention as an account recommendation.
 
 | Proposal | Meaning | Mutation authority |
 | --- | --- | --- |
-| `abstain` / `observe` / `hold` | no order; optionally create a bounded Watch | Harness only |
+| `hold` | maintain current exposure, including cash; explain why and when to review | no order; Harness may admit a bounded Watch |
 | `open` / `increase` | add exposure | Harness sizing, mandate, policy and approval |
 | `reduce` / `close` | lower existing exposure | Harness sizing, holdings and approval |
 | `rotate` | linked reduce plus open candidates | Harness evaluates each leg; no atomicity claim |
@@ -113,7 +334,8 @@ The Agent may propose only trading-related dispositions:
 | `kill` | stop new dispatch and request operational escalation | Harness kill-switch authority |
 
 The Agent may suggest target, direction, horizon, urgency and desired exposure. It cannot choose the
-final executable quantity. The Harness computes or rejects quantity from the exact Signal,
+final executable quantity. The Harness computes or rejects quantity from the admitted portfolio
+review (or exact Signal for a legacy origin),
 unadjusted Price Basis, side-applicable lot/tick/tradability rules, trusted Account State Snapshot,
 Trading Mandate and versioned sizing policy. Model confidence remains observational and cannot size
 a position.
@@ -177,9 +399,14 @@ and mints the read tool only for the exact content-identified Position Snapshot 
 caller-supplied lookalike tool is not part of this authority boundary. Cutoff and freeze instants are
 canonical UTC in serialized content identity, so equivalent aware timestamps cannot fork replay IDs.
 
-`Portfolio Decision` binds one Judgment/Signal candidate, the exact Position Snapshot,
-open-order conflicts and a disposition. Decision Admission v2 additionally binds its parent Account
-State Snapshot. The paper composition root reprojects the Position Snapshot from that trusted
+`Portfolio Decision` v3 binds a same-root portfolio review, its selected completed research (which
+may be empty for account-only review), the exact Account/Position/Authorized Decision View and a
+disposition. Account and exposure lineage is direct, not copied into a synthetic Signal. The
+portfolio-origin intent reopens that review before deterministic sizing, approval and dispatch.
+
+For the retained Signal-origin contract, Portfolio Decision binds one Judgment/Signal candidate,
+the exact Position Snapshot, open-order conflicts and a disposition. Decision Admission v2 also
+binds its parent Account State Snapshot. The paper composition root reprojects it from that trusted
 parent, rebuilds the Authorized Decision View, and checks venue/class against a trusted Instrument
 Master projection. `Portfolio Decision` is a proposal-admission boundary, not an order. `Order
 Sizing Decision` is deterministic Harness output and is the only path that may create the quantity
@@ -292,8 +519,8 @@ success never establishes broker order, fill, position or cash state.
    `AuthorizedDecisionView`/`read_position_snapshot` Agent tool are accepted. No credential or
    mutation capability is exposed. This is bounded `ACCOUNT` read acceptance only; its explicit
    manual-order coverage gap keeps all order mutations closed.
-2. **Decision and sizing.** Complete for the provider-neutral `manual_each` mock path. Content-
-   identified Portfolio Decision and Order Sizing Decision contracts bind the exact Signal, parent
+2. **Decision and sizing.** The Signal-origin `manual_each` Mock path remains accepted. Its content-
+   identified Portfolio Decision and Order Sizing Decision bind the exact Signal, parent
    Account State, Authorized Decision View, Position Snapshot, Trading Mandate, raw Price Basis,
    trusted Instrument Master identity, side-applicable venue/class rule and versioned sizing policy.
    Exposure increase requires a gap-free view and no conflicting open order. Reduction and close
@@ -304,13 +531,19 @@ success never establishes broker order, fill, position or cash state.
    bound Account State to remain current and unchanged. Open, blocked increase, blocked uncertain
    reduction, non-lot close rejection, hold, rotate rejection, adjusted-price rejection and the
    complete manual approval→mock accepted→reconciliation path pass locally. This is still synthetic
-   account/mock execution acceptance, not external broker-paper evidence.
-3. **Operation lifecycle.** Complete for the Provider-neutral mock boundary. Cancel has exact manual
+   account/mock execution acceptance, not external broker-paper evidence. The added v3 pi producer
+   and portfolio-origin intent use the same v2 sizing/risk owner, complete account/research ancestry
+   and explicit manual approval. Its synthetic USD-denominated ETF case demonstrates positive research plus
+   reduction, native-response replay, Mock partial/duplicate/final fills and account reconciliation;
+   it does not inherit A-share sell rules or broker acceptance. See the
+   [current handoff](#current-agent-handoff-and-activation-boundary) for activation limits.
+3. **Operation lifecycle.** The legacy Signal-origin Mock cancel/replace boundary is accepted. Cancel has exact manual
    approval, sealed capability, durable attempt state, restart recovery, ambiguous-ACK handling and
    reconciliation-established terminal state. Replace is cancel plus a new intent and cannot submit
    before the old order is reconciled canceled; cancellation creation and replacement linkage share
    one SQLite transaction. This does not accept an external Provider or yet
-   prove close/rotate portfolio behavior against a broker.
+   prove close/rotate portfolio behavior against a broker. The v3 manual portfolio entry does not
+   yet accept cancel/replace; do not route its orders through a legacy service to bypass that gate.
 4. **Operational control.** The durable kill switch is complete for the mock boundary: it blocks new
    submissions, preserves cancel/reconciliation, survives restart and requires a post-activation
    complete reconciliation before clearing. Durable approval inbox/notifications and reconciliation
@@ -329,15 +562,16 @@ success never establishes broker order, fill, position or cash state.
 6. **Live.** Require explicit authorization, versioned live mandate and limits, credential
    isolation, tested kill switch and separate live Provider Acceptance.
 
-Backtest and prospective work share EventAssessment, Signal, portfolio-policy and order semantics.
+Backtest and prospective work must share research, portfolio-policy and order semantics.
 Backtests use cutoff-bound simulated Account State and deterministic fills; paper/live use actual
 reconciled state. Neither lane upgrades the other's evidence authority.
 
 ## Decision-path parity and replay
 
-Backtest, paper and live use the same decision path up to the execution Provider. They must bind the
-same frozen evidence/tool view, Agent runtime and Skill surface, Judgment validation, Signal,
-portfolio-action policy, deterministic sizing, Order Intent, hard policy and mandate semantics.
+Backtest, paper and live must use the same decision path up to the execution Provider. They must bind
+the same frozen evidence/tool view, Agent runtime and Skill surface, Judgment/portfolio validation,
+deterministic sizing, Order Intent, hard policy and mandate semantics. Signal-origin legacy and
+portfolio-origin v3 ancestry remain distinguishable; neither is silently converted into the other.
 Environment-specific code may supply only the owning facts it must own:
 
 - a backtest supplies cutoff-bound simulated account state and later deterministic fills;
@@ -352,6 +586,14 @@ a new Run. Research features may use cutoff-correct adjusted/total-return prices
 limits and order prices always use the raw tradable basis.
 
 ## Effectiveness evidence
+
+The zero-cost [reliability ablation](MODEL_PROVIDER_RELIABILITY.md#bounded-reliability-ablation)
+exercises the real financial control owners with synthetic account/Provider
+fixtures. Removing freshness, raw-price, position-delta, notional, kill,
+unknown-submission or open-order reconciliation protections causes the owning
+tests to fail. This establishes targeted fault sensitivity, not IBKR Paper
+acceptance or profitable/risk-reducing investment decisions. Production risk
+controls are never disabled for an ablation.
 
 Engineering acceptance and investment effectiveness are separate. The common loop must first prove
 that it can replay the same frozen inputs, account state, policies and costs across historical,

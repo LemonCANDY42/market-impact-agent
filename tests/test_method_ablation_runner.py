@@ -35,10 +35,12 @@ from market_impact_agent.research_methods import AblationArmStudy
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger
 
+from .runtime_fakes import BusinessModelFixture
+
 ROOT = Path("examples/agent/energy_supply")
 
 
-class FakeAvailableProvider:
+class FakeAvailableProvider(BusinessModelFixture):
     def __init__(self, state_root: Path) -> None:
         self.state_root = state_root
         self.available_checked = False
@@ -56,7 +58,7 @@ class FakeAvailableProvider:
         assert len(tuple(self.state_root.rglob("binding-*.sqlite3"))) == 4
         self.available_checked = True
 
-    async def complete(
+    async def answer(
         self,
         *,
         messages: tuple[dict[str, object], ...],

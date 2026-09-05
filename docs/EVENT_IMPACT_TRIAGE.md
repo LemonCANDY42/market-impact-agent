@@ -619,13 +619,10 @@ remained identical, with its normal scheduler advancing to seven polls and zero 
 rerun, order or service restart was performed. A separately approved same-question diagnostic may
 start a new current-time registration; it must not merge the lost old response or promote this Run.
 
-The user subsequently approved at most one such same-question diagnostic with a USD 1 ceiling.
-Register it explicitly with `--model-profile-alias cliproxyapi-luna-max-cpa-reassessment-usd1-v1`
-and new registration/refs paths. This is the same Luna max/CPA/retry policy with only the estimated
-cost ceiling changed; the existing `0.30` registration and failed Run remain immutable. Prepare and
-run consume the frozen Profile rather than a CLI budget override. The old lost-response usage stays
-unknown and separate from the new diagnostic's usage. This approval is not a new blind sample,
-repeated-attempt authorization, trading permission or an upstream invoice cap.
+The user subsequently approved one same-question diagnostic with a USD 1 ceiling, using the then
+current v1 Profile. That authorization was consumed by the following completed run, not renewed
+by the pi migration. The original `0.30` registration, failed Run and unknown lost-response usage
+remain immutable. This history is not a new blind sample or further dispatch/trading permission.
 
 The authorized diagnostic actually completed with cutoff `2026-09-02T10:47:30.867021Z`, registration
 `77719aefb52f9b5d0b367f8556d67178f4a51cf9112070f0998eeade0ce9ed67`, Trigger
@@ -659,7 +656,7 @@ passes function parameters through and copies `strict` only when supplied. This 
 not establish the effective upstream schema for these requests; do not claim the gateway forced
 the optional fields or assign the entire failure to model capability.
 
-The input-access repair now binds checkpoint tool v3 in **new** reassessment registrations. The
+The intermediate input-access repair bound checkpoint tool v3. The
 offered schema/description and research instruction explicitly start with `{}`; optional query is
 literal substring matching and exact filters combine with AND. Results expose authorized-record
 counts and deterministic paging, so zero matches are not confused with zero available input.
@@ -669,6 +666,10 @@ and excludes the unrelated issuer from a shared receipt. Paging, explicit no-mat
 authorization subsets, schema rejection and legacy v2 replay are checked at the same public seams.
 This scripted Provider test verifies data delivery, not real-model comprehension or decision quality.
 See `DATA_INPUT_HARNESS.md` for the owning tool contract.
+The current pi route supersedes that interface for new registrations: checkpoint tool v4 exposes
+zero-filter `read_selected_*` tools separately from search and authorized pagination. Its default
+Profile is `pi-cpa-luna-max-v2`; production dispatch requires the exact runtime acceptance in
+`AGENT_RUNTIME.md`. Historical v2/v3 manifests remain evidence, not alternative execution paths.
 An offline reconstruction of both real earlier reassessments (the interrupted original and the
 completed USD 1 diagnostic) matched their original registration, Snapshot Set, Evidence Pack and
 tool-manifest hashes exactly. It made no model requests and did not reinterpret their results.
@@ -722,6 +723,35 @@ dispatch. Offline audit CAS is
 `78953913e5321c8fd95e4af5dc821443654f6b30f153c1fa8e36074d14a445ba`; the scripts and evidence
 remain under ignored `.market-impact/checkpoint-tool-v3-canary-20260902/`. The approval is consumed;
 no real Earnings rerun, Watch mutation, Signal, Intent or Paper operation follows from this failure.
+
+#### Accepted-pi current-time reassessment — 2026-09-03
+
+The separately authorized market-resumption slice now has an actual completed Earnings Judgment,
+not another synthetic runtime canary. The new cutoff is `2026-09-03T00:58:01.177272Z`; the original
+expired/failed questions remain unchanged. Registration `fb15ce19…` reopens the same issuer's two
+forecast versions with the latest eligible received issuer master and valuation context. Its exact
+Trigger Admission, Snapshot Set and Query Gate passed before dispatch. This is a current-time
+reassessment of received evidence, not a newly received Earnings event or a replay of an old window.
+
+Run `prospective-reassessment-5e7d9e0c879db153043fd6e09f27b9e5fedc7e98642c63e87f9380853930effa`
+completed on accepted pi build `ad861366…`, using CPA/Luna max: two physical requests, three selected
+evidence reads, 24,108 input / 8,630 output tokens and USD .015179 estimated cost. Credential-free
+reopening returned terminal `43d0edce…` without another dispatch; the parent budget has no unsettled
+requests. Original responses, licensed inputs and the private orchestration stay in the ignored
+`.market-impact/market-resumption-20260903/earnings/` directory.
+
+The result is **abstain**, with no Signal, Intent or Mock execution. The reasoning distinguishes
+different reporting periods, forecasts from actual results, and year-on-year growth from a
+same-period expectation surprise. It does not infer a forecast revision by subtracting unlike
+periods. Missing comparable prior expectations and a pre-decision price path remain economic
+uncertainties; successful selected reads are not investment-effectiveness evidence. A malformed
+reference in one free-text blocker also remains in the immutable response; structured evidence
+references validate, but this result must not be described as having perfect citation quality.
+
+The preceding fresh readiness check (`2026-09-03T00:56:28Z`, report `2e1d70ac…`) was **2/4 operational**:
+Earnings and NBS were waiting without a new checkpoint; policy/material still had cadence and
+Journal coverage blockers. This reassessment neither repairs those routes nor permits bypassing
+their gates. Collection and Gateway processes were not restarted.
 
 ### Actual-receipt coverage failure — 2026-09-02
 

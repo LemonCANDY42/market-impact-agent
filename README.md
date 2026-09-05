@@ -289,8 +289,8 @@ The bootstrap implements:
 - a bounded local Agent Harness with content-addressed Evidence/Pattern/Judgment contracts,
   append-only crash-safe runs, automatic context compaction, on-demand hashed Skills, typed
   permissioned tools, official MCP lifecycle handling, budgets, cancellation, redaction,
-  closed-output correction, a pinned MiniMax M3 China-endpoint Provider, and a pinned local
-  CLIProxyAPI `gpt-5.6-luna` xhigh Provider;
+  closed-output correction and one pinned pi model/Agent/compaction path. Exact CPA/Luna max
+  Responses and MiniMax M3 Chat routes require cleaned-build qualification before production admission;
 - persona-free, automatically routed Research Method Skills adapted from stable event,
   fundamental, market-context, and adversarial-risk workflows; a frozen four-arm ablation
   holds evidence/model/action space constant while varying only those method layers;
@@ -375,11 +375,11 @@ evidence. No baseline-superiority, alpha, Phase 3, paper, or live claim has pass
 [docs/PHASE2_CALIBRATION.md](docs/PHASE2_CALIBRATION.md).
 
 The bounded research-only Agent runtime and its exact non-claims are recorded in
-[docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). Deterministic hardening, base-wheel isolation,
-the private MiniMax M3 v4 single run, the private five-replicate v2 ensemble run, and a full
-CLIProxyAPI Luna xhigh single run pass the current local runtime gates. This proves bounded
-Provider substitution through the same auditable Agent-to-frozen-decision pipeline, not model
-quality, repeated behavioral equivalence, event-family calibration, alpha, or execution readiness.
+[docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md). Current new-model dispatch uses pi exclusively;
+the former generic execution code is removed. Its historical single-run and ensemble results
+remain evidence of those versions, not acceptance of the current build. Production admission
+requires the exact native-route/cache/compaction/restart qualification; this does not establish
+model quality, event-family calibration, alpha or execution readiness.
 The real ensemble selected `600938.XSHG`, while
 the committed deterministic replay fixture uses `600028.XSHG`; those results are deliberately
 not combined. None of this overrides the failed trading-calibration result.
@@ -537,6 +537,18 @@ exhaustiveness, and oil/non-European direct confirmation still needs additional 
 
 ## Architecture at a glance
 
+The core responsibility split is research view -> account-aware portfolio target -> Harness
+quantity/risk/approval -> Nautilus/accepted execution adapter -> reconciliation and review. The
+portfolio Agent must recommend what to do with the account, including staying in cash; it cannot
+abstain instead of analyzing the account. Research direction is not mechanically the buy/sell side:
+a bullish thesis can coexist with a concentration-reducing sale. The v3 pi portfolio producer,
+portfolio-origin intent and explicit manual Mock path are implemented; their production-shaped
+tests do not establish real model allocation quality or broker Paper acceptance. Automatic event
+selection/scheduled activation remain separately gated. This borrows [LEAN's layer separation](https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/portfolio-construction/key-concepts),
+without importing LEAN or another Agent framework. pi and Nautilus remain the runtime foundations.
+
+The previously accepted diagnostic path remains replayable under its frozen contract:
+
 ```text
 Prospective Snapshot Set -> exact Decision Inputs + Evidence lineage -> Query Gate
        -> frozen Provider Profile + two-arm Execution Plan -> 3 Judgment Runs per arm
@@ -565,9 +577,11 @@ Requirements:
 
 - Python 3.13 or 3.14
 - [uv](https://docs.astral.sh/uv/)
+- Node.js 22.19 or later for the pinned pi runtime
 
 ```bash
 uv sync --all-extras --python 3.13
+uv run market-impact runtime prepare
 uv run market-impact status
 uv run market-impact event validate examples/events/synthetic-energy-supply-shock.json
 uv run market-impact prediction capture --provider polymarket --limit 20
@@ -582,7 +596,7 @@ uv run market-impact agent method-ablation-run \
   --parent-registration examples/calibration/agent-physical-energy-prospective-v1.json \
   --exposure-registry examples/research/a-share-energy-exposure-registry-v1.json \
   --method-catalog examples/research/research-method-catalog-v1.json \
-  --provider-profile examples/providers/minimax-m3-research-v1.json \
+  --provider-profile examples/providers/pi-minimax-m3-v2.json \
   --evidence-pack examples/agent/energy_supply/evidence-pack.json \
   --evidence-documents examples/agent/energy_supply/evidence-documents.json \
   --pattern-pack examples/agent/energy_supply/pattern-pack.json \

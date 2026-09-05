@@ -243,7 +243,7 @@ Validate the frozen protocol and the first development provenance contract with:
 uv run market-impact agent method-benchmark-validate \
   --registration examples/calibration/method-quality-benchmark-v2.json \
   --method-catalog examples/research/research-method-catalog-v2.json \
-  --provider-profile examples/providers/minimax-m3-research-v1.json \
+  --provider-profile examples/providers/pi-minimax-m3-v2.json \
   --evaluation-specification examples/calibration/method-quality-evaluation-specification-v2.json \
   --historical-manifest examples/research/synthetic-energy-historical-evidence-v1.json \
   --evidence-pack examples/agent/energy_supply/evidence-pack.json \

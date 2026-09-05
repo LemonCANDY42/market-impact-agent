@@ -21,14 +21,12 @@ from tests.test_energy_monitor import build_monitor
 def test_status_is_fail_closed() -> None:
     payload = status_payload()
     assert payload["live_trading"] == "disabled"
-    assert payload["agent_runtime"] == {
-        "status": "accepted_local_research_v2",
-        "provider": "minimax-openai-compatible",
-        "model": "MiniMax-M3",
-        "tool_authority": "read_only",
-        "broker_reachability": False,
-        "provider_portability": "not_established",
-    }
+    runtime = cast(dict[str, object], payload["agent_runtime"])
+    assert runtime["status"] == "awaiting_runtime_acceptance"
+    assert runtime["implementation"] == "pi"
+    assert runtime["accepted_routes"] == []
+    assert runtime["tool_authority"] == "read_only"
+    assert runtime["broker_reachability"] is False
     providers = payload["providers"]
     assert isinstance(providers, list)
     assert providers[0]["provider_id"] == "mock-execution"
@@ -133,7 +131,7 @@ def test_prospective_triage_cli_reads_and_validates_model_concurrency(
     with pytest.raises(ValueError, match="must be an integer"):
         _effective_model_request_concurrency(None)
     monkeypatch.setenv("MARKET_IMPACT_MODEL_MAX_CONCURRENT_REQUESTS", "9")
-    with pytest.raises(ValueError, match="between 1 and 8"):
+    with pytest.raises(ValueError, match="authorized maximum of three"):
         _effective_model_request_concurrency(None)
 
 
@@ -722,6 +720,25 @@ def test_agent_study_validate_rejects_event_deletion_policy(
     output = json.loads(capsys.readouterr().out)
     assert output["valid"] is False
     assert any("retain_and_abstain" in error for error in output["errors"])
+
+
+def test_dynamic_effectiveness_replay_requires_an_authoritative_opened_terminal(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "agent",
+            "dynamic-effectiveness",
+            "replay-opened-analysis",
+            "--state-root",
+            str(tmp_path / "missing-study"),
+        ]
+    )
+
+    assert result == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"stage_passed": False, "error_class": "ValueError"}
 
 
 def test_source_poll_and_due_freeze_commands_complete_the_research_path(

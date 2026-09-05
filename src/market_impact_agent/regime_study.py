@@ -24,7 +24,7 @@ from market_impact_agent.market_regimes import (
 from market_impact_agent.method_skills import MethodSkillCatalog
 
 REGIME_STUDY_REGISTRATION_SCHEMA = "market-impact.regime-study-registration.v1"
-REGIME_STUDY_REPORT_SCHEMA = "market-impact.regime-study-baseline-report.v1"
+REGIME_STUDY_REPORT_SCHEMA = "market-impact.regime-study-baseline-report.v2"
 
 _BASE_SOURCE_CATEGORIES = frozenset(
     {
@@ -335,14 +335,24 @@ def write_regime_study_baseline_report(
         raise ValueError("regime study output root escaped the private regime directory")
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(root, 0o700)
-    destination = root / f"{panel_id}--{registration_id}.json"
+    # Include the full report content (and therefore its schema version) so a
+    # recomputation never replaces an earlier measurement for the same inputs.
+    destination = root / f"{panel_id}--{registration_id}--{canonical_hash(report)}.json"
     if destination.is_symlink():
         raise ValueError("regime study report destination must not be a symlink")
-    destination.write_text(
-        json.dumps(report, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    os.chmod(destination, 0o600)
+    content = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    try:
+        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        if destination.is_symlink() or not destination.is_file():
+            raise ValueError("regime study report destination must be a regular file") from None
+        if destination.read_bytes() != content:
+            raise ValueError("regime study report already exists with different content") from None
+        return destination
+    with os.fdopen(descriptor, "wb") as output:
+        output.write(content)
+        output.flush()
+        os.fsync(output.fileno())
     return destination
 
 
@@ -527,6 +537,9 @@ def _lagged_sector_momentum_path(
                     for series_id, units in holdings.items()
                 }
                 union = set(current_weights) | set(selected)
+                # The rate is per traded leg, not per portfolio replacement:
+                # a full A-to-B switch sells 100% and buys 100% (gross turnover 2).
+                # Weights are pre-fee targets; this remains a diagnostic cost model.
                 turnover = sum(
                     (
                         abs(
@@ -536,7 +549,7 @@ def _lagged_sector_momentum_path(
                         for series_id in union
                     ),
                     Decimal(0),
-                ) / Decimal(2)
+                )
             cost = open_value * turnover * cost_rate
             investable = open_value - cost
             holdings = {

@@ -24,7 +24,9 @@
     "cases"
   ],
   "properties": {
-    "schema_version": {"const": "market-impact.regime-study-baseline-report.v1"},
+    "schema_version": {
+      "enum": ["market-impact.regime-study-baseline-report.v1", "market-impact.regime-study-baseline-report.v2"]
+    },
     "registration_id": {
       "type": "string",
       "pattern": "^regime-study-registration-[0-9a-f]{64}$"

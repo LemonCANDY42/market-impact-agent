@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Protocol, cast
+from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_engine import AgentRunResult, RunMetrics
@@ -37,6 +38,7 @@ from market_impact_agent.model_provider import (
     load_builtin_model_provider_profile,
 )
 from market_impact_agent.observations import ObservationCapability
+from market_impact_agent.pi_execution import PiInvocationContext
 from market_impact_agent.prospective_data import (
     ProspectiveDataJournal,
     ProspectiveObservationVersionRef,
@@ -58,7 +60,6 @@ from market_impact_agent.prospective_trigger_admission import (
 from market_impact_agent.provider_reliability import (
     ProviderAttemptEvent,
     ProviderAttemptPhase,
-    ProviderCircuitState,
     ProviderFailure,
     ProviderGenerationState,
     ProviderHealthStore,
@@ -86,24 +87,6 @@ _HARD_POLICY = """Market Impact prospective EventAssessment policy v1:
 - Return one JSON object only. This assessment cannot create a Signal, Order Intent, approval,
   mandate change, broker access, or execution authority.
 """
-
-
-class _AttemptObservableProvider(Protocol):
-    async def complete_with_observer(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-        attempt_observer: Callable[[ProviderAttemptEvent], None],
-    ) -> ModelTurn: ...
-
-
-class _AvailabilityProvider(Protocol):
-    async def assert_model_available(self, *, timeout_seconds: float) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -587,7 +570,11 @@ class EventAssessmentRunner:
         self.contents = contents
         self.exposure_view = exposure_view
         self.profile = profile
+        self.secret_values = tuple(
+            value for value in (os.environ.get(profile.credential_env),) if value
+        )
         self.provider = provider
+        self._owns_provider = provider is None
         self.provider_factory = provider_factory
         self.provider_health_store = provider_health_store
         self.skills = SkillRegistry(skill_root)
@@ -635,7 +622,12 @@ class EventAssessmentRunner:
                 execution_binding_hash=execution_binding_hash,
             )
         finally:
-            claim.release()
+            try:
+                if self._owns_provider and self.provider is not None:
+                    await self.provider.close()
+                    self.provider = None
+            finally:
+                claim.release()
 
     async def _run_claimed(
         self,
@@ -645,6 +637,9 @@ class EventAssessmentRunner:
         prompt_hash: str,
         execution_binding_hash: str,
     ) -> EventAssessmentRunResult:
+        received_response = (
+            self.journal.event(f"{run_id}.pi-invocation.1.pi.response.1") is not None
+        )
         try:
             existing = self.journal.get_run(run_id)
         except KeyError:
@@ -658,7 +653,7 @@ class EventAssessmentRunner:
             dispatches = tuple(
                 item for item in events if item.event_type == "model.request.dispatched"
             )
-            if dispatches:
+            if dispatches and not received_response:
                 recovered_attempt_count = len(dispatches)
                 last = dispatches[-1]
                 recovered_physical_attempt = last.payload.get("physical_attempt")
@@ -730,51 +725,12 @@ class EventAssessmentRunner:
                 metrics=RunMetrics(0, 0, 0, 0, 0, 0.0, 0, 0),
             )
         selected_provider: ModelProvider | None = None
-        provider_prepared = False
         admission = (
             None
             if self.provider_health_store is None
             else self.provider_health_store.admission(self.profile.provider_id, now=self._now())
         )
-        if (
-            admission is not None
-            and not admission.allowed
-            and admission.state is ProviderCircuitState.OPEN
-        ):
-            try:
-                selected_provider = self._provider()
-                probe = getattr(selected_provider, "assert_model_available", None)
-                if not callable(probe):
-                    raise RuntimeError("Provider does not expose an admitted safe health probe")
-                await cast(_AvailabilityProvider, selected_provider).assert_model_available(
-                    timeout_seconds=30
-                )
-                provider_prepared = True
-                if self.provider_health_store is None:
-                    raise RuntimeError("Provider health authority disappeared during probe")
-                self.provider_health_store.record_probe_success(
-                    provider_id=self.profile.provider_id,
-                    request_id=None,
-                    observed_at=self._now(),
-                )
-                admission = self.provider_health_store.admission(
-                    self.profile.provider_id, now=self._now()
-                )
-            except Exception as exc:
-                record = record or self._start_run(run_id, execution_binding_hash)
-                failure = self._pre_dispatch_failure(exc, run_id)
-                self._record_provider_failure(failure, physical_attempt=1)
-                self._append_pre_dispatch_event(
-                    record=record,
-                    event_type="provider.probe.failed",
-                    prompt_hash=prompt_hash,
-                    payload=failure.safe_fields(),
-                )
-                return self._nonterminal_result(
-                    run_id=run_id,
-                    message="EventAssessment Provider safe recovery probe failed",
-                )
-        if admission is not None and not admission.allowed:
+        if admission is not None and not admission.allowed and not received_response:
             record = record or self._start_run(run_id, execution_binding_hash)
             self._append_pre_dispatch_event(
                 record=record,
@@ -792,15 +748,12 @@ class EventAssessmentRunner:
             )
         try:
             selected_provider = selected_provider or self._provider()
-            prepare = getattr(selected_provider, "assert_model_available", None)
-            if callable(prepare) and not provider_prepared:
-                await cast(_AvailabilityProvider, selected_provider).assert_model_available(
-                    timeout_seconds=30
-                )
+            if not received_response:
+                await selected_provider.assert_model_available(timeout_seconds=30)
         except Exception as exc:
             record = record or self._start_run(run_id, execution_binding_hash)
             failure = self._pre_dispatch_failure(exc, run_id)
-            self._record_provider_failure(failure, physical_attempt=1)
+            # Local config/Node readiness is not a remote service-health observation.
             self._append_pre_dispatch_event(
                 record=record,
                 event_type="provider.preparation.failed",
@@ -858,43 +811,21 @@ class EventAssessmentRunner:
                 recorded_failure_attempts.add(event.physical_attempt)
                 self._record_provider_failure(failure, physical_attempt=event.physical_attempt)
 
-        observable = getattr(selected_provider, "complete_with_observer", None)
-        if not callable(observable):
-            dispatched = self.journal.append(
-                run_id=run_id,
-                event_id=f"{run_id}.attempt.1.dispatched",
-                event_type="model.request.dispatched",
-                observed_at=self._now(),
-                payload={
-                    "binding_id": self.binding.binding_id,
-                    "prompt_hash": prompt_hash,
-                    "physical_attempt": 1,
-                    "max_output_tokens": maximum_output,
-                },
-            )
-            attempts.add(1)
-            dispatch_hashes[1] = dispatched.event_hash
         started = time.monotonic()
         try:
-            completion = (
-                cast(_AttemptObservableProvider, selected_provider).complete_with_observer(
-                    messages=messages,
-                    tools=(),
-                    temperature=self.profile.temperature,
-                    top_p=self.profile.top_p,
-                    max_output_tokens=maximum_output,
-                    timeout_seconds=self.profile.budget.max_wall_seconds,
-                    attempt_observer=observe,
-                )
-                if callable(observable)
-                else selected_provider.complete(
-                    messages=messages,
-                    tools=(),
-                    temperature=self.profile.temperature,
-                    top_p=self.profile.top_p,
-                    max_output_tokens=maximum_output,
-                    timeout_seconds=self.profile.budget.max_wall_seconds,
-                )
+            completion = selected_provider.run_once(
+                context=PiInvocationContext(
+                    run_id,
+                    1,
+                    self.journal,
+                    self.artifacts,
+                    self._now,
+                    self.secret_values,
+                ),
+                messages=messages,
+                max_output_tokens=maximum_output,
+                timeout_seconds=self.profile.budget.max_wall_seconds,
+                attempt_observer=observe,
             )
             turn = await asyncio.wait_for(
                 completion,
@@ -1011,7 +942,7 @@ class EventAssessmentRunner:
                 error="EventAssessment Provider identity or tool surface drifted",
                 metrics=metrics,
             )
-        if self.provider_health_store is not None:
+        if self.provider_health_store is not None and not received_response:
             self.provider_health_store.record_success(
                 provider_id=self.profile.provider_id,
                 request_id=provider_request_id or turn.response_id,
@@ -1531,11 +1462,10 @@ class EventAssessmentRunner:
                 attempts=error.attempts,
                 elapsed_latency_ms=error.elapsed_latency_ms,
             )
-        missing_credential = isinstance(error, ValueError) and "credential is missing" in str(error)
         return ProviderFailure(
             "EventAssessment Provider preparation failed before dispatch",
             error_class=type(error).__name__,
-            diagnostic_code=("auth_unavailable" if missing_credential else "provider_preparation"),
+            diagnostic_code="provider_preparation",
             request_id=f"prepare-{canonical_hash(run_id)[:24]}",
             generation_state=ProviderGenerationState.NOT_STARTED,
             retry_disposition=ProviderRetryDisposition.SAFE,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from hashlib import sha256
+
 import pytest
 
 from market_impact_agent.model_json import (
@@ -62,3 +64,27 @@ def test_parser_version_drift_fails_closed(monkeypatch: pytest.MonkeyPatch) -> N
 
     with pytest.raises(RuntimeError, match="parser version drifted"):
         load_model_json('{"value":1}')
+
+
+@pytest.mark.parametrize("wrapper", ["```json", "```"])
+def test_whole_answer_fence_preserves_original_evidence(wrapper: str) -> None:
+    source = f'  \n{wrapper}\n{{"fact":"18 hours","value":1}}\n```\n'
+    parsed = load_model_json(source)
+    assert parsed.value == {"fact": "18 hours", "value": 1}
+    assert parsed.evidence.wrapper_removed
+    assert parsed.evidence.source_content_hash == sha256(source.encode()).hexdigest()
+    assert not parsed.evidence.repair_applied
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        '<think>answer</think>\n```json\n{"x":1}\n```',
+        'Here is JSON:\n```json\n{"x":1}\n```',
+        '```json\n{"x":1}\n```\n```json\n{"x":2}\n```',
+        '```json\n{"x":1}',
+    ],
+)
+def test_wrapper_normalization_never_mines_reasoning_or_prose(source: str) -> None:
+    with pytest.raises(ValueError):
+        load_model_json(source)

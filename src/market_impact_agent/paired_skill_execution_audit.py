@@ -19,7 +19,6 @@ from market_impact_agent.agent_engine import (
     AgentRunResult,
 )
 from market_impact_agent.agent_runtime import (
-    ModelTurn,
     RuntimeConfig,
     SkillRegistry,
     ToolAccessContext,
@@ -38,35 +37,9 @@ from market_impact_agent.paired_skill_ablation_runner import (
     SkillAblationArm,
     build_paired_arm_report,
 )
+from market_impact_agent.pi_runtime import PiRuntimeProvider
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal
 from market_impact_agent.usage_ledger import UsageLedger
-
-
-class _NoCallProvider:
-    def __init__(self, *, provider_id: str, model: str) -> None:
-        self._provider_id = provider_id
-        self._model = model
-
-    @property
-    def provider_id(self) -> str:
-        return self._provider_id
-
-    @property
-    def model(self) -> str:
-        return self._model
-
-    async def complete(
-        self,
-        *,
-        messages: tuple[dict[str, object], ...],
-        tools: tuple[dict[str, object], ...],
-        temperature: float,
-        top_p: float,
-        max_output_tokens: int,
-        timeout_seconds: float,
-    ) -> ModelTurn:
-        _ = (messages, tools, temperature, top_p, max_output_tokens, timeout_seconds)
-        raise AssertionError("execution-binding audit cannot call a Model Provider")
 
 
 def audit_paired_execution_state(
@@ -101,7 +74,7 @@ def audit_paired_execution_state(
     )
     expected_arms = _expected_arms(registration, report)
     profile_config = profile.runtime_config()
-    provider = _NoCallProvider(provider_id=profile.provider_id, model=profile.model)
+    provider = PiRuntimeProvider(profile, dispatch_allowed=False)
     with tempfile.TemporaryDirectory(prefix="market-impact-binding-audit-") as temporary:
         temporary_root = Path(temporary)
         expected_bindings = _reconstruct_bindings(
@@ -161,7 +134,7 @@ def _reconstruct_bindings(
     *,
     repository: FrozenResearchRepository,
     profile_config: RuntimeConfig,
-    provider: _NoCallProvider,
+    provider: PiRuntimeProvider,
     instruction: str,
     expected_arms: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]],
     skill_root: Path,
@@ -236,7 +209,7 @@ def _validate_usage_ledger_bindings(
     experiment_root: Path,
     repository: FrozenResearchRepository,
     profile_config: RuntimeConfig,
-    provider: _NoCallProvider,
+    provider: PiRuntimeProvider,
     instruction: str,
     skill_root: Path,
     registration: Mapping[str, object],
@@ -334,7 +307,7 @@ def _replay_terminal_result(
     *,
     repository: FrozenResearchRepository,
     profile_config: RuntimeConfig,
-    provider: _NoCallProvider,
+    provider: PiRuntimeProvider,
     instruction: str,
     selected_skills: tuple[str, ...],
     skill_root: Path,

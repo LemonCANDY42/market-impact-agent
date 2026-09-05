@@ -185,19 +185,67 @@ smoothed state, present-day constituent list, or ex-post event selector is never
 
 The first implemented long-horizon comparator now covers cash, the primary index, static
 equal-sector buy-and-hold, and a lagged 20-session top-three sector-momentum rule rebalanced at the
-first session of each month. It charges 10 basis points per one-way turnover and reports daily-path
+first session of each month. It charges 10 basis points per traded leg and reports daily-path
 total/annualized return, volatility, Sharpe, maximum drawdown, 95% CVaR, information ratio, upside
 capture, downside loss participation, turnover, and modeled cost. Sharpe uses the registration's
 explicit zero annual risk-free assumption. Fewer than 20 sessions suppress
 annualized risk metrics. Industry price indices remain non-executable proxies; inverse-volatility,
 ETF implementation, realistic fills, and Agent decisions remain later gates.
 
-The private 2026-08-27 run covered all 15 cases. Twelve had at least 20 sessions. Equal-sector
+Baseline reports emitted from 2026-09-03 use `regime-study-baseline-report.v2`. An independent
+measurement audit found that v1 halved absolute rebalance weight changes before applying the
+one-way fee, charging a full sector A-to-B rotation as one leg instead of a sale and a purchase.
+V2 uses gross absolute weight changes: initial investment has turnover 1, a full rotation 2,
+and unchanged weights 0. Fees still use pre-fee target notionals and the last observation is a
+mark, not a liquidation; this is a descriptive approximation, not brokerage cash/fill accounting.
+Existing v1 reports are retained with their version and must not be quoted as current fee-corrected
+results. The schema can identify either version, but the current evaluator only emits v2.
+The writer now appends the full report hash to the panel/registration filename and creates the file
+exclusively. Recomputing cannot overwrite the old unversioned v1 filename or another report;
+exact-content replay returns the same path, while conflicting/partial content at that path fails
+without rewriting it. The CLI returns the actual report path rather than requiring a guessed name.
+
+A small synthetic monthly-rotation matrix covers unchanged holdings, a full switch at zero fee,
+the registered fee and double-fee stress. The old implementation fails the switch assertions;
+the correction passes without changing any frozen Agent input, Skill or pi runtime build.
+
+The private 2026-08-27 **v1** run covered all 15 cases. Twelve had at least 20 sessions. Equal-sector
 buy-and-hold beat the primary index on total return in 8/15 cases and on Sharpe in 6/12 eligible
 cases. Lagged sector momentum beat the primary index on total return in 6/15 and on Sharpe in 5/12,
 but improved maximum drawdown in only 2/15. It lost more than the primary index in the 2015 crash
 and 2018 and 2022 bear windows, and it also lagged in the 2016-2018 quality rise and 2024 broad
 rebound. These opened, selected windows are comparator diagnostics, not inference or alpha.
+
+### Fee-corrected opened comparator replay — 2026-09-03
+
+After the separately registered two-case Agent continuation completed and its terminal, context
+and Usage audit passed, all 15 original regime windows were recomputed using v2. The new normal-fee
+report is `d16e01a8…`; the two short pilot paths, its report binding and all 15 double-fee results
+are in private outcome report `6b82c030…`. Old v1 files were not replaced. This replay used no model
+requests or new data-provider calls and did not select windows based on the new results.
+
+| Comparator versus each case's primary index | Higher return | Smaller maximum drawdown | Less severe CVaR | Higher Sharpe, eligible cases |
+| --- | ---: | ---: | ---: | ---: |
+| Equal-sector buy-and-hold, 10 bps one-way | 8/15 | 7/15 | 5/15 | 6/12 |
+| Lagged sector momentum, 10 bps one-way | 6/15 | 2/15 | 2/15 | 5/12 |
+| Equal-sector buy-and-hold, 20 bps one-way | 8/15 | 7/15 | 5/15 | 6/12 |
+| Lagged sector momentum, 20 bps one-way | 6/15 | 2/15 | 2/15 | 4/12 |
+
+All 15 cases have common-path coverage; three have fewer than 20 sessions and no annualized
+Sharpe. These are strict relative comparisons, not success thresholds or independent statistical
+trials. CVaR uses each registered daily path, including short paths whose tail estimate is weak;
+do not treat a one-session value as reliable tail-risk evidence. No cross-case portfolio or pooled
+Sharpe is constructed. Costs are modeled traded-leg costs, not validated ETF fills or slippage.
+
+Unconditional momentum fails the desired robustness screen: for example its v2 returns are -48.02%
+versus primary -43.54% in 2015 deleveraging, -42.31% versus -32.41% in the 2018 bear, and -35.12%
+versus -28.58% in the 2022 multi-shock bear. A higher return in the structural-recovery interval
+(+87.93% versus +60.13%) came with greater drawdown (12.03% versus 7.16%); it is not simultaneous
+return-and-risk superiority. Sector breadth/diversification is a limited research direction, not
+a universal winner: equal-sector return and drawdown improvements occurred in only 8/15 and 7/15
+windows. Fixed-universe, point-in-time tradable constituents and separate risk-gate ablations are
+required before any Skill or execution claim. The full denominator and these counterexamples
+must accompany selected positive examples.
 
 ## Invalidated six-case Agent diagnostic
 
@@ -215,7 +263,9 @@ checkpoint horizons. It does not show useful market timing: neither the routed S
 general arm entered any positive regime, and the routed Skill was helpful at 0 checkpoints,
 harmful at 0, and decision-identical at 18.
 
-The four registered baselines now use the same case windows and 10-basis-point one-way cost model:
+The following historical v1 comparison used the same case windows and a nominal 10-basis-point
+one-way cost model, with the rotation undercharge described above. Its values remain historical;
+use the v2 replay for current fee-corrected comparator claims:
 
 | Opened case | Primary index return / Sharpe / max DD | Equal-sector return / Sharpe / max DD | Lagged sector momentum return / Sharpe / max DD |
 | --- | ---: | ---: | ---: |

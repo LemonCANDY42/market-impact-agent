@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
+import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import cast
 
@@ -996,7 +998,7 @@ def build_checkpoint_tool_descriptors(
             },
             "limit": {"type": "integer", "minimum": 1, "maximum": 100},
         }
-        if manifest.version == "3":
+        if manifest.version in {"3", "4"}:
             description += (
                 " Call with {} first to read the already selected records; no search terms "
                 "or filters are needed. This is a frozen-record reader, NOT natural-language "
@@ -1065,7 +1067,107 @@ def build_checkpoint_tool_descriptors(
                 handler=handler,
             )
         )
+    if any(
+        item.tool_manifest and item.tool_manifest.version == "4"
+        for item in snapshot_set.capability_bindings
+    ):
+        return tuple(
+            part for descriptor in descriptors for part in split_selected_reader(descriptor)
+        )
     return tuple(descriptors)
+
+
+def split_selected_reader(descriptor: ToolDescriptor) -> tuple[ToolDescriptor, ...]:
+    """Separate selected evidence reading from search; cursors bind exact queries.
+
+    The original descriptor remains the sole data/PIT owner. A cursor is a
+    content identity, not authority to select a different source or cutoff.
+    """
+    suffix = descriptor.name.removeprefix("lookup_")
+
+    async def page(arguments: dict[str, object]) -> object:
+        result = await descriptor.handler(arguments)
+        if not isinstance(result, dict):
+            raise TypeError("selected evidence reader must return an object")
+        payload = dict(cast(dict[str, object], result))
+        page_info = payload.get("page")
+        if not isinstance(page_info, dict):
+            raise ValueError("selected reader requires the versioned paged result")
+        info = dict(cast(dict[str, object], page_info))
+        next_offset = info.pop("next_offset", None)
+        cursor = None
+        if next_offset is not None:
+            selection = {**arguments, "offset": next_offset}
+            cursor = base64.urlsafe_b64encode(
+                canonical_json_bytes(
+                    {
+                        "manifest": descriptor.manifest_hash,
+                        "selection": selection,
+                    }
+                )
+            ).decode()
+        payload["page"] = {**info, "next_cursor": cursor}
+        payload.pop("result_id", None)
+        return {**payload, "result_id": f"checkpoint-data-tool-result-{canonical_hash(payload)}"}
+
+    async def read(arguments: dict[str, object]) -> object:
+        if arguments:
+            raise ValueError("selected reading takes no filters; use search separately")
+        return await page({})
+
+    async def next_page(arguments: dict[str, object]) -> object:
+        cursor = arguments.get("cursor")
+        if set(arguments) != {"cursor"} or not isinstance(cursor, str) or len(cursor) > 8192:
+            raise ValueError("invalid scoped evidence cursor")
+        try:
+            decoded: object = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        except (ValueError, UnicodeError) as exc:
+            raise ValueError("invalid scoped evidence cursor") from exc
+        if not isinstance(decoded, dict):
+            raise ValueError("invalid scoped evidence cursor")
+        scope = cast(dict[str, object], decoded)
+        if scope.get("manifest") != descriptor.manifest_hash:
+            raise ValueError("cursor belongs to another evidence scope")
+        selection = scope.get("selection")
+        if not isinstance(selection, dict):
+            raise ValueError("invalid scoped evidence selection")
+        return await page(cast(dict[str, object], selection))
+
+    search_schema = dict(descriptor.input_schema)
+    properties = dict(cast(dict[str, object], search_schema["properties"]))
+    properties.pop("offset", None)
+    search_schema["properties"] = properties
+    return (
+        replace(
+            descriptor,
+            name=f"read_selected_{suffix}",
+            description=f"Read selected {suffix} evidence. No search or filters needed.",
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+            handler=read,
+        ),
+        replace(
+            descriptor,
+            name=f"search_{suffix}",
+            description=(
+                f"Narrow frozen {suffix} records using literal query/exact filters. "
+                "An empty result is a search miss, not missing underlying evidence."
+            ),
+            input_schema=search_schema,
+            handler=page,
+        ),
+        replace(
+            descriptor,
+            name=f"read_next_{suffix}",
+            description="Read the next page using only the returned next_cursor.",
+            input_schema={
+                "type": "object",
+                "properties": {"cursor": {"type": "string"}},
+                "required": ["cursor"],
+                "additionalProperties": False,
+            },
+            handler=next_page,
+        ),
+    )
 
 
 def materialize_checkpoint_decision_inputs(
@@ -1130,7 +1232,7 @@ def _handle_checkpoint_tool(
     records: tuple[dict[str, object], ...],
     capability: ObservationCapability,
 ) -> dict[str, object]:
-    paged = manifest.version == "3"
+    paged = manifest.version in {"3", "4"}
     allowed_arguments = {"query", "publisher", "filters", "limit"}
     if paged:
         allowed_arguments.add("offset")

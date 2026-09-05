@@ -145,7 +145,7 @@
             "lookup_macro_vintage"
           ]
         },
-        "version": {"enum": ["1", "2", "3"]},
+        "version": {"enum": ["1", "2", "3", "4"]},
         "snapshot_ids": {
           "type": "array",
           "minItems": 1,
@@ -334,7 +334,7 @@
                     {
                       "allOf": [
                         {"$ref": "#/$defs/tool_manifest"},
-                        {"properties": {"version": {"enum": ["2", "3"]}}}
+                        {"properties": {"version": {"enum": ["2", "3", "4"]}}}
                       ]
                     }
                   ]
