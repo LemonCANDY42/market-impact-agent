@@ -94,6 +94,7 @@ def native_network(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureReque
         "research_only",
         "historical",
         "historical_gap",
+        "cancelled",
     ],
 )
 def test_source_to_signed_recall_update_account_action_and_restart(
@@ -286,7 +287,7 @@ def test_source_to_signed_recall_update_account_action_and_restart(
             assert budget.summary()["physical_requests"] == 1
             await provider.close()
             return
-        if mode in {"historical", "historical_gap"}:
+        if mode in {"historical", "historical_gap", "cancelled"}:
             from market_impact_agent.on_demand_research import ResearchSourceTemplate
             from market_impact_agent.tushare_observation import (
                 TushareObservationProvider,
@@ -332,13 +333,77 @@ def test_source_to_signed_recall_update_account_action_and_restart(
             def seed_only(_: ReviewFrame) -> tuple[str, ...]:
                 return ("510300.SH",)
 
-            owner.symbol_source = seed_only
+            if mode != "cancelled":
+                owner.symbol_source = seed_only
             owner.historical_research_templates = (
                 ResearchSourceTemplate.from_tushare(raw_provider, config.source_id),
             )
             owner.research_episode_deadline = RETRIEVED + timedelta(hours=1)
             owner.acquisition_clock = lambda: RETRIEVED
+
+            async def reopen_owner(*, replay_only: bool = False) -> ContinuousPortfolioRuntime:
+                nonlocal engine, provider
+                await provider.close()
+                engine.close()
+                assert first_session.spec is not None
+                engine = HistoricalStreamingAccount(
+                    specs=(first_session.spec,),
+                    journal_path=tmp_path / "account.jsonl",
+                    account_reference="continuous-arm-account",
+                    account_reference_key=b"a" * 32,
+                )
+                provider = PiRuntimeProvider(
+                    native_network, budget=budget, dispatch_allowed=not replay_only
+                )
+                reopened = runtime(provider)
+                reopened.historical_research_templates = owner.historical_research_templates
+                reopened.research_episode_deadline = owner.research_episode_deadline
+                reopened.acquisition_clock = owner.acquisition_clock
+                return reopened
+
+            cancelled = None
+            if mode == "cancelled":
+
+                async def cancel_before_dispatch(*_args: Any, **_kwargs: Any) -> Any:
+                    raise asyncio.CancelledError
+
+                with monkeypatch.context() as cancellation:
+                    cancellation.setattr(asyncio, "create_subprocess_exec", cancel_before_dispatch)
+                    with pytest.raises(asyncio.CancelledError):
+                        await owner.decide(frames[0], None, "cutoff-1", frozenset({1}), False)
+                cancelled = journal.get_run("cutoff-1.research")
+                assert cancelled.status.value == "cancelled"
+                assert budget.summary()["physical_requests"] == 0
+                owner = await reopen_owner()
             first = await owner.decide(frames[0], None, "cutoff-1", frozenset({1}), False)
+            if mode == "cancelled":
+                assert isinstance(first, ContinuousDecision), first
+                assert first.research_run_id == "cutoff-1.research.continuation.1"
+                assert first.research_successor_ref is not None
+                successor = cast(
+                    dict[str, object],
+                    source.store.artifacts.read_json(first.research_successor_ref),
+                )
+                assert successor["acquisitions"] == []
+                assert successor["snapshots"] == sorted(frames[0].snapshot_ids)
+                assert frames[0].snapshot_ids
+                context, effective = owner.resolve_decision_context(first, frames[0])
+                assert effective == frames[0]
+                assert context.source_market(first, effective).snapshot_ids == source.snapshot_ids
+                order = owner.admitted_intents(first, frames[0])
+                assert len(order) == 1 and order[0].side is Side.SELL
+                assert transport.requests == []
+                assert budget.summary()["physical_requests"] == 2
+                before = budget.summary()
+                owner = await reopen_owner(replay_only=True)
+                assert (
+                    await owner.decide(frames[0], None, "cutoff-1", frozenset({1}), True) == first
+                )
+                assert owner.admitted_intents(first, frames[0]) == order
+                assert journal.get_run("cutoff-1.research") == cancelled
+                assert budget.summary() == before and transport.requests == []
+                await provider.close()
+                return
             if mode == "historical_gap":
                 assert isinstance(first, PendingReview) and "000002.SZ" in first.reason
                 assert first.continuation_ref == "cutoff-1.research.continuation.1"

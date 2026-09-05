@@ -4,31 +4,66 @@ This report separates implemented behavior from source qualification, actual mod
 observations and investment acceptance. The owning registration and claim contract
 is [CONTINUOUS_DECISION_STUDY.md](CONTINUOUS_DECISION_STUDY.md).
 
-## Latest running checkpoint: 2026-09-05 14:15 UTC
+## Latest paused checkpoint: 2026-09-05 14:52 UTC
 
-The v4 source-qualified run is still active; the sections below retain earlier
-milestones and failures. Ten coverage windows passed source/baseline qualification.
-All 30 initial research theses for these windows validated. Initial portfolio
-diagnostics contain 29 completed, one incomplete and 24 preflight-pending entries
-within the unchanged denominator of 54. The incomplete Luna 2016 proposal cited a
-nonexistent price-evidence ID; offline parsing reproduced the bound-evidence
-rejection. Its original response and cost remain intact.
+The v4 source-qualified run is paused for a confirmed Harness recovery defect;
+the sections below retain earlier milestones and failures. Ten coverage windows
+passed source/baseline qualification. All 30 initial research theses validated.
+Initial portfolio diagnostics contain 29 completed, one incomplete and 24
+preflight-pending entries within the unchanged denominator of 54. The incomplete
+Luna 2016 proposal cited a nonexistent price-evidence ID; offline parsing
+reproduced the bound-evidence rejection. Its response and cost remain intact.
 
-Sixty trajectories have completed their first registered trading session without
-an account execution error. The remaining 12 of 72 are unavailable because one
-deep window failed preflight and one model/case lacked a valid initial decision.
-Two trajectories have also completed their second session; the remaining daily
-frontier is in progress. No full-window strategy comparison is accepted yet.
+Sixty trajectories completed their first registered trading session, and 29 also
+completed their second session: 89 durable account-session results. The remaining
+12 of 72 intended trajectories are unavailable because one deep window failed
+preflight and one model/case lacked a valid initial decision. No full-window
+strategy comparison is accepted yet. A second portfolio response in the COVID
+window cited a nonexistent evidence ID and remains incomplete; the policy-window
+Luna event-arm reduction was rejected for a mismatched instrument class.
 
-Actual continuous research has exercised the Recall correction: `read_current_thesis`
-returned a verified `already_supplied` reference of 620 UTF-8 bytes, retaining the
-original opinion as non-source evidence, and the successor research validated.
-The subsequent portfolio decision and second account session also completed.
+Five policy-window second-day reviews failed before any child model call because
+initial-adoption Recall selected an older frozen-input generation under the same
+experiment, arm and account scope. Each current receipt and current frame passed
+isolated replay. Sol expiry has the same latent collision. An independent offline
+reproduction identified the obsolete-receipt selection. The correction passed
+independent review and exact offline replay of all six current/stale pairs.
+Current Recall succeeds while explicit obsolete-receipt replay remains rejected.
+Old receipts, failed decisions and completed results remain preserved.
 
-At this checkpoint, cumulative known cost is USD 12.145064 across 261 physical
-requests. USD 0.031550 is reserved, including the unchanged USD 0.011769 prior
-unknown request and an active request. The original USD 40 parent and stage caps
-remain enforced. This is an interim checkpoint, not the final experiment report.
+Actual continuous research exercised the earlier Recall correction:
+`read_current_thesis` returned a verified `already_supplied` reference of 620 UTF-8
+bytes, retaining the prior signed opinion without treating it as a source fact.
+Successor research, portfolio review and the second account session completed.
+
+Cumulative known cost at pause is USD 13.259524 across 296 physical requests.
+The sole USD 0.011769 reservation remains the prior unknown request. The process
+group was suspended while confirming that no new request reservation was active,
+then the leader received a graceful interrupt. It exited with code 130; no further
+physical request was recorded. Cancellation reached a newly frozen research Run
+before dispatch. A narrowly proven undispatched cancellation now uses the existing
+bounded successor Run chain, preserving the cancelled terminal and exact inputs.
+Independent review and rehydrated-runtime replay passed; actual fresh-process
+batch resumption remains the next gate. Both corrections passed all 2,115 Python
+tests, Ruff, formatting and Pyright. The USD 40 parent and stage caps remain
+unchanged. This is an interim checkpoint, not a final report.
+
+## Reference check for the recovery boundary
+
+The observed failure is in Harness research authorization before model dispatch,
+not in order/position reconciliation. The project still uses pinned NautilusTrader
+1.231.0 for account execution; its [cache](https://nautilustrader.io/docs/latest/concepts/cache/)
+and [execution model](https://nautilustrader.io/docs/latest/concepts/execution/)
+remain the relevant references for trading-state ownership.
+
+For recovery selection, the reviewed [LangGraph implementation](https://github.com/langchain-ai/langgraph/blob/81bf17b23123e4ef8b9d5f49fa09a0122fc2edd1/libs/checkpoint/langgraph/checkpoint/memory/__init__.py#L230)
+selects an explicit checkpoint within a thread and namespace.
+[Temporal's execution identity documentation](https://github.com/temporalio/documentation/blob/bcd7f8a296e644514d5ac3c60ee7433581814887/docs/encyclopedia/workflow/workflow-execution/workflowid-runid.mdx)
+separates reusable business identity from individual executions and cautions
+against making business decisions from mutable retry Run IDs. These are design
+references: this correction uses the existing immutable source-frame identity
+and existing bounded research continuation mechanism. No additional framework,
+state store, retry owner or generated identity is introduced.
 
 ## Delivered engineering
 

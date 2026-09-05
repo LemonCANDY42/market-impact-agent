@@ -101,8 +101,15 @@ remain current; a separate modeled projection preserves the historical cutoff.
 Current news, profiles and constituents remain prohibited in that lane. The final
 signed research successor binds its concrete native-query candidates and source
 graph to portfolio admission and replay; aggregate research targets are not securities.
-Unknown model generation ends the composition without
-acquisition or regeneration. `OnDemandResearch.episode_id` freezes each Decision
+A signed `CancelledError` terminal may consume the next existing bounded
+continuation only when its Run contains exclusively known pre-dispatch events and
+the shared parent has no budget activity for any invocation of that Run. This
+`cancelled_before_dispatch` continuation records the original authenticated journal
+proof and keeps exact inputs, snapshots, account/arm, episode deadline and shared
+budget. It does not acquire data or transform inputs; the cancelled terminal remains
+immutable. The original Run limit still applies. Started, reserved, settled,
+unknown-generation and generic failed Runs do not receive this continuation.
+Unknown model generation ends the composition without acquisition or regeneration. `OnDemandResearch.episode_id` freezes each Decision
 Episode deadline independently inside the shared study budget; reopening that
 episode cannot extend its deadline. Omitting the ID preserves the legacy
 parent-wide deadline binding. Analyst, conditional Judge and delegated roles do not create a second

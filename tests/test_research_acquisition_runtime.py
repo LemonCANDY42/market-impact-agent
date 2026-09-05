@@ -289,3 +289,185 @@ def test_successor_preserves_selected_pack_and_pages_large_news_without_reinject
         assert len(transport.requests) == len(prices_transport.requests) == 1
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "boundary", ["undispatched", "reserved", "settled", "started", "failed", "limit"]
+)
+def test_cancelled_before_dispatch_continues_exact_episode_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    from market_impact_agent.research_acquisition_runtime import PreparedResearchSuccessor
+    from market_impact_agent.runtime_store import RunStatus
+    from tests.test_on_demand_research import PARAMS
+
+    initial, transport = _setup(tmp_path)
+    profile = pi_profile()
+    monkeypatch.setenv(profile.credential_env, "synthetic-research-key")
+
+    def installed(_root: Path) -> PiRuntimePermit:
+        return PiRuntimePermit(
+            canonical_hash(runtime_identity()), (profile.route_identity,), "synthetic-proof"
+        )
+
+    monkeypatch.setattr("market_impact_agent.pi_deployment.installed_permit", installed)
+    original_spawn = asyncio.create_subprocess_exec
+    starts = 0
+
+    async def scenario() -> None:
+        # Seed a real immutable source snapshot, so recovery must preserve a
+        # nonempty source binding without acquisition or an input transform.
+        await initial.request("lookup_fund_prices", PARAMS)
+        cutoff, frozen = initial.successor_input(await initial.fulfill_pending())
+        acquisition = OnDemandResearch(
+            store=initial.store,
+            parent_budget=initial.budget,
+            episode_id="cancelled-episode",
+            episode_deadline=initial.deadline,
+            run_id="cancelled-research",
+            cutoff=cutoff,
+            pit_lane=initial.pit_lane,
+            templates=tuple(initial.templates.values()),
+            frozen_input=frozen,
+            clock=initial.clock,
+        )
+        authority = ResearchThesisAuthority(
+            acquisition.store,
+            experiment_id="study",
+            arm_id="luna",
+            account_scope="opaque-account-a",
+            clock=acquisition.clock,
+        )
+        inputs = ResearchThesisRunInputs(
+            _repository(at=cutoff), "INDEX.ETF", "epoch", frozenset({5})
+        )
+
+        async def spawn(program: str, *args: str, **kwargs: Any):
+            nonlocal starts
+            starts += 1
+            if starts == 1:
+                if boundary in {"reserved", "settled"}:
+                    # Admission may commit before the Run's attempt event. A
+                    # different attempt suffix must not evade the parent scan.
+                    request = f"{acquisition.run_id}.pi-invocation.1:1:2"
+                    await acquisition.budget.reserve(request, 100)
+                    if boundary == "settled":
+                        acquisition.budget.settle(request, cost_microusd=10, evidence_ref="test")
+                elif boundary == "started":
+                    authority._events.append(
+                        run_id=acquisition.run_id,
+                        event_id=f"{acquisition.run_id}.pi-invocation.1.turn.1.started",
+                        event_type="model.turn.started",
+                        observed_at=cutoff,
+                        payload={"turn_number": 1, "attempt_observation": "physical"},
+                    )
+                elif boundary == "failed":
+                    raise RuntimeError("synthetic pre-dispatch failure")
+                raise asyncio.CancelledError
+            kwargs["env"]["RESEARCH_ACQUISITION_ANSWER"] = json.dumps(_answer())
+            return await original_spawn(
+                program,
+                "--import",
+                str(Path(__file__).with_name("research_acquisition_network.mjs")),
+                *args,
+                **kwargs,
+            )
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+
+        async def forbidden_acquisition(*_args: Any, **_kwargs: Any) -> Any:
+            pytest.fail("cancellation recovery must not acquire or freeze new inputs")
+
+        async def forbidden_transform(*_args: Any) -> PreparedResearchSuccessor:
+            pytest.fail("cancellation recovery must not transform frozen inputs")
+
+        monkeypatch.setattr(OnDemandResearch, "fulfill_pending", forbidden_acquisition)
+        monkeypatch.setattr(
+            "market_impact_agent.research_acquisition_runtime.freeze_acquired_research",
+            forbidden_acquisition,
+        )
+        provider = PiRuntimeProvider(profile, budget=acquisition.budget)
+        maximum_runs = 1 if boundary == "limit" else 2
+
+        async def analyze():
+            return await analyze_with_acquisition(
+                authority=authority,
+                provider=provider,
+                inputs=inputs,
+                acquisition=acquisition,
+                maximum_runs=maximum_runs,
+                successor_transform=forbidden_transform,
+                successor_transform_id="frozen-test-policy",
+            )
+
+        try:
+            if boundary == "failed":
+                assert (await analyze()).status == "incomplete"
+            else:
+                with pytest.raises(asyncio.CancelledError):
+                    await analyze()
+            cancelled = authority.journal.get_run(acquisition.run_id)
+            assert cancelled.status is (
+                RunStatus.FAILED if boundary == "failed" else RunStatus.CANCELLED
+            )
+            old_terminal = authority.replay(acquisition.run_id)
+            old_journal = authority.journal.journal_hash(acquisition.run_id)
+            before = acquisition.budget.summary()
+            result = await analyze()
+            if boundary == "undispatched":
+                assert result.status == "completed"
+                assert result.run_ids == (
+                    acquisition.run_id,
+                    acquisition.run_id + ".continuation.1",
+                )
+                assert starts == 2
+                assert result.final_inputs is inputs
+                assert result.frozen_input == frozen
+                assert result.acquisitions == ()
+                assert (
+                    acquisition.budget.summary()["physical_requests"]
+                    == before["physical_requests"] + 2
+                )
+                continuation = next(
+                    event
+                    for event in acquisition.budget.journal.events(acquisition.budget.owner_run_id)
+                    if event.event_type == "research.continuation.bound"
+                )
+                assert continuation.payload["continuation_reason"] == "cancelled_before_dispatch"
+                assert continuation.payload["cancellation_proof"] == {
+                    "run_journal_hash": old_journal
+                }
+                assert (
+                    continuation.payload["predecessor_terminal_hash"]
+                    == cancelled.terminal_artifact_id
+                )
+                assert continuation.payload["snapshot_ids"] == sorted(
+                    frozen.authorized_snapshot_ids
+                )
+                successor_binding = next(
+                    event.payload
+                    for event in acquisition.budget.journal.events(acquisition.budget.owner_run_id)
+                    if event.event_type == "research.binding"
+                    and event.payload["run_id"] == result.run_ids[-1]
+                )
+                assert successor_binding == {**acquisition.binding, "run_id": result.run_ids[-1]}
+            else:
+                assert result.status == (
+                    "continuation_limit" if boundary == "limit" else "incomplete"
+                )
+                assert result.run_ids == (acquisition.run_id,)
+                assert starts == 1
+                assert acquisition.budget.summary() == before
+            assert authority.replay(acquisition.run_id) == old_terminal
+            assert authority.journal.get_run(acquisition.run_id) == cancelled
+            assert authority.journal.journal_hash(acquisition.run_id) == old_journal
+            before_replay = acquisition.budget.summary()
+            before_starts = starts
+            assert await analyze() == result
+            assert acquisition.budget.summary() == before_replay
+            assert starts == before_starts
+            assert len(transport.requests) == 1
+        finally:
+            await provider.close()
+
+    asyncio.run(scenario())

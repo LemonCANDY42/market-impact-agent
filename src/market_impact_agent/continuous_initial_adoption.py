@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+from collections.abc import Iterator
 from dataclasses import asdict, replace
 from datetime import datetime
 from decimal import Decimal
@@ -419,11 +420,12 @@ class InitialAdoptionAuthority:
             "order": None if order is None else order.to_dict(),
         }, order
 
-    def rotation_order(
-        self, destination: ContinuousPortfolioRuntime, source_run_id: str
-    ) -> PortfolioOrderIntent:
-        """Resolve only this destination's signed adopted initial order."""
-        matches: list[PortfolioOrderIntent] = []
+    def _current_receipts(
+        self, destination: ContinuousPortfolioRuntime
+    ) -> Iterator[tuple[str, dict[str, object], ReviewFrame]]:
+        """Select signed permissions for the currently composed source generation."""
+        from market_impact_agent.continuous_portfolio_runtime import build_continuous_review_frame
+
         for event in self.budget.journal.events(self.budget.owner_run_id):
             if event.event_type != "continuous.initial-adoption.validated":
                 continue
@@ -435,8 +437,32 @@ class InitialAdoptionAuthority:
                 scope.get("experiment_id") != destination.experiment_id
                 or scope.get("arm_id") != destination.arm_id
                 or scope.get("account_scope") != destination.account.account_id
-                or _object(receipt["source_decision"]).get("portfolio_run_id") != source_run_id
             ):
+                continue
+            # The signed permission owns selection. A corrupted receipt frame must
+            # still reach deterministic replay when its permission is current.
+            initial_frame = _frame(_object(scope["frame"]))
+            source = self.source_runtime
+            current = build_continuous_review_frame(
+                repository=source.repository_source(initial_frame),
+                market=source.market_source(initial_frame),
+            )
+            if (
+                initial_frame.cutoff != current.cutoff
+                or initial_frame.snapshot_ids != current.snapshot_ids
+                or initial_frame.input_hash != current.input_hash
+            ):
+                continue
+            yield reference, permission, initial_frame
+
+    def rotation_order(
+        self, destination: ContinuousPortfolioRuntime, source_run_id: str
+    ) -> PortfolioOrderIntent:
+        """Resolve only this destination's signed adopted initial order."""
+        matches: list[PortfolioOrderIntent] = []
+        for reference, permission, _ in self._current_receipts(destination):
+            source_decision = _object(_object(permission["source"])["decision"])
+            if source_decision.get("portfolio_run_id") != source_run_id:
                 continue
             _, order = self.reopen(reference, destination)
             if order is not None:
@@ -450,20 +476,7 @@ class InitialAdoptionAuthority:
     ) -> str | None:
         """Recover only this destination's registered initial source after restart."""
         candidates: set[str] = set()
-        for event in self.budget.journal.events(self.budget.owner_run_id):
-            if event.event_type != "continuous.initial-adoption.validated":
-                continue
-            reference = str(event.payload["artifact_hash"])
-            receipt = self._signed_object(reference, "validated")
-            permission = self._signed_object(str(receipt["permission_ref"]), "authorized")
-            scope = _object(permission["scope"])
-            if (
-                scope.get("experiment_id") != destination.experiment_id
-                or scope.get("arm_id") != destination.arm_id
-                or scope.get("account_scope") != destination.account.account_id
-            ):
-                continue
-            initial_frame = _frame(_object(receipt["frame"]))
+        for reference, _, initial_frame in self._current_receipts(destination):
             if initial_frame.cutoff >= cutoff:
                 continue
             reopened, _ = self.reopen(reference, destination)

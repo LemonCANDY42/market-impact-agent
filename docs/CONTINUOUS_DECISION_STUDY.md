@@ -30,6 +30,11 @@ high and Sol high. Eight fixed deep windows produce 72 intended account paths:
 eight cases, three models and three review schedules. Initial decisions are reused
 within the same model/case through an explicit T0 adoption receipt, never by
 fabricating native model calls or granting access to sibling continuations.
+Recall recovery and adopted rotation select signed permissions matching the
+currently composed source cutoff, snapshot IDs and input hash before reopening
+receipts. Earlier frozen source generations can share the study/account scope but
+grant no current access. Every matching receipt still requires exact deterministic
+replay; corrupt current receipts remain errors rather than being skipped.
 The long windows observe 120 trading sessions; forecasts still select 1/3/5/10/20/60.
 The final observation cutoff constrains every new thesis. An intermediate update
 does not have to shorten its forecast merely because the preceding thesis has aged.

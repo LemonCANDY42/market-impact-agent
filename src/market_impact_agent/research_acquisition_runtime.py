@@ -27,6 +27,7 @@ from market_impact_agent.research_thesis_runtime import (
     ResearchThesisAuthority,
     ResearchThesisRunInputs,
 )
+from market_impact_agent.runtime_store import RunStatus
 
 
 class ResearchAcquisitionRequired(RuntimeError):
@@ -124,6 +125,41 @@ async def freeze_acquired_research(
         pattern_packs=patterns,
     )
     return replace(inputs, repository=repository), frozen
+
+
+def _undispatched_cancellation(
+    authority: ResearchThesisAuthority,
+    acquisition: OnDemandResearch,
+    terminal: dict[str, object],
+) -> dict[str, object] | None:
+    """Prove a signed cancellation ended before any admitted model dispatch."""
+    run_id = acquisition.run_id
+    if (
+        terminal.get("reason") != "CancelledError"
+        or authority.journal.get_run(run_id).status is not RunStatus.CANCELLED
+    ):
+        return None
+    events = authority.journal.events(run_id)
+    if any(
+        event.event_type
+        not in {
+            "research.thesis.frozen",
+            "pi.role.history.initial",
+            "pi.context.frozen",
+            "research.thesis.incomplete",
+        }
+        for event in events
+    ):
+        return None
+    # The parent owns physical admission. Check every invocation/turn/attempt,
+    # including a reservation committed before the Run's attempt observer ran.
+    prefix = f"{run_id}.pi-invocation."
+    if any(
+        isinstance(key := event.payload.get("request_key"), str) and key.startswith(prefix)
+        for event in acquisition.budget.journal.events(acquisition.budget.owner_run_id)
+    ):
+        return None
+    return {"run_journal_hash": authority.journal.journal_hash(run_id)}
 
 
 async def analyze_with_acquisition(
@@ -226,68 +262,73 @@ async def analyze_with_acquisition(
         terminal = await analysis if replaying else await asyncio.wait_for(analysis, remaining)
         if terminal.get("status") == "completed":
             return outcome("completed", terminal)
-        if terminal.get("reason") != ResearchAcquisitionRequired.__name__:
+        cancellation_proof = _undispatched_cancellation(authority, current, terminal)
+        if (
+            terminal.get("reason") != ResearchAcquisitionRequired.__name__
+            and cancellation_proof is None
+        ):
             return outcome("incomplete", terminal)
         # The signed old Run is now terminal, and the upstream invocation has ended.
         if not authority.journal.get_run(current.run_id).status.terminal:
             raise PermissionError("acquisition cannot run inside an active research Run")
         if number + 1 == maximum_runs:
             return outcome("continuation_limit", terminal)
-        results = await current.fulfill_pending()
-        if not results or any(item.status in {"pending", "uncertain"} for item in results):
-            receipts.extend(results)
-            return outcome("acquisition_wait", terminal)
         transform_proof: dict[str, object] | None = None
-        if successor_transform is None:
-            inputs, frozen = await freeze_acquired_research(inputs, current, results)
-        else:
-            predecessor = inputs
-            transformed = await successor_transform(inputs, current, results)
-            cutoff, verified = current.successor_input(transformed.acquisitions)
-            if (
-                transformed.frozen_input != verified
-                or transformed.inputs.repository.evidence_pack.as_of != cutoff
-                or transformed.inputs.thesis_epoch != inputs.thesis_epoch
-                or transformed.inputs.allowed_horizons != inputs.allowed_horizons
-                or transformed.inputs.date_presentation != inputs.date_presentation
-                or transformed.inputs.candidate_theses != inputs.candidate_theses
-                or transformed.inputs.repository.evidence_pack.event_id
-                != inputs.repository.evidence_pack.event_id
-                or not set(inputs.repository.evidence_pack.allowed_targets)
-                <= set(transformed.inputs.repository.evidence_pack.allowed_targets)
-                or any(
-                    ref not in transformed.inputs.repository.evidence_pack.evidence
-                    for ref in predecessor.repository.evidence_pack.evidence
-                )
-            ):
-                raise PermissionError(
-                    "successor transform changed prior authority or receipt cutoff"
-                )
-            if transformed.inputs.target_id != predecessor.target_id:
-                prior_thesis_run_id = None
-                prior_adoption_ref = None
-            inputs, frozen, results = (
-                transformed.inputs,
-                transformed.frozen_input,
-                transformed.acquisitions,
-            )
-            transform_proof = transformed.provenance
-            if transformed.stop_reason is not None:
-                receipts.extend(results)
-                current._append(  # pyright: ignore[reportPrivateUsage]
-                    "research.successor-refused." + canonical_hash(current.run_id),
-                    "research.successor.refused",
-                    {
-                        "predecessor_run_id": current.run_id,
-                        "reason": transformed.stop_reason,
-                        "provenance": transform_proof,
-                    },
-                )
-                return outcome("successor_refused", terminal)
-            if any(item.status in {"pending", "uncertain"} for item in results):
+        if cancellation_proof is None:
+            results = await current.fulfill_pending()
+            if not results or any(item.status in {"pending", "uncertain"} for item in results):
                 receipts.extend(results)
                 return outcome("acquisition_wait", terminal)
-        receipts.extend(results)
+            if successor_transform is None:
+                inputs, frozen = await freeze_acquired_research(inputs, current, results)
+            else:
+                predecessor = inputs
+                transformed = await successor_transform(inputs, current, results)
+                cutoff, verified = current.successor_input(transformed.acquisitions)
+                if (
+                    transformed.frozen_input != verified
+                    or transformed.inputs.repository.evidence_pack.as_of != cutoff
+                    or transformed.inputs.thesis_epoch != inputs.thesis_epoch
+                    or transformed.inputs.allowed_horizons != inputs.allowed_horizons
+                    or transformed.inputs.date_presentation != inputs.date_presentation
+                    or transformed.inputs.candidate_theses != inputs.candidate_theses
+                    or transformed.inputs.repository.evidence_pack.event_id
+                    != inputs.repository.evidence_pack.event_id
+                    or not set(inputs.repository.evidence_pack.allowed_targets)
+                    <= set(transformed.inputs.repository.evidence_pack.allowed_targets)
+                    or any(
+                        ref not in transformed.inputs.repository.evidence_pack.evidence
+                        for ref in predecessor.repository.evidence_pack.evidence
+                    )
+                ):
+                    raise PermissionError(
+                        "successor transform changed prior authority or receipt cutoff"
+                    )
+                if transformed.inputs.target_id != predecessor.target_id:
+                    prior_thesis_run_id = None
+                    prior_adoption_ref = None
+                inputs, frozen, results = (
+                    transformed.inputs,
+                    transformed.frozen_input,
+                    transformed.acquisitions,
+                )
+                transform_proof = transformed.provenance
+                if transformed.stop_reason is not None:
+                    receipts.extend(results)
+                    current._append(  # pyright: ignore[reportPrivateUsage]
+                        "research.successor-refused." + canonical_hash(current.run_id),
+                        "research.successor.refused",
+                        {
+                            "predecessor_run_id": current.run_id,
+                            "reason": transformed.stop_reason,
+                            "provenance": transform_proof,
+                        },
+                    )
+                    return outcome("successor_refused", terminal)
+                if any(item.status in {"pending", "uncertain"} for item in results):
+                    receipts.extend(results)
+                    return outcome("acquisition_wait", terminal)
+            receipts.extend(results)
         successor_run_id = f"{base_run_id}.continuation.{number + 1}"
         current._append(  # pyright: ignore[reportPrivateUsage]
             f"research.continuation.{canonical_hash(successor_run_id)}",
@@ -299,12 +340,20 @@ async def analyze_with_acquisition(
                 ).terminal_artifact_id,
                 "successor_run_id": successor_run_id,
                 "successor_inputs": inputs.identity_dict(),
-                "snapshot_ids": sorted(frozen.authorized_snapshot_ids),
+                "snapshot_ids": sorted(() if frozen is None else frozen.authorized_snapshot_ids),
                 "account_scope": authority.account_scope,
                 "arm_id": authority.arm_id,
                 "experiment_id": authority.experiment_id,
                 "parent_run_id": current.budget.owner_run_id,
                 **({"successor_transform": transform_proof} if transform_proof is not None else {}),
+                **(
+                    {
+                        "continuation_reason": "cancelled_before_dispatch",
+                        "cancellation_proof": cancellation_proof,
+                    }
+                    if cancellation_proof is not None
+                    else {}
+                ),
             },
         )
         current = OnDemandResearch(

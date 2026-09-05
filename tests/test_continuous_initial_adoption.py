@@ -345,6 +345,7 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
         )
 
     async def scenario() -> None:
+        nonlocal before_requests
         origin = runtime("coverage")
         if historical:
             from market_impact_agent.on_demand_research import ResearchSourceTemplate
@@ -405,6 +406,39 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
                 )
                 with pytest.raises(PermissionError, match="rules differ from frozen rules"):
                     initial_economic_contract(origin, frames[at])
+        stale_source: ContinuousDecision | None = None
+        if not historical:
+            # Same budget owner, scope and T0; a previous frozen research generation
+            # retains real signed receipts but cannot authorize the current account.
+            current_repository = repositories[at]
+            repositories[at] = _repository("510300.SH", at=at, event_id="previous-generation")
+            stale_frame = build_continuous_review_frame(repository=repositories[at], market=source)
+            stale_result = await origin.decide(
+                stale_frame, None, "registered-previous-initial", frozenset({1}), False
+            )
+            assert isinstance(stale_result, ContinuousDecision), stale_result
+            stale_source = stale_result
+            stale_authority = InitialAdoptionAuthority(
+                study_root=study_root,
+                source_runtime=origin,
+                coverage_window_id="cn-2024-policy-melt-up",
+                profile_arm="luna_max",
+                cadence="expiry_only",
+            )
+            stale_destination = runtime("expiry_only", stale_authority)
+            stale_decision = stale_destination.adopt_initial(stale_source, stale_frame)
+            assert (
+                stale_authority.recall_source(stale_destination, later)
+                == stale_source.research_run_id
+            )
+            repositories[at] = current_repository
+            assert stale_authority.recall_source(stale_destination, later) is None
+            with pytest.raises(PermissionError, match="no unique adopted"):
+                stale_authority.rotation_order(stale_destination, stale_source.portfolio_run_id)
+            with pytest.raises(PermissionError, match="frozen research/source policy"):
+                stale_destination.validate_decision(stale_decision, stale_frame)
+            stale_destination.account.close()
+            before_requests += 2
         first = await origin.decide(frames[at], None, "registered-initial", frozenset({1}), False)
         if historical:
             monkeypatch.delenv("CONTINUOUS_HISTORICAL")
@@ -503,6 +537,12 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
         )
         assert destination.admitted_intents(decision, frames[at]) == (order,)
         assert destination.initial_adoption_authority is not None
+        recovered_authority = destination.initial_adoption_authority
+        assert recovered_authority.recall_source(destination, later) == first.research_run_id
+        assert recovered_authority.rotation_order(destination, first.portfolio_run_id) == order
+        if stale_source is not None:
+            with pytest.raises(PermissionError, match="no unique adopted"):
+                recovered_authority.rotation_order(destination, stale_source.portfolio_run_id)
         receipt_store = destination.initial_adoption_authority.store
         forged = receipt_store.artifacts.put_json({"forged": "receipt"}).content_hash
         with pytest.raises(PermissionError, match="signature"):
@@ -589,6 +629,18 @@ def test_registered_initial_receipt_three_arms_and_fresh_scoped_update(
         assert budget.summary()["physical_requests"] == before_requests + 5 + (
             2 if historical else 0
         )
+        if not historical:
+            assert decision.initial_adoption_ref is not None
+            receipt, _ = recovered_authority.reopen(decision.initial_adoption_ref, destination)
+            # A current permission with a tampered receipt must not be mistaken for
+            # historical data and silently skipped by generation selection.
+            receipt["frame"] = replace(frames[at], input_hash="f" * 64).to_dict()
+            cast(dict[str, object], receipt["source_decision"])["portfolio_run_id"] = "tampered"
+            recovered_authority._persist(receipt, "validated", frames[at])  # pyright: ignore[reportPrivateUsage]
+            with pytest.raises(PermissionError):
+                recovered_authority.recall_source(destination, later)
+            with pytest.raises(PermissionError):
+                recovered_authority.rotation_order(destination, first.portfolio_run_id)
         await provider.close()
 
     try:
