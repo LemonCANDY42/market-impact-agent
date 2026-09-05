@@ -38,7 +38,7 @@ from market_impact_agent.tushare_observation import (
     load_tushare_observation_capture_bundle,
     tushare_observation_source_from_dict,
 )
-from market_impact_agent.tushare_range_cache import TushareDailyRangeCache
+from market_impact_agent.tushare_range_cache import TushareDailyRangeCache, verify_range_projection
 
 _PROJECTION_VERSION = "compact-facts-v2"
 
@@ -751,42 +751,89 @@ class OnDemandResearch:
                 and event.payload.get("request_id") == request_id
             ]
             started = attempts[-1] if attempts else None
+            snapshot: DataSnapshot | None = None
+            response: ProviderDataResponse | None = None
             if staged is None:
-                if started is not None and journal.event(started.event_id + ".deferred") is None:
+                recovering = (
+                    started is not None and journal.event(started.event_id + ".deferred") is None
+                )
+                range_source = template.api_name in {"daily", "fund_daily"}
+                if recovering and not range_source:
                     return ResearchContinuation(
                         request_id, "uncertain", error_kind="receipt_not_durable"
                     )
-                attempt_suffix = request_id + f".started.{len(attempts)}"
-                self._append(attempt_suffix, "research.data.started", {"request_id": request_id})
-                query = self._query(
-                    template, arguments, self.clock() if self.historical_inputs else self.cutoff
+                if not recovering:
+                    attempt_suffix = request_id + f".started.{len(attempts)}"
+                    self._append(
+                        attempt_suffix, "research.data.started", {"request_id": request_id}
+                    )
+                query = self._query(template, arguments, self.cutoff)
+                if range_source:
+                    cache = TushareDailyRangeCache(template.provider, self.store)
+                    try:
+                        segments = await asyncio.wait_for(
+                            cache.acquire(
+                                query=query, source=template.source, saved_only=recovering
+                            ),
+                            timeout=self._remaining(),
+                        )
+                        receipt = cache.latest_receipt(
+                            query=query, source=template.source, segments=segments
+                        )
+                        if receipt > self.clock():
+                            raise ValueError("provider receipt is in the Harness future")
+                        self._check_parent()
+                        snapshot = await cache.project(
+                            query=self._query(template, arguments, max(self.cutoff, receipt)),
+                            source=template.source,
+                            segments=segments,
+                        )
+                    except (ValueError, LookupError, OSError, TypeError) as exc:
+                        if recovering:
+                            raise AcquisitionUncertain(request_id) from exc
+                        raise
+                    self._append(
+                        request_id + ".received",
+                        "research.data.received",
+                        {"snapshot_id": snapshot.snapshot_id},
+                    )
+                else:
+                    query = self._query(
+                        template, arguments, self.clock() if self.historical_inputs else self.cutoff
+                    )
+                    response = await asyncio.wait_for(
+                        self._acquire(template, template.provider, query), timeout=self._remaining()
+                    )
+                    if response.retrieved_at > self.clock():
+                        raise ValueError("provider receipt is in the Harness future")
+                    artifact_hash = await asyncio.to_thread(_store_response, self.store, response)
+                    self._append(
+                        request_id + ".received",
+                        "research.data.received",
+                        {"artifact_hash": artifact_hash},
+                    )
+            elif "snapshot_id" in staged.payload:
+                snapshot = self.store.get(cast(str, staged.payload["snapshot_id"]))
+                expected_query = self._query(
+                    template, arguments, max(self.cutoff, snapshot.completed_at)
                 )
-                provider = (
-                    TushareDailyRangeCache(template.provider, self.store)
-                    if template.api_name in {"daily", "fund_daily"}
-                    else template.provider
-                )
-                response = await asyncio.wait_for(
-                    self._acquire(template, provider, query), timeout=self._remaining()
-                )
-                if response.retrieved_at > self.clock():
-                    raise ValueError("provider receipt is in the Harness future")
-                artifact_hash = await asyncio.to_thread(_store_response, self.store, response)
-                self._append(
-                    request_id + ".received",
-                    "research.data.received",
-                    {"artifact_hash": artifact_hash},
-                )
+                if snapshot.query != expected_query:
+                    raise ValueError("staged research snapshot query mismatch")
+                verify_range_projection(self.store, snapshot)
             else:
+                # Legacy durable physical receipts remain replayable.
                 response = _load_response(self.store, cast(str, staged.payload["artifact_hash"]))
             self._check_parent()
-            successor_cutoff = max(self.cutoff, response.retrieved_at)
-            harness = DataInputHarness(self.store)
-            harness.register(_ReceivedProvider(template.provider, response))
-            snapshot = await harness.execute(
-                self._query(template, arguments, successor_cutoff),
-                mode=DataQueryMode.DURABLE_FETCH_IF_MISSING,
-            )
+            if snapshot is None:
+                assert response is not None
+                successor_cutoff = max(self.cutoff, response.retrieved_at)
+                harness = DataInputHarness(self.store)
+                harness.register(_ReceivedProvider(template.provider, response))
+                snapshot = await harness.execute(
+                    self._query(template, arguments, successor_cutoff),
+                    mode=DataQueryMode.DURABLE_FETCH_IF_MISSING,
+                )
+            successor_cutoff = max(self.cutoff, snapshot.completed_at)
             result = ResearchContinuation(
                 request_id,
                 "fulfilled" if snapshot.coverage_complete else "data_gap",
@@ -812,11 +859,9 @@ class OnDemandResearch:
     async def _acquire(
         self,
         template: ResearchSourceTemplate,
-        provider: TushareDailyRangeCache | TushareObservationProvider,
+        provider: TushareObservationProvider,
         query: DataQuery,
     ) -> ProviderDataResponse:
-        if isinstance(provider, TushareDailyRangeCache):
-            return await provider.fetch(query=query, source=template.source)
         harness = DataInputHarness(self.store)
         harness.register(provider)
         initial = await harness.execute(query, mode=DataQueryMode.DURABLE_FETCH_IF_MISSING)

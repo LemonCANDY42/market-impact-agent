@@ -29,6 +29,7 @@ from market_impact_agent.streaming_nautilus_account import (
     HistoricalInstrumentSpec,
 )
 from market_impact_agent.tushare_observation import tushare_observation_source_from_dict
+from market_impact_agent.tushare_range_cache import verify_range_projection
 
 if TYPE_CHECKING:
     from market_impact_agent.ashare_security_qualification import SourceBackedAShareRulePolicy
@@ -402,6 +403,7 @@ class HistoricalAShareInputs:
         tables: list[_Table] = []
         for snapshot_id in self.snapshot_ids:
             snapshot = self.store.get(snapshot_id)
+            projection_hashes = verify_range_projection(self.store, snapshot)
             for binding, attempt in zip(snapshot.query.sources, snapshot.attempts, strict=True):
                 if (
                     not attempt.status.completed
@@ -420,7 +422,7 @@ class HistoricalAShareInputs:
                     attempt.raw_response_hash, media_type="application/octet-stream"
                 )
                 rows: list[tuple[dict[str, Any], str]] = []
-                hashes = {binding.source_config_hash, attempt.raw_response_hash}
+                hashes = {binding.source_config_hash, attempt.raw_response_hash} | projection_hashes
                 for observation in snapshot.observations:
                     if observation.upstream_source != binding.upstream_source:
                         continue

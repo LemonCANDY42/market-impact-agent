@@ -389,6 +389,22 @@ class ProviderDataResponse:
         return None if self.raw_payload is None else sha256(self.raw_payload).hexdigest()
 
 
+@dataclass(frozen=True, slots=True)
+class _SnapshotSourceData:
+    """Harness assembly input; never a physical Provider response."""
+
+    status: DataFetchStatus
+    retrieved_at: datetime
+    raw_payload: bytes
+    observations: tuple[SourceObservation, ...]
+    raw_records: tuple[tuple[str, bytes], ...]
+    error_kind: str | None = None
+
+    @property
+    def raw_response_hash(self) -> str:
+        return sha256(self.raw_payload).hexdigest()
+
+
 class DataProvider(Protocol):
     @property
     def manifest(self) -> ObservationProviderManifest: ...
@@ -832,6 +848,61 @@ class DataInputHarness:
         responses = await asyncio.gather(
             *(self._fetch_one(query, source) for source in query.sources)
         )
+        return await self._assemble(query, responses)
+
+    async def snapshot_from_response(
+        self, query: DataQuery, response: ProviderDataResponse
+    ) -> DataSnapshot:
+        if len(query.sources) != 1:
+            raise ValueError("saved physical response requires one source")
+        return await self._assemble(
+            query, (self._validate_response(query, query.sources[0], response),)
+        )
+
+    async def project_saved_responses(
+        self,
+        query: DataQuery,
+        *,
+        responses: tuple[ProviderDataResponse, ...],
+        observation_ids: frozenset[str],
+        manifest: Mapping[str, object],
+    ) -> DataSnapshot:
+        """Project verified physical segments without changing any record receipt."""
+        if len(query.sources) != 1 or not responses:
+            raise ValueError("saved-response projection requires one source and segments")
+        source = query.sources[0]
+        observations: dict[str, SourceObservation] = {}
+        records: dict[str, bytes] = {}
+        for response in responses:
+            validated = self._validate_response(query, source, response)
+            if validated is not response or not response.status.completed:
+                raise ValueError("invalid physical response in saved projection")
+            if response.raw_payload is not None:
+                await asyncio.to_thread(self.store.put_raw, response.raw_payload)
+            for item in response.observations:
+                if item.observation_id in observation_ids:
+                    observations[item.observation_id] = item
+            records.update(response.raw_records)
+        if observations.keys() != observation_ids:
+            raise ValueError("projection selects unknown observation identity")
+        latest = max(response.retrieved_at for response in responses)
+        if latest > query.as_of:
+            raise ValueError("range coverage receipt is after the query cutoff")
+        projection = _SnapshotSourceData(
+            status=DataFetchStatus.DATA if observations else DataFetchStatus.NO_DATA,
+            retrieved_at=latest,
+            raw_payload=canonical_json_bytes(manifest),
+            observations=tuple(observations.values()),
+            raw_records=tuple((key, records[key]) for key in observations),
+        )
+        return await self._assemble(query, (projection,))
+
+    async def _assemble(
+        self,
+        query: DataQuery,
+        responses: tuple[ProviderDataResponse | _SnapshotSourceData, ...]
+        | list[ProviderDataResponse],
+    ) -> DataSnapshot:
         attempts: list[DataProviderAttempt] = []
         accepted: list[SourceObservation] = []
         for source, response in zip(query.sources, responses, strict=True):
@@ -988,6 +1059,11 @@ class DataInputHarness:
                 DataFetchStatus.ERROR,
                 type(exc).__name__,
             )
+        return self._validate_response(query, source, response)
+
+    def _validate_response(
+        self, query: DataQuery, source: DataSourceBinding, response: ProviderDataResponse
+    ) -> ProviderDataResponse:
         if (
             response.provider_id != source.provider_id
             or response.provider_version != source.provider_version

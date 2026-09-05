@@ -970,18 +970,43 @@ permit a blind retry. A crash after external receipt but before durable publicat
 be reconstructed as success. No timer, model invocation, retry grant, or separate scheduler
 is created by this layer.
 
-The opt-in `TushareDailyRangeCache` Provider decorator reuses complete source intervals for
-`daily` and `fund_daily` with exactly one `ts_code`, `start_date`, and `end_date`. Register it
-with the existing Harness and use `FETCH_IF_MISSING`: its own source-scope claims serialize
-interval work across processes. Its key includes the entire source binding/configuration,
-fields and rights, capability, PIT lane, policy, and instrument. Only the underlying
-Provider's completed pagination yields reusable coverage. Missing prefixes, suffixes and
-internal gaps use the existing Provider collector; cached normalized rows keep their original
-receipt and authority times, and the original Harness cutoff still filters the projection.
-No-data is a durable queried interval, not evidence of tradability or absence of a halt.
-Failures block overlapping retries; lost owners are uncertain. Generic providers do not gain
-interval coverage implicitly. Event-window reuse remains owned by the existing Journal's
-exact-policy receipt coverage and freeze operation.
+The opt-in `TushareDailyRangeCache` is a Harness interval component for `daily` and
+`fund_daily` with exactly one `ts_code`, `start_date`, and `end_date`. Its `acquire()`
+returns immutable physical response references; `project()` invokes the Harness's saved
+response validation, raw persistence, PIT filtering and Snapshot assembly. It is not a
+Provider decorator: a physical `ProviderDataResponse` still requires every observation's
+receipt to equal that response's receipt. The source-scope key retains the complete source
+binding/configuration, fields and rights, capability, PIT lane, policy, and instrument.
+Only completed Provider pagination yields reusable interval coverage. Missing prefixes,
+suffixes and internal gaps use the existing collector. Failures block overlapping retries.
+
+The v2 range projection manifest binds that scope, source and requested parameters to each
+segment's interval, response artifact and raw bundle hash. Reopening validates response CAS,
+raw CAS, the capture's original source/configuration/query, completeness and reconstructed
+record identities; database interval metadata alone is not coverage proof. Rows keep their
+original IDs, raw bytes, availability, receipt and authority times. One aggregate attempt
+uses the latest physical segment receipt, including no-data segments. A cutoff earlier than
+that coverage receipt is rejected; older rows remain usable through their original Snapshots.
+No-data proves a queried interval, not tradability or absence of a halt. Historical raw-row
+reopening also traverses and retains the constituent response and bundle proof.
+
+Existing v1 projection manifests and frozen Snapshot identities remain readable. Their
+scope and requested parameters bind the source contract; their declared raw hashes are
+resolved through the existing range response index only as discovery hints. Each candidate
+must reopen its response and raw CAS, prove the original capture query and interval, and
+reconcile row identity, complete coverage and original aggregate receipt. Missing or
+ambiguous physical proof fails closed. The v1 merged-physical-response receipt constraint
+still applies; this compatibility path neither repairs invalid mixed receipts nor rewrites
+old manifests, Snapshots or times. Legacy staged v1 responses can finish and enter the same
+verified historical reopening path.
+
+`acquire(saved_only=True)` can recover an exact fully covered request from durable physical
+segments after interruption. It performs no transport calls, refuses active owners, and
+leaves missing, corrupt or mismatched evidence unresolved. Recovery never resets a legacy
+uncertain source scope to idle or authorizes its missing intervals to fetch. For new work,
+physical acquisition releases ownership before projection, so a later projection failure
+does not imply an unknown external request. Generic providers gain no implicit range reuse;
+event-window reuse remains owned by the Journal's exact-policy receipt coverage.
 
 `on_demand_research.OnDemandResearch` supplies the executable semantic composition.
 Construct it with the existing authoritative parent `ModelBudget`, unchanged absolute
@@ -1012,9 +1037,13 @@ records `research.data.requested` in the existing parent Journal and returns
 has yielded, the caller invokes `fulfill_pending()`. It shares parent cancellation, model
 allowance and the absolute episode deadline, claims each request through the existing
 Journal, acquires via the registered Provider/range cache, stages the receipt durably, and
-replays it through `DataInputHarness`. A staged receipt can recover without another fetch;
-an unaccounted started request stays uncertain. Exact profile requests use the durable
-Harness acquisition mode, and price requests use complete interval reuse.
+replays it through `DataInputHarness`. Price requests stage the durable projection Snapshot;
+legacy staged physical responses remain replayable. A started price request with no staged
+receipt may recover only through verified saved-only interval coverage, under the unchanged
+parent claim, cancellation, deadline and allowance. It stages `.received` before completion.
+Other unaccounted started requests remain uncertain. Successor receipt cutoffs derive from
+original verified receipts, never recovery time; modeled historical decision cutoffs remain
+unchanged. Exact profile requests use durable Harness acquisition mode.
 
 `successor_input(results)` returns a successor cutoff and frozen declaration for the caller's
 next Run. Prospective cutoffs advance to include actual receipt; old tool closures retain

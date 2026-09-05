@@ -631,3 +631,118 @@ def test_agent_query_validation_is_recoverable_but_preparation_is_strict(
         event.event_type == "research.data.requested"
         for event in research.budget.journal.events("episode")
     )
+
+
+@pytest.mark.parametrize("crash_point", ["segments", "received"])
+def test_recreated_parent_recovers_saved_ranges_without_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, crash_point: str
+) -> None:
+    from market_impact_agent.tushare_range_cache import TushareDailyRangeCache
+
+    research, transport = _setup(tmp_path)
+    original_project = TushareDailyRangeCache.project
+    original_append = research._append
+
+    async def crash_project(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("crash after physical segments")
+
+    def crash_received(suffix: str, kind: str, payload: dict[str, object]) -> None:
+        original_append(suffix, kind, payload)
+        if kind == "research.data.received":
+            raise RuntimeError("crash after staged projection")
+
+    async def run() -> None:
+        await research.descriptors()[0].handler(PARAMS)
+        if crash_point == "segments":
+            monkeypatch.setattr(TushareDailyRangeCache, "project", crash_project)
+        else:
+            monkeypatch.setattr(research, "_append", crash_received)
+        with pytest.raises(RuntimeError, match="crash after"):
+            await research.fulfill_pending()
+        monkeypatch.setattr(TushareDailyRangeCache, "project", original_project)
+        store = LocalDataSnapshotStore(tmp_path)
+        with store.authority_transaction() as connection:
+            connection.execute("UPDATE tushare_range_owners SET state = 'uncertain'")
+        config = load_tushare_observation_source(CONFIG)
+        no_transport = FakeTransport([])
+        provider = TushareObservationProvider(
+            TOKEN,
+            (config,),
+            transport=no_transport,
+            clock=lambda: RETRIEVED + timedelta(minutes=30),
+        )
+        reopened = OnDemandResearch(
+            store=store,
+            parent_budget=ModelBudget(RunJournal.authoritative(store), "episode", 10, 40_000_000),
+            episode_deadline=research.deadline,
+            run_id="research-1",
+            cutoff=research.cutoff,
+            pit_lane=research.pit_lane,
+            templates=(ResearchSourceTemplate.from_tushare(provider, config.source_id),),
+            clock=lambda: RETRIEVED + timedelta(minutes=30),
+        )
+        results = await reopened.fulfill_pending()
+        assert results[0].status == "fulfilled"
+        assert results[0].successor_cutoff == RETRIEVED
+        assert results[0].snapshot_id is not None
+        snapshot = store.get(results[0].snapshot_id)
+        assert snapshot.observations[0].times.retrieved_at == RETRIEVED
+        assert await reopened.fulfill_pending() == results
+        assert no_transport.requests == []
+        assert len(transport.requests) == 1
+        with store.authority_transaction() as connection:
+            row = connection.execute("SELECT state FROM tushare_range_owners").fetchone()
+            assert row is not None and row["state"] == "uncertain"
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("projection", [False, True])
+def test_legacy_staged_physical_response_remains_replayable(
+    tmp_path: Path, projection: bool
+) -> None:
+    from market_impact_agent.on_demand_research import _store_response
+
+    research, transport = _setup(tmp_path)
+
+    async def run() -> None:
+        requested = cast(dict[str, object], await research.descriptors()[0].handler(PARAMS))
+        request_id = cast(str, requested["request_id"])
+        template = next(iter(research.templates.values()))
+        query = research._query(template, PARAMS, research.cutoff)
+        if projection:
+            from market_impact_agent.tushare_range_cache import TushareDailyRangeCache
+            from tests.test_tushare_range_cache import _legacy_range_response
+
+            cache = TushareDailyRangeCache(template.provider, research.store)
+            segments = await cache.acquire(query=query, source=template.source)
+            response = _legacy_range_response(cache, query, segments)
+        else:
+            response = await template.provider.fetch(query=query, source=template.source)
+        artifact = _store_response(research.store, response)
+        research._append(
+            request_id + ".received", "research.data.received", {"artifact_hash": artifact}
+        )
+        result = (await research.fulfill_pending())[0]
+        assert result.status == "fulfilled"
+        assert result.successor_cutoff == RETRIEVED
+        assert len(transport.requests) == 1
+        if projection:
+            from decimal import Decimal
+
+            from market_impact_agent.historical_ashare_inputs import (
+                HistoricalAShareInputs,
+                ModeledHistoricalPolicy,
+            )
+
+            assert result.snapshot_id is not None
+            historical = HistoricalAShareInputs(
+                store=LocalDataSnapshotStore(tmp_path),
+                snapshot_ids=(result.snapshot_id,),
+                rule_artifact_hashes=(),
+                policy=ModeledHistoricalPolicy("legacy-stage", Decimal("0.01")),
+            )
+            assert len(historical._tables()[0].rows) == 1
+            assert historical._tables()[0].snapshot.completed_at == RETRIEVED
+
+    asyncio.run(run())

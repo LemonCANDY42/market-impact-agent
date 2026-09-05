@@ -203,8 +203,20 @@ USD 0.006559 before local range projection failed. Cumulative known cost is now
 USD 8.771052 across 164 requests, with the same USD 0.011769 prior unknown reserve.
 The cached populated interval and later empty suffix were both saved; an offline
 reconstruction reproduced the receipt-time mismatch without a source refetch.
-The batch is paused for verified local recovery. This is a Harness cache defect,
-not missing upstream data, a model judgment error or a completed account decision.
+Verified local recovery completed with zero transport invocations and unchanged
+model costs. The exact original request reopened 22 saved observations, retaining
+their original receipt time; the later empty interval determines the successor
+cutoff. Repeating recovery returned the identical snapshot. The original failure
+remains a Harness cache defect, not a model judgment error or account decision.
+
+Range acquisition now preserves physical response invariants and projects saved
+segments through the Harness. Missing, corrupt or ambiguous recovery proof remains
+blocked; uncertain network ownership is not cleared. Legacy v1 projections reopen
+only after their saved source, query, raw artifact and coverage proofs verify.
+The cache node passed 2,070 full-suite tests, 54 final targeted checks, Ruff,
+formatting, Pyright, TypeScript, four Node tests and the production runtime doctor.
+Independent read-only review found no concrete remaining issue. The paid discovery
+batch can resume using its original registration and shared budget authority.
 
 ## Outstanding acceptance
 
