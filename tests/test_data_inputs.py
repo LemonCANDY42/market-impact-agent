@@ -829,3 +829,125 @@ def test_frozen_snapshot_tool_filters_without_changing_snapshot_identity(tmp_pat
                 authorized_snapshot_ids=frozenset({"data-snapshot-other"})
             ),
         )
+
+
+@pytest.fixture
+def cached_snapshot_store(tmp_path: Path) -> tuple[LocalDataSnapshotStore, tuple[str, ...]]:
+    store = LocalDataSnapshotStore(tmp_path / "data")
+    harness = DataInputHarness(store)
+    harness.register(FixtureProvider(_manifest(), _response(_observation())))
+    snapshots = tuple(
+        asyncio.run(
+            harness.execute(
+                _query(parameters={"event": [str(index)]}), mode=DataQueryMode.FETCH_IF_MISSING
+            )
+        )
+        for index in range(2)
+    )
+    return store, tuple(snapshot.snapshot_id for snapshot in snapshots)
+
+
+def test_parsed_snapshot_reuse_is_immutable_and_instance_local(
+    cached_snapshot_store: tuple[LocalDataSnapshotStore, tuple[str, ...]],
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from dataclasses import FrozenInstanceError, fields, is_dataclass
+    from hashlib import sha256
+    from unittest.mock import patch
+
+    store, ids = cached_snapshot_store
+    with (
+        patch(
+            "market_impact_agent.data_inputs.data_snapshot_from_dict", wraps=data_snapshot_from_dict
+        ) as parse,
+        patch("market_impact_agent.runtime_store.sha256", wraps=sha256) as verify_hash,
+    ):
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            snapshots = tuple(executor.map(store.get, [ids[0]] * 8))
+        assert parse.call_count == 1
+        first = snapshots[0]
+        assert all(item is first for item in snapshots)
+        reopened = LocalDataSnapshotStore(store.root).get(ids[0])
+        assert reopened == first and reopened is not first
+        assert parse.call_count == 2
+        assert verify_hash.call_count == 9
+
+    def assert_immutable(value: object) -> None:
+        if is_dataclass(value) and not isinstance(value, type):
+            assert not hasattr(value, "__dict__")
+            for item in fields(value):
+                with pytest.raises(FrozenInstanceError):
+                    setattr(value, item.name, getattr(value, item.name))
+                assert_immutable(getattr(value, item.name))
+        elif isinstance(value, tuple):
+            for item in cast(tuple[object, ...], value):
+                assert_immutable(item)
+        else:
+            assert value is None or isinstance(value, (str, int, bool, datetime))
+
+    assert_immutable(first)
+    cast(list[str], first.query.parameters["event"]).append("changed")
+    first.observations[0].normalized_payload["headline"] = "changed"
+    first.to_dict()["observations"] = []
+    assert store.get(ids[0]) == reopened
+    assert first.query.parameters == {"event": ["0"]}
+    assert first.observations[0].normalized_payload["headline"] == "Policy release"
+
+
+@pytest.mark.parametrize("corruption", ["bytes", "symlink", "missing", "index_alias"])
+def test_parsed_snapshot_hits_revalidate_current_authority(
+    cached_snapshot_store: tuple[LocalDataSnapshotStore, tuple[str, ...]], corruption: str
+) -> None:
+    import sqlite3
+
+    store, ids = cached_snapshot_store
+    first = store.get(ids[0])
+    other = store.get(ids[1])
+    artifact_hash = canonical_hash(first.to_dict())
+    path = store.artifacts.root / artifact_hash
+    if corruption == "bytes":
+        path.write_bytes(b"corrupt")
+    elif corruption == "symlink":
+        path.unlink()
+        path.symlink_to(store.artifacts.root / canonical_hash(other.to_dict()))
+    elif corruption == "missing":
+        path.unlink()
+    else:
+        with sqlite3.connect(store.index_path) as connection:
+            connection.execute(
+                "UPDATE data_snapshots SET artifact_hash = ? WHERE snapshot_id = ?",
+                (canonical_hash(other.to_dict()), ids[0]),
+            )
+    error = FileNotFoundError if corruption in {"symlink", "missing"} else ValueError
+    for reader in (store, LocalDataSnapshotStore(store.root)):
+        with pytest.raises(error):
+            reader.get(ids[0])
+
+
+@pytest.mark.parametrize("limit", ["entries", "bytes", "oversized"])
+def test_parsed_snapshot_cache_is_bounded(
+    cached_snapshot_store: tuple[LocalDataSnapshotStore, tuple[str, ...]],
+    monkeypatch: pytest.MonkeyPatch,
+    limit: str,
+) -> None:
+    from unittest.mock import patch
+
+    import market_impact_agent.data_inputs as module
+
+    store, ids = cached_snapshot_store
+    size = len(canonical_json_bytes(store.get(ids[0]).to_dict()))
+    # A fresh instance starts empty under the selected retention budget.
+    store = LocalDataSnapshotStore(store.root)
+    if limit == "entries":
+        monkeypatch.setattr(module, "_PARSED_SNAPSHOT_CACHE_MAX_ENTRIES", 1)
+    else:
+        monkeypatch.setattr(
+            module, "_PARSED_SNAPSHOT_CACHE_MAX_BYTES", size - (limit == "oversized")
+        )
+    with patch.object(module, "data_snapshot_from_dict", wraps=data_snapshot_from_dict) as parse:
+        first = store.get(ids[0])
+        again = store.get(ids[0])
+        assert (again is first) is (limit != "oversized")
+        store.get(ids[1])
+        assert store.get(ids[0]) == first
+        assert parse.call_count == (4 if limit == "oversized" else 3)

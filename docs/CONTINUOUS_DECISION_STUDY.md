@@ -116,7 +116,11 @@ output reserves and review assumptions are frozen; uncertain future review count
 are reported separately. The actual shared budget remains the hard dispatch gate.
 Partial batches retain the fixed 72-path denominator and complete registered
 calendars, advancing across market states rather than spending first on one regime.
-Daily frontier checkpoints report `prefix_complete` only as progress. Replay still
+Daily frontier checkpoints report `prefix_complete` only as progress. Each arm holds
+one live coordinator stream and its episode claim across daily frontiers; each
+frontier advances the account once, after the prior result is durable. Streams are
+closed on completion, failure, or cancellation. A new stream and every explicit
+`run()` start from session zero and replay the durable prefix. Replay still
 reopens every signed decision and its exact engine input; a populated NAV file does
 not make a failed decision validation acceptable. Such curves remain diagnostic and
 cannot produce measured strategy comparisons. Research coverage gaps are included in

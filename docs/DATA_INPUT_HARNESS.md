@@ -90,6 +90,12 @@ cache entry for a future cutoff.
 Incomplete snapshots are retained for audit but are not reused as successful cache entries. A later
 retry creates another immutable snapshot instead of rewriting the failure.
 
+Repeated reads by snapshot ID reuse fully validated immutable parsed snapshots within one store
+instance, with least-recently-used eviction at 64 entries or 64 MiB of serialized content. Oversized
+snapshots are parsed without retention. Each read still queries the SQLite mapping, reads and hashes
+the current regular, non-symlink CAS file, and checks the requested snapshot identity; cached parsing
+does not replace persistent authority or validation on restart. JSON accessors return fresh values.
+
 The query selects one explicit PIT lane. `strict` rejects modeled-latency availability and requires
 `available_at <= authority_at <= cutoff`; `modeled` preserves the authority gap for process
 diagnostics; `prospective` requires `available_at == authority_at == retrieved_at` under actual

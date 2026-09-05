@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import AsyncExitStack, aclosing
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -231,13 +232,18 @@ def test_real_native_three_cadence_prefix_replay(
                 cadence=cadence,
             )
             coordinators.append((destination, coordinator))
-        for destination, coordinator in coordinators:
-            assert (await coordinator.run(stop_after_sessions=1))["status"] == "prefix_complete"
-            assert len(destination.account.results) == 2
-        assert budget.summary()["physical_requests"] == before_requests + 2
-        for destination, coordinator in coordinators:
-            assert (await coordinator.run())["status"] == "completed"
-            assert len(destination.account.results) == 3
+        async with AsyncExitStack() as stack:
+            streams = [
+                await stack.enter_async_context(aclosing(coordinator.stream()))
+                for _, coordinator in coordinators
+            ]
+            for (destination, _owner), stream in zip(coordinators, streams, strict=True):
+                assert (await anext(stream))["status"] == "prefix_complete"
+                assert len(destination.account.results) == 2
+            assert budget.summary()["physical_requests"] == before_requests + 2
+            for (destination, _owner), stream in zip(coordinators, streams, strict=True):
+                assert (await anext(stream))["status"] == "completed"
+                assert len(destination.account.results) == 3
         requests = budget.summary()["physical_requests"]
         for destination, coordinator in coordinators:
             assert (await coordinator.run(stop_after_sessions=1))["status"] == "prefix_complete"

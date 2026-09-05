@@ -7,7 +7,8 @@ Every accepted decision is durable before it can reach the execution callback.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import aclosing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -177,15 +178,34 @@ class ContinuousReviewCoordinator:
         stop = len(self.frames) if stop_after_sessions is None else stop_after_sessions
         if not 0 <= stop <= len(self.frames):
             raise ValueError("continuous prefix endpoint exceeds registered frames")
+        async with aclosing(self._stream(stop)) as stream:
+            report = self._report(0, "prefix_complete", None)
+            async for frontier in stream:
+                report = frontier
+            return report
+
+    def stream(self) -> AsyncGenerator[dict[str, object]]:
+        """Yield durable frontiers, retaining the episode claim until closed.
+
+        Callers must close the stream within their task (for example with
+        ``contextlib.aclosing``). A new stream always replays from session zero;
+        only this live generator retains scheduling progress between frontiers.
+        """
+        return self._stream(len(self.frames))
+
+    async def _stream(self, stop: int) -> AsyncGenerator[dict[str, object]]:
         claim = self.journal.try_claim_run(self.episode_id)
         if claim is None:
-            return self._report(0, "in_progress", "episode_owned_by_another_worker")
+            yield self._report(0, "in_progress", "episode_owned_by_another_worker")
+            return
         try:
-            return await self._run_claimed(stop)
+            async with aclosing(self._run_claimed(stop)) as traversal:
+                async for report in traversal:
+                    yield report
         finally:
             claim.release()
 
-    async def _run_claimed(self, stop: int) -> dict[str, object]:
+    async def _run_claimed(self, stop: int) -> AsyncGenerator[dict[str, object]]:
         previous: ContinuousDecision | None = None
         consumed: set[str] = set()
         expires = 0
@@ -193,7 +213,8 @@ class ContinuousReviewCoordinator:
         scheduled: set[int] = set()
         for index, frame in enumerate(self.frames[:stop]):
             if frame.gaps:
-                return self._report(index, "awaiting_data", "; ".join(frame.gaps))
+                yield self._report(index, "awaiting_data", "; ".join(frame.gaps))
+                return
             fresh = set(frame.new_fact_ids) - consumed
             expiry = index >= expires
             event_due = self.cadence is ContinuousCadence.EVENT and bool(fresh) and event_count < 3
@@ -236,9 +257,10 @@ class ContinuousReviewCoordinator:
                         frame, previous, event_key, allowed, started is not None
                     )
                     if isinstance(result, PendingReview):
-                        return self._report(
+                        yield self._report(
                             index, "incomplete", result.reason, result.continuation_ref
                         )
+                        return
                     decision = result
                 if decision.horizon_sessions not in allowed:
                     raise ValueError("thesis exceeds observation endpoint")
@@ -247,6 +269,18 @@ class ContinuousReviewCoordinator:
                     self._append(
                         event_key + ".completed", "continuous.review.completed", decision.to_dict()
                     )
+            day_key = f"{self.episode_id}.account.{index}"
+            advanced = self.journal.event(day_key)
+            # Executor owns replay and identity. It rebuilds its engine prefix even
+            # when the coordinator already committed this day's result.
+            account = await self.advance_account(index, decision)
+            if advanced is not None:
+                if advanced.payload != account:
+                    raise ValueError("account prefix replay differs from frozen result")
+            else:
+                self._append(day_key, "continuous.account.completed", account)
+            # Retain progress only after account durability or replay comparison.
+            if decision is not None:
                 # An intermediate revision may change the thesis horizon within
                 # the market observation window. Only an expiry-originated review
                 # replenishes the event allowance; revisions cannot reset it.
@@ -262,19 +296,11 @@ class ContinuousReviewCoordinator:
                     for offset in scheduled_review_offsets(decision.horizon_sessions)
                     if index + offset < len(self.frames)
                 }
-            day_key = f"{self.episode_id}.account.{index}"
-            advanced = self.journal.event(day_key)
-            # Executor owns replay and identity. It rebuilds its engine prefix even
-            # when the coordinator already committed this day's result.
-            account = await self.advance_account(index, decision)
-            if advanced is not None:
-                if advanced.payload != account:
-                    raise ValueError("account prefix replay differs from frozen result")
-            else:
-                self._append(day_key, "continuous.account.completed", account)
-        return self._report(
-            stop, "completed" if stop == len(self.frames) else "prefix_complete", None
-        )
+            yield self._report(
+                index + 1,
+                "completed" if index + 1 == len(self.frames) else "prefix_complete",
+                None,
+            )
 
     def _append(self, event_id: str, kind: str, payload: dict[str, object]) -> None:
         self.journal.append(

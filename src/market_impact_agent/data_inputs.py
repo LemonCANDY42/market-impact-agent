@@ -6,7 +6,9 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import uuid
+from collections import OrderedDict
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -34,6 +36,8 @@ DATA_QUERY_SCHEMA_V1 = "market-impact.data-query.v1"
 DATA_QUERY_SCHEMA = "market-impact.data-query.v2"
 DATA_SNAPSHOT_SCHEMA_V1 = "market-impact.data-snapshot.v1"
 DATA_SNAPSHOT_SCHEMA = "market-impact.data-snapshot.v2"
+_PARSED_SNAPSHOT_CACHE_MAX_BYTES = 64 * 1024 * 1024
+_PARSED_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 
 
 class DataFetchStatus(StrEnum):
@@ -571,6 +575,9 @@ class DataSnapshot:
 
 class LocalDataSnapshotStore:
     def __init__(self, root: Path) -> None:
+        self._parsed_snapshots: OrderedDict[str, tuple[DataSnapshot, int]] = OrderedDict()
+        self._parsed_snapshot_bytes = 0
+        self._parsed_snapshot_lock = threading.Lock()
         self.root = root.resolve()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(self.root, 0o700)
@@ -721,8 +728,33 @@ class LocalDataSnapshotStore:
             ).fetchone()
         if row is None:
             raise KeyError(f"unknown Data Snapshot: {snapshot_id}")
-        payload = self.artifacts.read_json(cast(str, row["artifact_hash"]))
-        return data_snapshot_from_dict(payload)
+        content_hash = cast(str, row["artifact_hash"])
+        with self._parsed_snapshot_lock:
+            # The index and current CAS bytes remain authoritative on every hit.
+            payload = self.artifacts.read_bytes(content_hash)
+            cached = self._parsed_snapshots.get(content_hash)
+            snapshot = (
+                cached[0]
+                if cached is not None
+                else data_snapshot_from_dict(json.loads(payload.decode("utf-8")))
+            )
+            if snapshot.snapshot_id != snapshot_id:
+                raise ValueError("data snapshot index identity does not match artifact")
+            if cached is not None:
+                self._parsed_snapshots.move_to_end(content_hash)
+            elif (
+                len(payload) <= _PARSED_SNAPSHOT_CACHE_MAX_BYTES
+                and _PARSED_SNAPSHOT_CACHE_MAX_ENTRIES > 0
+            ):
+                while self._parsed_snapshots and (
+                    self._parsed_snapshot_bytes + len(payload) > _PARSED_SNAPSHOT_CACHE_MAX_BYTES
+                    or len(self._parsed_snapshots) >= _PARSED_SNAPSHOT_CACHE_MAX_ENTRIES
+                ):
+                    _, (_, size) = self._parsed_snapshots.popitem(last=False)
+                    self._parsed_snapshot_bytes -= size
+                self._parsed_snapshots[content_hash] = (snapshot, len(payload))
+                self._parsed_snapshot_bytes += len(payload)
+            return snapshot
 
     def latest_complete(self, query_id: str) -> DataSnapshot | None:
         with self._connect() as connection:

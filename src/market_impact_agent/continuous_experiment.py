@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import AsyncExitStack, aclosing
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -792,18 +793,26 @@ async def run_continuous_experiment(
             )
             rolling.append(_RollingArm(runtime, window, coordinator, row))
         # Daily frontier: no market regime consumes its whole window before its peers.
-        active = list(rolling)
-        for frontier in range(1, max((len(item.window.frames) for item in active), default=0) + 1):
-            for item in tuple(active):
-                try:
-                    report = await item.coordinator.run(stop_after_sessions=frontier)
-                except (ValueError, PermissionError, RuntimeError) as exc:
-                    item.row.update(status="incomplete", reason=type(exc).__name__)
-                    active.remove(item)
-                    continue
-                item.row.update(report)
-                if report["status"] != "prefix_complete":
-                    active.remove(item)
+        async with AsyncExitStack() as streams:
+            active = [
+                (item, await streams.enter_async_context(aclosing(item.coordinator.stream())))
+                for item in rolling
+            ]
+            for _frontier in range(
+                max((len(item.window.frames) for item, _stream in active), default=0)
+            ):
+                for item, stream in tuple(active):
+                    try:
+                        report = await anext(stream)
+                    except (ValueError, PermissionError, RuntimeError) as exc:
+                        item.row.update(status="incomplete", reason=type(exc).__name__)
+                        active.remove((item, stream))
+                        await stream.aclose()
+                        continue
+                    item.row.update(report)
+                    if report["status"] != "prefix_complete":
+                        active.remove((item, stream))
+                        await stream.aclose()
         for item in rolling:
             seed = item.runtime.account.results[0]
             cost = sum(

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import tempfile
 import threading
 from collections.abc import Generator
@@ -195,23 +196,31 @@ class ArtifactStore:
         )
 
     def get(self, content_hash: str, *, media_type: str) -> StoredArtifact:
-        _sha256(content_hash, "content_hash")
-        path = self.root / content_hash
-        if path.is_symlink() or not path.is_file():
-            raise FileNotFoundError(f"artifact is not a regular file: {content_hash}")
-        payload = path.read_bytes()
-        if sha256(payload).hexdigest() != content_hash:
-            raise ValueError("artifact content does not match its identity")
+        payload = self.read_bytes(content_hash)
         return StoredArtifact(
             content_hash=content_hash,
             media_type=media_type,
             size_bytes=len(payload),
-            path=path,
+            path=self.root / content_hash,
         )
 
+    def read_bytes(self, content_hash: str) -> bytes:
+        """Read and verify the same regular-file bytes returned to the caller."""
+        _sha256(content_hash, "content_hash")
+        path = self.root / content_hash
+        if path.is_symlink() or not path.is_file():
+            raise FileNotFoundError(f"artifact is not a regular file: {content_hash}")
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise FileNotFoundError(f"artifact is not a regular file: {content_hash}")
+            payload = stream.read()
+        if sha256(payload).hexdigest() != content_hash:
+            raise ValueError("artifact content does not match its identity")
+        return payload
+
     def read_json(self, content_hash: str) -> object:
-        artifact = self.get(content_hash, media_type="application/json")
-        return json.loads(artifact.path.read_text(encoding="utf-8"))
+        return json.loads(self.read_bytes(content_hash).decode("utf-8"))
 
 
 class RunJournal:

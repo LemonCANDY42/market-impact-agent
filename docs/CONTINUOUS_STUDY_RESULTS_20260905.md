@@ -44,6 +44,21 @@ source/baseline preflight uses each deep case's registered horizon; the full ori
 price path remains a separate diagnostic. Qualification of an optional candidate
 does not replace the required initial holding's execution gate.
 
+The qualified preflight completed with eight ready coverage cases and 32 complete
+matched baselines: 2015 deleveraging, 2016–2018 quality slow bull (registered 120
+sessions), 2021 sector rotation (60), 2022 reopening, 2024 broad rebound, 2024 policy
+melt-up, ordinary low volatility and ordinary mid volatility. Five are registered
+deep cases, making 45 trajectories source-eligible before model/decision checks;
+the denominator remains 72. Thirty-six baselines have source/engine-input gaps and
+four have incomplete opening execution. In particular, the COVID path crosses a
+rule-artifact version boundary that the immutable engine specification currently
+rejects; it is not described as missing daily prices.
+
+The conservative full-matrix planning envelope exceeds the USD 40 authorization.
+It assumes a token per frozen frame byte, output reserves and daily review in every
+arm; it is not a measured cost forecast. Dispatch remains bounded by the unchanged
+parent and stage ledgers, with fixed-order partial completion reported explicitly.
+
 Official SSE suspension responses are persisted and authenticated. Both seed ETFs
 have bounded full-history queries; absence is projected only from complete verified
 responses. A source reuse acceptance reopened one immutable source graph for all
@@ -105,6 +120,30 @@ projection-recovery successors retain their original scope; the failed answer is
 not reclassified as a completed decision.
 The original failures and all costs remain preserved. Rolling acceptance is still
 reported from complete registered account paths, not these initial decisions.
+
+## Continuous execution cost correction
+
+The combined live-stream and verified-parsing candidate passed 2,005 Python tests,
+Ruff, formatting, Pyright, TypeScript/Node and the production runtime doctor.
+Independent read-only reviews found no concrete lifecycle or cache-authority issue.
+
+The old daily-frontier caller restarted authoritative replay from the first session
+on every step: a 120-session arm would invoke 7,260 account callbacks. The explicit
+live stream retains generator-local scheduling state under one lifetime episode
+claim and advances each session once; `run()` still performs full replay. Restart,
+changed-validator, cancellation and concurrent-claim behavior have separate tests.
+
+A measured 20-snapshot read reparsed 21,450 immutable observations. An instance-local
+bounded parsed cache reduced the profiled second pass from a cold 9.375 seconds to
+0.035 seconds, retaining 20 current-file SHA256 checks and identical snapshot
+objects. Current SQLite mappings and regular-file identity are checked on every
+lookup. These are component measurements, not end-to-end investment-run latency.
+
+The legacy recovery process was interrupted during local account/source validation
+with no additional physical requests or unknown reservations. Its signed decisions
+and partial account prefix remain the recovery authority. At that checkpoint, the
+cumulative ledger recorded 117 requests, USD 6.219792 known and USD 0.011769 reserved
+for the one prior unknown request.
 
 ## Outstanding acceptance
 

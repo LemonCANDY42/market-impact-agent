@@ -209,3 +209,156 @@ def test_long_window_revision_can_keep_h60_without_resetting_event_allowance(
         assert calls[:5] == [0, 1, 2, 3, 63]
     else:
         assert calls[:4] == [0, 5, 10, 15]
+
+
+def test_live_frontiers_are_linear_and_full_run_still_revalidates(tmp_path: Path) -> None:
+    from contextlib import aclosing
+
+    journal = RunJournal(tmp_path / "runs.sqlite3")
+    days: list[int] = []
+    judgments: list[str] = []
+    validations: list[str] = []
+
+    async def decide(
+        _frame: ReviewFrame,
+        _prior: ContinuousDecision | None,
+        run_id: str,
+        allowed: frozenset[int],
+        _resume: bool,
+    ) -> ContinuousDecision:
+        judgments.append(run_id)
+        return ContinuousDecision(run_id, run_id, max(allowed), "hold", run_id)
+
+    async def advance(index: int, _decision: ContinuousDecision | None) -> dict[str, object]:
+        days.append(index)
+        return {"index": index}
+
+    coordinator = ContinuousReviewCoordinator(
+        journal,
+        episode_id="linear",
+        registration_hash=canonical_hash("linear"),
+        account_scope="fixture-account",
+        model_arm="luna_max",
+        cadence=ContinuousCadence.EVENT,
+        frames=_frames(120),
+        decide=decide,
+        advance_account=advance,
+        validate_decision=lambda decision, _frame: validations.append(decision.decision_ref),
+    )
+
+    async def exercise() -> None:
+        async with aclosing(coordinator.stream()) as stream:
+            for frontier in range(1, 121):
+                report = await anext(stream)
+                assert report["completed_sessions"] == frontier
+                assert report["status"] == ("completed" if frontier == 120 else "prefix_complete")
+                assert days == list(range(frontier))
+                # Even a suspended stream owns the episode until explicitly closed.
+                assert (await coordinator.run())["status"] == "in_progress"
+        original_judgments = judgments.copy()
+        original_validations = validations.copy()
+        assert (await coordinator.run())["status"] == "completed"
+        assert days == list(range(120)) * 2
+        assert judgments == original_judgments
+        assert validations == original_validations * 2
+
+        def reject(_decision: ContinuousDecision, _frame: ReviewFrame) -> None:
+            raise PermissionError("replaced authority rejects")
+
+        coordinator.validate_decision = reject
+        with pytest.raises(PermissionError, match="replaced authority"):
+            await coordinator.run()
+        assert days == list(range(120)) * 2
+        claim = journal.try_claim_run("linear")
+        assert claim is not None
+        claim.release()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("boundary", ["review", "account", "cancel"])
+def test_live_interruption_replays_durable_prefix_without_regeneration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    from contextlib import aclosing
+
+    journal = RunJournal(tmp_path / "runs.sqlite3")
+    resumes: list[tuple[str, bool]] = []
+    days: list[int] = []
+    interrupted = False
+    entered = asyncio.Event()
+    original_append = journal.append
+
+    def append(**kwargs: object) -> None:
+        nonlocal interrupted
+        if boundary == "account" and kwargs["event_id"] == "resume.account.1" and not interrupted:
+            interrupted = True
+            raise RuntimeError("account commit interrupted")
+        original_append(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(journal, "append", append)
+
+    async def decide(
+        _frame: ReviewFrame,
+        _prior: ContinuousDecision | None,
+        run_id: str,
+        _allowed: frozenset[int],
+        resume: bool,
+    ) -> ContinuousDecision:
+        nonlocal interrupted
+        resumes.append((run_id, resume))
+        if boundary == "review" and run_id == "resume.review.1" and not interrupted:
+            interrupted = True
+            raise RuntimeError("review interrupted")
+        return ContinuousDecision(run_id, run_id, 1, "hold", run_id)
+
+    async def advance(index: int, _decision: ContinuousDecision | None) -> dict[str, object]:
+        nonlocal interrupted
+        days.append(index)
+        if boundary == "cancel" and index == 1 and not interrupted:
+            interrupted = True
+            entered.set()
+            await asyncio.Event().wait()
+        return {"index": index}
+
+    coordinator = ContinuousReviewCoordinator(
+        journal,
+        episode_id="resume",
+        registration_hash=canonical_hash("resume"),
+        account_scope="fixture-account",
+        model_arm="luna_max",
+        cadence=ContinuousCadence.EXPIRY_ONLY,
+        frames=_frames(3),
+        decide=decide,
+        advance_account=advance,
+        validate_decision=lambda _decision, _frame: None,
+    )
+
+    async def exercise() -> None:
+        async with aclosing(coordinator.stream()) as stream:
+            assert (await anext(stream))["completed_sessions"] == 1
+            if boundary == "cancel":
+                task = asyncio.create_task(anext(stream))
+                await entered.wait()
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+            else:
+                with pytest.raises(RuntimeError, match="interrupted"):
+                    await anext(stream)
+        assert journal.event("resume.account.0") is not None
+        assert journal.event("resume.account.1") is None
+        async with aclosing(coordinator.stream()) as restarted:
+            reports = [report async for report in restarted]
+        assert reports[-1]["status"] == "completed"
+        assert days == ([0, 0, 1, 2] if boundary == "review" else [0, 1, 0, 1, 2])
+        assert resumes == (
+            [("resume.review.0", False), ("resume.review.1", False)]
+            + ([("resume.review.1", True)] if boundary == "review" else [])
+            + [("resume.review.2", False)]
+        )
+        claim = journal.try_claim_run("resume")
+        assert claim is not None
+        claim.release()
+
+    asyncio.run(exercise())
