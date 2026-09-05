@@ -54,6 +54,11 @@ GitHub Actions may repeat these checks but is never the only acceptance path.
 - Prefer deterministic clocks, explicit concurrency barriers, and isolated state
   to real sleeps or incidental ordering. Profile slow tests before changing them;
   do not remove a necessary recovery or risk check merely to shorten the suite.
+- Real continuous-study integration paths require ignored licensed panel manifests
+  and the prior-usage audit under `.market-impact/`. They skip only when those
+  files are absent on a portable clone; synthetic tests continue to run. Local
+  acceptance with the private artifacts present must run those real paths and is
+  distinct from a portable pytest result.
 - During iteration run affected tests; at workslice completion run the required
   local checks above. Keep paid-model and broker acceptance separately authorized
   and budgeted. Offline passes do not establish real tool usability, investment

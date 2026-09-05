@@ -18,6 +18,7 @@ from typing import Protocol, cast
 
 from market_impact_agent.agent_contracts import canonical_hash, canonical_json_bytes
 from market_impact_agent.agent_runtime import ToolDescriptor, ToolSideEffect
+from market_impact_agent.data_acquisition import AcquisitionPending, AcquisitionUncertain
 from market_impact_agent.domain import require_aware
 from market_impact_agent.observations import (
     AvailabilityBasis,
@@ -50,6 +51,7 @@ class DataFetchStatus(StrEnum):
 class DataQueryMode(StrEnum):
     CACHE_ONLY = "cache_only"
     FETCH_IF_MISSING = "fetch_if_missing"
+    DURABLE_FETCH_IF_MISSING = "durable_fetch_if_missing"
 
 
 class DataPITLane(StrEnum):
@@ -362,8 +364,8 @@ class ProviderDataResponse:
             if self.error_kind is not None:
                 raise ValueError("completed provider responses cannot carry error_kind")
         else:
-            if self.raw_payload is not None or self.observations or self.raw_records:
-                raise ValueError("failed provider responses cannot carry data")
+            if self.observations or self.raw_records:
+                raise ValueError("failed provider responses cannot carry accepted data")
             _nonempty(self.error_kind, "failed provider response error_kind")
         if self.status is DataFetchStatus.DATA and not self.observations:
             raise ValueError("data response requires observations")
@@ -450,8 +452,10 @@ class DataProviderAttempt:
             if self.error_kind is not None:
                 raise ValueError("completed data provider attempts cannot carry error_kind")
         else:
-            if self.raw_response_hash is not None or self.received_count != 0:
-                raise ValueError("failed data provider attempts cannot carry source data")
+            if self.received_count != 0:
+                raise ValueError("failed data provider attempts cannot carry accepted source data")
+            if self.raw_response_hash is not None:
+                _sha256(self.raw_response_hash, "failed data provider raw_response_hash")
             _nonempty(self.error_kind, "failed data provider attempt error_kind")
         if self.status is DataFetchStatus.DATA and self.received_count == 0:
             raise ValueError("data provider attempt requires received records")
@@ -776,6 +780,13 @@ class DataInputHarness:
             return cached
         if mode is DataQueryMode.CACHE_ONLY:
             raise LookupError(f"no complete cached Data Snapshot for {query.query_id}")
+        if mode is DataQueryMode.DURABLE_FETCH_IF_MISSING:
+            from market_impact_agent.data_acquisition import DurableDataAcquisition
+
+            acquisition = await asyncio.to_thread(DurableDataAcquisition, self.store)
+            return await acquisition.execute(
+                query, fetch=self._fetch, lease_seconds=self.provider_timeout_seconds + 60.0
+            )
         lock = self._query_locks.setdefault(query.query_id, asyncio.Lock())
         async with lock:
             cached = await asyncio.to_thread(self.store.latest_complete, query.query_id)
@@ -936,6 +947,8 @@ class DataInputHarness:
                 provider.fetch(query=query, source=source),
                 timeout=self.provider_timeout_seconds,
             )
+        except (AcquisitionPending, AcquisitionUncertain):
+            raise
         except Exception as exc:
             return _failed_response(
                 source,

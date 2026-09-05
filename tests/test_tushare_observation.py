@@ -32,6 +32,9 @@ from market_impact_agent.tushare_observation import (
 RETRIEVED = datetime(2026, 8, 28, 8, 0, tzinfo=UTC)
 TOKEN = "tushare-test-token-must-never-appear"
 DOCUMENTATION_IDS = {
+    "fund_adj": 199,
+    "fund_div": 120,
+    "dividend": 103,
     "news": 143,
     "major_news": 195,
     "index_daily": 95,
@@ -986,3 +989,78 @@ def test_prospective_actual_receipt_does_not_claim_publisher_or_revision_authori
     assert observation.times.aggregator_fetched_at == datetime(2026, 8, 27, 23, 0, tzinfo=UTC)
     assert observation.normalized_payload["aggregator"] == "Tushare Pro"
     assert "publisher publication" in cast(str, observation.normalized_payload["time_semantics"])
+
+
+def test_full_row_fund_div_identity_retains_revisions_and_raw_duplicates(tmp_path: Path) -> None:
+    config = load_tushare_observation_source(
+        Path("examples/providers/tushare-observation-fund-div-v1.json")
+    )
+    base: dict[str, object] = {field: None for field in config.fields}
+    base.update(
+        ts_code="510300.SH",
+        ann_date="20250101",
+        record_date="20250102",
+        ex_date="20250103",
+        pay_date="20250103",
+        div_proc="实施",
+        div_cash=0.1,
+        net_ex_date="20250103",
+        base_unit=100,
+    )
+    revision = {**base, "net_ex_date": "20250104", "base_unit": 101}
+    competing = {**base, "div_cash": 0.2}
+    rows = [[row[field] for field in config.fields] for row in (base, base, revision, competing)]
+    transport = FakeTransport([_response(config.fields, rows)])
+    provider = TushareObservationProvider(
+        TOKEN, (config,), transport=transport, clock=lambda: RETRIEVED
+    )
+    store = LocalDataSnapshotStore(tmp_path)
+    harness = DataInputHarness(store)
+    harness.register(provider)
+    snapshot = asyncio.run(
+        harness.execute(
+            _query(provider, config, {"ts_code": "510300.SH"}), mode=DataQueryMode.FETCH_IF_MISSING
+        )
+    )
+    assert snapshot.coverage_complete and len(snapshot.observations) == 3, snapshot.attempts
+    assert {o.normalized_payload["record"]["div_cash"] for o in snapshot.observations} == {0.1, 0.2}  # type: ignore[index]
+    raw_hash = snapshot.attempts[0].raw_response_hash
+    assert raw_hash is not None
+    payload = store.artifacts.get(raw_hash, media_type="application/octet-stream").path.read_bytes()
+    captured = load_tushare_observation_capture_bundle(
+        payload, config=config, parameters={"ts_code": "510300.SH"}, retrieved_at=RETRIEVED
+    )
+    assert len(json.loads(captured.pages[0].response_body)["data"]["items"]) == 4
+    assert len(transport.requests) == 1
+
+
+def test_failed_parse_retains_received_page_in_snapshot_cas(tmp_path: Path) -> None:
+    config = _configs()[1]
+    row = _values(config.api_name, config.fields)
+    provider = TushareObservationProvider(
+        TOKEN,
+        (config,),
+        transport=FakeTransport([_response(config.fields, [row, row])]),
+        clock=lambda: RETRIEVED,
+    )
+    store = LocalDataSnapshotStore(tmp_path)
+    harness = DataInputHarness(store)
+    harness.register(provider)
+    snapshot = asyncio.run(
+        harness.execute(
+            _query(
+                provider,
+                config,
+                {"ts_code": "000300.SH", "start_date": "20260828", "end_date": "20260828"},
+            ),
+            mode=DataQueryMode.FETCH_IF_MISSING,
+        )
+    )
+    attempt = store.get(snapshot.snapshot_id).attempts[0]
+    assert not snapshot.coverage_complete and not snapshot.observations
+    assert attempt.error_kind == "duplicate_primary_key" and attempt.received_count == 0
+    assert attempt.raw_response_hash is not None
+    raw = store.artifacts.get(
+        attempt.raw_response_hash, media_type="application/octet-stream"
+    ).path.read_bytes()
+    assert b'"items"' in raw and TOKEN.encode() not in raw

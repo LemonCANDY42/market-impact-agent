@@ -393,6 +393,35 @@ connected, reconciled execution state, initialized its portfolio and started a z
 then compares its account/open-order/open-position counts with the direct reader. That proves the
 selected engine can observe the same bounded Paper account state; it neither removes the manual-TWS
 coverage gap nor exercises an order command. The report and logs remain in ignored private state.
+
+### Offline IBKR Paper preparation
+
+`ibkr_paper_preparation` turns an exact Trading Mandate v2 source file and its
+complete instrument-route map into one content-addressed offline plan. It accepts
+only the existing loopback Paper configuration (`127.0.0.1`, port `4002`, client
+ID `0`, `fetch_all_open_orders`, and `DAY`) and requires the current exact
+per-order manual-approval mode. The plan binds both the source-byte SHA-256 and
+canonical mandate/risk identities, without serializing its account scope. It
+lists the receipts needed before each future order and the required handling for
+incomplete coverage, manual TWS orders, client-ID collision, ambiguous
+acknowledgement, disconnect/restart, partial or duplicate fill, and
+cancel/replace faults.
+
+Use the following command to print the plan and, when requested, write a new
+private artifact with exclusive creation. The command accepts no broker
+credentials or account identifier.
+
+```bash
+market-impact ibkr-paper prepare --mandate <private-mandate.json> --instrument-route <instrument>=<market> [--output <private-plan.json>]
+```
+
+Preparation does not import or construct the command runtime, connect to a
+gateway, access credentials, bind manual orders, submit/cancel/replace orders,
+or claim a fill. It always reports `pending_real_ibkr_paper_acceptance`: the
+concrete driver and Provider Acceptance remain unaccepted until sealed real
+Paper scenario evidence covers submit, cancel, replace, account reconciliation,
+ambiguous acknowledgement, disconnect, external order, partial/duplicate fill,
+gateway/process restart, and the exact accepted scope.
 The Authorized Decision View recomputes freshness at its own cutoff instead of copying an earlier
 readiness result, rejects exposure-increase readiness whenever any account observation gap remains,
 and mints the read tool only for the exact content-identified Position Snapshot it names. A
@@ -617,3 +646,87 @@ independent validation, no unresolved material counterexample or conflict with a
 and an observational trace showing when it was offered, loaded, reported as used and influenced the
 proposal. Promotion is limited to the demonstrated domain; with/without-Skill comparisons test
 incremental value rather than attributing the whole Agent result to the Skill.
+
+### Continuous historical A-share account
+
+`HistoricalStreamingAccount` in `streaming_nautilus_account.py` owns one pinned
+NautilusTrader `1.231.0` engine and one CNY settlement account per historical arm.
+The [upstream streaming lifecycle](https://nautilustrader.io/docs/latest/concepts/backtesting/apis-and-runs/)
+is used directly: add a session batch, `run(streaming=True)`, `clear_data()`, and
+`end()` only when the arm closes. The pinned local `backtest/engine.pyx` documents
+this same lifecycle. A shared synthetic `HIST` venue supports one cash account
+across XSHG/XSHE; source symbols and exchange identities remain in the Account State.
+It is a historical BACKTEST provider, separate from the USD autonomous Paper mandate,
+IBKR and live execution.
+
+The caller supplies source-backed instrument rules and raw, unadjusted session bars,
+and owns Instrument Master/PIT verification and policy admission. `register_instrument`
+adds a newly admitted equity or `exchange_traded_fund` to the running engine; there is
+no requirement to trade the initial instrument universe forever. `advance_session`
+consumes already admitted `ExecutableOrder` records and returns actual engine fills,
+explicit no-fill/partial-fill reasons, cash, daily NAV and the existing canonical
+`AccountStateSnapshot`. Every held instrument needs a raw close for daily valuation.
+The adapter never generates research, changes a mandate or admits its own Agent orders.
+
+The default starting cash is CNY 100,000. `bootstrap_half_hs300` takes an explicit
+prior-session raw 510300 bar and buys approximately half the capital through the same
+engine. Fees reduce opening NAV; a missing, suspended or incompletely filled seed
+cannot be claimed as the required overnight allocation. Cash and positions then persist
+across all sessions. Overnight long inventory limits sales (including same-session
+buy/sell attempts), with full residual odd-lot liquidation supported. Suspension,
+zero volume, absent bid/ask liquidity and side-applicable daily limits yield explicit
+no-fill evidence. IOC market execution uses the available raw opening quote, with
+zero configured slippage; it does not invent intraday liquidity from daily OHLC.
+The existing A-share commission model is reused per instrument, with explicit ETF
+stamp-tax exemption. Partial fills and fees come from Nautilus, not a parallel ledger.
+
+Session inputs, corporate actions, registrations and admitted order identities are
+atomically published and fsynced before engine mutation. A single-writer journal lock
+prevents competing engines for one arm. On interruption the adapter reopens and replays
+that exact durable input prefix into one replacement engine; no Agent/model call is
+part of recovery. Any failed execution instance must be discarded before continuation.
+Source-backed net cash dividends use the upstream `SimulationModule` exchange account
+adjustment and prior-session share entitlement at the effective open. Split/bonus-share
+transitions remain explicitly unsupported and block the session before persistence:
+no public pinned position-adjustment transition has passed acceptance, and adjusted
+price factors must never impersonate corporate-action cash or shares. The data owner
+must supply the actual payable per-share cash and effective date; this adapter does
+not infer tax or payment dates from price adjustments.
+
+### Offline IBKR Paper preparation
+
+`market-impact ibkr-paper prepare` freezes the exact private Paper Mandate source,
+instrument routes, pinned runtime, per-order checklist and fault matrix without
+constructing a broker runtime or connecting a socket. The current static adapter
+scope is loopback Gateway port 4002, client ID 0, all-open-order coverage and DAY;
+the existing HK/US routes are preparation capabilities, not new trading permission.
+The CNY historical account does not activate this adapter. Preparation always
+reports `execution_accepted: false` until separately authorized real Paper evidence
+passes its own acceptance gate.
+
+For each future approved Paper order, the generated checklist requires, in order:
+
+1. Fresh complete account, positions, open orders and execution reconciliation.
+2. Same-root exposure view and raw executable-side price evidence.
+3. Exact order intent, policy result and unchanged versioned Mandate binding.
+4. Human approval for that exact order.
+5. Current sealed Provider acceptance, capability and exclusive session lease.
+6. Complete reconciliation after any transport or broker response.
+
+The preparation artifact owns the machine-readable fault matrix:
+
+| Failure | Required response and recovery evidence |
+| --- | --- |
+| Stale or incomplete account coverage | Block new orders; obtain complete fresh reconciliation. |
+| Uncovered manual TWS order | Prove client-ID-0 external-order coverage before mutation. |
+| Client-ID-0 collision | Do not start the command runtime or submit. |
+| Ambiguous submit or ACK | Preserve unknown state, stop new submissions and reconcile. |
+| Disconnect or Gateway restart | Invalidate the session and reconcile under a fresh scope. |
+| Partial or duplicate fill | Preserve monotonic cumulative fills and reconcile. |
+| Process restart | Reopen the exact durable operation without redispatch. |
+| Cancel or replace failure | Retain the original state until reconciliation proves the change. |
+
+Submit, cancel, replace, account reconciliation, ambiguous ACK, partial/duplicate
+fills, external orders, disconnect, Gateway restart and process restart each need
+real sealed acceptance receipts. Offline tests and local Mock evidence do not
+satisfy those broker scenarios.

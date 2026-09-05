@@ -60,6 +60,12 @@ _SCHEDULED_OFFSETS: Mapping[int, tuple[int, ...]] = {
 }
 
 
+def scheduled_review_offsets(horizon_sessions: int) -> tuple[int, ...]:
+    """Return registered session offsets without inventing calendar timestamps."""
+    horizon_band_for_sessions(horizon_sessions)
+    return _SCHEDULED_OFFSETS[horizon_sessions]
+
+
 def validate_horizon(band: HorizonBand, sessions: int) -> None:
     if isinstance(sessions, bool) or sessions not in HORIZONS_BY_BAND[band]:
         allowed = ", ".join(str(item) for item in sorted(HORIZONS_BY_BAND[band]))

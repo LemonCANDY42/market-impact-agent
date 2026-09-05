@@ -5,6 +5,31 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 ## Current delivery lane
 
+The 2026-09-05 [continuous decision study](docs/CONTINUOUS_DECISION_STUDY.md)
+supersedes the earlier four-case/two-ETF and USD 20 scope for new work. It registers
+18 coverage windows, eight deep windows and 72 intended account trajectories for
+Luna max, Terra high and Sol high under a shared cumulative USD 40 ceiling. Prior
+costs, failures and unknown reservations remain charged; seed ETFs are not the
+entire research or dynamically admitted trading universe.
+
+The current implementation includes durable on-demand source acquisition,
+candidate admission, scoped Recall, continuous Nautilus accounts, expiry/scheduled/
+event review, initial-decision adoption and reconciled two-step rotation. The
+production historical preflight retains fixed denominators of 54 initial model/case
+diagnostics and 72 rolling paths. Authenticated Shanghai fund-halt coverage now
+allows the complete 2024 policy window through source and executable-baseline
+qualification; model completion is reported separately. Seventeen other windows
+retain effective-rule, daily-limit or corporate-action gaps. Full raw index
+baselines are separate non-executable diagnostics.
+
+Actual-receipt prospective discovery has a production entry and independent
+candidate-to-portfolio integration evidence. Its current CLI has no accepted
+current Mock account or prospective trading-rule authority. Real Mock acceptance,
+unseen validation and investment effectiveness remain open. IBKR has an offline
+preparation entry only; Paper execution is unaccepted and live remains closed.
+
+## Preserved dynamic-horizon development epoch — 2026-09-04
+
 The dynamic-horizon/multi-model development path is implemented through its
 first non-executing evidence gates. New Research Thesis and Portfolio Proposal
 contracts support 1/3, 5/10 and 20/60-session horizons, priced-in versus
@@ -1524,8 +1549,11 @@ paper-provider/live authority.
   counterevidence and invalidation in the Wake callback; register scheduled account reviews; dedupe
   simultaneous triggers by frozen decision-view identity; and reach the existing Portfolio Agent,
   deterministic sizing and reconciliation path without per-tick LLM calls.
-- [ ] Run the pre-registered one-shot versus scheduled-daily versus material-event-driven rolling
-  ablation. Use chronological Snapshots and one root-event denominator; compare after-cost return,
+- [ ] Run the registered expiry-only versus horizon-scheduled versus material-event-driven rolling
+  ablation in [the continuous study](docs/CONTINUOUS_DECISION_STUDY.md): 18 coverage windows and
+  eight deep windows, three models, three schedules, 72 retained account trajectories. The former
+  four cases and two ETFs are early engineering seeds, not the complete universe or coverage.
+  Use chronological Snapshots and one root-event denominator; compare after-cost return,
   drawdown, correction latency, model reviews, orders, turnover and forgone rebounds. Reject cadence
   expansion if it merely adds churn or only fits the two already-opened reversal cases.
 - [x] Implement the private append-only Accrual Ledger with actual-receipt source identity,

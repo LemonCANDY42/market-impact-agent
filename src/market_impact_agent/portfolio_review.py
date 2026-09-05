@@ -11,12 +11,12 @@ import asyncio
 import hmac
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 from market_impact_agent.account_state import AccountStateSnapshot, PositionSnapshot
 from market_impact_agent.agent_contracts import canonical_hash
@@ -118,7 +118,10 @@ class PortfolioReviewInputs:
             raise PermissionError("portfolio review mandate belongs to another root")
         if not self.mandate.valid_from <= evaluated_at < self.mandate.valid_until:
             raise PermissionError("portfolio review mandate is not current")
-        if self.account_state.account_reference_hash != self.mandate.account_id:
+        if (
+            self.account_state.account_reference_hash != self.mandate.account_id
+            or self.account_state.environment is not self.mandate.environment
+        ):
             raise PermissionError("portfolio review account differs from mandate")
         expected_position = self.account_state.project_positions(
             evaluated_at=position.evaluated_at,
@@ -260,6 +263,45 @@ class AgentPortfolioProposalV4:
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "proposal_id": self.proposal_id}
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AgentPortfolioProposalV5(AgentPortfolioProposalV4):
+    """Explicit long-only source-close rotation; destination needs a later decision."""
+
+    rotation_source_instrument_id: str | None = None
+
+    @property
+    def proposal_id(self) -> str:
+        return "agent-portfolio-proposal-v5-" + canonical_hash(self.core_dict())
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            **AgentPortfolioProposalV4.core_dict(self),
+            "schema_version": "market-impact.agent-portfolio-proposal.v5",
+            "rotation_source_instrument_id": self.rotation_source_instrument_id,
+        }
+
+
+def parse_portfolio_proposal_v5(
+    value: object, *, binding_hash: str, evidence_ids: frozenset[str]
+) -> AgentPortfolioProposalV5:
+    payload = dict(_object(value))
+    source = payload.pop("rotation_source_instrument_id", None)
+    base = parse_portfolio_proposal_v4(
+        payload, binding_hash=binding_hash, evidence_ids=evidence_ids
+    )
+    if base.requested_action is PortfolioAction.ROTATE:
+        if not isinstance(source, str) or not source or source != source.strip():
+            raise ValueError("rotation requires an explicit source instrument")
+        if source == base.instrument_id or base.direction is not TargetExposureDirection.LONG:
+            raise ValueError("rotation requires distinct long-only source and destination")
+    elif source is not None:
+        raise ValueError("only rotation may name a source")
+    return AgentPortfolioProposalV5(
+        **{field.name: getattr(base, field.name) for field in fields(base)},
+        rotation_source_instrument_id=source,
+    )
 
 
 def parse_portfolio_proposal(
@@ -489,6 +531,39 @@ def evaluate_portfolio_decision_v3(
     *,
     decided_at: datetime,
 ) -> PortfolioDecisionV3:
+    if (
+        isinstance(proposal, AgentPortfolioProposalV5)
+        and proposal.requested_action is PortfolioAction.ROTATE
+    ):
+        source = next(
+            (
+                item
+                for item in inputs.position_snapshot.positions or ()
+                if item.target_id == proposal.rotation_source_instrument_id
+            ),
+            None,
+        )
+        if source is not None:
+            close = replace(
+                proposal,
+                requested_action=PortfolioAction.CLOSE,
+                instrument_id=source.target_id,
+                venue=source.venue,
+                instrument_class=source.instrument_class,
+                target_gross_exposure_ratio=Decimal(0),
+                rotation_source_instrument_id=None,
+            )
+            decision = evaluate_portfolio_decision_v3(close, inputs, decided_at=decided_at)
+            return replace(
+                decision,
+                proposal=proposal,
+                legs=tuple(
+                    replace(
+                        leg, role=PortfolioLegRole.ROTATION_SOURCE, physical_target_side=Side.SELL
+                    )
+                    for leg in decision.legs
+                ),
+            )
     blockers: set[str] = set()
     legs: tuple[PortfolioDecisionLegV2, ...] = ()
     action = proposal.requested_action
@@ -586,6 +661,25 @@ class PortfolioExecutionAdmissionV3:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class RotationSourceCompletion:
+    source_run_id: str
+    account_reference_hash: str
+    source_instrument_id: str
+    source_order_reference: str
+    source_quantity: Decimal
+    completed_at: datetime
+    reconciled_source_account: AccountStateSnapshot | None = None
+    current_account_snapshot_id: str | None = None
+    account_prefix_hash: str | None = None
+
+
+class RotationReconciliationAuthority(Protocol):
+    def reopen_source_completion(self, source_run_id: str) -> RotationSourceCompletion:
+        """Reopen authoritative fully-filled source order and complete reconciliation."""
+        ...
+
+
 class PortfolioReviewAuthority:
     """A same-root producer; its sources are composed by the Harness, not the model."""
 
@@ -596,7 +690,15 @@ class PortfolioReviewAuthority:
         input_source: Callable[[], PortfolioReviewInputs],
         exposure_authority: PortfolioExposureViewAuthorityV2,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        proposal_version: str = "v4",
+        rotation_authority: RotationReconciliationAuthority | None = None,
+        initial_rotation_source: Callable[[str], dict[str, object]] | None = None,
     ) -> None:
+        if proposal_version not in {"v4", "v5"}:
+            raise ValueError("unsupported portfolio producer version")
+        self.proposal_version = proposal_version
+        self.rotation_authority = rotation_authority
+        self.initial_rotation_source = initial_rotation_source
         self.store = store
         self.journal = RunJournal.authoritative(store)
         self.input_source = input_source
@@ -608,6 +710,131 @@ class PortfolioReviewAuthority:
             journal=self.journal,
             authority_id=store.harness_authority_id,
             signer=lambda value: hmac.new(key, value, sha256).hexdigest(),
+        )
+
+    def _rotation_completion(
+        self, source_run_id: str, inputs: PortfolioReviewInputs, adoption_ref: str | None = None
+    ) -> dict[str, object]:
+        if self.rotation_authority is None:
+            raise PermissionError("rotation requires source reconciliation authority")
+        terminal = self.replay(source_run_id)
+        source_binding = _object(
+            self.store.artifacts.read_json(self.journal.get_run(source_run_id).config_hash)
+        )
+        adopted_order: dict[str, object] | None = None
+        if adoption_ref is not None:
+            if self.initial_rotation_source is None:
+                raise PermissionError("adopted rotation requires registered receipt authority")
+            receipt = self.initial_rotation_source(adoption_ref)
+            if _object(receipt["source_decision"]).get("portfolio_run_id") != source_run_id:
+                raise PermissionError("adopted rotation receipt belongs to another source")
+            source_binding = {"inputs": receipt["inputs"]}
+            terminal = {**terminal, "decision": receipt["decision"]}
+            adopted_order = _object(receipt["order"])
+        proposal = _object(terminal.get("proposal"))
+        previous_account = _object(_object(source_binding["inputs"])["account_state"])
+        source_id = proposal.get("rotation_source_instrument_id")
+        completion = self.rotation_authority.reopen_source_completion(source_run_id)
+        if (
+            terminal.get("status") != "completed"
+            or proposal.get("schema_version") != "market-impact.agent-portfolio-proposal.v5"
+            or proposal.get("requested_action") != "rotate"
+            or (
+                adopted_order is not None
+                and (
+                    completion.source_order_reference != adopted_order.get("client_order_id")
+                    or completion.source_quantity != Decimal(_string(adopted_order, "quantity"))
+                )
+            )
+            or completion.source_run_id != source_run_id
+            or completion.source_instrument_id != source_id
+            or completion.account_reference_hash != inputs.account_state.account_reference_hash
+            or previous_account.get("account_reference_hash") != completion.account_reference_hash
+            or inputs.account_state.snapshot_id == previous_account.get("snapshot_id")
+            or not datetime.fromisoformat(_string(terminal, "completed_at").replace("Z", "+00:00"))
+            <= completion.completed_at
+            < inputs.cutoff
+            or completion.completed_at > inputs.account_state.as_of
+            or any(item.target_id == source_id for item in inputs.account_state.positions or ())
+            or any(item.target_id == source_id for item in inputs.account_state.open_orders or ())
+        ):
+            raise PermissionError("rotation source lacks exact fresh account reconciliation")
+        legs = cast(list[dict[str, object]], _object(terminal["decision"])["legs"])
+        if (
+            len(legs) != 1
+            or Decimal(_string(legs[0], "current_quantity")) != completion.source_quantity
+        ):
+            raise PermissionError("rotation source completion differs from full-close decision")
+        fill_account = inputs.account_state
+        prefix_proof: dict[str, object] = {}
+        if completion.reconciled_source_account is not None:
+            fill_account = completion.reconciled_source_account
+            if (
+                completion.current_account_snapshot_id != inputs.account_state.snapshot_id
+                or completion.account_prefix_hash is None
+                or len(completion.account_prefix_hash) != 64
+                or fill_account.account_reference_hash != completion.account_reference_hash
+                or fill_account.environment is not inputs.account_state.environment
+                or not fill_account.complete
+                or fill_account.missing_sections
+                or fill_account.reconciliation_gaps
+                or not completion.completed_at <= fill_account.as_of <= inputs.account_state.as_of
+                or fill_account.snapshot_id == previous_account.get("snapshot_id")
+                or any(item.target_id == source_id for item in fill_account.positions or ())
+                or any(item.target_id == source_id for item in fill_account.open_orders or ())
+            ):
+                raise PermissionError(
+                    "rotation historical fill receipt lacks exact reconciled prefix"
+                )
+            prefix_proof = {
+                "reconciled_source_snapshot_hash": canonical_hash(fill_account.to_dict()),
+                "account_prefix_hash": completion.account_prefix_hash,
+            }
+        elif (
+            completion.current_account_snapshot_id is not None
+            or completion.account_prefix_hash is not None
+        ):
+            raise PermissionError("rotation historical fill receipt is incomplete")
+        filled = sum(
+            (
+                item.quantity
+                for item in fill_account.recent_fills or ()
+                if item.order_reference == completion.source_order_reference
+                and item.target_id == source_id
+                and item.side is Side.SELL
+            ),
+            Decimal(0),
+        )
+        if filled != completion.source_quantity or filled <= 0:
+            raise PermissionError("rotation source fill coverage is partial or unknown")
+        return {
+            "source_run_id": source_run_id,
+            **({"initial_adoption_ref": adoption_ref} if adoption_ref else {}),
+            "source_terminal_hash": self.journal.get_run(source_run_id).terminal_artifact_id,
+            "source_order_reference": completion.source_order_reference,
+            "completed_at": completion.completed_at.isoformat(),
+            "account_snapshot_id": inputs.account_state.snapshot_id,
+            **prefix_proof,
+        }
+
+    async def review_after_rotation(
+        self, *, run_id: str, source_run_id: str, provider: ModelProvider
+    ) -> dict[str, object]:
+        if self.proposal_version != "v5" or run_id == source_run_id:
+            raise PermissionError("rotation destination requires a fresh v5 model Run")
+        return await self.review(
+            run_id=run_id,
+            provider=provider,
+            research_run_ids=(),
+            rotation_source_run_id=source_run_id,
+        )
+
+    @staticmethod
+    def _parse_bound_proposal(binding: Mapping[str, object]):
+        return (
+            parse_portfolio_proposal_v5
+            if binding.get("schema_version") == "market-impact.portfolio-review-binding.v5"
+            else parse_portfolio_proposal_v4
         )
 
     def _research(self, run_ids: tuple[str, ...], cutoff: datetime) -> list[dict[str, object]]:
@@ -697,6 +924,8 @@ class PortfolioReviewAuthority:
         research_run_ids: tuple[str, ...],
         research_thesis_run_ids: tuple[str, ...] = (),
         max_output_tokens: int | None = None,
+        rotation_source_run_id: str | None = None,
+        rotation_source_adoption_ref: str | None = None,
     ) -> dict[str, object]:
         output_limit = (
             provider.profile.reserved_output_tokens
@@ -746,10 +975,17 @@ class PortfolioReviewAuthority:
             inputs.assert_complete(
                 self.store.harness_authority_id, self.exposure_authority, self.clock()
             )
+            rotation_completion = (
+                None
+                if rotation_source_run_id is None
+                else self._rotation_completion(
+                    rotation_source_run_id, inputs, rotation_source_adoption_ref
+                )
+            )
             research = self._research(research_run_ids, inputs.cutoff)
             research_theses = self._research_theses(research_thesis_run_ids, inputs.cutoff)
             binding: dict[str, object] = {
-                "schema_version": "market-impact.portfolio-review-binding.v4",
+                "schema_version": "market-impact.portfolio-review-binding." + self.proposal_version,
                 "harness_authority_id": self.store.harness_authority_id,
                 "run_id": run_id,
                 "inputs": inputs.to_dict(),
@@ -757,7 +993,15 @@ class PortfolioReviewAuthority:
                 "research_theses": research_theses,
                 "profile": provider.profile.to_dict(),
                 "runtime": provider.runtime_identity,
-                "prompt": PORTFOLIO_REVIEW_PROMPT,
+                "prompt": PORTFOLIO_REVIEW_PROMPT
+                + (
+                    " For v5 rotate, instrument_id is the proposed destination; provide "
+                    "rotation_source_instrument_id explicitly. Only the full source close "
+                    "can execute now. Destination requires reconciliation and a fresh "
+                    "model review which may choose cash. Rotation is long-only."
+                    if self.proposal_version == "v5"
+                    else ""
+                ),
                 "budget_owner": {
                     "journal_path": str(
                         self.journal.path
@@ -768,6 +1012,8 @@ class PortfolioReviewAuthority:
                     "binding": None if provider.budget is None else provider.budget.binding,
                 },
             }
+            if rotation_completion is not None:
+                binding["rotation_completion"] = rotation_completion
             binding_hash = self.store.artifacts.put_json(binding).content_hash
             self.journal.start_run(run_id=run_id, config_hash=binding_hash, created_at=self.clock())
             self._events.append(
@@ -788,7 +1034,7 @@ class PortfolioReviewAuthority:
                         run_id, 1, invocation_journal, self.store.artifacts, self.clock
                     ),
                     messages=(
-                        {"role": "system", "content": PORTFOLIO_REVIEW_PROMPT},
+                        {"role": "system", "content": binding["prompt"]},
                         {
                             "role": "user",
                             "content": json.dumps(
@@ -797,6 +1043,11 @@ class PortfolioReviewAuthority:
                                     "research": research,
                                     "research_theses": research_theses,
                                     "evidence_ids": sorted(evidence_ids),
+                                    **(
+                                        {"rotation_completion": rotation_completion}
+                                        if rotation_completion is not None
+                                        else {}
+                                    ),
                                 },
                                 sort_keys=True,
                             ),
@@ -808,7 +1059,7 @@ class PortfolioReviewAuthority:
                 )
                 content = _string(turn.assistant_message, "content")
                 parsed = load_model_json(content)
-                proposal = parse_portfolio_proposal_v4(
+                proposal = self._parse_bound_proposal(binding)(
                     parsed.value, binding_hash=binding_hash, evidence_ids=evidence_ids
                 )
                 inputs.assert_complete(
@@ -818,7 +1069,8 @@ class PortfolioReviewAuthority:
                     raise PermissionError("authoritative account changed during portfolio review")
                 decision = evaluate_portfolio_decision_v3(proposal, inputs, decided_at=self.clock())
                 payload = {
-                    "schema_version": "market-impact.portfolio-review-terminal.v4",
+                    "schema_version": "market-impact.portfolio-review-terminal."
+                    + self.proposal_version,
                     "run_id": run_id,
                     "status": "completed",
                     "binding_hash": binding_hash,
@@ -843,7 +1095,8 @@ class PortfolioReviewAuthority:
                 if isinstance(error, asyncio.CancelledError):
                     cancellation = error
                 payload = {
-                    "schema_version": "market-impact.portfolio-review-terminal.v4",
+                    "schema_version": "market-impact.portfolio-review-terminal."
+                    + self.proposal_version,
                     "run_id": run_id,
                     "status": "incomplete",
                     "binding_hash": binding_hash,
@@ -941,8 +1194,14 @@ class PortfolioReviewAuthority:
         )
         return UsageRecord(
             experiment_id=(
-                "portfolio-review-v4"
-                if binding.get("schema_version") == "market-impact.portfolio-review-binding.v4"
+                "portfolio-review-v5"
+                if binding.get("schema_version") == "market-impact.portfolio-review-binding.v5"
+                else "portfolio-review-v4"
+                if binding.get("schema_version")
+                in {
+                    "market-impact.portfolio-review-binding.v4",
+                    "market-impact.portfolio-review-binding.v5",
+                }
                 else "portfolio-review-v3"
             ),
             arm_id="portfolio",
@@ -1023,12 +1282,16 @@ class PortfolioReviewAuthority:
             turn = native_turn(raw, _string(profile, "model"))
             parsed = load_model_json(_string(turn.assistant_message, "content"))
             proposal = (
-                parse_portfolio_proposal_v4(
+                self._parse_bound_proposal(binding)(
                     parsed.value,
                     binding_hash=record.config_hash,
                     evidence_ids=self._evidence_ids(binding),
                 )
-                if binding.get("schema_version") == "market-impact.portfolio-review-binding.v4"
+                if binding.get("schema_version")
+                in {
+                    "market-impact.portfolio-review-binding.v4",
+                    "market-impact.portfolio-review-binding.v5",
+                }
                 else parse_portfolio_proposal(
                     parsed.value,
                     binding_hash=record.config_hash,
@@ -1053,6 +1316,66 @@ class PortfolioReviewAuthority:
                 )
         return terminal
 
+    def derive_initial_adoption(
+        self, *, parsed_proposal: object, binding_hash: str, research_run_id: str
+    ) -> tuple[PortfolioDecisionV3, OrderSizingDecisionV2 | None, PortfolioOrderIntent | None]:
+        """Harness-only deterministic rebind; this creates no native model terminal."""
+        inputs = self.input_source()
+        inputs.assert_complete(
+            self.store.harness_authority_id, self.exposure_authority, self.clock()
+        )
+        if self.proposal_version != "v5":
+            raise PermissionError("initial adoption requires explicit v5 policy")
+        evidence_ids = frozenset(
+            {
+                "account_state",
+                "position_snapshot",
+                "authorized_view",
+                "exposure_view",
+                "mandate",
+                research_run_id,
+                *inputs.price_bases,
+            }
+        )
+        proposal = parse_portfolio_proposal_v5(
+            parsed_proposal, binding_hash=binding_hash, evidence_ids=evidence_ids
+        )
+        decision = evaluate_portfolio_decision_v3(proposal, inputs, decided_at=self.clock())
+        if decision.outcome is PortfolioDecisionOutcome.REJECTED:
+            raise PermissionError("adopted initial recommendation violates destination policy")
+        if proposal.requested_action is PortfolioAction.HOLD:
+            return decision, None, None
+        sizing = size_portfolio_decision_v2(
+            portfolio_decision=decision,
+            authorized_view=inputs.authorized_view,
+            position_snapshot=inputs.position_snapshot,
+            mandate=inputs.mandate,
+            exposure_view=inputs.exposure_view,
+            exposure_view_authority=self.exposure_authority,
+            price_bases=inputs.price_bases,
+            rule_set=inputs.rule_set,
+            decided_at=self.clock(),
+        )
+        if len(sizing.legs) != 1 or sizing.outcome is not OrderSizingOutcome.READY:
+            raise PermissionError("adopted initial recommendation is not executable")
+        leg = sizing.legs[0]
+        assert leg.side is not None and leg.quantity is not None
+        basis = inputs.price_bases[leg.instrument_id]
+        order = PortfolioOrderIntent(
+            client_order_id="portfolio-adopted-order-"
+            + canonical_hash({"adoption_binding": binding_hash, "sizing": sizing.to_dict()}),
+            portfolio_decision_id=decision.decision_id,
+            account_id=inputs.mandate.account_id,
+            environment=inputs.mandate.environment,
+            instrument_id=leg.instrument_id,
+            side=leg.side,
+            quantity=leg.quantity,
+            order_kind=OrderKind.MARKET,
+            created_at=self.clock(),
+            expires_at=min(inputs.expires_at, inputs.mandate.valid_until, basis.valid_until),
+        )
+        return decision, sizing, order
+
     def execution_admission(self, run_id: str) -> PortfolioExecutionAdmissionV3:
         terminal = self.replay(run_id)
         if terminal["status"] != "completed":
@@ -1065,6 +1388,17 @@ class PortfolioReviewAuthority:
         )
         if inputs.to_dict() != binding["inputs"]:
             raise PermissionError("portfolio review input authority changed")
+        if "rotation_completion" in binding:
+            rotation = _object(binding["rotation_completion"])
+            if (
+                self._rotation_completion(
+                    _string(rotation, "source_run_id"),
+                    inputs,
+                    cast(str | None, rotation.get("initial_adoption_ref")),
+                )
+                != rotation
+            ):
+                raise PermissionError("rotation source reconciliation changed")
         research = cast(list[dict[str, object]], binding["research"])
         research_theses = cast(list[dict[str, object]], binding.get("research_theses", []))
         if (
@@ -1077,12 +1411,16 @@ class PortfolioReviewAuthority:
         ):
             raise PermissionError("portfolio research provenance changed")
         proposal = (
-            parse_portfolio_proposal_v4(
+            self._parse_bound_proposal(binding)(
                 terminal["parsed_proposal"],
                 binding_hash=record.config_hash,
                 evidence_ids=self._evidence_ids(binding),
             )
-            if binding.get("schema_version") == "market-impact.portfolio-review-binding.v4"
+            if binding.get("schema_version")
+            in {
+                "market-impact.portfolio-review-binding.v4",
+                "market-impact.portfolio-review-binding.v5",
+            }
             else parse_portfolio_proposal(
                 terminal["parsed_proposal"],
                 binding_hash=record.config_hash,

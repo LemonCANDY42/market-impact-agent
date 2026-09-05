@@ -1194,3 +1194,15 @@ larger prospective study is justified; a pass authorizes that next research regi
   are materialized and requalified.
 - No real checkpoint has yet passed the new Query Gate, so no model experiment or experimental paper
   order is currently authorized by this data-platform slice. Live remains independently closed.
+
+### On-demand durable cache boundary
+
+Implemented local substrate: exact-query durable claims/results in `data_acquisition.py`,
+plus explicit raw Tushare `daily`/`fund_daily` interval reuse in `tushare_range_cache.py`.
+Both use the existing Harness authority store, retain typed absence/failure and original
+receipt times, and fail uncertain after a lost owner rather than repeating network I/O.
+The interval adapter invokes the maintained source collector only for missing intervals;
+Journal freeze remains the event-range coverage authority. See
+[Data Input Harness](DATA_INPUT_HARNESS.md#durable-on-demand-acquisition) for the opt-in API.
+Episode wait/continuation, budget reservation, and semantic `FETCH_REQUIRED` dispatch remain
+caller integration responsibilities; these storage APIs alone do not establish those gates.

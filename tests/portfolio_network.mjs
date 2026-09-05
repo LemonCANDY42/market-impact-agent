@@ -4,7 +4,25 @@ globalThis.fetch = async (input, init) => {
   const request = new Request(input, init);
   assert.equal(request.url, 'http://127.0.0.1:8317/v1/responses');
   const body = await request.json();
-  assert.ok(!body.tools?.length);
+  if (process.env.ROLE_TOOL_FIXTURE === '1') {
+    assert.ok(body.tools.some(tool => tool.name === 'read_frozen_fact'));
+    if (!body.input.some(item => item.type === 'function_call_output')) {
+      const item = {type: 'function_call', id: 'fc-read', call_id: 'read-1',
+        name: 'read_frozen_fact', arguments: '{}'};
+      const frames = [
+        {type: 'response.created', response: {id: 'role-tool-response'}},
+        {type: 'response.output_item.added', output_index: 0, item: {...item, arguments: ''}},
+        {type: 'response.function_call_arguments.delta', output_index: 0, delta: '{}'},
+        {type: 'response.output_item.done', output_index: 0, item},
+        {type: 'response.completed', response: {id: 'role-tool-response', model: body.model,
+          status: 'completed', output: [item], usage: {input_tokens: 100, output_tokens: 20,
+          input_tokens_details: {cached_tokens: 0}, total_tokens: 120}}},
+      ];
+      return new Response(frames.map(frame => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`).join(''),
+        {headers: {'Content-Type': 'text/event-stream'}});
+    }
+    assert.ok(JSON.stringify(body.input).includes('frozen-revenue'));
+  } else assert.ok(!body.tools?.length);
   let answer = process.env.PORTFOLIO_FIXTURE_ANSWER;
   assert.ok(answer);
   if (process.env.DYNAMIC_STUDY_FIXTURE === '1') {

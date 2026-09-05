@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -132,6 +133,8 @@ def thesis_network(monkeypatch: pytest.MonkeyPatch) -> tuple[ModelProviderProfil
     async def spawn(program: str, *args: str, **kwargs: Any):
         spawns.append(program)
         kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(_answer())
+        if os.environ.get("ROLE_TOOL_FIXTURE"):
+            kwargs["env"]["ROLE_TOOL_FIXTURE"] = "1"
         return await original(
             program,
             "--import",
@@ -351,6 +354,173 @@ def test_later_review_reopens_signed_prior_thesis_without_summary_substitution(
                 )
                 assert cast(str, original_thesis["thesis"]) not in json.dumps(native_input)
             assert len(spawns) == 1
+        finally:
+            await provider.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "presentation", [DatePresentation.TRUE_DATE, DatePresentation.RELATIVE_OFFSET]
+)
+def test_research_role_executes_durable_readonly_tool_and_replays(
+    tmp_path: Path,
+    thesis_network: tuple[ModelProviderProfile, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    presentation: DatePresentation,
+) -> None:
+    from market_impact_agent.agent_runtime import ToolDescriptor, ToolSideEffect
+
+    monkeypatch.setenv("ROLE_TOOL_FIXTURE", "1")
+    profile, spawns = thesis_network
+    calls: list[dict[str, object]] = []
+
+    async def read(arguments: dict[str, object]) -> object:
+        calls.append(arguments)
+        return {
+            "fact": "frozen-revenue",
+            "evidence_id": "release",
+            "as_of": "2020-02-02T00:00:00Z",
+            "thesis": "The February 1, 2020 report changes the outlook.",
+        }
+
+    descriptor = ToolDescriptor(
+        name="read_frozen_fact",
+        version="frozen-1",
+        description="Read frozen revenue.",
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        required_capabilities=frozenset({"evidence.read"}),
+        side_effect=ToolSideEffect.READ_ONLY,
+        timeout_seconds=2,
+        max_result_bytes=1000,
+        handler=read,
+    )
+
+    async def scenario() -> None:
+        store = LocalDataSnapshotStore(tmp_path / "harness")
+        authority = ResearchThesisAuthority(
+            store, experiment_id="tools", arm_id="luna", clock=lambda: NOW
+        )
+        provider = PiRuntimeProvider(profile)
+        inputs = ResearchThesisRunInputs(
+            _repository(), "INDEX.ETF", "epoch", frozenset({5}), presentation
+        )
+        try:
+            result = await authority.analyze(
+                run_id="tool-role", provider=provider, inputs=inputs, readonly_tools=(descriptor,)
+            )
+            assert result["status"] == "completed", result
+            assert calls == [{}]
+            event = next(
+                event
+                for event in authority.journal.events("tool-role")
+                if event.event_type == "pi.role.tool.completed"
+            )
+            tool_result = store.artifacts.read_json(cast(str, event.payload["artifact_hash"]))
+            if presentation is DatePresentation.RELATIVE_OFFSET:
+                assert "2020" not in json.dumps(tool_result)
+            else:
+                assert "2020-02-02" in json.dumps(tool_result)
+            assert (
+                len(
+                    [
+                        event
+                        for event in authority.journal.events("tool-role")
+                        if event.event_type == "pi.role.tool.completed"
+                    ]
+                )
+                == 1
+            )
+            assert (
+                await authority.analyze(
+                    run_id="tool-role",
+                    provider=provider,
+                    inputs=inputs,
+                    readonly_tools=(descriptor,),
+                )
+                == result
+            )
+            assert calls == [{}]
+            assert len(spawns) == 1
+        finally:
+            await provider.close()
+
+    asyncio.run(scenario())
+
+
+def test_readonly_role_recovers_after_durable_tool_without_reexecution(
+    tmp_path: Path,
+    thesis_network: tuple[ModelProviderProfile, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from market_impact_agent.agent_runtime import ToolDescriptor, ToolSideEffect
+    from market_impact_agent.pi_execution import PiInvocationContext, execute_pi_once
+    from market_impact_agent.runtime_store import ArtifactStore, RunJournal
+
+    from .test_agent_engine import SimulatedCrash
+
+    monkeypatch.setenv("ROLE_TOOL_FIXTURE", "1")
+    profile, _ = thesis_network
+    calls: list[object] = []
+
+    async def read(arguments: dict[str, object]) -> object:
+        calls.append(arguments)
+        return {"fact": "frozen-revenue"}
+
+    descriptor = ToolDescriptor(
+        name="read_frozen_fact",
+        version="frozen-1",
+        description="Read frozen revenue.",
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        required_capabilities=frozenset({"evidence.read"}),
+        side_effect=ToolSideEffect.READ_ONLY,
+        timeout_seconds=2,
+        max_result_bytes=1000,
+        handler=read,
+    )
+
+    async def scenario() -> None:
+        journal = RunJournal(tmp_path / "run.sqlite3")
+        journal.start_run(run_id="recover", config_hash=canonical_hash("fixed"), created_at=NOW)
+        context = PiInvocationContext("recover", 1, journal, ArtifactStore(tmp_path / "artifacts"))
+        provider = PiRuntimeProvider(profile)
+        append = journal.append
+
+        def crash(**kwargs: Any):
+            event = append(**kwargs)
+            if kwargs["event_type"] == "pi.role.tool.completed":
+                raise SimulatedCrash()
+            return event
+
+        async def invoke():
+            return await execute_pi_once(
+                provider,
+                context=context,
+                messages=({"role": "user", "content": "Inspect frozen revenue."},),
+                max_output_tokens=256,
+                timeout_seconds=20,
+                attempt_observer=lambda _: None,
+                readonly_tools=(descriptor,),
+            )
+
+        try:
+            journal.append = crash
+            with pytest.raises(SimulatedCrash):
+                await invoke()
+            journal.append = append
+            result = await invoke()
+            assert not result.tool_calls
+            assert calls == [{}]
+            assert (
+                len(
+                    [
+                        event
+                        for event in journal.events("recover")
+                        if event.event_type == "model.turn.started"
+                    ]
+                )
+                == 2
+            )
         finally:
             await provider.close()
 

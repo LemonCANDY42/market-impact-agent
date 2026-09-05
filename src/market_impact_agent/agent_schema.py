@@ -76,6 +76,8 @@ AGENT_SCHEMA_FILES = (
     "agent-portfolio-proposal-v2.schema.json",
     "agent-portfolio-proposal-v3.schema.json",
     "agent-portfolio-proposal-v4.schema.json",
+    "agent-portfolio-proposal-v5.schema.json",
+    "dynamic-ashare-universe.schema.json",
     "research-thesis-v1.schema.json",
     "decision-review-schedule-v1.schema.json",
     "dynamic-effectiveness-registration-v1.schema.json",

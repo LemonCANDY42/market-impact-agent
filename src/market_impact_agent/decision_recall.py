@@ -104,7 +104,8 @@ class ReopenedDecision:
             "recall_id": self.recall_id,
             "source_artifact_hash": self.source_artifact_hash,
             "source": self.source,
-            "evidence": True,
+            "evidence": False,
+            "authority": "prior_signed_opinion_not_source_fact",
         }
 
 
@@ -388,18 +389,60 @@ def decision_recall_tools(
     *,
     as_of: datetime,
     current_root_event_id: str,
+    allowed_source_run_ids: frozenset[str] | None = None,
 ) -> tuple[ToolDescriptor, ToolDescriptor, ToolDescriptor]:
     """Build the three read-only capabilities with Harness-owned cutoff and identity."""
 
     require_aware(as_of, "recall tool as_of")
     _text(current_root_event_id, "current_root_event_id")
 
+    def authorize(entry: RecallProjectionEntry) -> None:
+        if allowed_source_run_ids is not None and entry.source_run_id not in allowed_source_run_ids:
+            raise PermissionError("recall source is outside the Harness account/arm scope")
+
+    def reopen(ids: tuple[str, ...]) -> dict[str, object]:
+        with projection._connect() as connection:  # pyright: ignore[reportPrivateUsage]
+            for recall_id in ids:
+                row = connection.execute(
+                    "SELECT * FROM decision_recall_entries WHERE recall_id = ?", (recall_id,)
+                ).fetchone()
+                if row is None:
+                    raise KeyError("recall source is unknown")
+                authorize(_entry(row))
+        items = projection.read_prior_decisions(ids, as_of=as_of)
+        payload: dict[str, object] = {
+            "decisions": [item.to_dict() for item in items],
+            "evidence": False,
+            "authority": "prior_signed_opinion_not_source_fact",
+        }
+        size = len(canonical_json_bytes(payload))
+        if size > MAX_REOPENED_TOKENS:
+            raise ValueError("reopened recall exceeds the per-result context token bound")
+        return payload
+
     async def current(_: dict[str, object]) -> object:
-        entry = projection.read_current_thesis(
-            root_event_id=current_root_event_id,
-            as_of=as_of,
+        entries = projection.search_prior_decisions(
+            root_event_id=current_root_event_id, as_of=as_of
         )
-        return {"current_thesis": None if entry is None else entry.to_dict()}
+        entry = next(
+            (
+                item
+                for item in entries
+                if allowed_source_run_ids is None or item.source_run_id in allowed_source_run_ids
+            ),
+            None,
+        )
+        if entry is None:
+            return {"current_thesis": None}
+        reopened = reopen((entry.recall_id,))
+        return {
+            "current_thesis": {
+                **entry.to_dict(),
+                "source": cast(list[dict[str, object]], reopened["decisions"])[0]["source"],
+            },
+            "evidence": False,
+            "authority": "prior_signed_opinion_not_source_fact",
+        }
 
     async def search(arguments: dict[str, object]) -> object:
         allowed = {
@@ -421,7 +464,14 @@ def decision_recall_tools(
             query=_optional_text(arguments, "query"),
             limit=_optional_integer(arguments, "limit", MAX_SEARCH_RESULTS),
         )
-        return {"hits": [item.to_dict() for item in hits], "evidence": False}
+        return {
+            "hits": [
+                item.to_dict()
+                for item in hits
+                if allowed_source_run_ids is None or item.source_run_id in allowed_source_run_ids
+            ],
+            "evidence": False,
+        }
 
     async def read(arguments: dict[str, object]) -> object:
         if set(arguments) != {"ids"} or not isinstance(arguments.get("ids"), list):
@@ -429,9 +479,17 @@ def decision_recall_tools(
         raw_ids = cast(list[object], arguments["ids"])
         if any(not isinstance(item, str) for item in raw_ids):
             raise ValueError("recall read IDs must be strings")
-        items = projection.read_prior_decisions(tuple(cast(list[str], raw_ids)), as_of=as_of)
-        return {"decisions": [item.to_dict() for item in items], "evidence": True}
+        return reopen(tuple(cast(list[str], raw_ids)))
 
+    tool_version = "v2-" + canonical_hash(
+        {
+            "as_of": _timestamp(as_of),
+            "root_event_id": current_root_event_id,
+            "allowed_source_run_ids": None
+            if allowed_source_run_ids is None
+            else sorted(allowed_source_run_ids),
+        }
+    )
     return (
         ToolDescriptor(
             name="read_current_thesis",
@@ -440,7 +498,7 @@ def decision_recall_tools(
             ),
             input_schema={"type": "object", "properties": {}, "additionalProperties": False},
             handler=current,
-            version="v1",
+            version=tool_version,
             required_capabilities=frozenset({"decision_recall.read"}),
             side_effect=ToolSideEffect.READ_ONLY,
             timeout_seconds=5.0,
@@ -465,7 +523,7 @@ def decision_recall_tools(
                 },
             },
             handler=search,
-            version="v1",
+            version=tool_version,
             required_capabilities=frozenset({"decision_recall.read"}),
             side_effect=ToolSideEffect.READ_ONLY,
             timeout_seconds=5.0,
@@ -494,7 +552,7 @@ def decision_recall_tools(
                 },
             },
             handler=read,
-            version="v1",
+            version=tool_version,
             required_capabilities=frozenset({"decision_recall.read"}),
             side_effect=ToolSideEffect.READ_ONLY,
             timeout_seconds=5.0,

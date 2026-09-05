@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-impact.local/schemas/dynamic-ashare-universe.schema.json",
+  "title": "Concrete modeled-PIT A-share Universe binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "securities",
+    "mandate",
+    "live_capability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "market-impact.dynamic-ashare-universe.v1"
+    },
+    "live_capability": {
+      "const": false
+    },
+    "mandate": {
+      "$ref": "https://github.com/LemonCANDY42/market-impact-agent/schemas/trading-mandate.schema.json#/$defs/v3"
+    },
+    "securities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "symbol",
+          "research_eligible",
+          "execution_ready",
+          "evidence",
+          "gaps"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "pattern": "^[0-9]{6}\\.(SH|SZ)$"
+          },
+          "research_eligible": {
+            "const": true
+          },
+          "execution_ready": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "symbol",
+              "venue",
+              "instrument_class",
+              "cutoff",
+              "effective_from",
+              "effective_until",
+              "raw_price",
+              "halted",
+              "lower_limit",
+              "upper_limit",
+              "turnover",
+              "corporate_action_status",
+              "buy_lot_size",
+              "price_tick",
+              "source_record_hashes",
+              "gaps"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "minLength": 1
+              },
+              "venue": {
+                "enum": [
+                  "XSHG",
+                  "XSHE"
+                ]
+              },
+              "instrument_class": {
+                "enum": [
+                  "equity",
+                  "exchange_traded_fund"
+                ]
+              },
+              "cutoff": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "effective_from": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "effective_until": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "raw_price": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "halted": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "lower_limit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "upper_limit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "turnover": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "corporate_action_status": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "buy_lot_size": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "price_tick": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_record_hashes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "gaps": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "raw_price_observed_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

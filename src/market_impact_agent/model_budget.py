@@ -19,6 +19,30 @@ from market_impact_agent.runtime_store import RunJournal
 
 
 @dataclass(frozen=True, slots=True)
+class ModelBudgetScope:
+    name: str
+    max_cost_microusd: int
+    prior_cost_microusd: int = 0
+    prior_reserved_microusd: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.name or self.name != self.name.strip():
+            raise ValueError("budget scope requires a name")
+        if min(self.max_cost_microusd, self.prior_cost_microusd, self.prior_reserved_microusd) < 0:
+            raise ValueError("budget scope amounts must be nonnegative")
+        if self.prior_cost_microusd + self.prior_reserved_microusd > self.max_cost_microusd:
+            raise ValueError("budget scope is already over its authorized limit")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "max_cost_microusd": self.max_cost_microusd,
+            "prior_cost_microusd": self.prior_cost_microusd,
+            "prior_reserved_microusd": self.prior_reserved_microusd,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ModelBudget:
     journal: RunJournal
     owner_run_id: str
@@ -28,23 +52,56 @@ class ModelBudget:
     prior_cost_microusd: int = 0
     append: Callable[[str, str, dict[str, object]], None] | None = None
     check_cancel: Callable[[], None] = lambda: None
+    prior_reserved_microusd: int = 0
+    prior_unsettled_requests: int = 0
+    scope_limits: tuple[ModelBudgetScope, ...] = ()
+    scope: str | None = None
 
     def __post_init__(self) -> None:
         if not 0 <= self.prior_requests <= self.max_requests or self.max_requests < 1:
             raise ValueError("invalid physical request budget")
-        if self.prior_cost_microusd < 0 or (
-            self.max_cost_microusd is not None and self.prior_cost_microusd > self.max_cost_microusd
+        if min(
+            self.prior_cost_microusd, self.prior_reserved_microusd, self.prior_unsettled_requests
+        ) < 0 or (
+            self.max_cost_microusd is not None
+            and self.prior_cost_microusd + self.prior_reserved_microusd > self.max_cost_microusd
         ):
             raise ValueError("invalid model cost budget")
+        if self.prior_unsettled_requests > self.prior_requests:
+            raise ValueError("unknown prior requests must remain in the physical denominator")
+        if self.scope_limits:
+            names = [limit.name for limit in self.scope_limits]
+            if len(set(names)) != len(names) or self.scope not in names:
+                raise ValueError("model budget requires a registered scope")
+            if (
+                sum(limit.prior_cost_microusd for limit in self.scope_limits)
+                != self.prior_cost_microusd
+                or sum(limit.prior_reserved_microusd for limit in self.scope_limits)
+                != self.prior_reserved_microusd
+                or self.max_cost_microusd is None
+                or sum(limit.max_cost_microusd for limit in self.scope_limits)
+                > self.max_cost_microusd
+            ):
+                raise ValueError("budget scopes must reconcile with the parent authorization")
+        elif self.scope is not None:
+            raise ValueError("model budget scope has no registered limit")
 
     @property
     def binding(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "max_requests": self.max_requests,
             "max_cost_microusd": self.max_cost_microusd,
             "prior_requests": self.prior_requests,
             "prior_cost_microusd": self.prior_cost_microusd,
         }
+        # Preserve legacy authorization hashes. New scope limits are frozen once
+        # for the shared parent, not separately for each continuation or stage.
+        if self.prior_reserved_microusd or self.prior_unsettled_requests:
+            result["prior_reserved_microusd"] = self.prior_reserved_microusd
+            result["prior_unsettled_requests"] = self.prior_unsettled_requests
+        if self.scope_limits:
+            result["scope_limits"] = [limit.to_dict() for limit in self.scope_limits]
+        return result
 
     def _append(self, suffix: str, kind: str, payload: dict[str, object]) -> None:
         if self.append is not None:
@@ -77,7 +134,37 @@ class ModelBudget:
         return {
             "physical_requests": self.prior_requests + len(reserved),
             "known_cost_microusd": self.prior_cost_microusd + sum(settled.values()),
-            "reserved_microusd": sum(cost for key, cost in reserved.items() if key not in settled),
+            "reserved_microusd": self.prior_reserved_microusd
+            + sum(cost for key, cost in reserved.items() if key not in settled),
+            "unsettled_requests": self.prior_unsettled_requests
+            + len(reserved.keys() - settled.keys()),
+        }
+
+    def scope_summary(self) -> dict[str, int]:
+        if not self.scope_limits:
+            return self.summary()
+        limit = next(item for item in self.scope_limits if item.name == self.scope)
+        reserved: dict[str, int] = {}
+        settled: dict[str, int] = {}
+        events = self.journal.events(self.owner_run_id)
+        for event in events:
+            if event.event_type == "pi.budget.reserved":
+                if event.payload["binding"] != self.binding:
+                    raise ValueError("parent model budget changed; cannot reset spent authority")
+                if event.payload.get("scope") == self.scope:
+                    reserved[cast(str, event.payload["request_key"])] = cast(
+                        int, event.payload["reserved_microusd"]
+                    )
+        for event in events:
+            if event.event_type == "pi.budget.settled" and event.payload["request_key"] in reserved:
+                settled[cast(str, event.payload["request_key"])] = cast(
+                    int, event.payload["estimated_cost_microusd"]
+                )
+        return {
+            "physical_requests": len(reserved),
+            "known_cost_microusd": limit.prior_cost_microusd + sum(settled.values()),
+            "reserved_microusd": limit.prior_reserved_microusd
+            + sum(cost for key, cost in reserved.items() if key not in settled),
             "unsettled_requests": len(reserved.keys() - settled.keys()),
         }
 
@@ -111,6 +198,16 @@ class ModelBudget:
                 raise _BudgetExceeded(
                     "parent model budget has no unreserved request/cost allowance"
                 )
+            if self.scope_limits:
+                limit = next(item for item in self.scope_limits if item.name == self.scope)
+                scoped = self.scope_summary()
+                if (
+                    scoped["known_cost_microusd"]
+                    + scoped["reserved_microusd"]
+                    + estimated_cost_microusd
+                    > limit.max_cost_microusd
+                ):
+                    raise _BudgetExceeded("registered study stage has no unreserved cost allowance")
             self._append(
                 f"budget.{canonical_hash(request_key)}.reserved",
                 "pi.budget.reserved",
@@ -118,6 +215,7 @@ class ModelBudget:
                     "binding": self.binding,
                     "request_key": request_key,
                     "reserved_microusd": estimated_cost_microusd,
+                    **({"scope": self.scope} if self.scope_limits else {}),
                 },
             )
         finally:

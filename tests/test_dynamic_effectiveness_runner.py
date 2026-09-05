@@ -353,3 +353,109 @@ def test_failed_route_qualification_remains_replayable_without_becoming_accepted
     assert asyncio.run(run_dynamic_route_qualification(root)) == report
     with pytest.raises(ValueError, match="authoritative terminal"):
         accept_dynamic_route_qualification(root)
+
+
+def test_route_qualification_shares_parent_scope_and_preserves_old_unknown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sqlite3
+    from dataclasses import replace
+
+    from market_impact_agent.dynamic_effectiveness_runner import (
+        _verified_qualification_report,  # pyright: ignore[reportPrivateUsage]
+    )
+    from market_impact_agent.model_budget import ModelBudget, ModelBudgetScope
+    from market_impact_agent.runtime_store import RunStatus
+
+    profiles = cast(tuple[Any, Any, Any], _profiles())
+    for profile in profiles:
+        monkeypatch.setenv(profile.credential_env, "synthetic-study-key")
+    original = asyncio.create_subprocess_exec
+
+    async def spawn(program: str, *args: str, **kwargs: Any):
+        answer = _answer()
+        answer["evidence_refs"] = ["synthetic-release", "synthetic-market"]
+        kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(answer)
+        return await original(
+            program,
+            "--import",
+            str(Path(__file__).with_name("portfolio_network.mjs")),
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    parent = LocalDataSnapshotStore(tmp_path / "parent")
+    journal = RunJournal.authoritative(parent)
+    journal.start_run(
+        run_id="study", config_hash=canonical_hash("study-40-dollar"), created_at=datetime.now(UTC)
+    )
+    budget = ModelBudget(
+        journal,
+        "study",
+        500,
+        40_000_000,
+        prior_requests=20,
+        prior_cost_microusd=5_356_905,
+        prior_reserved_microusd=11_769,
+        prior_unsettled_requests=1,
+        scope_limits=(
+            ModelBudgetScope("route_qualification", 1_000_000, 85_194),
+            ModelBudgetScope("study", 39_000_000, 5_271_711, 11_769),
+        ),
+        scope="route_qualification",
+    )
+    verification = {
+        "runtime": runtime_identity(),
+        "checks": {
+            name: "passed"
+            for name in (
+                "ruff",
+                "format",
+                "pyright",
+                "pytest",
+                "typescript",
+                "node_tests",
+                "production_entry",
+                "independent_review",
+            )
+        },
+        "evidence_refs": ["synthetic-offline-review"],
+    }
+    verification_path = tmp_path / "verification.json"
+    verification_path.write_text(json.dumps(verification))
+    root = tmp_path / "qualification"
+    prepare_dynamic_route_qualification(
+        root,
+        profiles=profiles,
+        verification_path=verification_path,
+        registered_at=datetime.now(UTC),
+        shared_budget=budget,
+    )
+    with pytest.raises(ValueError, match="ancestry changed"):
+        asyncio.run(
+            run_dynamic_route_qualification(root, shared_budget=replace(budget, max_requests=501))
+        )
+    report = asyncio.run(run_dynamic_route_qualification(root, shared_budget=budget))
+    assert report["stage_passed"] is True, report
+    assert report["reconciled"] is True
+    batch = cast(dict[str, int], report["budget"])
+    assert batch["physical_requests"] == 3
+    assert batch["unsettled_requests"] == 0
+    assert budget.summary()["reserved_microusd"] == 11_769
+    assert budget.summary()["unsettled_requests"] == 1
+    assert budget.summary()["known_cost_microusd"] == 5_356_905 + batch["known_cost_microusd"]
+    assert budget.scope_summary()["known_cost_microusd"] == 85_194 + batch["known_cost_microusd"]
+    assert journal.get_run("study").status is RunStatus.RUNNING
+    assert _verified_qualification_report(root, require_passed=True) == report
+    assert asyncio.run(run_dynamic_route_qualification(root, shared_budget=budget)) == report
+    with pytest.raises(RuntimeError, match="registered study stage"):
+        asyncio.run(budget.reserve("outside-stage", 1_000_000))
+    with sqlite3.connect(journal.path) as connection:
+        connection.execute(
+            "UPDATE runs SET config_hash = ? WHERE run_id = ?",
+            (canonical_hash("different-parent-authorization"), "study"),
+        )
+    with pytest.raises(ValueError, match="ancestry changed"):
+        _verified_qualification_report(root, require_passed=True)

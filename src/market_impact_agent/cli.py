@@ -295,6 +295,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate_parser.add_argument("path", type=Path)
 
+    ibkr_paper_parser = subparsers.add_parser(
+        "ibkr-paper",
+        help="Prepare an offline, unaccepted IBKR Paper operation plan",
+    )
+    ibkr_paper_subparsers = ibkr_paper_parser.add_subparsers(
+        dest="ibkr_paper_command", required=True
+    )
+    ibkr_paper_prepare_parser = ibkr_paper_subparsers.add_parser(
+        "prepare",
+        help="Validate static Paper scope and emit a source-bound preparation artifact",
+    )
+    ibkr_paper_prepare_parser.add_argument("--mandate", required=True, type=Path)
+    ibkr_paper_prepare_parser.add_argument(
+        "--instrument-route",
+        action="append",
+        required=True,
+        type=_ibkr_instrument_route,
+        dest="instrument_routes",
+        metavar="INSTRUMENT=MARKET",
+    )
+    ibkr_paper_prepare_parser.add_argument("--gateway-host", default="127.0.0.1")
+    ibkr_paper_prepare_parser.add_argument("--gateway-port", type=int, default=4002)
+    ibkr_paper_prepare_parser.add_argument("--client-id", type=int, default=0)
+    ibkr_paper_prepare_parser.add_argument(
+        "--no-fetch-all-open-orders",
+        action="store_false",
+        dest="fetch_all_open_orders",
+        default=True,
+    )
+    ibkr_paper_prepare_parser.add_argument("--output", type=Path)
+
     data_parser = subparsers.add_parser("data", help="Capture immutable read-only Data Snapshots")
     data_subparsers = data_parser.add_subparsers(dest="data_command", required=True)
     feed_capture_parser = data_subparsers.add_parser(
@@ -870,6 +901,43 @@ def build_parser() -> argparse.ArgumentParser:
     dynamic_effectiveness_parser.add_argument(
         "--provider-profile", type=Path, action="append", default=[]
     )
+    dynamic_effectiveness_parser.add_argument(
+        "--continuous-study-root",
+        type=Path,
+        default=Path(".market-impact/continuous-20260905/study"),
+        help="Prepared continuous-study root that owns the shared route-qualification budget",
+    )
+    continuous_study_parser = agent_subparsers.add_parser(
+        "continuous-study",
+        help="Prepare and inspect the bounded 18-window continuous coverage study",
+    )
+    continuous_study_parser.add_argument(
+        "action", choices=("prepare", "preflight", "report", "prepare-experiment", "run")
+    )
+    continuous_study_parser.add_argument(
+        "--state-root", type=Path, default=Path(".market-impact/continuous-20260905/study")
+    )
+    continuous_study_parser.add_argument(
+        "--dataset", type=Path, default=Path("examples/research/market-regime-dataset-v1.json")
+    )
+    continuous_study_parser.add_argument(
+        "--panel-root", type=Path, default=Path(".market-impact/regime")
+    )
+    continuous_study_parser.add_argument("--prior-usage-audit", type=Path)
+    continuous_study_parser.add_argument("--research-inputs-root", type=Path)
+    prospective_discovery_parser = agent_subparsers.add_parser(
+        "prospective-discovery",
+        help="Research actual receipts with durable dynamic source continuation",
+    )
+    prospective_discovery_parser.add_argument("action", choices=("prepare", "run"))
+    prospective_discovery_parser.add_argument(
+        "--state-root", type=Path, default=Path(".market-impact/continuous-20260905/study")
+    )
+    prospective_discovery_parser.add_argument("--receipt-binding", type=Path)
+    prospective_discovery_parser.add_argument("--receipt-report", type=Path)
+    prospective_discovery_parser.add_argument("--receipt-episode-id")
+    prospective_discovery_parser.add_argument("--receipt-run-id")
+    prospective_discovery_parser.add_argument("--registration", type=Path)
     agent_validate_parser = agent_subparsers.add_parser(
         "validate", help="Validate one frozen Evidence Pack and its bound local content"
     )
@@ -3409,6 +3477,21 @@ def _aware_timestamp(value: str) -> datetime:
     return result
 
 
+def _ibkr_instrument_route(value: str) -> tuple[str, str]:
+    instrument_id, separator, market = value.partition("=")
+    if (
+        separator != "="
+        or not instrument_id
+        or instrument_id != instrument_id.strip()
+        or not market
+        or market != market.strip()
+    ):
+        raise argparse.ArgumentTypeError(
+            "IBKR instrument routes must use non-empty INSTRUMENT=MARKET values"
+        )
+    return instrument_id, market
+
+
 def _utc_timestamp(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("timestamp must be timezone-aware")
@@ -3774,6 +3857,52 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["valid"] else 1
+    if args.command == "ibkr-paper" and args.ibkr_paper_command == "prepare":
+        from market_impact_agent.ibkr_paper_preparation import (
+            IbkrPaperStaticConfiguration,
+            prepare_ibkr_paper_from_mandate_path,
+            write_ibkr_paper_preparation,
+        )
+
+        try:
+            instrument_routes = dict(args.instrument_routes)
+            if len(instrument_routes) != len(args.instrument_routes):
+                raise ValueError("IBKR instrument routes must not repeat an instrument")
+            preparation = prepare_ibkr_paper_from_mandate_path(
+                mandate_path=args.mandate,
+                instrument_routes=instrument_routes,
+                configuration=IbkrPaperStaticConfiguration(
+                    host=args.gateway_host,
+                    port=args.gateway_port,
+                    client_id=args.client_id,
+                    fetch_all_open_orders=args.fetch_all_open_orders,
+                ),
+            )
+            result = preparation.to_dict()
+            if args.output is not None:
+                write_ibkr_paper_preparation(preparation, args.output)
+                result["artifact_path"] = args.output.as_posix()
+        except (
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps(
+                    {
+                        "preparation_valid": False,
+                        "execution_accepted": False,
+                        "error": _format_command_error(cast(BaseException, exc)),
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "event" and args.event_command == "validate":
         try:
             result = validate_event(args.path)
@@ -5126,6 +5255,109 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result.get("stage_passed", result.get("accepted", True)) else 1
+    if args.command == "agent" and args.agent_command == "prospective-discovery":
+        from market_impact_agent.prospective_discovery_entry import (
+            prepare_prospective_discovery,
+            run_prepared_prospective_discovery,
+        )
+
+        try:
+            if args.action == "prepare":
+                if any(
+                    value is None
+                    for value in (
+                        args.receipt_binding,
+                        args.receipt_report,
+                        args.receipt_episode_id,
+                        args.receipt_run_id,
+                    )
+                ):
+                    raise ValueError(
+                        "preparation requires the original receipt binding and identities"
+                    )
+                result = prepare_prospective_discovery(
+                    study_root=args.state_root,
+                    receipt_binding_path=args.receipt_binding,
+                    receipt_report_path=args.receipt_report,
+                    receipt_episode_id=args.receipt_episode_id,
+                    receipt_run_id=args.receipt_run_id,
+                )
+            else:
+                if args.registration is None:
+                    raise ValueError("prospective run requires its prepared registration")
+                result = asyncio.run(
+                    run_prepared_prospective_discovery(
+                        study_root=args.state_root,
+                        registration_path=args.registration,
+                    )
+                )
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+            print(
+                json.dumps(
+                    {
+                        "stage_passed": False,
+                        "error_class": type(cast(BaseException, exc)).__name__,
+                    }
+                )
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent" and args.agent_command == "continuous-study":
+        from market_impact_agent.continuous_study_runner import (
+            preflight_continuous_study,
+            prepare_continuous_study,
+            report_continuous_study,
+        )
+
+        try:
+            if args.action == "prepare":
+                if args.prior_usage_audit is None:
+                    raise ValueError("continuous study preparation requires prior usage audit")
+                result = prepare_continuous_study(
+                    args.state_root,
+                    dataset_path=args.dataset,
+                    panel_root=args.panel_root,
+                    prior_usage_audit_path=args.prior_usage_audit,
+                )
+            elif args.action == "preflight":
+                result = preflight_continuous_study(args.state_root)
+            elif args.action in {"prepare-experiment", "run"}:
+                from market_impact_agent.continuous_study_entry import continuous_study_entry
+
+                if args.prior_usage_audit is None:
+                    raise ValueError("continuous experiment requires its bound prior usage audit")
+                result = asyncio.run(
+                    continuous_study_entry(
+                        action=args.action,
+                        study_root=args.state_root,
+                        input_root=args.research_inputs_root or args.state_root / "research-inputs",
+                        dataset_path=args.dataset,
+                        panel_root=args.panel_root,
+                        prior_usage_audit_path=args.prior_usage_audit,
+                    )
+                )
+            else:
+                result = report_continuous_study(args.state_root)
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            KeyError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(
+                json.dumps(
+                    {
+                        "stage_passed": False,
+                        "error_class": type(cast(BaseException, exc)).__name__,
+                    }
+                )
+            )
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result.get("stage_passed", True) else 1
     if args.command == "agent" and args.agent_command == "dynamic-effectiveness":
         from market_impact_agent.dynamic_effectiveness_runner import (
             accept_dynamic_route_qualification,
@@ -5144,6 +5376,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.action == "prepare-qualification":
                 if args.verification is None:
                     raise ValueError("qualification preparation requires offline verification")
+                from market_impact_agent.continuous_study_runner import study_budget
+
                 result = prepare_dynamic_route_qualification(
                     args.state_root,
                     profiles=cast(
@@ -5155,9 +5389,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                         profiles,
                     ),
                     verification_path=args.verification,
+                    shared_budget=study_budget(args.continuous_study_root, "route_qualification"),
                 )
             elif args.action == "run-qualification":
-                result = asyncio.run(run_dynamic_route_qualification(args.state_root))
+                from market_impact_agent.continuous_study_runner import study_budget
+
+                result = asyncio.run(
+                    run_dynamic_route_qualification(
+                        args.state_root,
+                        shared_budget=study_budget(
+                            args.continuous_study_root, "route_qualification"
+                        ),
+                    )
+                )
             elif args.action == "accept-qualification":
                 result = accept_dynamic_route_qualification(args.state_root)
             elif args.action == "prepare-study":

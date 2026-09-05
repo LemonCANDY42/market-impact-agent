@@ -19,8 +19,12 @@ from market_impact_agent.agent_runtime import (
     ModelProvider,
     ModelTurn,
     ProviderUsage,
+    ToolAccessContext,
     ToolCall,
+    ToolDescriptor,
     ToolExecutionResult,
+    ToolRegistry,
+    ToolSideEffect,
     Utf8TokenEstimator,
 )
 from market_impact_agent.model_budget import ModelBudget
@@ -103,6 +107,9 @@ class PiRoleJournal(RunJournal):
                 "pi.response.received",
                 "pi.role.response.completed",
                 "pi.agent.ended",
+                "pi.role.tool.completed",
+                "pi.role.history.initial",
+                "pi.context.compacted",
                 "pi.budget.reserved",
                 "pi.budget.settled",
             }
@@ -547,8 +554,16 @@ async def execute_pi_once(
     max_output_tokens: int,
     timeout_seconds: float,
     attempt_observer: ProviderAttemptObserver,
+    readonly_tools: tuple[ToolDescriptor, ...] = (),
+    initial_history: str = "",
 ) -> ModelTurn:
-    """A zero-tool, single-turn role uses the same pi loop and physical boundary.
+    """Execute a role on pi, with bounded Harness-injected read-only capabilities.
+
+    Without tools the role retains its one-turn allowance. ``initial_history`` is
+    the calling Harness' serialized model-visible prior-opinion fragment. This
+    boundary alone reserves its bytes and all Recall result bytes against one
+    12,000-byte conservative token allowance per business Run, including replay.
+    Durable results remain reserved even when a crash prevented their delivery.
 
     The calling role retains its validator and business terminal. Its native reply
     is durable before returning, including when business validation later fails.
@@ -565,8 +580,61 @@ async def execute_pi_once(
         reserved_output_tokens=maximum,
         budget=replace(profile.budget, max_turns=1, max_output_tokens=maximum),
     )
+    if readonly_tools:
+        config = replace(config, budget=profile.budget)
+    registry = ToolRegistry(context.artifacts)
+    for descriptor in readonly_tools:
+        if descriptor.side_effect is not ToolSideEffect.READ_ONLY:
+            raise PermissionError("pi research roles accept only read-only tools")
+        registry.register(descriptor)
+    access = ToolAccessContext(
+        allowed_capabilities=frozenset(
+            cap for t in readonly_tools for cap in t.required_capabilities
+        ),
+        allowed_side_effects=frozenset({ToolSideEffect.READ_ONLY}),
+        allowed_tools=frozenset(t.name for t in readonly_tools),
+    )
+    model_tools = list(registry.model_tools(access))
     metrics = _MutableMetrics()
     result: ModelTurn | None = None
+    history_names = {"read_current_thesis", "search_prior_decisions", "read_prior_decisions"}
+    history_bytes = len(initial_history.encode("utf-8"))
+    history_binding: dict[str, object] = {
+        "content_hash": canonical_hash(initial_history),
+        "bytes": history_bytes,
+    }
+    history_event_id = f"{invocation_id}.history.initial"
+    previous_history = context.journal.event(history_event_id)
+    if previous_history is not None and previous_history.payload != history_binding:
+        raise PermissionError("replayed role initial history changed")
+    # Reopen all durable Run charges, including compacted history whose replay may
+    # skip old tool callbacks. A replayed result is charged once, never a new allowance.
+    charged_history_results: set[str] = set()
+    for event in context.journal.events(context.run_id):
+        if event.event_id == history_event_id:
+            continue
+        if event.event_type == "pi.role.history.initial":
+            history_bytes += cast(int, event.payload["bytes"])
+        elif (
+            event.event_type == "pi.role.tool.completed"
+            and cast(dict[str, object], event.payload["binding"])["name"] in history_names
+        ):
+            prior_result = cast(
+                dict[str, object],
+                context.artifacts.read_json(cast(str, event.payload["artifact_hash"])),
+            )
+            history_bytes += len(cast(str, prior_result["content"]).encode("utf-8"))
+            charged_history_results.add(event.event_id)
+    if history_bytes > 12_000:
+        raise PermissionError("role exhausted cumulative historical context tokens")
+    if previous_history is None:
+        context.journal.append(
+            run_id=context.run_id,
+            event_id=history_event_id,
+            event_type="pi.role.history.initial",
+            observed_at=context.clock(),
+            payload=history_binding,
+        )
 
     def append(suffix: str, kind: str, payload: dict[str, object]) -> None:
         context.journal.append(
@@ -665,16 +733,95 @@ async def execute_pi_once(
     )
 
     async def callback(method: str, payload: dict[str, object]) -> dict[str, object]:
+        nonlocal history_bytes
         serialized = json.dumps(payload, ensure_ascii=False)
         if any(value and value in serialized for value in context.secret_values):
             raise PermissionError("pi role response contains protected secret material")
         value = await boundary.callback(method, payload)
         if value is not None:
             return value
+        if method == "tool":
+            call = ToolCall(
+                _call_id(payload["call_id"]),
+                cast(str, payload["name"]),
+                cast(dict[str, object], payload["arguments"]),
+            )
+            if result is None or call not in result.tool_calls or result.finish_reason == "length":
+                raise PermissionError("role tool call has no complete durable response")
+            manifest = registry.manifest_hash(call.name, access)
+            suffix = f"tool.{call.call_id}"
+            existing = context.journal.event(f"{invocation_id}.{suffix}")
+            binding = {"name": call.name, "arguments": call.arguments, "manifest_hash": manifest}
+            if existing is not None:
+                if existing.payload.get("binding") != binding:
+                    raise PermissionError("replayed role tool binding changed")
+                saved = cast(
+                    dict[str, object],
+                    context.artifacts.read_json(cast(str, existing.payload["artifact_hash"])),
+                )
+                context.artifacts.read_json(cast(str, saved["result_artifact_hash"]))
+                content = cast(str, saved["content"])
+            else:
+                if metrics.tool_calls >= profile.budget.max_tool_calls:
+                    raise PermissionError("role exhausted its read-only tool budget")
+                executed = await registry.execute(
+                    call, access=access, secret_values=context.secret_values
+                )
+                content = executed.model_content
+                saved = {
+                    "content": content,
+                    "result_artifact_hash": executed.result_artifact.content_hash,
+                }
+                artifact = context.artifacts.put_json(saved)
+                append(
+                    suffix,
+                    "pi.role.tool.completed",
+                    {"binding": binding, "artifact_hash": artifact.content_hash},
+                )
+            history_result_id = f"{invocation_id}.{suffix}"
+            if call.name in history_names and history_result_id not in charged_history_results:
+                history_bytes += len(content.encode("utf-8"))
+                if history_bytes > 12_000:
+                    raise PermissionError("role exhausted cumulative historical context tokens")
+                charged_history_results.add(history_result_id)
+            metrics.tool_calls += 1
+            metrics.result_bytes += len(content.encode("utf-8"))
+            if metrics.result_bytes > profile.budget.max_result_bytes:
+                raise PermissionError("role exhausted its tool result budget")
+            return {"content": content}
+        if method == "tool_message":
+            message = cast(dict[str, object], payload["message"])
+            if (
+                context.journal.event(f"{invocation_id}.tool.{_call_id(message['toolCallId'])}")
+                is None
+            ):
+                raise PermissionError("role tool message has no authorized durable result")
+            return {}
         if method == "turn_end":
-            if result is None or result.tool_calls:
-                raise PermissionError("single-turn role has no authorized final response")
-            return {"stop": True}
+            if result is None:
+                raise PermissionError("role has no authorized response")
+            return {"stop": not bool(result.tool_calls)}
+        if method == "compaction_lookup":
+            event = context.journal.event(f"{invocation_id}.pi.compaction.{payload['number']}")
+            if event is None:
+                return {}
+            for number in range(metrics.turns + 1, cast(int, event.payload["call_number"]) + 1):
+                turn_event = context.journal.event(f"{invocation_id}.turn.{number}")
+                if turn_event is None:
+                    raise ValueError("role compaction has no durable summary response")
+                record(load(turn_event), number)
+            return {
+                "entry": context.artifacts.read_json(cast(str, event.payload["entry_hash"])),
+                "call_number": event.payload["call_number"],
+            }
+        if method == "compaction_commit":
+            artifact = context.artifacts.put_json(payload["entry"])
+            append(
+                f"pi.compaction.{payload['number']}",
+                "pi.context.compacted",
+                {"entry_hash": artifact.content_hash, "call_number": payload["call_number"]},
+            )
+            return {}
         if method == "agent_end":
             append("ended", "pi.agent.ended", {"runtime": provider.runtime_identity})
             return {}
@@ -685,11 +832,11 @@ async def execute_pi_once(
             provider.execute(
                 {
                     "runId": invocation_id,
-                    **provider.context_identity(context.run_id, [], fixed),
+                    **provider.context_identity(context.run_id, model_tools, fixed),
                     "profile": profile.to_dict(),
                     "messages": fixed,
                     "nativeMessages": native,
-                    "tools": [],
+                    "tools": model_tools,
                 },
                 callback,
             ),

@@ -403,6 +403,88 @@ preexisting, $0.053516 invalid horizon, and $0.991336 formal Modeled-PIT, totali
 the shared $20 cap. This report is process evidence only: strict PIT, effectiveness, inference,
 paper, and live gates remain closed.
 
+## Continuous coverage registration
+
+`market_impact_agent.continuous_study` registers a separate 18-window coverage denominator without
+changing the legacy 15-case dataset or its registrations. It binds both frozen private panel
+identities, `d63c8f98…2286` and `e0817b85…8c8b`. The older d63 manifest is checked against its
+original content-addressed shape and restrictive permissions because it predates the later taxonomy
+field; the newer e081 manifest also passes the current semantic panel validator. The two manifests
+must bind the same dataset and identical CSI 300 selection series.
+
+The registration retains the 15 legacy windows, then chooses exactly one new 60-session ordinary
+window in each low, mid, and higher-but-nonextreme volatility stratum. A candidate uses only the
+CSI 300 closes through the prior session: 20/60-session log returns and 20-session realized
+volatility. It must have absolute returns no greater than 0.08 and 0.15 respectively, and it cannot
+have same-direction 20/60-session returns when both normalized trend z values are at least 0.5 in
+absolute value. This excludes clear price trends such as the 2014 bull and 2022 lockdown candidates
+without reading news or eventual outcomes. The volatility bands are `[0, 0.01)`, `[0.01, 0.02)`, and
+`[0.02, 0.03)`. Within each stratum candidates are ordered by the SHA-256 of the frozen policy,
+stratum, and decision session. They cannot overlap a fixed deep window or a previously selected
+ordinary window. The selection cutoff is 2024-12-31 and the registration binds the pinned manifest.
+
+The eight deep cells are the full 2024 policy fast bull, the first 120 sessions of the 2016 slow
+bull and 2018 bear, the full 2015 fast bear and 2020 COVID window, the first 60 sessions of 2021
+rotation, and the selected low- and higher-nonextreme-volatility ordinary windows. The time contract
+keeps every price feature and model-visible source at or before the prior session, while a 1/3/5/10/
+20/60-session thesis label begins at the decision-session open and remains evaluator-only. It retains
+the existing `preopen_t0_h1_next_preopen_expiry_v1` time-contract version unchanged.
+
+Luna max, Terra high, and Sol high are frozen as separate profile bindings. Each runs every deep
+cell under expiry-only, scheduled, and event cadence: 8 × 3 × 3 = 72 planned observations. Missing
+or blocked inputs remain in that denominator. The new $40 cap allocates $1/$9/$2.5/$22/$2.5/$3 to
+route qualification, analysis coverage, portfolio coverage, rolling, unseen and prospective, and
+recovery. An immutable prior-usage audit binds the earlier 98 requests: route (9, $85,194
+micro-USD known), analysis (77, $4,870,788 known plus $11,769 reserved), and portfolio (12,
+$400,923 known). Final budget accounting consumes that binding; it does not label any prior usage
+as outside the new-study cap.
+
+Price coverage does not show that no material headline existed. The registration therefore exposes a
+typed `information_coverage` gap, `pending_bounded_news_audit`, for all 18 windows. It makes no
+coverage-completeness claim until that audit closes the gap. This module performs no model or network
+call, and it grants no broker, paper, or live-trading authority.
+
+### Continuous zero-model baselines
+
+`continuous_baselines` evaluates every registered window on its complete CSI 300-derived daily
+calendar. The panel supplies dates only: it never supplies an execution price. Each executable arm
+reopens raw, unadjusted `510300.SH` bars, rule records, modeled-PIT policy, and corporate-action
+records through `HistoricalAShareInputs`, then uses `HistoricalStreamingAccount` for fills, fees,
+T+1 inventory, and cash dividends.
+
+All comparable arms begin from CNY 100,000 and the same approximately half-invested prior-session
+`bootstrap_half_hs300` allocation. At the first registered session, `cash_no_action` sells that
+seed through the account engine, `same_initial_account_hold` retains it, and `broad_etf_hold` buys
+additional whole 510300 lots up to the source-backed affordable amount. A suspension, incomplete
+fill, missing raw bar/rule/action proof, or changing instrument rule remains a typed incomplete
+window with the original daily denominator; no window is shortened.
+
+`phase2_adjusted_close_momentum_510300` is a separately versioned continuous execution binding,
+`continuous-phase2-adjusted-close-momentum-510300.v1`. Before every registered session open it
+reopens exactly four source-bound adjusted closes and applies the unchanged Phase 2 direction
+calculation: buy only when the latest close is strictly above the close three completed open
+sessions earlier. The Phase 2 rule otherwise returns `ABSTAIN`; Phase 2 did not define an account
+transition for an already half-invested seed. This new binding explicitly maps that abstention to a
+cash target, selling the current 510300 position at the next eligible raw-price open. A buy targets
+the maximum affordable whole-lot 510300 exposure using only the cutoff-known raw reference and
+source-bound effective upper limit, with an upward-rounded fee ceiling; the future open never sets
+quantity. The binding reports its identity, calculation reference, inputs, and source-record hashes;
+it does not modify, reinterpret, or retroactively change Phase 2. Each four-close input must form an
+unbroken source-calendar `pretrade_date` chain into the decision session, so a missing intervening
+close is a typed source gap rather than a longer implicit horizon. Fills, fees, T+1 inventory, halts,
+and corporate actions remain governed by the same source-gated account engine. Persisted unfilled or
+partial fills remain incomplete after account-prefix replay.
+
+`OrdinarySelectionPolicy` calculates volatility only to select windows and has no executable
+rebalance policy. The existing static equal-sector and 20-session monthly top-three sector momentum
+paths use SW2021 price-index proxies. These volatility and sector baselines remain typed unsupported
+until their missing policy or point-in-time tradable sector membership, executable symbols, and
+source-backed corporate-action paths are bound; a current constituent list cannot fill those gaps.
+
+The separate raw CSI 300 long-price diagnostic is descriptive research only. It is explicitly
+non-executable and cannot substitute for a source-backed ETF fill, tradability claim, or baseline
+completion.
+
 ## Private data and commands
 
 The public registry contains dates, source references, and proxy identities but no licensed market

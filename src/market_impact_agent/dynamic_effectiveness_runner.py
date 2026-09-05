@@ -41,13 +41,14 @@ from market_impact_agent.dynamic_effectiveness import (
     StudyCase,
 )
 from market_impact_agent.frozen_research import FrozenResearchRepository
-from market_impact_agent.model_budget import ModelBudget
+from market_impact_agent.model_budget import ModelBudget, ModelBudgetScope
 from market_impact_agent.model_provider import (
     ModelProviderProfile,
     model_provider_profile_from_dict,
 )
 from market_impact_agent.paper_execution import PriceBasis
 from market_impact_agent.pi_deployment import PiRuntimePermit
+from market_impact_agent.pi_execution import native_turn
 from market_impact_agent.pi_runtime import (
     ExperimentSlots,
     PiRuntimeProvider,
@@ -251,12 +252,147 @@ def load_dynamic_effectiveness_study(root: Path) -> dict[str, object]:
     return value
 
 
+def _qualification_budget_binding(budget: ModelBudget) -> dict[str, object]:
+    if not budget.journal.promotion_eligible or budget.scope != "route_qualification":
+        raise ValueError(
+            "qualification requires an authoritative registered route_qualification budget"
+        )
+    limit = next(item for item in budget.scope_limits if item.name == budget.scope)
+    if limit.max_cost_microusd > 1_000_000:
+        raise ValueError("route qualification scope exceeds its one-dollar authorization")
+    record = budget.journal.get_run(budget.owner_run_id)
+    budget.summary()
+    return {
+        "journal_path": str(budget.journal.path),
+        "harness_authority_id": budget.journal.harness_authority_id,
+        "owner_run_id": budget.owner_run_id,
+        "owner_config_hash": record.config_hash,
+        "scope": budget.scope,
+        "limits": budget.binding,
+    }
+
+
+def _qualification_budget(
+    registration: dict[str, object], *, shared_budget: ModelBudget | None = None
+) -> ModelBudget | None:
+    raw = registration.get("shared_budget")
+    if raw is None:
+        if shared_budget is not None:
+            raise ValueError("qualification registration has no shared parent budget")
+        return None
+    frozen = _object(raw)
+    if shared_budget is None:
+        journal_path = Path(_string(frozen, "journal_path"))
+        if not journal_path.is_file():
+            raise ValueError("qualification parent journal is missing")
+        store = LocalDataSnapshotStore(journal_path.parent)
+        journal = RunJournal.authoritative(store)
+        limits = _object(frozen["limits"])
+        scopes = cast(list[dict[str, object]], limits.get("scope_limits", []))
+        shared_budget = ModelBudget(
+            journal=journal,
+            owner_run_id=_string(frozen, "owner_run_id"),
+            max_requests=cast(int, limits["max_requests"]),
+            max_cost_microusd=cast(int | None, limits["max_cost_microusd"]),
+            prior_requests=cast(int, limits["prior_requests"]),
+            prior_cost_microusd=cast(int, limits["prior_cost_microusd"]),
+            prior_reserved_microusd=cast(int, limits.get("prior_reserved_microusd", 0)),
+            prior_unsettled_requests=cast(int, limits.get("prior_unsettled_requests", 0)),
+            scope_limits=tuple(
+                ModelBudgetScope(
+                    name=_string(item, "name"),
+                    max_cost_microusd=cast(int, item["max_cost_microusd"]),
+                    prior_cost_microusd=cast(int, item["prior_cost_microusd"]),
+                    prior_reserved_microusd=cast(int, item["prior_reserved_microusd"]),
+                )
+                for item in scopes
+            ),
+            scope=_string(frozen, "scope"),
+        )
+    if _qualification_budget_binding(shared_budget) != frozen:
+        raise ValueError("qualification shared parent budget ancestry changed")
+    return shared_budget
+
+
+def _verify_qualification_native_budget(
+    store: LocalDataSnapshotStore, run_id: str, budget: ModelBudget, profile: ModelProviderProfile
+) -> None:
+    parent_events = budget.journal.events(budget.owner_run_id)
+    settlements = {
+        event.payload.get("request_key"): event.payload
+        for event in parent_events
+        if event.event_type == "pi.budget.settled"
+    }
+    input_tokens = output_tokens = cost = responses = 0
+    for event in RunJournal.authoritative(store).events(run_id):
+        if event.event_type != "pi.response.received":
+            continue
+        raw = _object(store.artifacts.read_json(_string(event.payload, "artifact_hash")))
+        turn = native_turn(raw, profile.model)
+        invocation = event.event_id.rsplit(".pi.response.", 1)[0]
+        key = f"{invocation}:{raw['number']}:{turn.attempts}"
+        settlement = settlements.get(key)
+        charge = profile.pricing.estimate_microusd(turn.usage)
+        if (
+            settlement is None
+            or settlement.get("evidence_ref") != canonical_hash(raw)
+            or settlement.get("estimated_cost_microusd") != charge
+        ):
+            raise ValueError("qualification native response lacks its exact parent settlement")
+        responses += 1
+        input_tokens += turn.usage.input_tokens
+        output_tokens += turn.usage.output_tokens
+        cost += charge
+    records = [
+        item.record
+        for item in UsageLedger(store.index_path).records()
+        if item.record.run_id == run_id
+    ]
+    if len(records) != 1 or not responses:
+        raise ValueError("qualification has no exact native Usage record")
+    metrics = records[0].metrics
+    if (
+        metrics.input_tokens,
+        metrics.output_tokens,
+        metrics.turns,
+        metrics.estimated_cost_microusd,
+    ) != (input_tokens, output_tokens, responses, cost):
+        raise ValueError("qualification Usage differs from settled native responses")
+
+
+def _qualification_batch_summary(budget: ModelBudget, run_ids: tuple[str, ...]) -> dict[str, int]:
+    budget.summary()  # Revalidate the whole parent without erasing historical unknowns.
+    reserved: dict[str, int] = {}
+    settled: dict[str, int] = {}
+    for event in budget.journal.events(budget.owner_run_id):
+        key = event.payload.get("request_key")
+        if not isinstance(key, str) or not any(
+            key.startswith(f"{run_id}.pi-invocation.") for run_id in run_ids
+        ):
+            continue
+        if event.event_type == "pi.budget.reserved":
+            if event.payload.get("scope") != "route_qualification":
+                raise ValueError("qualification request was charged to another stage")
+            reserved[key] = cast(int, event.payload["reserved_microusd"])
+        elif event.event_type == "pi.budget.settled":
+            settled[key] = cast(int, event.payload["estimated_cost_microusd"])
+    if not settled.keys() <= reserved.keys():
+        raise ValueError("qualification settlement lacks its exact reservation")
+    return {
+        "physical_requests": len(reserved),
+        "known_cost_microusd": sum(settled.values()),
+        "reserved_microusd": sum(value for key, value in reserved.items() if key not in settled),
+        "unsettled_requests": len(reserved.keys() - settled.keys()),
+    }
+
+
 def prepare_dynamic_route_qualification(
     root: Path,
     *,
     profiles: tuple[ModelProviderProfile, ModelProviderProfile, ModelProviderProfile],
     verification_path: Path,
     registered_at: datetime | None = None,
+    shared_budget: ModelBudget | None = None,
 ) -> dict[str, object]:
     """Freeze the only paid route-qualification batch for the current build."""
 
@@ -264,7 +400,9 @@ def prepare_dynamic_route_qualification(
     os.chmod(root, 0o700)
     path = root / "qualification-registration.json"
     if path.exists():
-        return load_dynamic_route_qualification(root)
+        existing = load_dynamic_route_qualification(root)
+        _qualification_budget(existing, shared_budget=shared_budget)
+        return existing
     verification = _verified_build(verification_path)
     ordered = _ordered_profiles(profiles)
     value: dict[str, object] = {
@@ -283,6 +421,8 @@ def prepare_dynamic_route_qualification(
         "execution_capability": False,
         "live_execution": False,
     }
+    if shared_budget is not None:
+        value["shared_budget"] = _qualification_budget_binding(shared_budget)
     value["registration_hash"] = canonical_hash(value)
     _write_new(path, value)
     return value
@@ -301,13 +441,18 @@ def load_dynamic_route_qualification(root: Path) -> dict[str, object]:
     return value
 
 
-async def run_dynamic_route_qualification(root: Path) -> dict[str, object]:
+async def run_dynamic_route_qualification(
+    root: Path, *, shared_budget: ModelBudget | None = None
+) -> dict[str, object]:
     """Qualify model identity, effort route and one real native terminal per Profile."""
 
     report_path = root / "qualification-report.json"
+    registration = load_dynamic_route_qualification(root)
+    registered_budget = _qualification_budget(registration, shared_budget=shared_budget)
     if report_path.exists():
         return _verified_qualification_report(root, require_passed=False)
-    registration = load_dynamic_route_qualification(root)
+    if registration.get("shared_budget") is not None and shared_budget is None:
+        raise ValueError("shared qualification requires its registered writable parent budget")
     store = LocalDataSnapshotStore(root / "authority")
     journal = RunJournal.authoritative(store)
     owner = f"dynamic-route-qualification-{registration['registration_hash']}"
@@ -327,9 +472,9 @@ async def run_dynamic_route_qualification(root: Path) -> dict[str, object]:
         ),
         cast(str, registration["registration_hash"]),
         run_ids,
-        owner,
+        owner if registered_budget is None else registered_budget.owner_run_id,
     )
-    budget = ModelBudget(
+    budget = registered_budget or ModelBudget(
         journal=journal,
         owner_run_id=owner,
         max_requests=cast(int, registration["maximum_physical_requests"]),
@@ -374,7 +519,11 @@ async def run_dynamic_route_qualification(root: Path) -> dict[str, object]:
         )
         if terminal["status"] != "completed":
             break
-    summary = budget.summary()
+    summary = (
+        budget.summary()
+        if registered_budget is None
+        else _qualification_batch_summary(budget, run_ids)
+    )
     stage_passed = len(results) == 3 and all(item["status"] == "completed" for item in results)
     terminal_status = RunStatus.COMPLETED if stage_passed else RunStatus.FAILED
     report: dict[str, object] = {
@@ -1176,7 +1325,8 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
         or report.get("runtime") != registration.get("runtime")
     ):
         raise ValueError("dynamic route qualification report changed")
-    if not require_passed:
+    shared_budget = _qualification_budget(registration)
+    if not require_passed and (shared_budget is None or report.get("stage_passed") is not True):
         return report
     owner = f"dynamic-route-qualification-{registration['registration_hash']}"
     authority_store = LocalDataSnapshotStore(root / "authority")
@@ -1219,6 +1369,12 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
             artifact_store=case_store.artifacts,
             run_id=run_id,
         )
+        case_authority = ResearchThesisAuthority(
+            case_store,
+            experiment_id=cast(str, registration["registration_hash"]),
+            arm_id=topology.value,
+        )
+        case_authority.replay(run_id)
         binding = _object(case_store.artifacts.read_json(_string(source, "binding_hash")))
         expected_inputs = ResearchThesisRunInputs(
             repository=_qualification_repository(registered_at),
@@ -1229,6 +1385,19 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
                 "What is the defensible direction and horizon for the synthetic proxy?"
             ),
         ).identity_dict()
+        if shared_budget is not None and binding.get("budget_owner") != {
+            "journal_path": str(shared_budget.journal.path),
+            "run_id": shared_budget.owner_run_id,
+            "binding": shared_budget.binding,
+        }:
+            raise ValueError("qualification case has changed parent budget ancestry")
+        if shared_budget is not None:
+            _verify_qualification_native_budget(
+                case_store,
+                run_id,
+                shared_budget,
+                model_provider_profile_from_dict(profiles[topology.value]),
+            )
         if (
             thesis.base_case_direction
             not in {
@@ -1247,6 +1416,13 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
             or UsageLedger(case_store.index_path).ledger_hash != item.get("usage_ledger_hash")
         ):
             raise ValueError("dynamic route case differs from its signed native terminal")
+    if shared_budget is not None:
+        run_ids = tuple(f"{owner}.{topology.value}" for topology in _TOPOLOGIES)
+        summary = _qualification_batch_summary(shared_budget, run_ids)
+        if report.get("budget") != summary or report.get("reconciled") != (
+            summary["unsettled_requests"] == 0
+        ):
+            raise ValueError("qualification batch does not reconcile with its parent budget")
     return report
 
 

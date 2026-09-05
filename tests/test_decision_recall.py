@@ -145,7 +145,7 @@ def test_recall_search_is_navigation_and_reopen_is_authoritative(tmp_path: Path)
 
     reopened = recall.read_prior_decisions((first.recall_id,), as_of=NOW)
     assert reopened[0].source == _thesis(NOW, "epoch-1").to_dict()
-    assert reopened[0].to_dict()["evidence"] is True
+    assert reopened[0].to_dict()["evidence"] is False
     with pytest.raises(PermissionError, match="after the decision cutoff"):
         recall.read_prior_decisions((future.recall_id,), as_of=NOW)
 
@@ -294,4 +294,36 @@ def test_recall_tools_hide_cutoff_identity_and_separate_search_from_read(tmp_pat
     read_value = asyncio.run(invoke(read.handler, {"ids": [entry.recall_id]}))
     assert current_value["current_thesis"]["recall_id"] == entry.recall_id  # type: ignore[index]
     assert search_value["evidence"] is False  # type: ignore[index]
-    assert read_value["evidence"] is True  # type: ignore[index]
+    assert read_value["evidence"] is False  # type: ignore[index]
+
+
+def test_recall_tools_enforce_scope_without_owning_run_cumulative_context(tmp_path: Path) -> None:
+    async def invoke(
+        handler: Callable[[dict[str, object]], Awaitable[object]], arguments: dict[str, object]
+    ) -> object:
+        return await handler(arguments)
+
+    store = LocalDataSnapshotStore(tmp_path / "harness")
+    recall = DecisionRecallProjection(
+        tmp_path / "recall.sqlite3",
+        artifact_store=store.artifacts,
+        journal=RunJournal.authoritative(store),
+    )
+    entry = _entry(store, _thesis(NOW, "allowed"))
+    recall.add(entry)
+    current, search, read = decision_recall_tools(
+        recall, as_of=NOW, current_root_event_id="earnings-root", allowed_source_run_ids=frozenset()
+    )
+    assert asyncio.run(invoke(current.handler, {})) == {"current_thesis": None}
+    assert asyncio.run(invoke(search.handler, {})) == {"hits": [], "evidence": False}
+    with pytest.raises(PermissionError, match="account/arm scope"):
+        asyncio.run(invoke(read.handler, {"ids": [entry.recall_id]}))
+    _, _, read = decision_recall_tools(
+        recall,
+        as_of=NOW,
+        current_root_event_id="earnings-root",
+        allowed_source_run_ids=frozenset({entry.source_run_id}),
+    )
+    # Cumulative allowance belongs to the pi Run, never this reusable projection.
+    for _ in range(30):
+        assert asyncio.run(invoke(read.handler, {"ids": [entry.recall_id]}))

@@ -1,9 +1,10 @@
 """Authoritative dynamic-horizon research roles executed by the upstream pi loop.
 
 The Harness selects and freezes every input before dispatch.  The model authors
-only the analytical thesis.  This is intentionally a single-turn, zero-tool
-role: evidence discovery belongs to the prospective/Modeled-PIT preparation
-layer, while this authority answers a decision question over that frozen set.
+only the analytical thesis. Harness-injected read-only tools use the same upstream
+pi loop. Newly acquired
+data requires a new frozen Snapshot and continuation Run; tools cannot enlarge
+the evidence IDs accepted by the current thesis.
 """
 
 from __future__ import annotations
@@ -13,17 +14,18 @@ import hmac
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_engine import (
     RunMetrics,
     _PrivilegedEventSink,  # pyright: ignore[reportPrivateUsage]
 )
+from market_impact_agent.agent_runtime import ToolDescriptor
 from market_impact_agent.data_inputs import LocalDataSnapshotStore
 from market_impact_agent.decision_thesis import (
     BaseCaseDirection,
@@ -45,6 +47,9 @@ from market_impact_agent.pi_execution import (
 from market_impact_agent.provider_reliability import ProviderAttemptEvent
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal, RunStatus
 from market_impact_agent.usage_ledger import UsageLedger, UsageRecord
+
+if TYPE_CHECKING:
+    from market_impact_agent.research_thesis_watch import ResearchThesisWatchDelegation
 
 RESEARCH_THESIS_PROMPT = """Act as a senior public-equity analyst. Produce the best
 defensible forecast from the point-in-time inputs; uncertainty lowers confidence in
@@ -94,6 +99,7 @@ class ResearchThesisRunInputs:
     date_presentation: DatePresentation = DatePresentation.TRUE_DATE
     candidate_theses: tuple[ResearchThesisV1, ...] = ()
     research_question: str | None = None
+    watch_delegation: ResearchThesisWatchDelegation | None = None
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -115,6 +121,17 @@ class ResearchThesisRunInputs:
             or self.research_question != self.research_question.strip()
         ):
             raise ValueError("research_question must be nonempty trimmed text")
+        if self.watch_delegation is not None:
+            from market_impact_agent.research_thesis_watch import ResearchThesisWatchDelegation
+
+            if (
+                type(self.watch_delegation) is not ResearchThesisWatchDelegation
+                or self.watch_delegation.subject.canonical_id
+                != self.repository.evidence_pack.event_id
+            ):
+                raise PermissionError(
+                    "Watch delegation must bind the exact Harness research root event"
+                )
         if self.candidate_theses:
             pack = self.repository.evidence_pack
             evidence_ids = {item.evidence_id for item in pack.evidence}
@@ -167,6 +184,11 @@ class ResearchThesisRunInputs:
                 canonical_hash(item.to_dict()) for item in self.candidate_theses
             ],
             "research_question": self.research_question or pack.research_question,
+            **(
+                {"watch_delegation": self.watch_delegation.to_dict()}
+                if self.watch_delegation is not None
+                else {}
+            ),
         }
 
 
@@ -179,6 +201,9 @@ class ResearchThesisAuthority:
         *,
         experiment_id: str,
         arm_id: str,
+        account_scope: str | None = None,
+        prior_adoption_validator: Callable[[str, str, str, datetime], dict[str, object]]
+        | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         for value, name in ((experiment_id, "experiment_id"), (arm_id, "arm_id")):
@@ -188,6 +213,8 @@ class ResearchThesisAuthority:
         self.journal = RunJournal.authoritative(store)
         self.experiment_id = experiment_id
         self.arm_id = arm_id
+        self.account_scope = account_scope
+        self.prior_adoption_validator = prior_adoption_validator
         self.clock = clock
         self.usage_ledger = UsageLedger(store.index_path)
         key = (store.root / ".harness-event-hmac.key").read_bytes()
@@ -205,6 +232,8 @@ class ResearchThesisAuthority:
         inputs: ResearchThesisRunInputs,
         max_output_tokens: int | None = None,
         prior_thesis_run_id: str | None = None,
+        prior_adoption_ref: str | None = None,
+        readonly_tools: tuple[ToolDescriptor, ...] = (),
     ) -> dict[str, object]:
         output_limit = (
             provider.profile.reserved_output_tokens
@@ -213,23 +242,70 @@ class ResearchThesisAuthority:
         )
         if not 16 <= output_limit <= provider.profile.reserved_output_tokens:
             raise ValueError("research thesis output limit is outside the accepted Profile")
+        if inputs.watch_delegation is not None:
+            if provider.budget is None or self.account_scope is None:
+                raise PermissionError(
+                    "Watch delegation requires an account and shared parent budget"
+                )
+            inputs.watch_delegation.verify_episode(self.store, provider.budget)
+            from market_impact_agent.research_thesis_watch import (
+                RESEARCH_WATCH_TOOL,
+                research_thesis_watch_tool,
+            )
+
+            watch_tool = research_thesis_watch_tool(inputs, run_id)
+            offered = tuple(tool for tool in readonly_tools if tool.name == RESEARCH_WATCH_TOOL)
+            if offered and (
+                len(offered) != 1 or offered[0].manifest_hash != watch_tool.manifest_hash
+            ):
+                raise PermissionError("research Watch tool differs from the frozen Harness offer")
+            if not offered:
+                readonly_tools += (watch_tool,)
         if inputs.repository.evidence_pack.as_of > self.clock():
             raise PermissionError("research thesis evidence is after the authority clock")
+        if inputs.date_presentation is DatePresentation.RELATIVE_OFFSET:
+            readonly_tools = tuple(
+                _relative_tool(tool, inputs.repository.evidence_pack.as_of.date())
+                for tool in readonly_tools
+            )
         claim = self.journal.try_claim_run(run_id)
         if claim is None:
             raise RuntimeError("research thesis Run already has an owner")
         with claim:
             selected = await inputs.selected_inputs()
             prior: dict[str, object] | None = None
+            adopted_prior: dict[str, object] | None = None
+            if prior_adoption_ref is not None:
+                if prior_thesis_run_id is None or self.prior_adoption_validator is None:
+                    raise PermissionError("adopted prior requires registered receipt authority")
+                adopted_prior = self.prior_adoption_validator(
+                    prior_adoption_ref,
+                    prior_thesis_run_id,
+                    inputs.target_id,
+                    inputs.repository.evidence_pack.as_of,
+                )
             if prior_thesis_run_id is not None:
                 prior_thesis, prior = reopen_completed_research_thesis(
                     journal=self.journal,
                     artifact_store=self.store.artifacts,
                     run_id=prior_thesis_run_id,
                 )
+                prior_binding = _object(
+                    self.store.artifacts.read_json(
+                        self.journal.get_run(prior_thesis_run_id).config_hash
+                    )
+                )
                 if (
                     prior_thesis.as_of >= inputs.repository.evidence_pack.as_of
-                    or prior_thesis.primary_horizon_sessions not in inputs.allowed_horizons
+                    or prior_binding.get("experiment_id") != self.experiment_id
+                    or (
+                        adopted_prior is None
+                        and (
+                            prior_binding.get("arm_id") != self.arm_id
+                            or prior_binding.get("account_scope") != self.account_scope
+                        )
+                    )
+                    or _object(prior_binding["inputs"]).get("target_id") != inputs.target_id
                 ):
                     raise ValueError("prior thesis is not an earlier compatible review state")
                 selected["prior_thesis"] = (
@@ -251,9 +327,14 @@ class ResearchThesisAuthority:
                 "run_id": run_id,
                 "inputs": inputs.identity_dict(),
                 "prior_thesis": prior,
+                **({"prior_adoption": adopted_prior} if adopted_prior is not None else {}),
                 "selected_inputs_artifact_hash": selected_hash,
                 "profile": provider.profile.to_dict(),
                 "runtime": provider.runtime_identity,
+                "experiment_id": self.experiment_id,
+                "arm_id": self.arm_id,
+                "account_scope": self.account_scope,
+                "readonly_tool_hashes": sorted(t.manifest_hash for t in readonly_tools),
                 "prompt": role_prompt,
                 "max_output_tokens": output_limit,
                 "budget_owner": {
@@ -329,6 +410,14 @@ class ResearchThesisAuthority:
                     max_output_tokens=output_limit,
                     timeout_seconds=provider.profile.budget.max_wall_seconds,
                     attempt_observer=lambda event: self._observe_attempt(run_id, event),
+                    readonly_tools=readonly_tools,
+                    initial_history=""
+                    if prior is None
+                    else json.dumps(
+                        {"prior_thesis": selected["prior_thesis"]},
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
                 )
                 parsed = load_model_json(_string(turn.assistant_message, "content"))
                 pack = inputs.repository.evidence_pack
@@ -475,7 +564,7 @@ class ResearchThesisAuthority:
         self._events.append(
             run_id=run_id,
             event_id=(
-                f"{run_id}.research-thesis.attempt.{event.physical_attempt}.{event.phase.value}"
+                f"{run_id}.research-thesis.attempt.{canonical_hash(event.request_id)}.{event.physical_attempt}.{event.phase.value}"
             ),
             event_type="research.thesis.model.attempt",
             observed_at=self.clock(),
@@ -507,10 +596,18 @@ class ResearchThesisAuthority:
                 reserved[key] = cast(int, event.payload["reserved_microusd"])
             elif event.event_type == "pi.budget.settled":
                 settled[key] = cast(int, event.payload["estimated_cost_microusd"])
+        tool_calls = result_bytes = 0
         turns = input_tokens = output_tokens = attempts = 0
         latency = 0.0
         for event in self.journal.events(run_id):
-            if event.event_type == "research.thesis.model.attempt":
+            if event.event_type == "pi.role.tool.completed":
+                tool_calls += 1
+                result_bytes += len(
+                    json.dumps(
+                        self.store.artifacts.read_json(_string(event.payload, "artifact_hash"))
+                    ).encode("utf-8")
+                )
+            elif event.event_type == "research.thesis.model.attempt":
                 attempts += int(event.payload["phase"] == "dispatched")
                 if event.payload["phase"] != "dispatched":
                     latency += float(cast(float, event.payload["latency_ms"]))
@@ -524,10 +621,10 @@ class ResearchThesisAuthority:
                 output_tokens += turn.usage.output_tokens
         metrics = RunMetrics(
             turns=turns,
-            tool_calls=0,
+            tool_calls=tool_calls,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            result_bytes=0,
+            result_bytes=result_bytes,
             latency_ms=latency,
             provider_attempts=attempts,
             estimated_cost_microusd=sum(settled.values())
@@ -618,6 +715,21 @@ def theses_semantically_disagree(first: ResearchThesisV1, second: ResearchThesis
     return (
         first.base_case_direction != second.base_case_direction
         or first.primary_horizon_sessions != second.primary_horizon_sessions
+    )
+
+
+def _relative_tool(tool: ToolDescriptor, cutoff: date) -> ToolDescriptor:
+    """Mask model-visible tool data while preserving underlying source authority."""
+
+    async def read(arguments: dict[str, object]) -> object:
+        return _relative_temporal_view(await tool.handler(arguments), cutoff)
+
+    return replace(
+        tool,
+        handler=read,
+        description=cast(str, _relative_temporal_view(tool.description, cutoff)),
+        version="relative-v1-"
+        + canonical_hash({"manifest": tool.manifest_hash, "cutoff": cutoff.isoformat()}),
     )
 
 

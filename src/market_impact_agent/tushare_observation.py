@@ -504,16 +504,14 @@ class TushareObservationProvider(DataProvider):
                     raise TushareObservationCaptureTooLargeError(
                         "Tushare capture exceeded its aggregate byte limit"
                     )
-                page = _parse_response_page(response_body, config=config)
                 if self._token.encode() in response_body:
+                    # Preserve the typed API failure without retaining its secret-bearing body.
+                    _parse_response_page(response_body, config=config)
                     raise TushareObservationSecretLeakError(
                         "Tushare response contains the configured token and cannot be captured"
                     )
-                _validate_page_primary_keys(page, config=config)
-                if len(page.rows) > config.pagination_page_size:
-                    raise TushareObservationOverflowError(
-                        "Tushare response exceeded the configured page size"
-                    )
+                # Preserve the bounded, secret-free received page before interpretation.
+                # Parse/key/API errors must remain auditable without another network read.
                 pages.append(
                     TushareObservationPageCapture(
                         page=page_number,
@@ -521,6 +519,12 @@ class TushareObservationProvider(DataProvider):
                         response_body=response_body,
                     )
                 )
+                page = _parse_response_page(response_body, config=config)
+                _validate_page_primary_keys(page, config=config)
+                if len(page.rows) > config.pagination_page_size:
+                    raise TushareObservationOverflowError(
+                        "Tushare response exceeded the configured page size"
+                    )
                 if len(page.rows) < config.pagination_page_size:
                     return TushareObservationCapture(
                         source_id=config.source_id,
@@ -612,6 +616,11 @@ class TushareObservationProvider(DataProvider):
                 retrieved_at=capture.retrieved_at,
                 status=capture.failure_status,
                 error_kind=capture.error_kind,
+                raw_payload=_capture_bundle(
+                    capture, config=config, request_parameters=capture.request_parameters
+                )
+                if capture.pages
+                else None,
             )
         try:
             request_parameters = _request_parameters(config, query.parameters)
@@ -642,6 +651,9 @@ class TushareObservationProvider(DataProvider):
                 retrieved_at=capture.retrieved_at,
                 status=DataFetchStatus.ERROR,
                 error_kind=exc.error_kind,
+                raw_payload=_capture_bundle(
+                    capture, config=config, request_parameters=capture.request_parameters
+                ),
             )
         return ProviderDataResponse(
             status=DataFetchStatus.DATA if observations else DataFetchStatus.NO_DATA,
@@ -661,6 +673,7 @@ class TushareObservationProvider(DataProvider):
         retrieved_at: datetime,
         status: DataFetchStatus,
         error_kind: str,
+        raw_payload: bytes | None = None,
     ) -> ProviderDataResponse:
         return ProviderDataResponse(
             status=status,
@@ -668,7 +681,7 @@ class TushareObservationProvider(DataProvider):
             provider_version=self.manifest.provider_version,
             upstream_source=source.upstream_source,
             retrieved_at=retrieved_at,
-            raw_payload=None,
+            raw_payload=raw_payload,
             observations=(),
             raw_records=(),
             error_kind=error_kind,
@@ -890,6 +903,10 @@ def _observations_from_pages(
             primary_values = {field: values[field] for field in config.primary_key_fields}
             primary_key_json = canonical_json_bytes(primary_values).decode()
             if primary_key_json in seen_primary_keys:
+                if config.primary_key_fields == config.fields:
+                    # Full-row source identity: identical repeated disclosures are
+                    # retained in raw pages but normalize to one observation.
+                    continue
                 raise TushareObservationDuplicateError(
                     "Tushare response contains duplicate primary keys"
                 )
@@ -968,7 +985,7 @@ def _validate_page_primary_keys(
         values = dict(zip(config.fields, row, strict=True))
         primary_values = {field: values[field] for field in config.primary_key_fields}
         primary_key_json = canonical_json_bytes(primary_values).decode()
-        if primary_key_json in seen_primary_keys:
+        if primary_key_json in seen_primary_keys and config.primary_key_fields != config.fields:
             raise TushareObservationDuplicateError(
                 "Tushare response contains duplicate primary keys"
             )
@@ -1219,7 +1236,10 @@ def _validate_row_temporal_fields(
     *,
     config: TushareObservationSourceConfig,
 ) -> None:
-    primary_keys = set(config.primary_key_fields)
+    # Full-row content identity includes typed absence; optional dates stay optional.
+    primary_keys: set[str] = (
+        set() if config.primary_key_fields == config.fields else set(config.primary_key_fields)
+    )
     for field_name in config.date_fields:
         value = values[field_name]
         if _missing_temporal_value(value):

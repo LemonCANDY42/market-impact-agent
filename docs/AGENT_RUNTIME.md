@@ -72,9 +72,34 @@ Frozen Harness input, tools, Skills and business validator
 
 The Harness is the sole authority for PIT, evidence, permission, experiments,
 budget, Journal, Usage, trading policy and reconciliation. pi supplies model
-protocols, opaque messages, the Agent loop and compaction. One-shot roles use the
-same loop with no tools and one turn, retaining their own business output
-contracts. Analyst, conditional Judge and delegated roles do not create a second
+protocols, opaque messages, the Agent loop and compaction. Roles use the same loop, retaining their own business output contracts.
+Without tools they use one turn; Research Thesis and Portfolio roles may receive
+Harness-injected read-only descriptors and then use the frozen Profile turn/tool
+bounds. Signed tool completions replay before a dependent model turn. Recall
+reads and directly injected prior theses share one cumulative 12,000-byte conservative
+token bound per Run. Signed initial-history and tool receipts reconstruct consumption
+across turns, compaction and replay without charging the same receipt twice or
+resetting the allowance. Their signed opinions remain context, never new source facts. The Harness
+binds the account/arm source-Run allowlist and tool manifest hashes. Newly acquired
+data requires a new frozen Snapshot and continuation Run on the same parent
+`ModelBudget`, rather than changing the current accepted evidence IDs.
+
+`analyze_with_acquisition` composes that transition using the existing signed
+Research Thesis terminal and parent acquisition Journal. A semantic miss seals an
+incomplete `ResearchAcquisitionRequired` Run before acquisition. Its successor
+binds the acquired Snapshot, receipt-advanced cutoff, same account/arm and parent
+budget in a new Evidence Pack and Run; acquisition waiting is never a portfolio
+hold. Explicit modeled historical continuation permits bounded completed-session
+`daily` and `fund_daily` records through the existing source routes. Actual receipts
+remain current; a separate modeled projection preserves the historical cutoff.
+Current news, profiles and constituents remain prohibited in that lane. The final
+signed research successor binds its concrete native-query candidates and source
+graph to portfolio admission and replay; aggregate research targets are not securities.
+Unknown model generation ends the composition without
+acquisition or regeneration. `OnDemandResearch.episode_id` freezes each Decision
+Episode deadline independently inside the shared study budget; reopening that
+episode cannot extend its deadline. Omitting the ID preserves the legacy
+parent-wide deadline binding. Analyst, conditional Judge and delegated roles do not create a second
 model loop or receive independent spending/financial authority.
 
 ### Reuse-first runtime policy

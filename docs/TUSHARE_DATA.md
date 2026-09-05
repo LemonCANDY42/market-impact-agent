@@ -390,3 +390,91 @@ price limits into every replay. Twenty-five registered buys each completed two d
 Nautilus runs. The v2 calibration gate rejected the cohort because candidate mean net return
 was not positive. This proves the bounded data/replay contract under those windows, not
 general Tushare permissions, Provider verification, alpha, or execution readiness.
+
+## Modeled historical account input authority
+
+`HistoricalAShareInputs` reopens explicit `LocalDataSnapshotStore` snapshot IDs,
+source configurations, complete provider attempts and raw CAS records. It checks
+that normalized Tushare rows match their stored raw fields/values. No data ledger,
+network client or execution engine is added. `with_snapshots` binds newly captured
+references for the next decision view; it does not rewrite earlier views.
+Each frozen input binding verifies and caches its immutable source-table tuple once,
+under a lock. A new binding, including `with_snapshots(())`, verifies the CAS graph
+again; cached decision views do not silently reread changed artifacts.
+
+The constructor requires `ModeledHistoricalPolicy` and effective-dated, versioned
+Harness trading-rule artifact hashes. A rule records its symbol, equity versus
+`exchange_traded_fund` class, effective interval, lot, tick, price-limit ratio and
+fees, and references the captured source document. `stock_basic`/`etf_basic` listing
+and exchange fields provide corroboration; current index/ETF mappings never replace
+the explicit historical rule. Missing or overlapping versions fail closed.
+
+`reopen_security(symbol, cutoff)` is the 09:25 Shanghai preopen decision projection.
+Raw price and turnover come exclusively from the calendar's previous completed
+trading session, with `raw_price_observed_at` retained as that prior close. Today's
+calendar, price limits and full-day halt information are usable only under the
+explicit modeled 09:00 venue-fact availability assumption. Their exclusive validity
+ends at 09:30:00.000001, covering the single opening tick through the named
+`opening_tick_validity_microseconds=1` policy. This is not a general extension of
+price freshness. Actual provider receipt timestamps remain unchanged; backfilled
+2025 rows captured in 2026 cannot become StrictPIT observations.
+
+`session(symbol, date)` is an executor-only projection and may contain that session's
+full raw OHLC/volume. It returns a source-backed instrument specification, an
+`AShareDailyBar`, corporate actions and typed gaps. Opening quote size is explicitly
+modeled as a configured fraction (at most 1%) of reported daily volume, converted
+from Tushare lots to shares. It is not an observed opening book and must not enter
+the preopen Agent view. Source daily limits are checked against the effective rule.
+The rule check uses the raw daily reference price. An absent optional
+`stk_limit.pre_close` remains absent in source evidence; it is compared only when
+both sources supply a value. Reported limits that disagree with the exchange tick
+calculation still block, including older provider values rounded to cents.
+
+The added [fund_adj](https://tushare.pro/document/2?doc_id=199),
+[fund_div](https://tushare.pro/document/2?doc_id=120) and
+[dividend](https://tushare.pro/document/2?doc_id=103) source templates preserve actual
+receipt semantics and private-research rights. `fund_div` exposes per-share cash,
+record, ex-dividend and payment dates. A supported same-day ex/payment event pays
+actual cash through Nautilus against the persisted record-date position; recovery
+reopens that entitlement rather than using holdings on the payment date. Dividend
+reinvestment, bonus shares, splits and delayed ex/payment settlement remain explicit
+gaps. `fund_adj`/`adj_factor` are anomaly/research evidence only: unexplained changes
+block; no adjusted factor can create shares or cash. Pending receivable valuation
+has not passed the pinned engine account contract, so a 120-day run crossing an
+unsupported event cannot be reported complete.
+
+The fund-dividend template uses full source-row identity because a single event can
+have multiple disclosures differing in fields such as net ex-date and distribution
+base. Exact repeated rows normalize once while every occurrence remains in raw
+capture pages; distinct disclosures remain separate evidence. Settlement groups
+matching symbol, record, ex-dividend and payment dates into one cash effect. Different
+cash amounts for that event produce `corporate_action_conflicting_payment_effects`
+and block settlement instead of selecting a revision or paying twice.
+
+Received pages are persisted even when provider parsing or primary-key validation
+fails. Such failed attempts retain a raw-response CAS hash with zero accepted
+observations, enabling offline reparsing after a source-contract fix. Secret-bearing
+or over-limit response bodies are excluded from this diagnostic retention.
+
+The official [suspend_d](https://tushare.pro/document/2?doc_id=214) contract documents
+stocks. Complete empty stock coverage can establish no reported suspension under
+the modeled policy; an empty ETF response cannot. For Shanghai ETFs,
+`sse_fund_suspension.py` captures the official exchange fund-suspension query through
+the same durable claims, authenticated Journal receipts and raw CAS. Unsigned
+diagnostic captures cannot authorize execution. Absence is usable only after exact
+symbol, unfiltered query, complete pagination and continuous history from inception
+have been verified. An overlapping suspension record remains a typed gap until its
+session semantics are mapped; neither a blank time nor a reason string proves a
+full-day trading halt. Unknown post-dispatch state requires reconciliation, while
+saved responses replay without another fetch. Each historical input binding verifies
+the bound SSE CAS and authenticated receipt graph once under a lock, then projects
+sessions from immutable coverage ranges, record intervals and source hashes. A new
+binding (including `with_snapshots(())`) and every standalone reopen verify the
+graph afresh; session projections never replay the parent Run Journal.
+
+The coverage artifact is part of every historical source binding and baseline
+replay identity. New coverage creates a new version; the actual current receipt
+never gains historical StrictPIT authority. Other exchanges or unsupported fund
+status sources retain `halt_status_unverified`. The synthetic positive fixtures exercise the same provider,
+CAS, source authority, dynamic admission and real Nautilus route, while actual ETF
+source availability and user entitlement must be verified independently.

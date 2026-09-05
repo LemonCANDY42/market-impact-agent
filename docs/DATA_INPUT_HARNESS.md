@@ -853,8 +853,8 @@ not reused, and a Watch whose poll, byte or wake budget is already exhausted rej
 subscriber instead of promising a future callback.
 
 The generic caller-created parent projection remains self-declaration even when append-only and
-content-addressed, so the project retains no generic context-minting path. One concrete authority is
-now accepted: `EventImpactTriageWatchAuthority` reopens an exact durable Triage Decision and derives
+content-addressed, so the project retains no generic context-minting path. The Triage authority is
+accepted: `EventImpactTriageWatchAuthority` reopens an exact durable Triage Decision and derives
 the allowed evidence references, event-cluster subject and bounded matcher terms for a cluster
 explicitly routed to Attention Watch. Unrelated, archived and EventAssessment-routed clusters remain
 closed. Free-text matching requires at least two co-occurring non-generic anchors; a single exact
@@ -866,6 +866,40 @@ to every due Watch bound to the same exact Collection Policy, without a second P
 Profile registration and multi-parent Triage resolution are durable; each Watch retains its own
 lease, matcher, budgets, aggregate freeze and callback outbox. Only the separately admitted bounded
 acquisition executor for a `fetch_required` Resolution remains a later PDI-40 gate.
+
+Research Thesis adds a second concrete parent resolver, not another Watch runtime.
+`ResearchThesisWatchDelegation.bind` freezes a Harness-offered profile catalog, explicit root-event
+Monitoring Subject and matcher anchors against the existing `OnDemandResearch` Episode event,
+deadline and shared ModelBudget. The signed completed Thesis Run also binds its account, model arm,
+target and cutoff. The initial scope is the exact Evidence Pack root event; company or industry
+membership is never inferred from prose. Historical/modelled inputs cannot create this prospective
+Watch delegation. `request_research_watch` only proposes a bounded request: the existing signed pi
+tool-completion artifact is its durable queue, and post-terminal admission reopens that exact tool
+manifest and completed parent. Relative-date Runs reconstruct the exact transformed manifest and
+verify the redacted native result against its signed arguments; admission retains the canonical
+request without exposing original dates in the tool response. Active duration is capped at the
+original Episode deadline. Research Watch reuse includes exact experiment/account/arm/target/Episode
+ownership, so unrelated scopes cannot become callback subscribers of the same Watch. Their
+collection work still shares the existing Journaled Collection Snapshot.
+
+`run_research_thesis_watch_callback` reuses the existing dispatcher Run claim, reopens the original
+research question, Watch question/rationale, thesis, counterevidence and invalidation conditions,
+and checks the new versions against the matching Snapshot delta and their actual first receipts.
+The supplied Harness review callback receives the original account/arm/target, Episode deadline,
+parent ModelBudget and frozen delegate profile. It must use `parent_run_id` as the existing counted
+`prior_thesis_run_id` input; prior thesis text must not be copied into fresh evidence to evade the
+combined history budget. Completed callbacks replay their stored result, including interrupted
+terminalization. An interrupted callback without a durable completion requires reconciliation and
+never regenerates. `run_prospective_watch_review` supplies that concrete composition through the existing
+`run_prospective_discovery` function: it freezes only the new Journal receipt versions as fresh
+source evidence, invokes counted prior-aware Research Thesis, reopens the supplied current-account
+and security authorities, and runs the same Portfolio Review. It divides the frozen callback
+turn/token/cost ceilings across its bounded possible native roles, intersecting each share with the
+original Provider Profile; pricing, effort and the parent ModelBudget remain unchanged. Missing
+account, source or portfolio configuration returns exact `pending_authority` gaps. No CLI account,
+collection route or execution authority is inferred. Opting into `watch_delegation` automatically
+adds the bound native proposal tool; the prospective composition admits its signed completed
+proposals after the thesis terminal.
 
 The callback lookup remains a read-only binding over a durable Wake, accepted Admission and exact
 still-registered delegate profile. `AgentWatchWakeDispatcher` can now create one deterministic fresh
@@ -912,3 +946,80 @@ not refetch, regenerate or acknowledge a Wake before those bindings are durable.
 
 See [DATA_PLATFORM_PLAN.md](DATA_PLATFORM_PLAN.md) for layer ownership, the infrastructure adoption
 matrix, A-share source order, operational limits, and evolution gates.
+
+### Durable on-demand acquisition
+
+`DataQueryMode.DURABLE_FETCH_IF_MISSING` adds an opt-in exact-query acquisition claim
+in the same Harness SQLite authority. Query identity already binds source configuration,
+Provider/version, semantic parameters, policy, rights-bearing route configuration, and
+PIT cutoff. Independent processes cannot issue the same claimed query. Network I/O and
+CAS preparation occur outside write transactions; snapshot indexing and terminal claim
+completion commit together. Terminal snapshots retain typed no-data and failures and are
+returned without a new request, even when coverage is incomplete. This differs from the
+legacy `FETCH_IF_MISSING` collection retry behavior, which remains unchanged.
+
+`AcquisitionPending` asks the owning caller to continue within its existing episode deadline
+and budget. Expired or interrupted owners produce `AcquisitionUncertain`; expiry does not
+permit a blind retry. A crash after external receipt but before durable publication cannot
+be reconstructed as success. No timer, model invocation, retry grant, or separate scheduler
+is created by this layer.
+
+The opt-in `TushareDailyRangeCache` Provider decorator reuses complete source intervals for
+`daily` and `fund_daily` with exactly one `ts_code`, `start_date`, and `end_date`. Register it
+with the existing Harness and use `FETCH_IF_MISSING`: its own source-scope claims serialize
+interval work across processes. Its key includes the entire source binding/configuration,
+fields and rights, capability, PIT lane, policy, and instrument. Only the underlying
+Provider's completed pagination yields reusable coverage. Missing prefixes, suffixes and
+internal gaps use the existing Provider collector; cached normalized rows keep their original
+receipt and authority times, and the original Harness cutoff still filters the projection.
+No-data is a durable queried interval, not evidence of tradability or absence of a halt.
+Failures block overlapping retries; lost owners are uncertain. Generic providers do not gain
+interval coverage implicitly. Event-window reuse remains owned by the existing Journal's
+exact-policy receipt coverage and freeze operation.
+
+`on_demand_research.OnDemandResearch` supplies the executable semantic composition.
+Construct it with the existing authoritative parent `ModelBudget`, unchanged absolute
+`episode_deadline`, active Run ID/cutoff/PIT lane, explicit `ResearchSourceTemplate` bindings,
+and that Run's `FrozenDataSnapshotInput` (or no data authorization). `descriptors()` returns
+ordinary read-only tools for raw stock/fund prices, current company/fund profiles,
+industry taxonomy and membership, ETF constituents, bounded news, suspension records,
+and exchange price limits.
+Templates derive Provider/version/source/rights identity from the configured Tushare routes;
+model arguments contain only one instrument and, for price queries, its date interval.
+Industry, event and tradability placeholders return a typed gap only when their source
+family is not configured. Industry/company code filters allow a news-to-industry-to-new
+company research path; these observations do not approve instruments or orders.
+
+During the model Run, a tool reads only the snapshots captured in its constructor.
+Observation pages default to 20 rows; `offset` and `limit` (maximum 100) paginate the
+same authorized snapshot without changing the source query. A miss
+records `research.data.requested` in the existing parent Journal and returns
+`continuation_required`, without network I/O or expansion of active evidence. After the Run
+has yielded, the caller invokes `fulfill_pending()`. It shares parent cancellation, model
+allowance and the absolute episode deadline, claims each request through the existing
+Journal, acquires via the registered Provider/range cache, stages the receipt durably, and
+replays it through `DataInputHarness`. A staged receipt can recover without another fetch;
+an unaccounted started request stays uncertain. Exact profile requests use the durable
+Harness acquisition mode, and price requests use complete interval reuse.
+
+`successor_input(results)` returns a successor cutoff and frozen declaration for the caller's
+next Run. Prospective cutoffs advance to include actual receipt; old tool closures retain
+only their original snapshot set. Historical cache misses return `planned_external_historical_acquisition` with the
+semantic template, parameters, cutoff and lane for the owning coordinator. These
+actual-receipt source templates cannot themselves backdate current source information. Typed
+source failures/no-data remain snapshots and gaps. The composition creates no model budget,
+model call, scheduler, broker path or independent collection loop. The same parent binding
+prevents resetting the deadline or allowance across successor Runs.
+
+Preparation can call `await research.request(tool_name, arguments)` with the explicit
+`harness_preparation` origin, then use the same fulfillment and successor-input methods.
+This logs preparation separately from `agent_tool` requests and does not imply an Agent
+or model was called. Use a preparation Run ID under the same parent budget and deadline.
+Additional templates cover `fund_adj`, `fund_div`, `dividend`, and `trade_cal` through
+`lookup_fund_adjustments`, `lookup_fund_distributions`, `lookup_company_distributions`,
+and `lookup_exchange_calendar`. Corporate-action lookups accept one instrument with
+optional exact source date filters; calendar requests bind exchange and a date interval.
+All dates are checked before frozen-cache selection or acquisition. Raw price, adjustment,
+suspension and limit windows cannot extend beyond the active cutoff's date. Calendar
+schedules may describe future dates while retaining their actual receipt authority; no
+schedule, factor or cash-action record becomes a historical execution claim implicitly.

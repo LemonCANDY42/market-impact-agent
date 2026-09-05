@@ -7,9 +7,19 @@ prospective studies retain their frozen registrations and reports, but none may 
 an Agent, strategy or Skill effective. Engineering acceptance, investment effectiveness,
 execution-Provider acceptance and execution authorization remain separate claims.
 
-## Dynamic-horizon, multi-model development epoch
+## Current continuous-study scope
 
-The next development epoch removes the old five-session horizon as a universal
+The user-approved 2026-09-05 [continuous study](CONTINUOUS_DECISION_STUDY.md)
+replaces the earlier scope for new work: 18 coverage cases, eight complete rolling
+cases, three models, three review schedules and a cumulative USD 40 ceiling that
+includes preserved earlier use. Expiry-only review is the new control. The old
+one-shot experiments below retain their original registrations and cannot be
+combined with the new account comparisons. Engineering completion, actual model
+consumption, source qualification and investment results are reported separately.
+
+## Preserved dynamic-horizon, multi-model development epoch — 2026-09-04
+
+This earlier development epoch removed the old five-session horizon as a universal
 business rule. Earlier eight-case five-session artifacts remain immutable and
 replayable. New `ResearchThesisV1` forecasts choose exactly one registered
 horizon: immediate 1/3 sessions, tactical 5/10, or swing 20/60. A thesis states
@@ -1084,6 +1094,12 @@ quarantines immediately; replicated ineffectiveness or incremental harm demotes 
 rewriting prior traces.
 
 ## Prospective and Paper progression
+
+The new [continuous decision study](CONTINUOUS_DECISION_STUDY.md) registers 18 coverage
+windows and 72 rolling account trajectories, with one shared cumulative USD 40 budget.
+Its expiry-only control renews at each thesis expiry throughout the same observation
+window. Legacy one-shot results are preserved separately. Registration, engineering
+tests and descriptive account metrics do not satisfy the following prospective gate.
 
 All qualifying actual-receipt events, abstentions, failures, missing inputs and no-fills enter the
 sealed prospective denominator established by its qualification window, cutoff, Journal and digest.

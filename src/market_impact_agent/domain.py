@@ -269,8 +269,8 @@ class TradingMandateV2:
             raise ValueError("valid_until must be after valid_from")
         if self.valid_until - self.valid_from > timedelta(days=1):
             raise ValueError("Trading Mandate v2 validity cannot exceed one day")
-        if self.environment is not TradingEnvironment.PAPER:
-            raise ValueError("Trading Mandate v2 is paper-only")
+        if self.environment not in self._accepted_environments():
+            raise ValueError("Trading Mandate environment is outside its versioned scope")
         if not self.allowed_instruments:
             raise ValueError("allowed_instruments must not be empty")
         if not self.allowed_sides:
@@ -282,8 +282,8 @@ class TradingMandateV2:
             raise ValueError("Trading Mandate v2 allows only unlevered cash equity or ETF classes")
         if not self.currency or self.currency != self.currency.strip():
             raise ValueError("currency must be non-empty trimmed text")
-        if self.currency != "USD":
-            raise ValueError("Trading Mandate v2 currently accepts USD only")
+        if self.currency != self._accepted_currency():
+            raise ValueError("Trading Mandate currency is outside its versioned scope")
         for value, name in (
             (self.gross_exposure_limit, "gross_exposure_limit"),
             (self.daily_turnover_limit, "daily_turnover_limit"),
@@ -329,6 +329,12 @@ class TradingMandateV2:
         ):
             raise ValueError("Trading Mandate v2 kill predicates cannot be disabled")
 
+    def _accepted_currency(self) -> str:
+        return "USD"
+
+    def _accepted_environments(self) -> frozenset[TradingEnvironment]:
+        return frozenset({TradingEnvironment.PAPER})
+
     def to_dict(self) -> dict[str, object]:
         return {
             "schema_version": "market-impact.trading-mandate.v2",
@@ -359,6 +365,47 @@ class TradingMandateV2:
             "kill_on_incomplete_order_coverage": self.kill_on_incomplete_order_coverage,
             "kill_on_reconciliation_difference": self.kill_on_reconciliation_difference,
             "kill_on_provider_loss": self.kill_on_provider_loss,
+        }
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TradingMandateV3(TradingMandateV2):
+    """Concrete CNY historical/local Mock mandate; no broker or live authority."""
+
+    universe_binding_hash: str
+    execution_scope: str = "historical_backtest"
+
+    def _accepted_currency(self) -> str:
+        return "CNY"
+
+    def _accepted_environments(self) -> frozenset[TradingEnvironment]:
+        return frozenset({TradingEnvironment.BACKTEST, TradingEnvironment.PAPER})
+
+    def __post_init__(self) -> None:
+        TradingMandateV2.__post_init__(self)
+        expected = (
+            "historical_backtest"
+            if self.environment is TradingEnvironment.BACKTEST
+            else "local_mock"
+        )
+        if self.execution_scope != expected or self.minimum_net_exposure < 0:
+            raise ValueError("CNY mandate requires explicit long-only historical/local Mock scope")
+        if len(self.universe_binding_hash) != 64 or any(
+            char not in "0123456789abcdef" for char in self.universe_binding_hash
+        ):
+            raise ValueError("CNY mandate requires an immutable Universe binding")
+        if any(
+            len(item) != 9 or not item[:6].isdigit() or item[6:] not in {".SH", ".SZ"}
+            for item in self.allowed_instruments
+        ):
+            raise ValueError("CNY mandate requires concrete A-share instrument identities")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            **TradingMandateV2.to_dict(self),
+            "schema_version": "market-impact.trading-mandate.v3",
+            "universe_binding_hash": self.universe_binding_hash,
+            "execution_scope": self.execution_scope,
         }
 
 

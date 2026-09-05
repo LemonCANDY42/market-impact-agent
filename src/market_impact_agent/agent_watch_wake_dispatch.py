@@ -232,6 +232,11 @@ class AgentWatchWakeDispatcher:
                 config_hash=artifact.content_hash,
                 created_at=dispatched_at,
             )
+            if run.status.terminal:
+                reopened = self.reopen_dispatch(binding.run_id)
+                if reopened.binding != binding:
+                    raise ValueError("terminal Watch Wake Run differs from its binding")
+                return reopened
             event = self.run_journal.append(
                 run_id=binding.run_id,
                 event_id=event_id,

@@ -46,6 +46,7 @@ from market_impact_agent.portfolio_decision import (
 from market_impact_agent.portfolio_review import (
     AgentPortfolioProposalV3,
     AgentPortfolioProposalV4,
+    AgentPortfolioProposalV5,
     PortfolioDecisionV3,
     PortfolioExecutionAdmissionV3,
     PortfolioReviewAuthority,
@@ -964,7 +965,8 @@ class AutonomousPaperExecutionServiceV2:
         elif _review is not None or not isinstance(proposal, AgentPortfolioProposalV2):
             raise PermissionError("portfolio-origin orders require explicit manual_each approval")
         now = self._now()
-        risk_reduction = proposal.requested_action in {
+        source_only_rotation = _is_v5_source_close(proposal, portfolio_decision, sizing_decision)
+        risk_reduction = source_only_rotation or proposal.requested_action in {
             PortfolioAction.REDUCE,
             PortfolioAction.CLOSE,
         }
@@ -977,11 +979,16 @@ class AutonomousPaperExecutionServiceV2:
             evaluated_at=now,
             risk_reduction=risk_reduction,
         )
-        if self.active_kill_reasons and proposal.requested_action in {
-            PortfolioAction.OPEN,
-            PortfolioAction.INCREASE,
-            PortfolioAction.ROTATE,
-        }:
+        if (
+            not source_only_rotation
+            and self.active_kill_reasons
+            and proposal.requested_action
+            in {
+                PortfolioAction.OPEN,
+                PortfolioAction.INCREASE,
+                PortfolioAction.ROTATE,
+            }
+        ):
             raise PermissionError("active autonomous kill blocks new or increased exposure")
         _assert_chain(
             proposal=proposal,
@@ -2975,6 +2982,10 @@ def _assert_chain(
         if actual_hash != expected_price_hash or sized_leg.price_basis_hash != expected_price_hash:
             raise ValueError("Order Sizing v2 does not bind the exact raw Price Basis")
     if proposal.requested_action is PortfolioAction.ROTATE:
+        if isinstance(proposal, AgentPortfolioProposalV5):
+            if not _is_v5_source_close(proposal, portfolio_decision, sizing_decision):
+                raise PermissionError("v5 rotation accepts only an exact full source close")
+            return
         source = tuple(
             (decision_leg, sized_leg)
             for decision_leg, sized_leg in zip(
@@ -2999,6 +3010,33 @@ def _assert_chain(
             raise PermissionError(
                 "rotation destination must remain blocked until source reconciliation"
             )
+
+
+def _is_v5_source_close(
+    proposal: AgentPortfolioProposalV2 | AgentPortfolioProposalV3 | AgentPortfolioProposalV4,
+    decision: PortfolioDecisionV2 | PortfolioDecisionV3,
+    sizing: OrderSizingDecisionV2,
+) -> bool:
+    if (
+        not isinstance(proposal, AgentPortfolioProposalV5)
+        or proposal.requested_action is not PortfolioAction.ROTATE
+    ):
+        return False
+    if len(decision.legs) != 1 or len(sizing.legs) != 1:
+        return False
+    leg, sized = decision.legs[0], sizing.legs[0]
+    return (
+        leg.role is PortfolioLegRole.ROTATION_SOURCE
+        and leg.action is PortfolioAction.CLOSE
+        and leg.current_side is Side.BUY
+        and leg.physical_target_side is Side.SELL
+        and leg.target_gross_exposure_ratio == 0
+        and leg.instrument_id == proposal.rotation_source_instrument_id == sized.instrument_id
+        and leg.instrument_id != proposal.instrument_id
+        and sized.side is Side.SELL
+        and sized.outcome is OrderSizingOutcome.READY
+        and sized.quantity == leg.current_quantity > 0
+    )
 
 
 def _assert_existing_operation_matches(

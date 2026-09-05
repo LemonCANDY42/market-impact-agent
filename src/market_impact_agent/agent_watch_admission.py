@@ -53,6 +53,7 @@ from market_impact_agent.prospective_data import (
 
 if TYPE_CHECKING:
     from market_impact_agent.prospective_event_assessment import EventAssessmentRunAuthority
+    from market_impact_agent.research_thesis_watch import ResearchThesisWatchAuthorityResolver
 
 AGENT_WATCH_REQUEST_SCHEMA = "market-impact.agent-watch-request.v1"
 AGENT_WATCH_ADMISSION_SCHEMA = "market-impact.agent-watch-admission.v1"
@@ -849,10 +850,13 @@ class AgentWatchAdmissionService:
             AgentDelegationContextStore
             | EventImpactTriageWatchAuthority
             | EventImpactTriageWatchAuthorityResolver
+            | ResearchThesisWatchAuthorityResolver
         ),
         journal: ProspectiveDataJournal | None = None,
         watch_service: AttentionWatchService | None = None,
     ) -> None:
+        from market_impact_agent.research_thesis_watch import ResearchThesisWatchAuthorityResolver
+
         if len({item.profile_id for item in profiles}) != len(profiles):
             raise ValueError("Agent Watch admission requires unique delegate profiles")
         self.store = store
@@ -864,6 +868,7 @@ class AgentWatchAdmissionService:
         )
         if type(delegation_authority) not in {
             AgentDelegationContextStore,
+            ResearchThesisWatchAuthorityResolver,
             EventImpactTriageWatchAuthority,
             EventImpactTriageWatchAuthorityResolver,
         }:
@@ -888,7 +893,7 @@ class AgentWatchAdmissionService:
                 raise ValueError("Watch delegate profile capability does not match its route")
             if profile.minimum_coverage_sources > len(collection_policy.sources):
                 raise ValueError("Watch delegate profile coverage exceeds its route")
-        if self._has_triage_authority():
+        if self._has_parent_authority():
             self._reconcile_pending_watch_activations()
 
     def _connect(self) -> sqlite3.Connection:
@@ -1000,6 +1005,7 @@ class AgentWatchAdmissionService:
                     profile
                     for profile in self.profiles.values()
                     if profile.profile_id in self._offered_profile_ids
+                    and self._profile_authorized_by_parent(context, profile.profile_id)
                     and context.parent_agent_type in profile.allowed_parent_agent_types
                     and context.lineage_depth < profile.maximum_lineage_depth
                     and (
@@ -1023,7 +1029,7 @@ class AgentWatchAdmissionService:
         admission = agent_watch_admission_from_dict(
             self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
         )
-        self._reopen_triage_admission(admission)
+        self._reopen_parent_admission(admission)
         return admission
 
     def admit(
@@ -1113,7 +1119,7 @@ class AgentWatchAdmissionService:
             )
         matcher_terms = {term for clause in request.matcher.clauses for term in clause.terms}
         if not matcher_terms <= set(context.authorized_matcher_terms) or (
-            self._has_triage_authority() and not _specific_triage_matcher(request.matcher)
+            self._has_parent_authority() and not _specific_triage_matcher(request.matcher)
         ):
             return self._reject(
                 request,
@@ -1142,12 +1148,32 @@ class AgentWatchAdmissionService:
             template=profile.query_template,
             collection_policy=self.journal.policy(profile.collection_policy_id),
         )
+        operational_key = _operational_scope_key(profile, scope)
+        expires_at = decided_at + timedelta(seconds=profile.active_duration_seconds)
+        from market_impact_agent.research_thesis_watch import ResearchThesisWatchAuthorityResolver
+
+        if type(self.delegation_authority) is ResearchThesisWatchAuthorityResolver:
+            parent = self.delegation_authority.parent(context.parent_ref)[1]
+            if (
+                decided_at > self.delegation_authority.clock()
+                or decided_at >= parent.episode_deadline
+            ):
+                raise PermissionError(
+                    "research Watch admission exceeds its Episode deadline or current clock"
+                )
+            expires_at = min(expires_at, parent.episode_deadline)
+            operational_key = canonical_hash(
+                {
+                    "collection_scope": operational_key,
+                    "research_scope": self.delegation_authority.operational_scope_identity(),
+                }
+            )
         watch = AttentionWatchPolicy.build(
             origin_ref=context.parent_ref,
             collection_policy_id=profile.collection_policy_id,
             initial_data_snapshot_id=initial_data_snapshot_id,
             starts_at=decided_at,
-            expires_at=decided_at + timedelta(seconds=profile.active_duration_seconds),
+            expires_at=expires_at,
             maximum_polls=profile.maximum_polls,
             maximum_bytes=profile.maximum_bytes,
             maximum_wakes=profile.maximum_wakes,
@@ -1163,7 +1189,7 @@ class AgentWatchAdmissionService:
             scope=scope,
             plan=plan,
             watch=watch,
-            operational_key=_operational_scope_key(profile, scope),
+            operational_key=operational_key,
             decided_at=decided_at,
         )
         self._ensure_watch_activated(admission)
@@ -1238,7 +1264,7 @@ class AgentWatchAdmissionService:
             admission = agent_watch_admission_from_dict(
                 self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
             )
-            self._reopen_triage_admission(admission)
+            self._reopen_parent_admission(admission)
             request = self._request(cast(str, row["request_id"]))
             profile = self.profiles.get(cast(str, row["delegate_profile_id"]))
             if profile is None:
@@ -1256,20 +1282,28 @@ class AgentWatchAdmissionService:
         return tuple(bindings)
 
     def _require_parent_authority_integration(self, operation: str) -> None:
-        if self._has_triage_authority():
+        if self._has_parent_authority():
             return
         raise ValueError(
             "Agent Watch parent authority integration is not configured; "
             f"{operation} cannot be authorized"
         )
 
-    def _reopen_triage_admission(
+    def _reopen_parent_admission(
         self,
         admission: AgentWatchAdmission,
     ) -> AgentDelegationContext:
-        if not self._has_triage_authority():
-            raise ValueError("Agent Watch admission has no concrete Triage parent authority")
-        context = self._triage_authority(admission.parent_ref).delegation_context()
+        from market_impact_agent.research_thesis_watch import ResearchThesisWatchAuthorityResolver
+
+        if type(self.delegation_authority) is ResearchThesisWatchAuthorityResolver:
+            context = self.delegation_authority.delegation_context(admission.parent_ref)
+            if (
+                admission.outcome is not WatchAdmissionOutcome.REJECTED
+                and not self._profile_authorized_by_parent(context, admission.delegate_profile_id)
+            ):
+                raise ValueError("Watch admission profile is outside its signed parent offer")
+        else:
+            context = self._triage_authority(admission.parent_ref).delegation_context()
         if (
             admission.parent_ref != context.parent_ref
             or admission.parent_agent_type != context.parent_agent_type
@@ -1278,6 +1312,23 @@ class AgentWatchAdmissionService:
         ):
             raise ValueError("Agent Watch admission differs from reopened Triage authority")
         return context
+
+    def _has_parent_authority(self) -> bool:
+        from market_impact_agent.research_thesis_watch import ResearchThesisWatchAuthorityResolver
+
+        return (
+            self._has_triage_authority()
+            or type(self.delegation_authority) is ResearchThesisWatchAuthorityResolver
+        )
+
+    def _profile_authorized_by_parent(
+        self, context: AgentDelegationContext, profile_id: str
+    ) -> bool:
+        from market_impact_agent.research_thesis_watch import ResearchThesisWatchAuthorityResolver
+
+        if type(self.delegation_authority) is ResearchThesisWatchAuthorityResolver:
+            return profile_id in self.delegation_authority.offered_profile_ids(context.parent_ref)
+        return True
 
     def _has_triage_authority(self) -> bool:
         return type(self.delegation_authority) in {
@@ -1636,8 +1687,8 @@ class AgentWatchAdmissionService:
     def _ensure_watch_activated(self, admission: AgentWatchAdmission) -> None:
         if admission.outcome is WatchAdmissionOutcome.REJECTED:
             return
-        if self._has_triage_authority():
-            self._reopen_triage_admission(admission)
+        if self._has_parent_authority():
+            self._reopen_parent_admission(admission)
         if admission.watch_id is None:
             raise AssertionError("accepted Agent Watch admission is missing its Watch")
         try:
@@ -1664,8 +1715,8 @@ class AgentWatchAdmissionService:
         owner = agent_watch_admission_from_dict(
             self.store.artifacts.read_json(cast(str, row["artifact_hash"]))
         )
-        if self._has_triage_authority():
-            self._reopen_triage_admission(owner)
+        if self._has_parent_authority():
+            self._reopen_parent_admission(owner)
         try:
             self.watch_service.create(policy, created_at=owner.admitted_at)
         except sqlite3.IntegrityError:
@@ -1704,7 +1755,21 @@ class AgentWatchAdmissionService:
                 and admission.parent_ref != authority.cluster_id
             ):
                 continue
-            self._reopen_triage_admission(admission)
+            from market_impact_agent.research_thesis_watch import (
+                RESEARCH_WATCH_PARENT_TYPE,
+                ResearchThesisWatchAuthorityResolver,
+            )
+
+            is_research = type(authority) is ResearchThesisWatchAuthorityResolver
+            if (admission.parent_agent_type == RESEARCH_WATCH_PARENT_TYPE) != is_research:
+                continue
+            if type(
+                authority
+            ) is ResearchThesisWatchAuthorityResolver and not authority.owns_parent(
+                admission.parent_ref
+            ):
+                continue
+            self._reopen_parent_admission(admission)
             self._ensure_watch_activated(admission)
 
 
