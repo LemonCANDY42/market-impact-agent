@@ -242,3 +242,50 @@ def test_runner_refuses_changed_authority_before_pi(
         )
     assert len(receipts.transport.requests) == before
     assert receipts.acquisition.budget.summary()["physical_requests"] == 0
+
+
+def test_v2_preparation_and_fixed_denominator_budget_pending(
+    receipts: ReceiptFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from .test_ashare_security_qualification import accepted_policy
+
+    policy = accepted_policy(receipts.acquisition.store, RETRIEVED - timedelta(days=1))
+    prepared = entry.prepare_prospective_discovery(
+        study_root=receipts.root,
+        receipt_binding_path=receipts.binding_path,
+        receipt_report_path=receipts.report_path,
+        receipt_episode_id="received-news",
+        receipt_run_id="received-news.research",
+        templates=tuple(receipts.acquisition.templates.values()),
+        rule_policy_event_id=policy.acceptance_event_id,
+    )
+    assert prepared["schema_version"] == "market-impact.prospective-discovery-entry.v2"
+    assert prepared["maximum_runs_per_model"] == 3
+    assert prepared["maximum_stage_cost_microusd"] == 2500000
+    assert prepared["rule_policy_artifact_hash"] == policy.policy_artifact_hash
+    registration_path = receipts.root / "v2.json"
+    registration_path.write_text(json.dumps(prepared))
+
+    def templates(**_: object) -> tuple[ResearchSourceTemplate, ...]:
+        return tuple(receipts.acquisition.templates.values())
+
+    def exhausted(_: ModelBudget) -> dict[str, int]:
+        return {
+            "physical_requests": 1,
+            "known_cost_microusd": 2500000,
+            "reserved_microusd": 0,
+            "unsettled_requests": 0,
+        }
+
+    monkeypatch.setattr(entry, "discovery_source_templates", templates)
+    monkeypatch.setattr(ModelBudget, "scope_summary", exhausted)
+    report = asyncio.run(
+        entry.run_prepared_prospective_discovery(
+            study_root=receipts.root, registration_path=registration_path
+        )
+    )
+    assert report["denominator"] == 3
+    assert [row["status"] for row in cast(list[dict[str, object]], report["results"])] == [
+        "pending_budget"
+    ] * 3
+    assert receipts.acquisition.budget.summary()["physical_requests"] == 0

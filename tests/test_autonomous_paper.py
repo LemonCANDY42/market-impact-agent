@@ -1518,3 +1518,62 @@ def test_forked_child_cannot_use_or_unlock_parent_service(tmp_path: Path) -> Non
     service.close()
     successor = _open_service(fixture.store, fixture, service.provider_lease.lease_id)
     successor.close()
+
+
+def test_usd_renewal_preserves_legacy_risk_scope_and_blocks_unresolved_operations(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path / "risk")
+    service = _service(tmp_path, fixture)
+    service.close()
+    _set_equity_change(fixture, change=Decimal("1001"))
+    fixture.clock_box[0] = AT + timedelta(seconds=4)
+    peak = _service(tmp_path, fixture)
+    peak.close()
+    fixture.mandate = replace(
+        fixture.mandate, mandate_id="renewed-universe", allowed_instruments=frozenset({TARGET})
+    )
+    _set_equity_change(fixture, change=Decimal("-1"))
+    renewed = _service(tmp_path, fixture)
+    assert "strategy_peak_drawdown_threshold_exceeded" not in renewed.active_kill_reasons
+    renewed.close()
+
+    pending = _fixture(tmp_path / "pending")
+    service = _service(tmp_path, pending)
+    _admit(service, pending)
+    service.close()
+    pending.mandate = replace(pending.mandate, mandate_id="unsafe-renewal")
+    with pytest.raises(PermissionError, match="unresolved operations"):
+        _service(tmp_path, pending)
+
+
+def test_reconciled_old_mandate_turnover_remains_in_renewed_budget(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    service = _service(tmp_path, fixture)
+    operation = _admit(service, fixture)[0]
+    service.dispatch_next()
+    service.request_cancel(operation.client_order_id)
+    service.dispatch_next_cancellation()
+    _refresh_reconciliation_authorities(fixture)
+    assert service.reconcile().complete
+    service.close()
+    fixture.mandate = replace(fixture.mandate, mandate_id="universe-renewal")
+    renewed = _service(tmp_path, fixture)
+    try:
+        with (
+            fixture.store.authority_transaction() as connection,
+            pytest.raises(PermissionError, match="daily turnover"),
+        ):
+            renewed._assert_reservation_budget(  # pyright: ignore[reportPrivateUsage]
+                connection,
+                exposure_view=fixture.exposure_box[0],
+                account_state=fixture.account_box[0],
+                instrument_id=SECOND_TARGET,
+                signed_delta=Decimal(0),
+                gross_delta=Decimal(0),
+                turnover_reserved=Decimal(47000),
+                cash_reserved=Decimal(0),
+                position_count_delta=0,
+            )
+    finally:
+        renewed.close()

@@ -509,3 +509,70 @@ never gains historical StrictPIT authority. Other exchanges or unsupported fund
 status sources retain `halt_status_unverified`. The synthetic positive fixtures exercise the same provider,
 CAS, source authority, dynamic admission and real Nautilus route, while actual ETF
 source availability and user entitlement must be verified independently.
+
+## Generic dynamic A-share qualification
+
+`SourceBackedAShareRulePolicy` reopens a root-signed
+`ashare.rule_policy.accepted` Journal event and its immutable policy artifact.
+The ordinary `research.public.received` event records acquisition provenance; it
+is **not** a signed acceptance. Harness-only `accept_ashare_rule_policy` binds the
+reviewed 2026 revision to the source receipts, actual receipt times, source URLs
+and verified raw CAS bytes. Reopening checks the root signature, fixed registered
+numeric policy and complete source coverage. Agent dictionaries cannot mint this
+acceptance. The accepted source interval begins on 2026-07-06; its end is absent
+unless an actual bound is supplied. A current qualification cannot precede policy
+acceptance. Historical use remains explicitly modeled and cannot authorize dates
+before this source revision became effective.
+
+Required source coverage includes the SSE and SZSE 2026 notices and full rules,
+the SSE deferred-implementation attachment, the applicable tax notice, and Tushare
+ETF/fund classification documentation. Auction buy sizing follows clauses 3.3.8
+and 3.3.11: 100 shares/units, CNY 0.01 equity tick and CNY 0.001 fund tick. Deferred
+block-trade behavior is not enabled. Commission is the separately registered
+**SYNTHETIC** account policy (0.0003, minimum CNY 5), not an exchange/broker fact.
+The modeled stamp-tax rates are 0.0005 for equity sells and zero for equity ETFs.
+This is a bounded local account fee model, not a claim of complete broker charges.
+
+`qualify_ashare_security` selects a concrete acquired security by venue and
+supported class, without a symbol whitelist or manually injected symbol rule.
+Current mainboard stock identity excludes known special/delisting names and
+unsupported board prefixes. ETF qualification requires acquired `etf_basic`
+domestic/tracked-index identity plus matching `fund_basic` exchange-listed,
+`股票型` classification and listing date. `etf_type=境内` alone does not distinguish
+equity from bond or commodity funds. The added `lookup_fund_asset_class(ts_code)`
+route uses [fund_basic](https://tushare.pro/document/2?doc_id=19), with the existing
+source configuration, capture and successor mechanisms.
+
+The resolver persists `market-impact.ashare-security-qualification.v1` and a
+concrete `market-impact.ashare-qualified-rule.v1` artifact. The rule's static
+lot/tick/class identity is distinct from session execution readiness and stays
+stable when unchanged source evidence is reopened at a later cutoff. In particular,
+a domestic stock ETF is **not** automatically a 10% product: SZSE 3.3.13 includes
+20% tracked-index exceptions. The bounded normal-regime rule requires the session's
+reported limits to match the accepted 10% formula before execution. Stock execution
+also requires at least five prior observed exchange sessions since listing;
+calendar days and names without “ST” do not prove a normal historical regime.
+Unknown/special regimes remain gaps.
+
+`ProspectiveAShareInputs` uses actual received identity and daily facts for static
+qualification and completed-session reference valuation. `raw_price_observed_at`
+remains the actual prior daily close; receipt today cannot make it an intraday
+quote. This base adapter always carries `fresh_intraday_quote_missing` and grants
+no executable quote authority. Research may still finish outside market hours.
+The `lookup_stock_quote`/`lookup_fund_quote` routes accept only `freq=1MIN` and
+provide actually observed bars, not an order book. Frozen quote reuse requires
+both source observation and receipt within two minutes of the frozen cutoff.
+A stale view queues the existing acquisition continuation; fulfillment cannot
+silently refresh the active Run. Repeated requests in the same frozen binding
+reuse its existing request/completion identities.
+
+Historical expansion is opt-in through
+`ModeledHistoricalPolicy(research_projection="dynamic_ashare_sources_v1")` plus
+accepted generic qualification policy. Route-specific projections include immutable
+listing identity, calendar, preopen reported limits/full-day halts, completed
+adjustment factors and announcement-dated action schedules. Current company names,
+industry and stock/fund classifications are not backfilled. Their historical
+regime authority requires observations actually received by that cutoff; otherwise
+the result records a gap. Intraday quote routes remain unprojectable. The old
+`qualified_seed_etf_exchange_rule_v1`, including its two-symbol restriction and
+serialized default-policy identities, remains unchanged.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import cast
 
 from market_impact_agent.account_state import AccountStateSnapshot
@@ -51,6 +51,10 @@ async def run_prospective_watch_review(
         PortfolioReviewAuthority,
     ]
     | None,
+    portfolio_context_source: Callable[
+        [ResearchThesisRunInputs, FrozenDataSnapshotInput], tuple[AccountStateSnapshot, datetime]
+    ]
+    | None = None,
     source_templates: tuple[ResearchSourceTemplate, ...] = (),
     source_snapshot_ids: tuple[str, ...] = (),
     maximum_runs: int = 2,
@@ -255,6 +259,7 @@ async def run_prospective_watch_review(
                 account_max_age=account_max_age,
                 admission_authority_factory=admission_authority_factory,
                 portfolio_authority_factory=portfolio_authority_factory,
+                portfolio_context_source=portfolio_context_source,
                 maximum_runs=maximum_runs,
                 prior_thesis_run_id=context.parent_run_id,
             )

@@ -1115,6 +1115,22 @@ account view, mandate, policy, execution Provider and reconciliation gates pass.
 experimental. Mock acceptance cannot satisfy IBKR acceptance. Live remains fail-closed behind its
 own authorization, mandate, credential isolation, kill switch and reconciliation evidence.
 
+## Continuous study implementation evidence
+
+The expanded study keeps 18 coverage cases, eight deep cases, 54 initial model/case
+slots and 72 model/case/cadence account trajectories. The dated results report
+[records completed and incomplete denominators](CONTINUOUS_STUDY_RESULTS_20260905.md).
+Harness failures, such as the four legacy Recall context-limit interruptions, are
+not model judgment errors or `hold`. A repaired delivery policy creates new bound
+Runs and does not rewrite earlier evidence. Two completed six-session Terra paths
+without an expiry-only control do not support an investment-effect claim.
+
+Current source-qualified CNY Mock engineering, including later-source fills and
+restart reconciliation, is a separate gate. Real new receipts, naturally due Watch
+or scheduled review and actual account outcomes must still be observed; a synthetic
+passing test or ACK cannot replace them. All attempts retain the original cumulative
+USD 40 model-budget authority, including failures and unknown reservations.
+
 ## Stop rules
 
 - Stop Agent spending when the same input-contract omission still causes the readiness pilot to

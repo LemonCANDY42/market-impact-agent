@@ -29,6 +29,7 @@ from market_impact_agent.domain import (
     Side,
     TradingEnvironment,
     TradingMandateV2,
+    TradingMandateV3,
     require_aware,
 )
 from market_impact_agent.paper_execution import PriceBasis
@@ -57,6 +58,7 @@ from market_impact_agent.providers import (
     CancellationCommandStatus,
     Capability,
     ExecutionProvider,
+    MockExecutionProvider,
     NewOrderAdmissionProvider,
     ReconciliationSnapshot,
     SubmissionCapability,
@@ -868,6 +870,7 @@ class AutonomousPaperExecutionServiceV2:
         self._closed = False
         try:
             self._initialize()
+            self._assert_safe_mandate_switch()
             self._initialize_risk_day()
             os.chmod(self.root, 0o700)
             os.chmod(self.database_path, 0o600)
@@ -948,7 +951,7 @@ class AutonomousPaperExecutionServiceV2:
     ) -> tuple[AutonomousPaperOperation, ...]:
         self._assert_open()
         manual = self.mandate.approval_mode is ApprovalMode.MANUAL_EACH
-        if manual:
+        if manual or self._autonomous_cny_review():
             if _review is None or self.portfolio_review_authority is None:
                 raise PermissionError("manual_each admission requires an actual portfolio review")
             reopened = self.portfolio_review_authority.execution_admission(_review.run_id)
@@ -1200,12 +1203,59 @@ class AutonomousPaperExecutionServiceV2:
             operations.append(self.get(client_order_id))
         return tuple(operations)
 
-    def admit_portfolio_review(self, run_id: str) -> AutonomousPaperOperation:
-        """Reserve one recomputed target without granting dispatch authority."""
+    def _autonomous_cny_review(self) -> bool:
+        return (
+            self.mandate.approval_mode is ApprovalMode.AUTONOMOUS
+            and isinstance(self.mandate, TradingMandateV3)
+            and self.mandate.execution_scope == "local_mock"
+            and self.mandate.currency == "CNY"
+            and type(self.provider) is MockExecutionProvider
+        )
+
+    def get_portfolio_review_operation(self, run_id: str) -> AutonomousPaperOperation | None:
+        """Recover a persisted review operation without granting fresh trade authority."""
         self._assert_open()
         authority = self.portfolio_review_authority
-        if self.mandate.approval_mode is not ApprovalMode.MANUAL_EACH or authority is None:
-            raise PermissionError("portfolio review requires a configured manual_each authority")
+        if authority is None:
+            raise PermissionError("portfolio recovery requires the original review authority")
+        terminal = authority.replay(run_id)
+        if terminal["status"] != "completed":
+            return None
+        record = authority.journal.get_run(run_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM autonomous_operations WHERE mandate_hash = ?",
+                (self.mandate_hash,),
+            ).fetchall()
+        for row in rows:
+            policy = cast(
+                dict[str, object], self.artifacts.read_json(row["policy_evaluation_hash"])
+            )
+            admission_hash = policy.get("portfolio_execution_admission_hash")
+            if not isinstance(admission_hash, str):
+                continue
+            admission = cast(dict[str, object], self.artifacts.read_json(admission_hash))
+            if admission.get("run_id") != run_id:
+                continue
+            if (
+                admission.get("binding_hash") != record.config_hash
+                or admission.get("terminal_hash") != record.terminal_artifact_id
+                or canonical_hash(admission["order"]) != row["order_hash"]
+            ):
+                raise PermissionError("persisted operation differs from original portfolio review")
+            return self.get(cast(str, row["client_order_id"]))
+        return None
+
+    def admit_portfolio_review(self, run_id: str) -> AutonomousPaperOperation:
+        """Reserve a completed review under its exact manual or CNY Mock mandate."""
+        self._assert_open()
+        authority = self.portfolio_review_authority
+        if authority is None or not (
+            self.mandate.approval_mode is ApprovalMode.MANUAL_EACH or self._autonomous_cny_review()
+        ):
+            raise PermissionError(
+                "portfolio review requires a configured accepted review authority"
+            )
         admission = authority.execution_admission(run_id)
         with self._connect() as connection:
             existing = connection.execute(
@@ -1956,7 +2006,7 @@ class AutonomousPaperExecutionServiceV2:
         require_approval: bool = True,
     ) -> None:
         order = _order_from_payload(self.artifacts.read_json(cast(str, row["order_hash"])))
-        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH:
+        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH or self._autonomous_cny_review():
             self._assert_portfolio_lineage(row, require_approval=require_approval)
         if not self.mandate.valid_from <= evaluated_at < self.mandate.valid_until:
             raise PermissionError("Trading Mandate v2 is not current at dispatch")
@@ -2044,6 +2094,17 @@ class AutonomousPaperExecutionServiceV2:
             approval = cast(
                 dict[str, object], self.artifacts.read_json(cast(str, row["approval_hash"]))
             )
+            if self._autonomous_cny_review():
+                if (
+                    approval.get("schema_version") != "market-impact.autonomous-policy-approval.v2"
+                    or approval.get("approved") is not True
+                    or approval.get("actor_kind") != "harness_policy"
+                    or approval.get("actor_ref") != "autonomous-paper-v2"
+                    or approval.get("policy_evaluation_hash") != row["policy_evaluation_hash"]
+                    or approval.get("mandate_binding_hash") != row["mandate_binding_hash"]
+                ):
+                    raise PermissionError("CNY portfolio order lacks exact Harness policy approval")
+                return
             if (
                 approval.get("schema_version") != "market-impact.portfolio-manual-approval.v3"
                 or approval.get("approved") is not True
@@ -2251,8 +2312,16 @@ class AutonomousPaperExecutionServiceV2:
             )
             account_hash = canonical_hash(account_state.to_dict())
             exposure_hash = canonical_hash(exposure_view.to_dict())
-            mandate_hash = canonical_hash(self.mandate.to_dict())
+            mandate_hash = self._risk_authority_hash(evaluated_at)
             with self.store.authority_transaction() as connection:
+                if self.mandate.currency == "CNY":
+                    self._ensure_risk_day(
+                        connection,
+                        now=evaluated_at,
+                        current_equity=current_equity,
+                        account_hash=account_hash,
+                        exposure_hash=exposure_hash,
+                    )
                 row = connection.execute(
                     """
                     SELECT * FROM autonomous_risk_days
@@ -2331,6 +2400,39 @@ class AutonomousPaperExecutionServiceV2:
             )
         return measurement
 
+    def _risk_authority_hash(self, evaluated_at: datetime) -> str:
+        if self.mandate.currency != "CNY":
+            return self.mandate_hash
+        payload = self.mandate.to_dict()
+        for key in (
+            "mandate_id",
+            "valid_from",
+            "valid_until",
+            "allowed_instruments",
+            "universe_binding_hash",
+        ):
+            payload.pop(key, None)
+        payload["risk_session"] = evaluated_at.astimezone(UTC).date().isoformat()
+        return canonical_hash(payload)
+
+    def _assert_safe_mandate_switch(self) -> None:
+        with self.store.authority_transaction() as connection:
+            pending = connection.execute(
+                "SELECT 1 FROM autonomous_operations WHERE mandate_hash != ? "
+                "AND reservation_active = 1 LIMIT 1",
+                (self.mandate_hash,),
+            ).fetchone()
+        if pending is not None:
+            raise PermissionError(
+                "unresolved operations require their original mandate before renewal"
+            )
+        if self.mandate.currency == "CNY" and (
+            not isinstance(self.mandate, TradingMandateV3)
+            or self.mandate.execution_scope != "local_mock"
+            or type(self.provider) is not MockExecutionProvider
+        ):
+            raise PermissionError("CNY paper authority is restricted to the local Mock provider")
+
     def _initialize_risk_day(self) -> None:
         now = self._now()
         try:
@@ -2343,34 +2445,67 @@ class AutonomousPaperExecutionServiceV2:
             )
         except Exception:
             return
-        mandate_hash = canonical_hash(self.mandate.to_dict())
-        account_hash = canonical_hash(account_state.to_dict())
-        exposure_hash = canonical_hash(exposure_view.to_dict())
         with self.store.authority_transaction() as connection:
-            connection.execute(
-                """
-                INSERT OR IGNORE INTO autonomous_risk_days (
-                    harness_authority_id, mandate_hash, account_reference_hash,
-                    day_start_equity, peak_equity,
-                    initial_account_state_hash, initial_exposure_view_hash,
-                    last_account_state_hash, last_exposure_view_hash,
-                    initialized_at, last_observed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    self.harness_authority_id,
-                    mandate_hash,
-                    self.mandate.account_id,
-                    str(current_equity),
-                    str(current_equity),
-                    account_hash,
-                    exposure_hash,
-                    account_hash,
-                    exposure_hash,
-                    _timestamp(now),
-                    _timestamp(now),
-                ),
+            self._ensure_risk_day(
+                connection,
+                now=now,
+                current_equity=current_equity,
+                account_hash=canonical_hash(account_state.to_dict()),
+                exposure_hash=canonical_hash(exposure_view.to_dict()),
             )
+
+    def _ensure_risk_day(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        now: datetime,
+        current_equity: Decimal,
+        account_hash: str,
+        exposure_hash: str,
+    ) -> None:
+        mandate_hash = self._risk_authority_hash(now)
+        day_start_equity = peak_equity = current_equity
+        if self.mandate.currency == "CNY":
+            previous = connection.execute(
+                "SELECT day_start_equity, peak_equity, initialized_at FROM autonomous_risk_days "
+                "WHERE harness_authority_id = ? AND account_reference_hash = ? "
+                "ORDER BY initialized_at",
+                (self.harness_authority_id, self.mandate.account_id),
+            ).fetchall()
+            peak_equity = max([current_equity, *(Decimal(row["peak_equity"]) for row in previous)])
+            same_day = [
+                row
+                for row in previous
+                if _datetime(row["initialized_at"]).astimezone(UTC).date()
+                == now.astimezone(UTC).date()
+            ]
+            day_start_equity = (
+                Decimal(same_day[0]["day_start_equity"]) if same_day else current_equity
+            )
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO autonomous_risk_days (
+                harness_authority_id, mandate_hash, account_reference_hash,
+                day_start_equity, peak_equity,
+                initial_account_state_hash, initial_exposure_view_hash,
+                last_account_state_hash, last_exposure_view_hash,
+                initialized_at, last_observed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                self.harness_authority_id,
+                mandate_hash,
+                self.mandate.account_id,
+                str(day_start_equity),
+                str(peak_equity),
+                account_hash,
+                exposure_hash,
+                account_hash,
+                exposure_hash,
+                _timestamp(now),
+                _timestamp(now),
+            ),
+        )
 
     def _authoritative_equity(
         self,
@@ -2423,6 +2558,16 @@ class AutonomousPaperExecutionServiceV2:
             raise PermissionError("risk observation is stale")
         return balances[0].settled + exposure_view.current_net_exposure, valid_until
 
+    def _same_account_day(self, row: sqlite3.Row) -> bool:
+        mandate = self.artifacts.read_json(cast(str, row["mandate_hash"]))
+        if not isinstance(mandate, dict):
+            raise PermissionError("durable operation lacks mandate authority")
+        payload = cast(dict[str, object], mandate)
+        return payload.get("account_id") == self.mandate.account_id and (
+            bool(row["reservation_active"])
+            or _datetime(cast(str, row["activity_at"])).date() == self._now().date()
+        )
+
     def _assert_reservation_budget(
         self,
         connection: sqlite3.Connection,
@@ -2441,18 +2586,19 @@ class AutonomousPaperExecutionServiceV2:
             SELECT signed_delta, gross_delta, turnover_reserved, cash_reserved,
                    position_count_delta, order_hash
             FROM autonomous_operations
-            WHERE reservation_active = 1 AND mandate_hash = ?
+            WHERE reservation_active = 1
             """,
-            (canonical_hash(self.mandate.to_dict()),),
         ).fetchall()
         activity_rows = connection.execute(
             """
-            SELECT turnover_reserved
-            FROM autonomous_operations
-            WHERE mandate_hash = ? AND (reservation_active = 1 OR submission_consumed = 1)
+            SELECT turnover_reserved, mandate_hash, reservation_active,
+                   COALESCE((SELECT MAX(started_at) FROM autonomous_submission_attempts a
+                             WHERE a.operation_id = o.operation_id), created_at) AS activity_at
+            FROM autonomous_operations o
+            WHERE reservation_active = 1 OR submission_consumed = 1
             """,
-            (canonical_hash(self.mandate.to_dict()),),
         ).fetchall()
+        activity_rows = [row for row in activity_rows if self._same_account_day(row)]
         exposure_hash = canonical_hash(exposure_view.to_dict())
         reused = connection.execute(
             "SELECT 1 FROM autonomous_exposure_generations WHERE exposure_view_hash = ?",
@@ -2542,7 +2688,7 @@ class AutonomousPaperExecutionServiceV2:
         if row is None:
             return False
         action = PortfolioAction(cast(str, row["action"]))
-        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH:
+        if self.mandate.approval_mode is ApprovalMode.MANUAL_EACH or self._autonomous_cny_review():
             try:
                 self._assert_dispatch_authorities(
                     row,
@@ -2918,6 +3064,24 @@ class AutonomousPaperExecutionServiceV2:
 
 
 def _assert_autonomous_mandate(mandate: TradingMandateV2) -> None:
+    if isinstance(mandate, TradingMandateV3) and mandate.currency == "CNY":
+        if not all(
+            (
+                mandate.environment is TradingEnvironment.PAPER,
+                mandate.execution_scope == "local_mock",
+                mandate.approval_mode in {ApprovalMode.AUTONOMOUS, ApprovalMode.MANUAL_EACH},
+                mandate.gross_exposure_limit == 100_000,
+                mandate.minimum_net_exposure == 0,
+                mandate.maximum_net_exposure == 100_000,
+                mandate.maximum_position_count == 5,
+                mandate.daily_turnover_limit == 100_000,
+                mandate.daily_submission_limit == 10,
+                mandate.daily_loss_kill_threshold == 10_000,
+                mandate.strategy_peak_drawdown_kill_threshold == 20_000,
+            )
+        ):
+            raise PermissionError("CNY local Mock mandate differs from the accepted study envelope")
+        return
     expected = (
         mandate.environment is TradingEnvironment.PAPER,
         mandate.approval_mode in {ApprovalMode.AUTONOMOUS, ApprovalMode.MANUAL_EACH},

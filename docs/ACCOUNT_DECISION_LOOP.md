@@ -190,7 +190,10 @@ hash-checked, tied to its signed completed source Run, and rebound to its own cu
 The projection cannot admit a standalone CAS object, even when that object has a
 valid content hash and thesis-shaped JSON. Current account and portfolio state
 still come from their dedicated authorities rather than this disposable index.
-Search is capped at eight candidates and 12,000 injected tokens, enforces the
+Search is capped at eight candidates; the implementation conservatively limits
+cumulative historical injection to 12,000 UTF-8 bytes, rather than measuring actual
+model tokens. New Runs return a verified input reference for an already injected
+current opinion; older opinions remain available through bounded reopening. Recall enforces the
 new Run's `as_of`, and excludes secrets, account identifiers, paid-news bodies
 and hidden outcomes. pi summaries may navigate this history but never replace
 its evidence.
@@ -670,7 +673,7 @@ is used directly: add a session batch, `run(streaming=True)`, `clear_data()`, an
 `end()` only when the arm closes. The pinned local `backtest/engine.pyx` documents
 this same lifecycle. A shared synthetic `HIST` venue supports one cash account
 across XSHG/XSHE; source symbols and exchange identities remain in the Account State.
-It is a historical BACKTEST provider, separate from the USD autonomous Paper mandate,
+It is a historical BACKTEST provider, separate from the USD and CNY local Mock Paper mandates,
 IBKR and live execution.
 
 The caller supplies source-backed instrument rules and raw, unadjusted session bars,
@@ -747,3 +750,63 @@ Submit, cancel, replace, account reconciliation, ambiguous ACK, partial/duplicat
 fills, external orders, disconnect, Gateway restart and process restart each need
 real sealed acceptance receipts. Offline tests and local Mock evidence do not
 satisfy those broker scenarios.
+
+### Current CNY local Mock authority
+
+The durable `MockExecutionProvider` also supports the explicit
+`cny-local-mock.v1` opening authority. CNY cash and overnight opening inventory
+are immutable, including the source reference and opening timestamp. Later
+source-qualified instruments append admission evidence without rewriting the
+opening account; venue/class identity cannot change across qualification
+revisions. The projection remains the existing Mock order/fill journal, not a
+second account ledger or execution engine.
+
+An accepted order is only an ACK. Only explicit simulated fills change cash or
+positions. CNY fills require explicit fees; purchases also require a future
+sellability timestamp. The Harness must derive fees and the next trading-session
+open from accepted rules/calendar before recording these facts. The provider
+does not infer a trading calendar or commission schedule. It deducts fees,
+rejects cash overdrafts, and enforces settled sellable inventory at both order
+submission (including outstanding sells) and fill recording. Repeated fill IDs
+must retain exact quantity, price, fee and sellability authority across restart.
+`simulated_sellable_quantity` exposes that same journal projection for sizing;
+canonical Account State continues to report total held quantity. Reconciliation may
+supply its exact Provider snapshot to the projection; current durable receipts
+must match before the Account State adopts that snapshot timestamp and identity.
+
+Only the CNY `TradingMandateV3` `local_mock` scope accepts the registered study
+risk envelope: CNY 100,000 gross/maximum net exposure, zero minimum net exposure,
+five positions, CNY 100,000 daily turnover, ten daily submissions, CNY 10,000
+daily-loss kill and CNY 20,000 peak-drawdown kill. Universe-only renewals retain
+account/policy/day risk authority, prior peak equity and account-day activity.
+CNY loss-risk sessions roll at UTC midnight. Fresh authoritative equity initializes
+a new session atomically during evaluation; stale evidence cannot establish a new
+baseline. Same-day renewals retain the starting equity and historical peak. USD
+retains its legacy mandate-bound risk key and baseline semantics.
+An unresolved operation prevents switching away from its original mandate;
+reopen that mandate and reconcile first. The USD envelope remains available,
+and CNY Mock evidence grants no IBKR or live capability.
+
+For that exact CNY envelope, an autonomous mandate may admit a completed,
+same-root Portfolio Review directly under `harness_policy` approval. The service
+reopens the completed review and recomputed sizing during admission, dispatch
+and Provider capability validation. It does not create a human approval record,
+and a raw Agent proposal without a completed review cannot use this CNY path.
+USD portfolio-origin orders retain their existing `manual_each` boundary.
+
+The source-derived local Mock fill adapter requires a traded minute strictly after
+submission and an unexpired accepted market order. It derives commission and sell
+stamp tax from the qualified rule and BUY sellability from a contiguous calendar
+through the next open session. Its full-order simulation policy is recorded in an
+immutable artifact; it does not claim broker liquidity or fills. Missing quote,
+company-action or calendar authority returns typed gaps without moving funds.
+
+Prospective review capture freezes account-day ledger facts with the original
+account and cutoff. Recovery reopens the persisted operation and lease before
+attempting fresh admission, including after ACK, partial fill or quote expiry.
+An expired quote cannot erase a submitted order or authorize a new one. The
+reconciliation owner remains accessible and reports
+`fresh_account_exposure_rebuild_required` until a genuinely new frozen
+`reconciliation_input` supplies current marks. `reconcile_prospective_mock_review`
+uses that source input for the explicit fill adapter and existing reconciliation
+owner, preserving the original review and order identities.

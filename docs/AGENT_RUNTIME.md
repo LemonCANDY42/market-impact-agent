@@ -76,8 +76,14 @@ protocols, opaque messages, the Agent loop and compaction. Roles use the same lo
 Without tools they use one turn; Research Thesis and Portfolio roles may receive
 Harness-injected read-only descriptors and then use the frozen Profile turn/tool
 bounds. Signed tool completions replay before a dependent model turn. Recall
-reads and directly injected prior theses share one cumulative 12,000-byte conservative
-token bound per Run. Signed initial-history and tool receipts reconstruct consumption
+reads and directly injected prior theses share one cumulative 12,000 UTF-8 byte
+upper bound per Run. This conservatively bounds text tokens; it is not a measurement
+of 12,000 actual model tokens. New Runs freeze `injected-prior-reference-v1`: after
+normal signed-source, scope and PIT reopening, a lookup of the already injected
+opinion returns its exact input pointer and content hash instead of another copy.
+Other opinions still return their bounded original content. The compact response
+is charged normally, including repeated lookups. Existing Run bindings retain their
+old descriptors and delivery semantics. Signed initial-history and tool receipts reconstruct consumption
 across turns, compaction and replay without charging the same receipt twice or
 resetting the allowance. Their signed opinions remain context, never new source facts. The Harness
 binds the account/arm source-Run allowlist and tool manifest hashes. Newly acquired

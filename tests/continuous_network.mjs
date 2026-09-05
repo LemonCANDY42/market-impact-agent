@@ -31,7 +31,9 @@ globalThis.fetch = async (input, init) => {
   if (prior) {
     const result = JSON.parse(body.input.find(x => x.type === 'function_call_output').output).result;
     assert.equal(result.authority, 'prior_signed_opinion_not_source_fact');
-    assert.equal(result.current_thesis.source.thesis, 'Prior evidence calls for a source close.');
+    assert.equal(result.current_thesis.status, 'already_supplied');
+    assert.equal(result.current_thesis.json_pointer, '/prior_thesis/thesis');
+    assert.equal(data.prior_thesis.thesis.thesis, 'Prior evidence calls for a source close.');
   }
   const common = {primary_horizon_sessions: 1, horizon_band: 'immediate',
     priced_in_assessment: 'Only frozen prior-close evidence is considered.',

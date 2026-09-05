@@ -72,7 +72,9 @@ _MODELS = ("luna-max", "terra-high", "sol-high")
 _MAXIMUM_RUNS = 2
 
 
-def discovery_source_templates() -> tuple[ResearchSourceTemplate, ...]:
+def discovery_source_templates(
+    *, current_authority: bool = False
+) -> tuple[ResearchSourceTemplate, ...]:
     sources = tuple(
         load_tushare_observation_source(
             _PROJECT / f"examples/providers/tushare-observation-{name}-v1.json"
@@ -87,7 +89,21 @@ def discovery_source_templates() -> tuple[ResearchSourceTemplate, ...]:
     additions = tuple(item for item in sources if item.api_name == "adj_factor")
     provider = TushareObservationProvider(credential, original)
     extra_provider = TushareObservationProvider(credential, additions)
+    current = ()
+    if current_authority:
+        current_sources = tuple(
+            load_tushare_observation_source(
+                _PROJECT / f"examples/providers/tushare-observation-{name}-v1.json"
+            )
+            for name in ("fund-basic", "rt-min", "rt-etf-min")
+        )
+        current_provider = TushareObservationProvider(credential, current_sources)
+        current = tuple(
+            ResearchSourceTemplate.from_tushare(current_provider, item.source_id)
+            for item in current_sources
+        )
     return (
+        *current,
         *(ResearchSourceTemplate.from_tushare(provider, item.source_id) for item in original),
         *(
             ResearchSourceTemplate.from_tushare(extra_provider, item.source_id)
@@ -104,6 +120,7 @@ def prepare_prospective_discovery(
     receipt_episode_id: str,
     receipt_run_id: str,
     templates: tuple[ResearchSourceTemplate, ...] | None = None,
+    rule_policy_event_id: str | None = None,
 ) -> dict[str, object]:
     """Reopen parent completions and freeze a deterministic bounded news panel."""
     budget = study_budget(study_root, "unseen_and_prospective")
@@ -111,7 +128,16 @@ def prepare_prospective_discovery(
     store = LocalDataSnapshotStore(budget.journal.path.parent)
     binding = cast(dict[str, str], json.loads(receipt_binding_path.read_text()))
     report = cast(dict[str, object], json.loads(receipt_report_path.read_text()))
-    selected_templates = discovery_source_templates() if templates is None else templates
+    selected_templates = (
+        discovery_source_templates(current_authority=rule_policy_event_id is not None)
+        if templates is None
+        else templates
+    )
+    policy = None
+    if rule_policy_event_id is not None:
+        from market_impact_agent.ashare_security_qualification import SourceBackedAShareRulePolicy
+
+        policy = SourceBackedAShareRulePolicy.from_accepted_event(store, rule_policy_event_id)
     receipt_event = budget.journal.event(
         f"{budget.owner_run_id}.binding.{canonical_hash(receipt_run_id)}"
     )
@@ -230,9 +256,9 @@ def prepare_prospective_discovery(
         for item in cast(list[dict[str, object]], study["model_profiles"])
     ]:
         raise PermissionError("prospective profiles differ from the frozen study models")
+    maximum_runs = 3 if policy is not None else _MAXIMUM_RUNS
     maximum_cost = sum(
-        cast(int, profile.budget.max_estimated_cost_microusd) * _MAXIMUM_RUNS
-        for profile in profiles
+        cast(int, profile.budget.max_estimated_cost_microusd) * maximum_runs for profile in profiles
     )
     registration: dict[str, object] = {
         "schema_version": "market-impact.prospective-discovery-entry.v1",
@@ -246,7 +272,7 @@ def prepare_prospective_discovery(
         "research_input_bytes": artifact.size_bytes,
         "source_template_ids": sorted(item.template_id for item in selected_templates),
         "profiles": [profile.to_dict() for profile in profiles],
-        "maximum_runs_per_model": _MAXIMUM_RUNS,
+        "maximum_runs_per_model": maximum_runs,
         "maximum_research_cost_microusd": maximum_cost,
         "budget_scope": "unseen_and_prospective",
         "news_selection_policy": "latest-24-by-published-time-and-observation-id-compact-v2",
@@ -254,7 +280,26 @@ def prepare_prospective_discovery(
         "portfolio_authority_available": False,
         "broker_access": False,
     }
-    if maximum_cost > 2_500_000:
+    if policy is not None:
+        registration.update(
+            {
+                "schema_version": "market-impact.prospective-discovery-entry.v2",
+                "rule_policy_event_id": policy.acceptance_event_id,
+                "rule_policy_artifact_hash": policy.policy_artifact_hash,
+                "current_account_authority_available": True,
+                "portfolio_authority_available": True,
+                "mock_opening_policy": "100k-half-hs300-overnight-v1",
+                "stage_affordability_policy": "sequential-whole-episode-reservation-v1",
+                "maximum_stage_cost_microusd": 2_500_000,
+                "maximum_research_cost_microusd": min(maximum_cost, 2_500_000),
+                "per_model_episode_allowance_microusd": {
+                    profile.profile_id: cast(int, profile.budget.max_estimated_cost_microusd)
+                    * maximum_runs
+                    for profile in profiles
+                },
+            }
+        )
+    if policy is None and maximum_cost > 2_500_000:
         raise PermissionError("prospective research batch cannot fit its registered stage cap")
     identity = canonical_hash(registration)
     registration["registration_id"] = "prospective-discovery-" + identity
@@ -295,7 +340,14 @@ async def run_prepared_prospective_discovery(
         != load_prepared_continuous_registration(study_root)["registration_id"]
     ):
         raise PermissionError("prospective inputs differ from their prepared parent authority")
-    templates = discovery_source_templates()
+    current_authority = (
+        registration["schema_version"] == "market-impact.prospective-discovery-entry.v2"
+    )
+    templates = (
+        discovery_source_templates(current_authority=True)
+        if current_authority
+        else discovery_source_templates()
+    )
     if sorted(item.template_id for item in templates) != registration["source_template_ids"]:
         raise PermissionError("prospective source templates changed after preparation")
     artifact = cast(
@@ -337,11 +389,79 @@ async def run_prepared_prospective_discovery(
     for profile in profiles:
         arm = profile.profile_id
         episode_id = str(registration["registration_id"]) + "." + arm
+        outcome_event_id = f"{budget.owner_run_id}.prospective.model." + canonical_hash(episode_id)
+        existing_outcome = budget.journal.event(outcome_event_id) if current_authority else None
+        if existing_outcome is not None:
+            rows.append(
+                cast(
+                    dict[str, object],
+                    store.artifacts.read_json(str(existing_outcome.payload["artifact_hash"])),
+                )
+            )
+            continue
+        composition = None
+        if current_authority:
+            allowance = cast(dict[str, int], registration["per_model_episode_allowance_microusd"])[
+                arm
+            ]
+            spent = budget.scope_summary()
+            if spent["known_cost_microusd"] + spent["reserved_microusd"] + allowance > int(
+                str(registration["maximum_stage_cost_microusd"])
+            ):
+                rows.append(
+                    {
+                        "model": profile.model,
+                        "effort": profile.reasoning_effort,
+                        "status": "pending_budget",
+                        "gaps": ["registered_stage_episode_allowance_unaffordable"],
+                        "episode_allowance_microusd": allowance,
+                        "stage_budget": spent,
+                        "execution_dispatched": False,
+                    }
+                )
+                pending = store.artifacts.put_json(rows[-1])
+                budget.journal.append(
+                    run_id=budget.owner_run_id,
+                    event_id=outcome_event_id,
+                    event_type="prospective.discovery.model.reported",
+                    observed_at=datetime.now(UTC),
+                    payload={"artifact_hash": pending.content_hash},
+                )
+                continue
+            from market_impact_agent.ashare_security_qualification import (
+                SourceBackedAShareRulePolicy,
+            )
+            from market_impact_agent.prospective_ashare_quotes import (
+                ExecutableProspectiveAShareInputs,
+            )
+            from market_impact_agent.prospective_mock_composition import ProspectiveMockComposition
+
+            accepted_policy = SourceBackedAShareRulePolicy.from_accepted_event(
+                store, str(registration["rule_policy_event_id"])
+            )
+            if accepted_policy.policy_artifact_hash != registration["rule_policy_artifact_hash"]:
+                raise PermissionError("prospective generic rule policy changed")
+            composition = ProspectiveMockComposition(
+                store=store,
+                profile_id=arm,
+                study_registration_id=str(registration["study_registration_id"]),
+                opening_authority_ref=str(registration["study_registration_id"]),
+                parent_run_id=budget.owner_run_id,
+                market_factory=lambda snapshots, policy=accepted_policy: (
+                    ExecutableProspectiveAShareInputs(
+                        store=store,
+                        snapshot_ids=tuple(sorted(snapshots.authorized_snapshot_ids)),
+                        qualification_policy=policy,
+                    )
+                ),
+            )
         authority = ResearchThesisAuthority(
             store,
             experiment_id=str(registration["registration_id"]),
             arm_id=arm,
-            account_scope="research-context-" + canonical_hash(episode_id),
+            account_scope="research-context-" + canonical_hash(episode_id)
+            if composition is None
+            else composition.account_scope,
         )
         acquisition = OnDemandResearch(
             store=store,
@@ -363,24 +483,53 @@ async def run_prepared_prospective_discovery(
                     repository, "ASHARE.RESEARCH", episode_id, frozenset({1, 3, 5, 10, 20, 60})
                 ),
                 acquisition=acquisition,
-                account_source=unavailable_account,
+                account_source=unavailable_account
+                if composition is None
+                else composition.account_source,
                 account_max_age=timedelta(minutes=5),
-                admission_authority_factory=admission_source,
+                admission_authority_factory=admission_source
+                if composition is None
+                else composition.admission_source,
+                portfolio_authority_factory=None
+                if composition is None
+                else composition.portfolio_authority,
+                portfolio_context_source=None
+                if composition is None
+                else composition.capture_context,
                 maximum_runs=int(str(registration["maximum_runs_per_model"])),
             )
             rows.append(
                 {"model": profile.model, "effort": profile.reasoning_effort, **result.to_dict()}
             )
+            if composition is not None and result.portfolio_run_id is not None:
+                from market_impact_agent.prospective_mock_execution import (
+                    dispatch_prospective_mock_review,
+                )
+
+                rows[-1].update(
+                    dispatch_prospective_mock_review(composition, result.portfolio_run_id)
+                )
+            if current_authority:
+                reported = store.artifacts.put_json(rows[-1])
+                budget.journal.append(
+                    run_id=budget.owner_run_id,
+                    event_id=outcome_event_id,
+                    event_type="prospective.discovery.model.reported",
+                    observed_at=datetime.now(UTC),
+                    payload={"artifact_hash": reported.content_hash},
+                )
         finally:
             await provider.close()
     report: dict[str, object] = {
-        "schema_version": "market-impact.prospective-discovery-batch.v1",
+        "schema_version": "market-impact.prospective-discovery-batch.v2"
+        if current_authority
+        else "market-impact.prospective-discovery-batch.v1",
         "registration_id": registration["registration_id"],
         "denominator": 3,
         "results": rows,
         "budget": budget.summary(),
         "stage_budget": budget.scope_summary(),
-        "current_account_authority_available": False,
+        "current_account_authority_available": current_authority,
         "broker_access": False,
         "local_mock_accepted": False,
     }

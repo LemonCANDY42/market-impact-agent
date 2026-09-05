@@ -21,6 +21,17 @@ Pyright, TypeScript/Node and the zero-network runtime doctor. Independent review
 covered recovery, source qualification and evidence-scope changes. These checks do
 not establish completed real-model trajectories or broker acceptance.
 
+The current source-qualified CNY/Recall node ran the complete 2,041-test Python
+suite: 2,039 passed and two test-contract regressions were identified. The historical
+Recall fixture still expected duplicate full text, and the source configuration
+allowlist omitted the three newly added documented APIs. After correcting these
+test expectations, all three initial-adoption tests and all 28 source-provider tests
+passed. Production behavior was unchanged by those final corrections. Ruff,
+formatting, Pyright, TypeScript, four Node tests, production CLI preparation and the
+runtime doctor passed. Independent reviews covered source qualification, CNY account
+and risk, Recall, source-derived fills, and reconstructed-process recovery; the
+reported risk rollover and two recovery defects were fixed and re-reviewed.
+
 ## Source and coverage qualification
 
 The frozen study has 18 coverage cases and eight deep cases, with 54 initial
@@ -74,7 +85,7 @@ entire report without another request or fee.
 |---|---|---|
 | Luna max | Completed a broad A-share research thesis; selected no concrete candidate through a native profile query. | No dynamic candidate or portfolio acceptance. |
 | Terra high | Independently queried an outside-seed company, acquired admission inputs and entered candidate research. | Continuation aborted on conflicting price-limit date arguments after two successful tool reads. This is a tool-contract failure, not an economic conclusion. |
-| Sol high | Independently queried the same outside-seed company, reused source facts and completed candidate research. | Dynamic trading admission refused missing historical security evidence; no portfolio or order was produced. |
+| Sol high | Independently queried the same outside-seed company, reused source facts and completed candidate research. | Dynamic trading admission refused because the production adapter supplied no accepted trading-rule authority; this was a Harness wiring gap, not proof of missing upstream data. No portfolio or order was produced. |
 
 The shared candidate/source outcome did not arise from sharing another model's
 ranking or thesis: initial contexts were equal, while native query receipts and
@@ -83,9 +94,11 @@ private. The original failed Terra attempt and its cost are retained. A later
 corrective tool implementation cannot retroactively turn that attempt into success
 or reset its frozen two-Run Episode allowance.
 
-There is no accepted current Mock account/trading-rule authority in this production
-discovery entry. Natural Watch-triggered account review and real Mock execution
-remain unaccepted. Synthetic engineering acceptance is reported separately.
+The original v1 discovery entry had no accepted current Mock account/trading-rule
+authority. Its report remains unchanged. The new v2 source-qualified CNY composition
+has passed native synthetic research, portfolio, ACK, partial-fill, reconciliation
+and restart checks; actual fresh-receipt execution and natural Watch review remain
+unaccepted. Synthetic engineering acceptance is reported separately.
 
 ## Recovery findings
 
@@ -144,6 +157,34 @@ with no additional physical requests or unknown reservations. Its signed decisio
 and partial account prefix remain the recovery authority. At that checkpoint, the
 cumulative ledger recorded 117 requests, USD 6.219792 known and USD 0.011769 reserved
 for the one prior unknown request.
+
+## Legacy six-session results and Recall correction
+
+The completed legacy v6 batch retained the fixed 54 initial-diagnostic and 72
+trajectory denominators. Initial diagnostics contain 2 completed, 1 incomplete
+legacy portfolio and 51 pending. Trajectories contain 2 completed, 4 research
+incomplete, 3 pending legacy portfolio and 63 pending window preparation. The two
+completed trajectories are Terra scheduled and event review, each 6/6 sessions.
+They validate the account path only; no complete expiry-control pair exists, so
+all strategy comparisons remain incomplete and no investment improvement is claimed.
+
+All four research interruptions exhausted the Harness's 12,000 UTF-8-byte Recall
+context guard. Returning full current opinions already present in the initial
+input caused redundant injection. This is a Harness integration failure, not a
+model judgment failure. New Run bindings validate the original signed opinion and
+return a compact reference when the exact opinion is already injected; other
+historical opinions still reopen and count normally. Legacy bindings and failures
+retain their old semantics. The byte guard remains a conservative bound, not an
+exact token measurement. Chinese payload and native pi review tests passed, with
+an independent review finding no concrete issue in this repair.
+
+At this checkpoint the cumulative ledger records 163 physical requests,
+USD 8.764493 known cost and USD 0.011769 reserved for one prior unknown request.
+The expanded qualified paid matrix has not dispatched. Source-qualified zero-model
+preflight and replay were byte-identical; five deep cases currently have eligible
+source paths, representing 45 potential tracks within the unchanged denominator
+of 72, not 45 completed tracks. Missing rules, company actions and execution gaps
+remain explicit.
 
 ## Outstanding acceptance
 

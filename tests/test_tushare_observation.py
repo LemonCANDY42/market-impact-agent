@@ -58,6 +58,9 @@ DOCUMENTATION_URLS = {
         api_name: f"https://tushare.pro/document/2?doc_id={doc_id}"
         for api_name, doc_id in DOCUMENTATION_IDS.items()
     },
+    "fund_basic": "https://tushare.pro/document/2?doc_id=19",
+    "rt_min": "https://tushare.pro/document/2?doc_id=374",
+    "rt_etf_min": "https://tushare.pro/document/2?doc_id=416",
     "adj_factor": "https://tushare.pro/document/2?doc_id=28",
     "daily": "https://tushare.pro/document/1?doc_id=27",
     "express_vip": "https://tushare.pro/document/2?doc_id=46",

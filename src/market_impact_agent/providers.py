@@ -17,6 +17,7 @@ from market_impact_agent.domain import (
     ExecutableOrder,
     ExecutionReceipt,
     ExecutionStatus,
+    Side,
     TradingEnvironment,
     require_aware,
 )
@@ -554,6 +555,22 @@ class MockExecutionProvider:
                     "(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), "
                     "payload_json TEXT NOT NULL)"
                 )
+                fill_columns = {
+                    row[1] for row in connection.execute("PRAGMA table_info(mock_execution_fills)")
+                }
+                for name, declaration in {
+                    "fee": "TEXT NOT NULL DEFAULT '0'",
+                    "sellable_at": "TEXT",
+                }.items():
+                    if name not in fill_columns:
+                        connection.execute(
+                            f"ALTER TABLE mock_execution_fills ADD COLUMN {name} {declaration}"
+                        )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS mock_account_instruments "
+                    "(target_id TEXT NOT NULL, qualification_hash TEXT NOT NULL, "
+                    "payload_json TEXT NOT NULL, PRIMARY KEY(target_id, qualification_hash))"
+                )
             os.chmod(self._state_path, 0o600)
 
     @property
@@ -675,6 +692,8 @@ class MockExecutionProvider:
         fill_id: str,
         quantity: Decimal,
         price: Decimal,
+        fee: Decimal | None = None,
+        sellable_at: datetime | None = None,
     ) -> ExecutionReceipt:
         """Record explicit simulated Provider facts, not a price/fill realism claim.
 
@@ -686,6 +705,10 @@ class MockExecutionProvider:
             raise ValueError("simulated fill requires an explicit identity")
         if not quantity.is_finite() or quantity <= 0 or not price.is_finite() or price <= 0:
             raise ValueError("simulated fill quantity and price must be positive and finite")
+        if fee is not None and (not fee.is_finite() or fee < 0):
+            raise ValueError("simulated fee must be finite and nonnegative")
+        if sellable_at is not None:
+            require_aware(sellable_at, "sellable_at")
         observed_at = self._clock()
         require_aware(observed_at, "observed_at")
         with self._connect() as connection:
@@ -699,6 +722,21 @@ class MockExecutionProvider:
             order = cast(dict[str, object], json.loads(cast(str, row["order_json"])))
             if canonical_hash(order) != row["order_hash"]:
                 raise ValueError("simulated fill order content differs from accepted identity")
+            configuration = connection.execute(
+                "SELECT payload_json FROM mock_account_configuration"
+            ).fetchone()
+            cny = (
+                configuration is not None
+                and json.loads(configuration[0])["cash"][0]["currency"] == "CNY"
+            )
+            if cny and (fee is None or (order["side"] == "buy" and sellable_at is None)):
+                raise ValueError(
+                    "CNY simulated fills require explicit fee and buy sellability authority"
+                )
+            fee_value = fee if fee is not None else Decimal(0)
+            sellable_text = (
+                sellable_at.astimezone(UTC).isoformat() if sellable_at is not None else None
+            )
             prior = connection.execute(
                 "SELECT * FROM mock_execution_fills WHERE fill_id = ?", (fill_id,)
             ).fetchone()
@@ -707,6 +745,8 @@ class MockExecutionProvider:
                     prior["client_order_id"] != client_order_id
                     or Decimal(prior["quantity"]) != quantity
                     or Decimal(prior["price"]) != price
+                    or Decimal(prior["fee"]) != fee_value
+                    or prior["sellable_at"] != sellable_text
                 ):
                     raise ValueError("simulated fill identity already has different content")
                 return self._durable_receipt(connection, row)
@@ -717,6 +757,35 @@ class MockExecutionProvider:
                 raise ValueError("simulated fill requires an open accepted order")
             if observed_at < _provider_datetime(cast(str, row["observed_at"])):
                 raise ValueError("simulated fill cannot precede the last Provider observation")
+            if cny:
+                from market_impact_agent.mock_account import sellable_quantity
+
+                assert configuration is not None
+                cash = json.loads(configuration[0])["cash"][0]
+                available = min(Decimal(cash["available"]), Decimal(cash["settled"]))
+                for prior_fill in connection.execute(
+                    "SELECT f.quantity, f.price, f.fee, r.order_json FROM mock_execution_fills f "
+                    "JOIN mock_execution_receipts r USING(client_order_id)"
+                ):
+                    sign = (
+                        Decimal(1)
+                        if json.loads(prior_fill["order_json"])["side"] == "buy"
+                        else Decimal(-1)
+                    )
+                    available -= sign * Decimal(prior_fill["quantity"]) * Decimal(
+                        prior_fill["price"]
+                    ) + Decimal(prior_fill["fee"])
+                cost = quantity * price if order["side"] == "buy" else -quantity * price
+                if cost + fee_value > available:
+                    raise PermissionError("CNY fill exceeds available cash including fees")
+                if order["side"] == "buy" and (sellable_at is None or sellable_at <= observed_at):
+                    raise ValueError(
+                        "CNY buy requires a future source-qualified T+1 sellability time"
+                    )
+                if order["side"] == "sell" and quantity > sellable_quantity(
+                    connection, cast(str, order["instrument_id"]), observed_at
+                ):
+                    raise PermissionError("CNY sell exceeds settled sellable inventory")
             receipt = self._durable_receipt(connection, row)
             total = receipt.filled_quantity + quantity
             ordered = Decimal(cast(str, order["quantity"]))
@@ -724,8 +793,16 @@ class MockExecutionProvider:
                 raise ValueError("simulated fill would overfill the accepted order")
             timestamp = observed_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
             connection.execute(
-                "INSERT INTO mock_execution_fills VALUES (?, ?, ?, ?, ?)",
-                (fill_id, client_order_id, str(quantity), str(price), timestamp),
+                "INSERT INTO mock_execution_fills VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    fill_id,
+                    client_order_id,
+                    str(quantity),
+                    str(price),
+                    timestamp,
+                    str(fee_value),
+                    sellable_text,
+                ),
             )
             status = (
                 ExecutionStatus.FILLED if total == ordered else ExecutionStatus.PARTIALLY_FILLED
@@ -750,6 +827,7 @@ class MockExecutionProvider:
         positions: tuple[AccountPosition, ...],
         instruments: Mapping[str, tuple[str, str]],
         opened_at: datetime,
+        opening_authority: Mapping[str, str] | None = None,
     ) -> None:
         """Bind immutable synthetic opening facts once, before any accepted orders."""
         from market_impact_agent.mock_account import configure_simulated_account
@@ -761,17 +839,40 @@ class MockExecutionProvider:
             positions=positions,
             instruments=instruments,
             opened_at=opened_at,
+            opening_authority=opening_authority,
         )
+
+    def register_simulated_instrument(
+        self, *, target_id: str, venue: str, instrument_class: str, qualification_hash: str
+    ) -> None:
+        from market_impact_agent.mock_account import register_simulated_instrument
+
+        register_simulated_instrument(
+            self,
+            target_id=target_id,
+            venue=venue,
+            instrument_class=instrument_class,
+            qualification_hash=qualification_hash,
+        )
+
+    def simulated_sellable_quantity(self, target_id: str) -> Decimal:
+        from market_impact_agent.mock_account import sellable_quantity
+
+        with self._connect() as connection:
+            return sellable_quantity(connection, target_id, self._clock())
 
     def simulated_account_snapshot(
         self,
         *,
         price_bases: Mapping[str, PriceBasis],
+        reconciliation_snapshot: ReconciliationSnapshot | None = None,
     ) -> AccountStateSnapshot:
         """Project configured opening state plus exact durable simulated order/fill facts."""
         from market_impact_agent.mock_account import simulated_account_snapshot
 
-        return simulated_account_snapshot(self, price_bases=price_bases)
+        return simulated_account_snapshot(
+            self, price_bases=price_bases, reconciliation_snapshot=reconciliation_snapshot
+        )
 
     def simulated_fills(self, client_order_id: str) -> tuple[dict[str, object], ...]:
         """Exact recorded Mock facts for Harness cash/position reconciliation."""
@@ -818,6 +919,47 @@ class MockExecutionProvider:
                 if cast(str, existing["order_hash"]) != capability.order_hash:
                     raise ValueError("mock provider order identity conflict")
                 return self._durable_receipt(connection, existing)
+            configuration = connection.execute(
+                "SELECT payload_json FROM mock_account_configuration"
+            ).fetchone()
+            if configuration is not None:
+                config = json.loads(configuration[0])
+                if config["cash"][0]["currency"] == "CNY":
+                    from market_impact_agent.mock_account import sellable_quantity
+
+                    known = (
+                        order.instrument_id in config["instruments"]
+                        or connection.execute(
+                            "SELECT 1 FROM mock_account_instruments WHERE target_id = ?",
+                            (order.instrument_id,),
+                        ).fetchone()
+                        is not None
+                    )
+                    if not known:
+                        raise SubmissionCapabilityRejected(
+                            "CNY order lacks source-qualified instrument metadata"
+                        )
+                    if order.side is Side.SELL:
+                        pending = Decimal(0)
+                        for other in connection.execute(
+                            "SELECT * FROM mock_execution_receipts "
+                            "WHERE status IN ('accepted', 'partially_filled')"
+                        ):
+                            payload = json.loads(other["order_json"])
+                            if (
+                                payload["instrument_id"] == order.instrument_id
+                                and payload["side"] == "sell"
+                            ):
+                                pending += (
+                                    Decimal(payload["quantity"])
+                                    - self._durable_receipt(connection, other).filled_quantity
+                                )
+                        if order.quantity + pending > sellable_quantity(
+                            connection, order.instrument_id, self._clock()
+                        ):
+                            raise SubmissionCapabilityRejected(
+                                "CNY sell exceeds unreserved settled inventory"
+                            )
             count = cast(
                 int,
                 connection.execute("SELECT COUNT(*) FROM mock_execution_receipts").fetchone()[0],

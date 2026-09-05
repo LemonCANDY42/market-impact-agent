@@ -314,6 +314,22 @@ class ResearchThesisAuthority:
                     else prior
                 )
             selected_hash = self.store.artifacts.put_json(selected).content_hash
+            delivery_policy: str | None = None
+            if prior is not None:
+                try:
+                    old_binding = _object(
+                        self.store.artifacts.read_json(self.journal.get_run(run_id).config_hash)
+                    )
+                    delivery_policy = cast(str | None, old_binding.get("recall_delivery_policy"))
+                except KeyError:
+                    delivery_policy = "injected-prior-reference-v1"
+                if delivery_policy is not None:
+                    if delivery_policy != "injected-prior-reference-v1":
+                        raise PermissionError("unrecognized frozen Recall delivery policy")
+                    readonly_tools = tuple(
+                        _injected_prior_reference(tool, prior, selected_hash)
+                        for tool in readonly_tools
+                    )
             role_prompt = (
                 RESEARCH_THESIS_JUDGE_PROMPT
                 if inputs.candidate_theses
@@ -327,6 +343,11 @@ class ResearchThesisAuthority:
                 "run_id": run_id,
                 "inputs": inputs.identity_dict(),
                 "prior_thesis": prior,
+                **(
+                    {"recall_delivery_policy": delivery_policy}
+                    if delivery_policy is not None
+                    else {}
+                ),
                 **({"prior_adoption": adopted_prior} if adopted_prior is not None else {}),
                 "selected_inputs_artifact_hash": selected_hash,
                 "profile": provider.profile.to_dict(),
@@ -715,6 +736,69 @@ def theses_semantically_disagree(first: ResearchThesisV1, second: ResearchThesis
     return (
         first.base_case_direction != second.base_case_direction
         or first.primary_horizon_sessions != second.primary_horizon_sessions
+    )
+
+
+def _injected_prior_reference(
+    tool: ToolDescriptor, prior: dict[str, object], selected_hash: str
+) -> ToolDescriptor:
+    """Reopen normally, then omit a verified opinion already present in the input.
+
+    The underlying handler still enforces scope, signature and PIT. The compact
+    result is charged normally by pi; no source-hash exemption hides delivered text.
+    """
+    if tool.name not in {"read_current_thesis", "read_prior_decisions"}:
+        return tool
+    source_hash = canonical_hash(prior["thesis"])
+    reference = {
+        "status": "already_supplied",
+        "source_run_id": prior["run_id"],
+        "source_artifact_hash": source_hash,
+        "selected_inputs_artifact_hash": selected_hash,
+        "json_pointer": "/prior_thesis/thesis",
+        "authority": "prior_signed_opinion_not_source_fact",
+        "evidence": False,
+    }
+
+    async def read(arguments: dict[str, object]) -> object:
+        value = await tool.handler(arguments)
+        if not isinstance(value, dict):
+            return value
+        payload = cast(dict[str, object], value)
+        if tool.name == "read_current_thesis":
+            current = payload.get("current_thesis")
+            if isinstance(current, dict):
+                current = cast(dict[str, object], current)
+                if (
+                    current.get("source_run_id") == prior["run_id"]
+                    and current.get("source_artifact_hash") == source_hash
+                ):
+                    return {
+                        "current_thesis": reference,
+                        "evidence": False,
+                        "authority": "prior_signed_opinion_not_source_fact",
+                    }
+        elif isinstance(payload.get("decisions"), list):
+            return {
+                **payload,
+                "decisions": [
+                    {"recall_id": item.get("recall_id"), **reference}
+                    if item.get("source_artifact_hash") == source_hash
+                    else item
+                    for raw in cast(list[object], payload["decisions"])
+                    for item in (_object(raw),)
+                ],
+            }
+        return payload
+
+    return replace(
+        tool,
+        handler=read,
+        description=tool.description
+        + " An already injected current opinion returns its exact input reference"
+        + " instead of duplicate text.",
+        version="injected-prior-reference-v1-"
+        + canonical_hash({"tool": tool.manifest_hash, "reference": reference}),
     )
 
 

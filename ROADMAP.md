@@ -1549,6 +1549,15 @@ paper-provider/live authority.
   counterevidence and invalidation in the Wake callback; register scheduled account reviews; dedupe
   simultaneous triggers by frozen decision-view identity; and reach the existing Portfolio Agent,
   deterministic sizing and reconciliation path without per-tick LLM calls.
+- [x] Connect signed generic current A-share rules and source-qualified non-seed stocks/ETFs to
+  the CNY local Mock account and native Portfolio Review. Engineering checks cover ACK without
+  funds movement, explicit source-derived fills, T+1, fees, same-day risk renewal, UTC risk
+  rollover, and recovery after ACK/partial fill/quote expiry. Existing orders reopen independently
+  of fresh trade admission; fresh snapshots are still required for current account reconciliation.
+  This does not accept a natural prospective execution, a strategy effect or IBKR.
+- [x] Version Recall delivery for an already injected signed opinion: verify its source and return
+  an exact input reference, while charging actual returned context and reopening other history.
+  Preserve old Run bindings and the four recorded Harness context-limit interruptions.
 - [ ] Run the registered expiry-only versus horizon-scheduled versus material-event-driven rolling
   ablation in [the continuous study](docs/CONTINUOUS_DECISION_STUDY.md): 18 coverage windows and
   eight deep windows, three models, three schedules, 72 retained account trajectories. The former
@@ -1701,8 +1710,9 @@ cases, and regime tags. Examples alone are not taxonomy evidence.
     and explicit gaps. The Harness derives content identity and a keyed, non-serialized account
     pseudonym, requires an
     enabled reconciliation-capable Provider with verified `ACCOUNT`, and marks missing positions or
-    concentration as not exposure-increase-ready. Mock execution still declares no account
-    capability. This is contract/fixture acceptance only.
+    concentration as not exposure-increase-ready. The later versioned local Mock opening authority
+    now supplies durable account projections; its engineering evidence remains separate from
+    actual prospective and broker acceptance.
   - [x] Bind one accepted read-only account Provider and its exact Account/Position projections into
     the Authorized Decision View. A local IB Gateway Paper session completed API-ready, account,
     summary, API-open-order and execution barriers and produced content-identified private Account

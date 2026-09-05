@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import cast
 
 from market_impact_agent.account_state import AccountStateSnapshot
@@ -79,9 +79,14 @@ class ProspectiveDiscoveryResult:
 
 class _CandidateSuccessor:
     def __init__(
-        self, authority: ResearchThesisAuthority, initial: ResearchThesisRunInputs
+        self,
+        authority: ResearchThesisAuthority,
+        initial: ResearchThesisRunInputs,
+        current_sources: bool = False,
     ) -> None:
         self.authority, self.initial = authority, initial
+        self.current_sources = current_sources
+        self.policy = "native-profile-current-mock-successor-v2" if current_sources else _POLICY
         self.candidate: str | None = None
         self.provenance: dict[str, object] = {}
         self.gaps: set[str] = set()
@@ -186,7 +191,7 @@ class _CandidateSuccessor:
                 continue
             event_id, native_hash, call = calls[0]
             proof: dict[str, object] = {
-                "policy": _POLICY,
+                "policy": self.policy,
                 "candidate": symbol,
                 "profile_api": template.api_name,
                 "predecessor_run_id": acquisition.run_id,
@@ -225,7 +230,7 @@ class _CandidateSuccessor:
                     unchanged,
                     frozen,
                     results,
-                    {"policy": _POLICY, "gaps": sorted(self.gaps)},
+                    {"policy": self.policy, "gaps": sorted(self.gaps)},
                     "candidate_identity_unverified",
                 )
             self.candidate, api, self.provenance = identity
@@ -266,6 +271,38 @@ class _CandidateSuccessor:
                     else {"ts_code": symbol, "trade_date": end},
                 ),
             ]
+            if self.current_sources:
+                if api == "etf_basic":
+                    requests.append(("lookup_fund_asset_class", {"ts_code": symbol}))
+                requests.append(
+                    (
+                        "lookup_stock_quote" if api == "stock_basic" else "lookup_fund_quote",
+                        {"ts_code": symbol, "freq": "1MIN"},
+                    )
+                )
+            if self.current_sources:
+                seed_interval: dict[str, object] = {
+                    "ts_code": "510300.SH",
+                    "start_date": start,
+                    "end_date": end,
+                }
+                requests.extend(
+                    [
+                        ("lookup_fund_profile", {"ts_code": "510300.SH"}),
+                        ("lookup_fund_asset_class", {"ts_code": "510300.SH"}),
+                        ("lookup_fund_prices", seed_interval),
+                        ("lookup_fund_adjustments", seed_interval),
+                        ("lookup_fund_distributions", {"ts_code": "510300.SH"}),
+                        ("lookup_fund_constituents", {"ts_code": "510300.SH", "trade_date": end}),
+                        ("lookup_price_limits", seed_interval),
+                        ("lookup_suspensions", seed_interval),
+                        (
+                            "lookup_exchange_calendar",
+                            {"exchange": "SSE", "start_date": start, "end_date": end},
+                        ),
+                        ("lookup_fund_quote", {"ts_code": "510300.SH", "freq": "1MIN"}),
+                    ]
+                )
             for tool, arguments in requests:
                 queued = await acquisition.request(tool, arguments)
                 if queued.get("status") == "data_gap":
@@ -331,12 +368,16 @@ async def run_prospective_discovery(
         PortfolioReviewAuthority,
     ]
     | None = None,
+    portfolio_context_source: Callable[
+        [ResearchThesisRunInputs, FrozenDataSnapshotInput], tuple[AccountStateSnapshot, datetime]
+    ]
+    | None = None,
     maximum_runs: int = 4,
     prior_thesis_run_id: str | None = None,
 ) -> ProspectiveDiscoveryResult:
     if not 1 <= maximum_runs <= 4 or account_max_age <= timedelta(0):
         raise ValueError("prospective discovery requires a bounded Run count and account age")
-    transform = _CandidateSuccessor(authority, inputs)
+    transform = _CandidateSuccessor(authority, inputs, portfolio_context_source is not None)
     if prior_thesis_run_id is not None:
         prior, _ = reopen_completed_research_thesis(
             journal=authority.journal,
@@ -366,7 +407,7 @@ async def run_prospective_discovery(
         acquisition=acquisition,
         maximum_runs=maximum_runs,
         successor_transform=transform,
-        successor_transform_id=_POLICY,
+        successor_transform_id=transform.policy,
         prior_thesis_run_id=prior_thesis_run_id,
     )
     watch_admission_ids: tuple[str, ...] = ()
@@ -421,23 +462,37 @@ async def run_prospective_discovery(
             or final.target_id != transform.candidate
         ):
             raise PermissionError("candidate thesis differs from its verified successor binding")
+        portfolio_cutoff = final.repository.evidence_pack.as_of
+        account: AccountStateSnapshot | None = None
+        if portfolio_context_source is not None:
+            try:
+                account, portfolio_cutoff = portfolio_context_source(final, result.frozen_input)
+            except (PermissionError, FileNotFoundError, LookupError) as error:
+                gaps.add("current_portfolio_context_missing:" + str(error))
+            if account is not None and (
+                portfolio_cutoff < authority.journal.get_run(thesis_run_id).updated_at
+                or account.as_of > portfolio_cutoff
+            ):
+                raise PermissionError(
+                    "portfolio cutoff must follow thesis completion and account capture"
+                )
         source = admission_authority_factory(final, result.frozen_input)
         security = DynamicAShareAdmission(source).discover(
-            (transform.candidate,), final.repository.evidence_pack.as_of
+            (transform.candidate,), portfolio_cutoff
         )[0]
         gaps.update(security.gaps)
         status = "admission_refused"
         if not gaps:
-            account: AccountStateSnapshot | None = None
             try:
-                account = account_source()
+                if account is None:
+                    account = account_source()
             except (PermissionError, FileNotFoundError, LookupError):
                 gaps.add("account_authority_missing")
             if account is not None:
                 if account.account_reference_hash != authority.account_scope:
                     raise PermissionError("candidate portfolio crosses the research account scope")
                 if not account.readiness(
-                    evaluated_at=final.repository.evidence_pack.as_of, max_age=account_max_age
+                    evaluated_at=portfolio_cutoff, max_age=account_max_age
                 ).exposure_increase_ready:
                     gaps.add("account_authority_incomplete_or_stale")
             if not gaps and portfolio_authority_factory is None:
@@ -454,7 +509,7 @@ async def run_prospective_discovery(
                 if (
                     portfolio.store.root.resolve() != authority.store.root.resolve()
                     or current.account_state != account
-                    or current.cutoff != final.repository.evidence_pack.as_of
+                    or current.cutoff != portfolio_cutoff
                     or not isinstance(current.mandate, TradingMandateV3)
                     or transform.candidate not in current.mandate.allowed_instruments
                     or basis is None

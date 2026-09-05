@@ -62,9 +62,34 @@ source record and proof. Each model has its own discovery episode and may select
 new company or ETF through an actual native profile query. Confirmed identity causes
 outside-Run admission-data acquisition and a candidate-targeted successor thesis.
 Dynamic admission then either supplies an eligible candidate to an existing portfolio
-authority or reports exact refusal gaps. The current CLI has no accepted current
-Mock account or prospective trading-rule authority; a research-context identifier is
-not an account snapshot. This entry therefore cannot claim completed Mock acceptance.
+authority or reports exact refusal gaps. Registrations without `--rule-policy-event-id`
+retain the research-only v1 contract and historical replay. Supplying a root-signed
+accepted generic source-rule policy creates a v2 registration that binds that policy's
+artifact hash and the additional fund asset-class and one-minute quote routes.
+
+The v2 composition uses one durable CNY Mock account per study/model. The registered
+opening is CNY 100,000 with approximately half allocated to source-priced HS300 ETF
+lots as explicit overnight inventory. Missing seed qualification or prices remain a
+typed pending authority gap. The provider owns cash, positions, orders and fills;
+the composition adds no account ledger. Candidate and held instruments must both
+pass current source admission before binding an immutable dynamic Universe and
+Mandate to `PortfolioReviewAuthority`. Daily closes remain reference marks rather
+than executable quotes. Current source absence, closed-market quotes and incomplete
+held-symbol evidence cannot produce a completed portfolio action.
+
+The account is captured after thesis completion, then a separate portfolio cutoff
+is frozen and the source evidence is revalidated at that cutoff. The earlier thesis
+identity is retained unchanged. Captured account/cutoff and completed model rows are
+durable, so replay does not substitute later account facts. Portfolio review uses the
+existing CNY local Mock execution gate; actual dispatch and reconciliation evidence
+remain separate from completion of the review.
+
+Each v2 episode permits at most three native Runs, leaving room for discovery,
+successor thesis and portfolio review. Before each model, the Harness checks the
+full profile cap multiplied by three against remaining stage authority. The frozen
+USD 2.50 estimated stage cap and each profile's effort and limits remain unchanged.
+An unaffordable episode produces a durable `pending_budget` row; the denominator
+remains three. Existing atomic request reservations still govern actual model calls.
 
 The existing authority store owns content-addressed raw responses, versioned
 observations, coverage and acquisition transactions. Durable claims deduplicate
@@ -183,7 +208,7 @@ Production entry points are:
 ```bash
 market-impact agent continuous-study prepare-experiment --prior-usage-audit <audit.json> --research-inputs-root <frozen-manifests>
 market-impact agent continuous-study run --prior-usage-audit <audit.json> --research-inputs-root <frozen-manifests>
-market-impact agent prospective-discovery prepare --receipt-binding <binding.json> --receipt-report <receipts.json> --receipt-episode-id <episode> --receipt-run-id <source-run>
+market-impact agent prospective-discovery prepare --receipt-binding <binding.json> --receipt-report <receipts.json> --receipt-episode-id <episode> --receipt-run-id <source-run> --rule-policy-event-id <accepted-policy-event>
 market-impact agent prospective-discovery run --registration <prepared-registration.json>
 market-impact ibkr-paper prepare --mandate <private-paper-mandate.json> --instrument-route <instrument>=<market>
 ```

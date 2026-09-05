@@ -10,7 +10,7 @@ import asyncio
 import base64
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from market_impact_agent.agent_contracts import canonical_hash
@@ -52,6 +52,9 @@ _ROUTES = {
     "fund_daily": ("lookup_fund_prices", "Raw fund daily prices"),
     "stock_basic": ("lookup_company_profile", "Currently observed company master metadata"),
     "etf_basic": ("lookup_fund_profile", "Currently observed ETF master metadata"),
+    "fund_basic": ("lookup_fund_asset_class", "Currently observed fund asset class"),
+    "rt_min": ("lookup_stock_quote", "Actually observed stock one-minute bar; not an order book"),
+    "rt_etf_min": ("lookup_fund_quote", "Actually observed ETF one-minute bar; not an order book"),
     "index_classify": ("lookup_industry_taxonomy", "Observed industry taxonomy codes and names"),
     "index_member_all": (
         "lookup_industry_members",
@@ -92,6 +95,9 @@ _PARAMETERS = {
     "fund_daily": ("ts_code", "start_date", "end_date"),
     "stock_basic": ("ts_code",),
     "etf_basic": ("ts_code",),
+    "fund_basic": ("ts_code",),
+    "rt_min": ("ts_code", "freq"),
+    "rt_etf_min": ("ts_code", "freq"),
     "index_classify": ("index_code", "level", "src"),
     "index_member_all": ("l1_code", "l2_code", "l3_code", "ts_code", "is_new"),
     "etf_sh_cons": ("ts_code", "trade_date"),
@@ -201,6 +207,8 @@ class ResearchSourceTemplate:
             )
         if "ts_code" in arguments and "," in cast(str, arguments["ts_code"]):
             raise ResearchQueryValidationError("research query requires one instrument")
+        if self.api_name in {"rt_min", "rt_etf_min"} and arguments.get("freq") != "1MIN":
+            raise ResearchQueryValidationError("current quote research requires freq=1MIN")
         if self.api_name == "stk_limit" and not (
             set(arguments) == {"ts_code", "trade_date"}
             or set(arguments) == {"ts_code", "start_date", "end_date"}
@@ -328,6 +336,15 @@ class OnDemandResearch:
                 "base_snapshot_ids": list(historical_inputs.snapshot_ids),
                 "rule_artifact_hashes": list(historical_inputs.rule_artifact_hashes),
                 **(
+                    {
+                        "qualification_policy_artifact_hash": (
+                            historical_inputs.qualification_policy.policy_artifact_hash
+                        )
+                    }
+                    if historical_inputs.qualification_policy is not None
+                    else {}
+                ),
+                **(
                     {"fund_halt_artifact_hashes": list(historical_inputs.fund_halt_artifact_hashes)}
                     if historical_inputs.fund_halt_artifact_hashes
                     else {}
@@ -388,6 +405,38 @@ class OnDemandResearch:
     ) -> dict[str, object]:
         assert self.historical_inputs is not None
         market = self.historical_inputs.with_snapshots((snapshot.snapshot_id,))
+        if template.api_name not in {"daily", "fund_daily"}:
+            projection = market.research_projection(snapshot, template.api_name, self.cutoff)
+            observations = {item.raw_content_hash: item for item in snapshot.observations}
+            rows = cast(list[dict[str, object]], projection["rows"])
+            return {
+                "status": "available" if snapshot.coverage_complete else "data_gap",
+                "projection_version": projection["projection_version"],
+                "snapshot_id": snapshot.snapshot_id,
+                "source_api": template.api_name,
+                "actual_receipt_query": snapshot.query.to_dict(),
+                "modeled_cutoff": self.cutoff.isoformat(),
+                "policy_id": market.policy.policy_id,
+                "strict_pit_accepted": False,
+                "gaps": projection["gaps"],
+                "observations": [
+                    {
+                        "observation_id": observations[
+                            str(row["source_record_hash"])
+                        ].observation_id,
+                        "raw_content_hash": row["source_record_hash"],
+                        "times": observations[str(row["source_record_hash"])].times.to_dict(),
+                        "modeled_fact": row["record"],
+                    }
+                    for row in rows[offset : offset + limit]
+                ],
+                "page": {
+                    "offset": offset,
+                    "limit": limit,
+                    "total": len(rows),
+                    "has_more": offset + limit < len(rows),
+                },
+            }
         projection = market.research_series(str(arguments["ts_code"]), self.cutoff, limit=252)
         observations = {item.raw_content_hash: item for item in snapshot.observations}
         start, end = str(arguments["start_date"]), str(arguments["end_date"])
@@ -581,6 +630,15 @@ class OnDemandResearch:
                 and snapshot.query.source_policy_id == template.template_id
                 and snapshot.query.parameters == arguments
             ):
+                if template.api_name in {"rt_min", "rt_etf_min"} and not any(
+                    timedelta(0) <= self.cutoff - item.times.retrieved_at <= timedelta(minutes=2)
+                    and item.times.aggregator_fetched_at is not None
+                    and timedelta(0)
+                    <= self.cutoff - item.times.aggregator_fetched_at
+                    <= timedelta(minutes=2)
+                    for item in snapshot.observations
+                ):
+                    continue
                 if self.historical_inputs is not None:
                     return self._modeled_page(snapshot, template, arguments, offset, limit)
                 return {

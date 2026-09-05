@@ -91,6 +91,7 @@ _PROCESS_CLAIMS: set[str] = set()
 _AUTHORITATIVE_JOURNAL_TOKEN = object()
 _PRIVILEGED_EVENT_TYPES = frozenset(
     {
+        "ashare.rule_policy.accepted",
         "run.started",
         "run.failed",
         "model.turn.completed",

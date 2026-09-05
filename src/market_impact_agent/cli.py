@@ -938,6 +938,7 @@ def build_parser() -> argparse.ArgumentParser:
     prospective_discovery_parser.add_argument("--receipt-episode-id")
     prospective_discovery_parser.add_argument("--receipt-run-id")
     prospective_discovery_parser.add_argument("--registration", type=Path)
+    prospective_discovery_parser.add_argument("--rule-policy-event-id")
     agent_validate_parser = agent_subparsers.add_parser(
         "validate", help="Validate one frozen Evidence Pack and its bound local content"
     )
@@ -5281,6 +5282,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     receipt_report_path=args.receipt_report,
                     receipt_episode_id=args.receipt_episode_id,
                     receipt_run_id=args.receipt_run_id,
+                    rule_policy_event_id=args.rule_policy_event_id,
                 )
             else:
                 if args.registration is None:

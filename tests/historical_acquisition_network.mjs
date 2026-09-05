@@ -28,7 +28,9 @@ globalThis.fetch = async (input, init) => {
     }
     if (data.prior_thesis) {
       const priorResult=JSON.parse(result.output).result;
-      assert.equal(priorResult.current_thesis.source.thesis,'Prior evidence calls for a source close.');
+      assert.equal(priorResult.current_thesis.status,'already_supplied');
+      assert.equal(priorResult.current_thesis.json_pointer,'/prior_thesis/thesis');
+      assert.equal(data.prior_thesis.thesis.thesis,'Prior evidence calls for a source close.');
       assert.equal(priorResult.authority,'prior_signed_opinion_not_source_fact');
     }
     const answer=portfolio ? {...common,requested_action:seedClose?'close':'open',rationale:'Act on the reconciled historical account.',evidence_refs:['account_state','exposure_view'],instrument_id:seedClose?'510300.SH':'000001.SZ',venue:seedClose?'XSHG':'XSHE',instrument_class:seedClose?'exchange_traded_fund':'equity',direction:'long',target_gross_exposure_ratio:seedClose?'0':'0.30'} : {...common,base_case_direction:'up',thesis:process.env.HISTORY_SEED==='1'?'Prior evidence calls for a source close.':'Modeled historical completed prices support a candidate thesis.',typed_unknowns:['Historical projection is not strict PIT.']};

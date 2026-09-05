@@ -22,6 +22,8 @@ from market_impact_agent.decision_thesis import (
 from market_impact_agent.research_thesis_runtime import (
     ResearchThesisAuthority,
     ResearchThesisRunInputs,
+    _injected_prior_reference,  # pyright: ignore[reportPrivateUsage]
+    reopen_completed_research_thesis,
 )
 from market_impact_agent.runtime_store import RunJournal
 
@@ -30,6 +32,58 @@ from .test_pi_runtime import pi_profile
 from .test_research_thesis_runtime import _repository  # pyright: ignore[reportPrivateUsage]
 
 NOW = datetime(2026, 9, 4, 8, 0, tzinfo=UTC)
+
+
+def _run_awaitable(value: Awaitable[object]) -> object:
+    async def invoke() -> object:
+        return await value
+
+    return asyncio.run(invoke())
+
+
+def test_injected_opinion_returns_verified_reference_without_charging_hidden_text(
+    tmp_path: Path,
+) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "harness")
+    journal = RunJournal.authoritative(store)
+    recall = DecisionRecallProjection(
+        tmp_path / "recall.sqlite3", artifact_store=store.artifacts, journal=journal
+    )
+    first = _entry(store, _thesis(NOW, "unicode", "行业消息需要继续验证。" * 150))
+    recall.rebuild((first,))
+    _, prior = reopen_completed_research_thesis(
+        journal=journal, artifact_store=store.artifacts, run_id=first.source_run_id
+    )
+    selected = store.artifacts.put_json({"prior_thesis": prior}).content_hash
+    raw_tools = decision_recall_tools(
+        recall,
+        as_of=NOW,
+        current_root_event_id="earnings-root",
+        allowed_source_run_ids=frozenset({first.source_run_id}),
+    )
+    tools = {tool.name: _injected_prior_reference(tool, prior, selected) for tool in raw_tools}
+    first_read = _run_awaitable(tools["read_current_thesis"].handler({}))
+    assert first_read == _run_awaitable(tools["read_current_thesis"].handler({}))
+    assert "already_supplied" in json.dumps(first_read)
+    assert len(json.dumps(first_read).encode()) < 1000
+    assert "行业消息" not in json.dumps(first_read, ensure_ascii=False)
+    assert selected in json.dumps(first_read)
+    older_read = _run_awaitable(tools["read_prior_decisions"].handler({"ids": [first.recall_id]}))
+    assert "already_supplied" in json.dumps(older_read)
+    # No exemption for another injected opinion or for the legacy tool version.
+    other = {**prior, "run_id": "another-run", "thesis": {"different": True}}
+    legacy = _run_awaitable(raw_tools[0].handler({}))
+    assert (
+        _run_awaitable(_injected_prior_reference(raw_tools[0], other, selected).handler({}))
+        == legacy
+    )
+    assert "行业消息" in json.dumps(legacy, ensure_ascii=False)
+    # The compact response still reopens source authority on every call.
+    store.artifacts.get(first.source_artifact_hash, media_type="application/json").path.write_text(
+        "{}"
+    )
+    with pytest.raises((ValueError, PermissionError)):
+        _run_awaitable(tools["read_current_thesis"].handler({}))
 
 
 def _thesis(as_of: datetime, epoch: str, text: str = "A tactical earnings rerating."):
