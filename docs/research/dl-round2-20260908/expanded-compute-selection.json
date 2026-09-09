@@ -1,0 +1,68 @@
+{
+  "frozen_at": "2026-09-08T04:22:38.817491+00:00",
+  "selection_basis": "corrected training-only profiles; no expanded development or final holdout outcomes inspected",
+  "folds": [
+    "A",
+    "B"
+  ],
+  "seeds": [
+    17,
+    29,
+    43
+  ],
+  "learned_search": {
+    "arms": [
+      "lstm",
+      "transformer"
+    ],
+    "action_steps": 131072,
+    "pool_capacity": 20,
+    "factor_cache_size": 64,
+    "pool_weight_device": "cpu",
+    "formula_and_policy_device": "cuda",
+    "torch_cpu_threads_per_job": 4,
+    "max_concurrent_gpu_jobs": 2
+  },
+  "random_control": {
+    "unique_admission_candidate_target": "maximum learned-search count within the same fold and seed, read only from the saved search checkpoint",
+    "action_ceiling": 2097152
+  },
+  "supervised": {
+    "ridge_seeds": [
+      17
+    ],
+    "lightgbm_seeds": [
+      17,
+      29,
+      43
+    ],
+    "tiers": [
+      "A",
+      "B",
+      "C"
+    ],
+    "threads_per_model": 64,
+    "max_concurrent_jobs": 2,
+    "stagger_data_preparation": true,
+    "minimum_available_memory_for_second_launch_gib": 70
+  },
+  "features": {
+    "workers": 128,
+    "native_threads_per_worker": 1
+  },
+  "account": {
+    "cost_multipliers": [
+      1,
+      2
+    ],
+    "all_completed_candidates": true,
+    "max_concurrent_jobs": 2
+  },
+  "source_sha256": {
+    "expanded_rl.py": "4cbe1ab48644df2d18eab4b8f65a18d4ea34fca0b38488e4a8e36c2f696cf8a9",
+    "expanded_train.py": "fbd7f544e140c992f9bf5478051dcf97c12271ace04489bc1957ac456641eddc",
+    "expanded_features.py": "e48e635ccb9485395e1ceba69b4329ba1eeb064a56b80988cd851582ae2ecc85",
+    "expanded_backtest.py": "63b9838d3c418d6ef5a88699c0265113a4ec3727076e466f7053f7f42554e9a3"
+  },
+  "resource_retry_policy": "A resource-only failure may restart with the identical seed/model/data and lower concurrency; retain failed artifacts and report the retry. Never select retries by score."
+}

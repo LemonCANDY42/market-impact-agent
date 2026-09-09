@@ -1,0 +1,76 @@
+{
+  "schema": "next-account-pair-readiness.v1",
+  "window_id": "cn-2024-broad-rebound",
+  "scope": "Previously opened development sample; one initial decision per arm and five account sessions",
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "high",
+  "arms": [
+    "price_only",
+    "price_and_event"
+  ],
+  "schedule_binding": {
+    "schema": "explicit-h5-successor-schedule.v1",
+    "paired_registration_window": "cn-2024-broad-rebound",
+    "seed_session": "2024-02-05",
+    "sessions": [
+      "2024-02-06",
+      "2024-02-07",
+      "2024-02-08",
+      "2024-02-19",
+      "2024-02-20"
+    ],
+    "legacy_source_registered_sessions": [
+      "2024-02-06"
+    ],
+    "calendar_hash": "21b21d41b3e45882ab00fe7ec246a71eaade97cd1a7ad80b15c322233a3dd91a",
+    "calendar_record_hashes": [
+      "046e20b62c2b200080e1c54176d33c1dc46a2acb2b6f585b9da11f08b1374fea",
+      "0d19fb80b472bb95b921a1d464db799319b5133c7cf5398ca776bd0303649325",
+      "3168152405d6d383d1383f76e6c9fa663ad9ad4d9a4a138248940786bea3579c",
+      "3bf61148d8d0a9ce944924ca3f7680215d50be5bd4e69d70b30c3b9240a25fa2",
+      "44de76d59e115b92f9bc47255c3d4a918a6aa5b64a94402296a98683c14838e0",
+      "580a773cb071906f6690cdc0603762e4dc16116f3c2d725f65736acaa3a8099d",
+      "70b9cdeb60c1b407015379620f0d32ee07df3dcfe482a0358a6872c8d3323006",
+      "749d1ca795fcdb717a47ea9cdb18094150535dc29e4aa4cb22d9d512c0ccb69b",
+      "99be2da8d6f8f0a4cf788798f84e95355b2bf272ccb882339a4f2907a8e579ad",
+      "9a7414fa9a9749ac8988e43571f0544d52f4dbd4c899183d6c55f6ba514d731a",
+      "b2779ac5d5e2f658113a426191dbc7e796b31c9d3c487bb591bf4af282802866",
+      "cf1598fd1da7742d75e0633b825052719a838de6e835536b46b232b934c07d76",
+      "d84cf611aed81c6b615264c971d27636b9b114fcd1abee5827e0db2bb60c7160",
+      "e2fcf93fd0196f78cf4cb15a63ed1c1bbafa6169efb6d4c4f5ab3ff3b360fa27",
+      "e6fd509806556f43977504fc53d52506d214ff665fb1e32c54df45384c1a87a2",
+      "fedfe558758b27970e30421373abee28cb8e888ac117f72a3ebbdaf0625fc0c7"
+    ],
+    "legacy_registration_unchanged": true
+  },
+  "binding_hash": "ec9f32fecd8a3ef56c2295d10a2178f5c535058fcd55f1b9f919c43839693280",
+  "source_preflight_passed": true,
+  "synthetic_complete": true,
+  "synthetic_reopen_identical": true,
+  "synthetic_role_requests": 4,
+  "synthetic_intents": 2,
+  "synthetic_fills": 2,
+  "context_estimated_tokens": [
+    17574,
+    13922,
+    37645,
+    13937
+  ],
+  "context_limit_tokens": 65536,
+  "maximum_role_runs": 4,
+  "maximum_physical_requests": 16,
+  "registered_worst_case_cost_microusd": 3670016,
+  "proposed_fresh_cap_microusd": 4000000,
+  "pricing_basis": "Existing local provider profile; not a live price quote",
+  "real_model_calls": 0,
+  "fresh_paid_authorization_granted": false,
+  "old_budget_authority_reused": false,
+  "source_bindings_unchanged": true,
+  "strict_pit_accepted": false,
+  "investment_effectiveness_accepted": false,
+  "failure_accounting": "Preserve failed attempts and costs; report incomplete pairs without interpreting investment delta.",
+  "independent_review": {
+    "scope": "H5 schedule authority, current binding and fresh paid cap",
+    "concrete_defects_found": false
+  }
+}

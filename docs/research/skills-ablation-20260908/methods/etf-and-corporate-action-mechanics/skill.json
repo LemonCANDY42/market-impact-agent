@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "etf-and-corporate-action-mechanics",
+  "version": "0.1.0",
+  "description": "Check ETF product exposure and corporate-action mechanics before inferring tradable value or flows.",
+  "source": "research://skills-ablation-20260908/etf-and-corporate-action-mechanics",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "211fb357cbd6489cf11068dc6941a9fd6e9888c52285491dad5063be670c367d",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "a6d14d08ef6b3e109abff171c3473a719b7fae7fcb90cdd4997a4edd30732ae7"
+}

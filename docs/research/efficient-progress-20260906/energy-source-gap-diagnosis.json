@@ -1,0 +1,26 @@
+{
+  "raw_records": 375,
+  "current_prospective_records": 36,
+  "current_unit_counts": {
+    "kWh/d": 26,
+    "kWh/h": 10
+  },
+  "current_missing_or_nonpositive_capacity": 0,
+  "current_convertible_positive_loss_count": 35,
+  "current_nature_counts": {
+    "physical_transport_loss": 24,
+    "planned_maintenance": 12
+  },
+  "new_network_calls": 0,
+  "source_hash": "1674c4d1ff3a37a086dc5c67e4ca5a95fdde79222776cf1abc4b944326292d1d",
+  "qualified_field_diagnosis": {
+    "future_occurrence": 34,
+    "missing_start": 0,
+    "positive_loss_below_500k_boe_day": 35,
+    "loss_at_least_500k_boe_day": 0,
+    "missing_positive_loss": 1,
+    "missing_duration": 0,
+    "duration_below_24h": 1
+  },
+  "scope_note": "Frozen physical-disruption cohort requires occurrence facts; this does not reject future announcements as research in general."
+}

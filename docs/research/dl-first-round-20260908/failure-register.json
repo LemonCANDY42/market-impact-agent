@@ -1,0 +1,47 @@
+{
+  "events": [
+    {
+      "phase": "local inventory",
+      "attempts": 2,
+      "failure": "Standalone environment lacked project package, then jsonschema",
+      "resolution": "Reuse project dependencies with isolated TA-Lib overlay",
+      "model_calls": 0
+    },
+    {
+      "phase": "public model download",
+      "failure": "Origin timeout; mirror Xet 401",
+      "resolution": "Mirror HTTP with Xet and implicit tokens disabled; origin hash verification passed"
+    },
+    {
+      "phase": "Qlib result serialization",
+      "failure": "Undefined correlation produced NaN, strict JSON refused output",
+      "resolution": "Typed absence; rerun retained identical prediction bytes; 12 configurations fitted twice"
+    },
+    {
+      "phase": "GPU startup",
+      "attempts": 3,
+      "failures": [
+        "missing multiprocessing main guard",
+        "nvcc discovery",
+        "CUDA toolkit header incompatibility"
+      ],
+      "resolution": "Main guard and maintained native sampler configuration; no library source edit"
+    },
+    {
+      "phase": "greedy thinking trial",
+      "failure": "4 of 7 returned outputs hit 2048 tokens",
+      "status": "stopped; 1 inflight cancelled, 16 planned requests not started"
+    },
+    {
+      "phase": "official sampling thinking",
+      "failure": "8 of 12 returned outputs hit 2048 tokens",
+      "status": "complete attempt, failed extraction cases retained"
+    },
+    {
+      "phase": "native account",
+      "failure": "Final additional 100-unit order blocked in both Close9 LightGBM 2024 fee cases",
+      "status": "54 full observation paths, 52 target-complete, 2 incomplete_execution; no row removed"
+    }
+  ],
+  "prior_project_terminals_modified": false
+}

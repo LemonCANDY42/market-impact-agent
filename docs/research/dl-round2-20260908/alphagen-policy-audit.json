@@ -1,0 +1,25 @@
+{
+  "num_timesteps": 4096,
+  "_n_updates": 80,
+  "n_steps": 512,
+  "n_epochs": 10,
+  "batch_size": 128,
+  "learning_rate": 0.0003,
+  "gamma": 1.0,
+  "gae_lambda": 0.95,
+  "ent_coef": 0.01,
+  "vf_coef": 0.5,
+  "max_grad_norm": 0.5,
+  "policy_parameter_count": 298609,
+  "policy_trainable_parameter_count": 298609,
+  "net_arch": {
+    "pi": [
+      64,
+      64
+    ],
+    "vf": [
+      64,
+      64
+    ]
+  }
+}

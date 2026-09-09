@@ -1,0 +1,21 @@
+{
+  "stage": "conditional continuation prepared before nomination and fresh outcomes",
+  "checks": [
+    "Python parse/compile",
+    "absent nominee prevents creation",
+    "duplicate nomination rejected",
+    "generated advanced fold matches protocol",
+    "synthetic upstream 30-versus-6 padding exact equality",
+    "positive raw signal with zero size-partial signal fails fresh gate"
+  ],
+  "scripts": {
+    "recover_expanded_cpu.py": "b6a3c53152c4f13988eea1788bd7489247641fd0bab376a01e0ca7cd824a100b",
+    "prepare_fresh_confirmation.py": "b93126aafad574e881276025be4990e0ad6f5140d5d97736cf035bfe6e8938d4",
+    "run_fresh_if_qualified.py": "c7e66a99ea6d5af40dde3fad554f282f8919df31b5b22e3fb9530bd4bdfe025a",
+    "summarize_fresh_confirmation.py": "28965841d2293ee2cbdaa53a18d2062366dcad4a8f49772e92e9238f4ef14c1c",
+    "check_fresh_padding.py": "bc60687d20debfcdd8bba1e901301a524780d67084b9375eea438d6fa95a3a45",
+    "summarize_expanded.py": "4d2d6f64894d574302f3109a83aeb42a674edfa048441aa4dac92cd9603ec448",
+    "audit_expanded_matrix.py": "b744370306caa43efaec19c6556d548457f1c248c8ad462c49eb85104a11f5b3",
+    "check_fresh_gate.py": "b178269bb1a51c1eeff4c4a559163275a804356ce85bf601fe40de2b47504bd4"
+  }
+}

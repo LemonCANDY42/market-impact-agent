@@ -1,0 +1,47 @@
+{
+  "binding_hash": "2ae54655dfc3d26caecd3479e3d83c30d27af391a0ed9b365e8b0610bcab4a19",
+  "complete": false,
+  "mode": "paid",
+  "source_bindings_unchanged": true,
+  "budget": {
+    "physical_requests": 4,
+    "known_cost_microusd": 105214,
+    "reserved_microusd": 0,
+    "unsettled_requests": 0
+  },
+  "real_model_calls": 4,
+  "strict_pit_accepted": false,
+  "investment_effectiveness_accepted": false,
+  "arms": {
+    "price_only": {
+      "complete": false,
+      "pending": "PendingReview(reason='portfolio_run_incomplete', continuation_ref='isolated-investment-firstpair-paid-2ae54655dfc3d26caecd.price_only.initial.portfolio')"
+    },
+    "price_and_event": {
+      "complete": false,
+      "pending": "PendingReview(reason='portfolio_run_incomplete', continuation_ref='isolated-investment-firstpair-paid-2ae54655dfc3d26caecd.price_and_event.initial.portfolio')"
+    }
+  },
+  "research": {
+    "price_only": {
+      "status": "completed",
+      "base_case_direction": "unknown",
+      "event_support": "unsupported"
+    },
+    "price_and_event": {
+      "status": "completed",
+      "base_case_direction": "down",
+      "event_support": "supported"
+    }
+  },
+  "portfolio_status": "both incomplete in original paid run; parser rejected authorized evidence IDs because it only accepted descriptive labels",
+  "investment_metrics_available": false,
+  "orders_submitted": 0,
+  "authorized_cap_microusd": 4000000,
+  "parser_fix": "accept exact labels or authorized IDs; unknown and ambiguous references rejected",
+  "offline_replay_status": "both saved responses pass parser and policy with exact original bindings; native account replay blocked at durable-response gate",
+  "offline_economics_available": false,
+  "offline_diagnostic_receipt": "investment-offline-diagnostic.json",
+  "separate_native_saved_response_diagnostic": "investment-offline-account-result.json",
+  "original_paid_experiment_remains_incomplete": true
+}

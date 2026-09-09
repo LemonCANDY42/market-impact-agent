@@ -1,0 +1,1478 @@
+{
+  "acceptance": {
+    "elapsed_seconds": 952.599,
+    "elapsed_seconds_scope": "final_journal_reopen_and_summary_regeneration",
+    "first_full_matrix_elapsed_seconds": null,
+    "new_model_calls": 0,
+    "new_paid_cost_microusd": 0,
+    "status": "passed",
+    "total_local_compute_elapsed_seconds": null,
+    "total_local_compute_timing": "not precisely measured; includes the first full native matrix that ended at the retained shared-root fingerprint audit failure"
+  },
+  "candidate": {
+    "execution_engine": "HistoricalStreamingAccount",
+    "label": "custom isolated TA-Lib SMA5/20 long/cash feasibility strategy",
+    "production_admission": false,
+    "promotion_eligible": false,
+    "rule": "at frozen 09:25 cutoff, SMA5>SMA20 over 20 completed adjusted closes targets long; otherwise cash",
+    "strategy_id": "isolated_talib_sma5_20_long_cash",
+    "unknown_or_missing_mapping": "gap; never cash"
+  },
+  "checks": {
+    "cashflow_seed_equality": {
+      "passed": true,
+      "window_cost_checks": 6
+    },
+    "cost_stress": {
+      "passed": true,
+      "source_fee_case": "source-verified ETF commission/minimum and zero stamp tax",
+      "stress_fee_case": "declared doubled commission rate and doubled minimum commission; ETF stamp tax remains zero",
+      "stress_is_source_fee_claim": false
+    },
+    "frozen_source_bindings_unchanged": true,
+    "future_warmup_missing_and_no_fill": [
+      {
+        "check": "future_row_rejection",
+        "evidence_lane": "tiny_synthetic_contract_only",
+        "observed_gap": "future_or_uncompleted_row_rejected",
+        "passed": true
+      },
+      {
+        "check": "warmup_gap",
+        "evidence_lane": "tiny_synthetic_contract_only",
+        "observed_gap": "warmup_history_insufficient",
+        "passed": true
+      },
+      {
+        "check": "missing_observation_gap",
+        "evidence_lane": "tiny_synthetic_contract_only",
+        "observed_gap": "missing_observation",
+        "passed": true
+      },
+      {
+        "check": "native_no_fill",
+        "evidence_lane": "isolated_fault_injection_no_financial_inference",
+        "observed_gap": [
+          "limit_down_or_no_bid"
+        ],
+        "passed": true
+      }
+    ],
+    "initial_shared_root_fingerprint_audit": {
+      "canonical_domain_writes_observed": 0,
+      "classification": "audit_design_false_positive_retained",
+      "observed": "read-only SQLite sidecar metadata changed during the first full run",
+      "passed": false,
+      "replacement_check": "frozen_source_bindings_unchanged"
+    },
+    "native_journal_replay": {
+      "arm_window_cost_checks": 30,
+      "passed": true
+    },
+    "same_economics": {
+      "passed": true,
+      "window_cost_checks": 6
+    }
+  },
+  "derived_summary_refresh": {
+    "engine_or_source_reopened": false,
+    "source": "existing private native account measurements"
+  },
+  "evidence_lane": "opened_historical_modeled_pit",
+  "interpretation": {
+    "capital_occupancy": "mean daily 1-cash/NAV; ending cash fraction is reported separately",
+    "causal_claim": false,
+    "independent_sample": false,
+    "investment_effectiveness_accepted": false,
+    "model_superiority_claim": false,
+    "pit_provenance": "Modeled-PIT only: trading-date-filtered historical source versions do not establish actual historical receipt availability",
+    "retained_audit_limitation": "the initial whole shared-authority filesystem fingerprint failed because read-only SQLite opens update sidecar metadata; the corrected audit checks the frozen immutable manifest/source bindings",
+    "risk_statistics": "descriptive only",
+    "selection_bias": "three previously opened development cases were frozen for feasibility coverage",
+    "sharpe_sortino": "annualized from daily native NAV returns with zero risk-free/target; descriptive and unreliable for these short selected windows",
+    "tiny_case_warning": "three non-independent selected windows cannot establish reliable tail risk, profitability, or model superiority"
+  },
+  "isolation": {
+    "all_output_under_native_rule": true,
+    "broker_calls": 0,
+    "canonical_source_domain_writes": 0,
+    "canonical_source_writes": 0,
+    "model_calls": 0,
+    "network_calls": 0,
+    "source_store": "ReadOnlyDataSnapshotStore(shared_admission_root()/continuous-study-20260905-usd40)",
+    "sqlite_sidecar_metadata_change_observed": true
+  },
+  "libraries": {
+    "TA-Lib": "0.6.8",
+    "nautilus_trader": "1.231.0",
+    "python": "3.13.15"
+  },
+  "schema": "isolated-native-sma5-20-feasibility-summary.v1",
+  "selection_sha256": "4fe7e172d2c455f2ccd52fb00ff1cfe9ada257aaae00004292b2219072d9ea43",
+  "strict_pit_accepted": false,
+  "windows": [
+    {
+      "calendar_source": "frozen_last-record-bound_manifest_records",
+      "cost_cases": [
+        {
+          "arms": [
+            {
+              "arm_id": "cash_no_action",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "2.20139815712",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "14.98",
+                "expected_sessions": 52,
+                "initial_nav": "100144.910",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.001258376486633219801186101",
+                "observed_sessions": 52,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4986993347939500869290311410",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "same_initial_account_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-3.50644687892",
+                "annualized_sortino_zero_target": "-4.20803901588",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.4326858841454654014762131529",
+                "cash_ratio": "0.6358655818088651115758288347",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.04206306118690811291569645223",
+                "ending_cash_fraction": "0.6358655818088651115758288347",
+                "execution_fees_cny": "0",
+                "expected_sessions": 52,
+                "initial_nav": "100144.910",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2172951176450206006476015606",
+                "model_cost_microusd": 0,
+                "net_return": "-0.2094105431818751447277749813",
+                "observed_sessions": 52,
+                "residual_positions": {
+                  "510300.SH": "9400"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0E+3",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "broad_etf_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-3.289061431",
+                "annualized_sortino_zero_target": "-4.00128696781",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.9403204012809432127233208831",
+                "cash_ratio": "0.07750458691067806069761146444",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.09332355217621793349163304581",
+                "ending_cash_fraction": "0.07750458691067806069761146444",
+                "execution_fees_cny": "13.71",
+                "expected_sessions": 52,
+                "initial_nav": "100144.910",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.4175220687701451826158713408",
+                "model_cost_microusd": 0,
+                "net_return": "-0.4024239474577389904289693805",
+                "observed_sessions": 52,
+                "residual_positions": {
+                  "510300.SH": "18000"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4562568382157415688925178524",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "phase2_adjusted_close_momentum_510300",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-4.65075591891",
+                "annualized_sortino_zero_target": "-4.65698182524",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.3663476176318800595129528060",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.07457195841658849328852256838",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "474.76",
+                "expected_sessions": 52,
+                "initial_nav": "100144.910",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2718706322667822059054224523",
+                "model_cost_microusd": 0,
+                "net_return": "-0.2718706322667822059054224523",
+                "observed_sessions": 52,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "14.50893809780247443429725984",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "isolated_talib_sma5_20_long_cash",
+              "custom_isolated_strategy": true,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-3.42913798714",
+                "annualized_sortino_zero_target": "-3.62671137453",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.2638032073755520610364391352",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.07310510647144533561802461527",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "163.79",
+                "expected_sessions": 52,
+                "initial_nav": "100144.910",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2096251322208986957000610415",
+                "model_cost_microusd": 0,
+                "net_return": "-0.2096251322208986957000610415",
+                "observed_sessions": 52,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "4.819738716625737643580687226",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            }
+          ],
+          "cost_case": 1,
+          "etf_stamp_tax_rate": "0",
+          "fee_case": "source_verified_commission_and_minimum",
+          "identical_native_half_seed_all_arms": true,
+          "same_reopened_economic_conditions_all_arms": true,
+          "sma_descriptive_differences_from_baselines": {
+            "broad_etf_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.2078969365492464869158102993",
+              "missed_upside_applicability": "not_applicable_nonpositive_matched_broad_etf_return",
+              "net_return_difference": "0.1927988152368402947289083390",
+              "requested_matched_broad_etf_missed_upside": null,
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "cash_no_action": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0.2096251322208986957000610415",
+              "net_return_difference": "-0.2108835087075319155012471425",
+              "return_shortfall_relative_to_baseline": "0.2108835087075319155012471425",
+              "status": "descriptive_pair"
+            },
+            "phase2_adjusted_close_momentum_510300": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.0622455000458835102053614108",
+              "net_return_difference": "0.0622455000458835102053614108",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "same_initial_account_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.0076699854241219049475405191",
+              "net_return_difference": "-0.0002145890390235509722860602",
+              "return_shortfall_relative_to_baseline": "0.0002145890390235509722860602",
+              "status": "descriptive_pair"
+            }
+          },
+          "source_session_cache_entries": 53
+        },
+        {
+          "arms": [
+            {
+              "arm_id": "cash_no_action",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "2.20139815712",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "29.97",
+                "expected_sessions": 52,
+                "initial_nav": "100130.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.001108858262487114254046888",
+                "observed_sessions": 52,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4987734947021882148830091116",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "same_initial_account_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-3.50641431485",
+                "annualized_sortino_zero_target": "-4.20800860944",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.43275828912805942405445737",
+                "cash_ratio": "0.6357970869123286889033689572",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.04207023069994482153037029196",
+                "ending_cash_fraction": "0.6357970869123286889033689572",
+                "execution_fees_cny": "0",
+                "expected_sessions": 52,
+                "initial_nav": "100130.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2173274308743771348492689805",
+                "model_cost_microusd": 0,
+                "net_return": "-0.2094416839225638824400514451",
+                "observed_sessions": 52,
+                "residual_positions": {
+                  "510300.SH": "9400"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0E+3",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "broad_etf_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-3.28978155665",
+                "annualized_sortino_zero_target": "-4.00208737921",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.9406663249888526607709872517",
+                "cash_ratio": "0.07706350851617303847156928962",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.09335979478820294388458810281",
+                "ending_cash_fraction": "0.07706350851617303847156928962",
+                "execution_fees_cny": "27.42",
+                "expected_sessions": 52,
+                "initial_nav": "100130.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.4177210790530152695465355944",
+                "model_cost_microusd": 0,
+                "net_return": "-0.4026207125495430840820764842",
+                "observed_sessions": 52,
+                "residual_positions": {
+                  "510300.SH": "18000"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4563246866424275157440296127",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "phase2_adjusted_close_momentum_510300",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-4.7360146968",
+                "annualized_sortino_zero_target": "-4.73118520306",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.3663414091776057202802575533",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.07450209787815219786801300323",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "947.67",
+                "expected_sessions": 52,
+                "initial_nav": "100130.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2756792618237767255015029459",
+                "model_cost_microusd": 0,
+                "net_return": "-0.2756792618237767255015029459",
+                "observed_sessions": 52,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "14.47161500616897909338278370",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "isolated_talib_sma5_20_long_cash",
+              "custom_isolated_strategy": true,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-3.45414098792",
+                "annualized_sortino_zero_target": "-3.6504166498",
+                "as_of": "2015-08-26T07:00:00+00:00",
+                "average_capital_occupancy": "0.2638077722889372156227435806",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.07310802173901241013611590508",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "327.37",
+                "expected_sessions": 52,
+                "initial_nav": "100130.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2109803833056260250422400794",
+                "model_cost_microusd": 0,
+                "net_return": "-0.2109803833056260250422400794",
+                "observed_sessions": 52,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "2.60",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "4.812555715059279924242499902",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            }
+          ],
+          "cost_case": 2,
+          "etf_stamp_tax_rate": "0",
+          "fee_case": "declared_2x_commission_and_minimum_sensitivity",
+          "identical_native_half_seed_all_arms": true,
+          "same_reopened_economic_conditions_all_arms": true,
+          "sma_descriptive_differences_from_baselines": {
+            "broad_etf_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.2067406957473892445042955150",
+              "missed_upside_applicability": "not_applicable_nonpositive_matched_broad_etf_return",
+              "net_return_difference": "0.1916403292439170590398364048",
+              "requested_matched_broad_etf_missed_upside": null,
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "cash_no_action": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0.2109803833056260250422400794",
+              "net_return_difference": "-0.2120892415681131392962869674",
+              "return_shortfall_relative_to_baseline": "0.2120892415681131392962869674",
+              "status": "descriptive_pair"
+            },
+            "phase2_adjusted_close_momentum_510300": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.0646988785181507004592628665",
+              "net_return_difference": "0.0646988785181507004592628665",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "same_initial_account_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.0063470475687511098070289011",
+              "net_return_difference": "-0.0015386993830621426021886343",
+              "return_shortfall_relative_to_baseline": "0.0015386993830621426021886343",
+              "status": "descriptive_pair"
+            }
+          },
+          "source_session_cache_entries": 53
+        }
+      ],
+      "cost_sensitivity": {
+        "broad_etf_hold": {
+          "fee_difference_cny_cost2_minus_cost1": "13.71",
+          "net_return_difference_cost2_minus_cost1": "-0.0001967650918040936531071037",
+          "status": "descriptive_pair"
+        },
+        "cash_no_action": {
+          "fee_difference_cny_cost2_minus_cost1": "14.99",
+          "net_return_difference_cost2_minus_cost1": "-0.000149518224146105547139213",
+          "status": "descriptive_pair"
+        },
+        "isolated_talib_sma5_20_long_cash": {
+          "fee_difference_cny_cost2_minus_cost1": "163.58",
+          "net_return_difference_cost2_minus_cost1": "-0.0013552510847273293421790379",
+          "status": "descriptive_pair"
+        },
+        "phase2_adjusted_close_momentum_510300": {
+          "fee_difference_cny_cost2_minus_cost1": "472.91",
+          "net_return_difference_cost2_minus_cost1": "-0.0038086295569945195960804936",
+          "status": "descriptive_pair"
+        },
+        "same_initial_account_hold": {
+          "fee_difference_cny_cost2_minus_cost1": "0",
+          "net_return_difference_cost2_minus_cost1": "-0.0000311407406887377122764638",
+          "status": "descriptive_pair"
+        }
+      },
+      "expected_sessions": 52,
+      "first_session": "2015-06-15",
+      "last_session": "2015-08-26",
+      "manifest_last_record_binding_used": true,
+      "window_id": "cn-2015-disorder-deleveraging"
+    },
+    {
+      "calendar_source": "frozen_last-record-bound_manifest_records",
+      "cost_cases": [
+        {
+          "arms": [
+            {
+              "arm_id": "cash_no_action",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.44913767462",
+                "annualized_sortino_zero_target": "-1.44913767462",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.00008128453968055275886526383333",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "14.88",
+                "expected_sessions": 120,
+                "initial_nav": "100019.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.0004877072380833165531915830",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0004877072380833165531915830",
+                "observed_sessions": 120,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "0.4957497084054612812643035295",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "same_initial_account_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.94469807934",
+                "annualized_sortino_zero_target": "-2.44249164188",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.4624637329739132345241745871",
+                "cash_ratio": "0.5507666255928852459159708238",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.01475965589658187058520669688",
+                "ending_cash_fraction": "0.5507666255928852459159708238",
+                "execution_fees_cny": "0",
+                "expected_sessions": 120,
+                "initial_nav": "100019.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.1158029742742930294657956057",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0850728191497977084758478937",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "11300"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "0E+3",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "broad_etf_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.85041616552",
+                "annualized_sortino_zero_target": "-2.34870551092",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.9459300442348329840902669842",
+                "cash_ratio": "0.05677458405334612240928316775",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.02977003010211370613792613412",
+                "ending_cash_fraction": "0.05677458405334612240928316775",
+                "execution_fees_cny": "13.69",
+                "expected_sessions": 120,
+                "initial_nav": "100019.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2222076361076123321344280318",
+                "model_cost_microusd": 0,
+                "net_return": "-0.1631948603375637953661213637",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "21700"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "0.4562652183554687898361731599",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "phase2_adjusted_close_momentum_510300",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-0.493053620024",
+                "annualized_sortino_zero_target": "-0.716204278708",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.394814066891163011447494737",
+                "cash_ratio": "0.003116025723786826155075492964",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.01479376437306481509210094397",
+                "ending_cash_fraction": "0.003116025723786826155075492964",
+                "execution_fees_cny": "936.60",
+                "expected_sessions": 120,
+                "initial_nav": "100019.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.0852189920693018591314894444",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0258030922518536974267494323",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "26700"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "28.77779546330287979226351148",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "isolated_talib_sma5_20_long_cash",
+              "custom_isolated_strategy": true,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.73581707045",
+                "annualized_sortino_zero_target": "-2.13905344092",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.288268586482593062748951833",
+                "cash_ratio": "0.003359521435521543383764651509",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.0153546745244437411905195677",
+                "ending_cash_fraction": "0.003359521435521543383764651509",
+                "execution_fees_cny": "217.21",
+                "expected_sessions": 120,
+                "initial_nav": "100019.020",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.1089093854348902838680083048",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0693599077455467969992107501",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "25500"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "6.027367594683491199973764990",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            }
+          ],
+          "cost_case": 1,
+          "etf_stamp_tax_rate": "0",
+          "fee_case": "source_verified_commission_and_minimum",
+          "identical_native_half_seed_all_arms": true,
+          "same_reopened_economic_conditions_all_arms": true,
+          "sma_descriptive_differences_from_baselines": {
+            "broad_etf_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.1132982506727220482664197270",
+              "missed_upside_applicability": "not_applicable_nonpositive_matched_broad_etf_return",
+              "net_return_difference": "0.0938349525920169983669106136",
+              "requested_matched_broad_etf_missed_upside": null,
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "cash_no_action": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0.1084216781968069673148167218",
+              "net_return_difference": "-0.0688722005074634804460191671",
+              "return_shortfall_relative_to_baseline": "0.0688722005074634804460191671",
+              "status": "descriptive_pair"
+            },
+            "phase2_adjusted_close_momentum_510300": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0.0236903933655884247365188604",
+              "net_return_difference": "-0.0435568154936930995724613178",
+              "return_shortfall_relative_to_baseline": "0.0435568154936930995724613178",
+              "status": "descriptive_pair"
+            },
+            "same_initial_account_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.0068935888394027455977873009",
+              "net_return_difference": "0.0157129114042509114766371436",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            }
+          },
+          "source_session_cache_entries": 121
+        },
+        {
+          "arms": [
+            {
+              "arm_id": "cash_no_action",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.44913767462",
+                "annualized_sortino_zero_target": "-1.44913767462",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.00010607893105769443901411425",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "29.75",
+                "expected_sessions": 120,
+                "initial_nav": "100004.150",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.0006364735863461666340846855",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0006364735863461666340846855",
+                "observed_sessions": 120,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "0.4958234233279318908265306990",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "same_initial_account_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.9446841988",
+                "annualized_sortino_zero_target": "-2.44247801284",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.4625370253111196991952116351",
+                "cash_ratio": "0.5506936152423213226916151385",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.01476196355493490622273201905",
+                "ending_cash_fraction": "0.5506936152423213226916151385",
+                "execution_fees_cny": "0",
+                "expected_sessions": 120,
+                "initial_nav": "100004.150",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.1158201934619713281898801200",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0850854689530384489043704686",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "11300"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "0E+3",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "broad_etf_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.85177804764",
+                "annualized_sortino_zero_target": "-2.35035883794",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.9462374958920006183895239642",
+                "cash_ratio": "0.05645261436678141800430679065",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.02977944244535045854628617048",
+                "ending_cash_fraction": "0.05645261436678141800430679065",
+                "execution_fees_cny": "27.38",
+                "expected_sessions": 120,
+                "initial_nav": "100004.150",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.2223775713307897722244526852",
+                "model_cost_microusd": 0,
+                "net_return": "-0.1633560207251399066938722043",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "21700"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "0.4563330621779196163359220592",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "phase2_adjusted_close_momentum_510300",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-0.693053330607",
+                "annualized_sortino_zero_target": "-0.997188986122",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.3949684507619417673113529481",
+                "cash_ratio": "0.0008753106233442835251948721680",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.01485065020463666408966013347",
+                "ending_cash_fraction": "0.0008753106233442835251948721680",
+                "execution_fees_cny": "1875.49",
+                "expected_sessions": 120,
+                "initial_nav": "100004.150",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.0919045156364775727797896240",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0351254422941447929910908697",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "26500"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "28.66083557532362406960111155",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "isolated_talib_sma5_20_long_cash",
+              "custom_isolated_strategy": true,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "-1.77810655548",
+                "annualized_sortino_zero_target": "-2.18546664088",
+                "as_of": "2018-07-25T07:00:00+00:00",
+                "average_capital_occupancy": "0.2879546314841383355569082282",
+                "cash_ratio": "0.001293369709311551382648176095",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "-0.01539567663089439646258719047",
+                "ending_cash_fraction": "0.001293369709311551382648176095",
+                "execution_fees_cny": "423.71",
+                "expected_sessions": 120,
+                "initial_nav": "100004.150",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0.1106025099958351728403271264",
+                "model_cost_microusd": 0,
+                "net_return": "-0.0711471473933831745982541725",
+                "observed_sessions": 120,
+                "residual_positions": {
+                  "510300.SH": "25500"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "6.00",
+                "tail_precision": "empirical",
+                "turnover_over_initial_nav": "6.012516480566056508654890822",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            }
+          ],
+          "cost_case": 2,
+          "etf_stamp_tax_rate": "0",
+          "fee_case": "declared_2x_commission_and_minimum_sensitivity",
+          "identical_native_half_seed_all_arms": true,
+          "same_reopened_economic_conditions_all_arms": true,
+          "sma_descriptive_differences_from_baselines": {
+            "broad_etf_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.1117750613349545993841255588",
+              "missed_upside_applicability": "not_applicable_nonpositive_matched_broad_etf_return",
+              "net_return_difference": "0.0922088733317567320956180318",
+              "requested_matched_broad_etf_missed_upside": null,
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "cash_no_action": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0.1099660364094890062062424409",
+              "net_return_difference": "-0.0705106738070370079641694870",
+              "return_shortfall_relative_to_baseline": "0.0705106738070370079641694870",
+              "status": "descriptive_pair"
+            },
+            "phase2_adjusted_close_momentum_510300": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0.0186979943593576000605375024",
+              "net_return_difference": "-0.0360217050992383816071633028",
+              "return_shortfall_relative_to_baseline": "0.0360217050992383816071633028",
+              "status": "descriptive_pair"
+            },
+            "same_initial_account_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "-0.0052176834661361553495529936",
+              "net_return_difference": "0.0139383215596552743061162961",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            }
+          },
+          "source_session_cache_entries": 121
+        }
+      ],
+      "cost_sensitivity": {
+        "broad_etf_hold": {
+          "fee_difference_cny_cost2_minus_cost1": "13.69",
+          "net_return_difference_cost2_minus_cost1": "-0.0001611603875761113277508406",
+          "status": "descriptive_pair"
+        },
+        "cash_no_action": {
+          "fee_difference_cny_cost2_minus_cost1": "14.87",
+          "net_return_difference_cost2_minus_cost1": "-0.0001487663482628500808931025",
+          "status": "descriptive_pair"
+        },
+        "isolated_talib_sma5_20_long_cash": {
+          "fee_difference_cny_cost2_minus_cost1": "206.50",
+          "net_return_difference_cost2_minus_cost1": "-0.0017872396478363775990434224",
+          "status": "descriptive_pair"
+        },
+        "phase2_adjusted_close_momentum_510300": {
+          "fee_difference_cny_cost2_minus_cost1": "938.89",
+          "net_return_difference_cost2_minus_cost1": "-0.0093223500422910955643414374",
+          "status": "descriptive_pair"
+        },
+        "same_initial_account_hold": {
+          "fee_difference_cny_cost2_minus_cost1": "0",
+          "net_return_difference_cost2_minus_cost1": "-0.0000126498032407404285225749",
+          "status": "descriptive_pair"
+        }
+      },
+      "expected_sessions": 120,
+      "first_session": "2018-01-25",
+      "last_session": "2018-07-25",
+      "manifest_last_record_binding_used": true,
+      "window_id": "cn-2018-bear-market"
+    },
+    {
+      "calendar_source": "frozen_last-record-bound_manifest_records",
+      "cost_cases": [
+        {
+          "arms": [
+            {
+              "arm_id": "cash_no_action",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "6.48074069841",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "15.11",
+                "expected_sessions": 6,
+                "initial_nav": "100197.890",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.004551892260405882798529989",
+                "observed_sessions": 6,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.5027331413865102348961639811",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "same_initial_account_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "29.4524407794",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.5360744588164188966766001345",
+                "cash_ratio": "0.4285689453418404721456928328",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0.006977469434747817318833141",
+                "ending_cash_fraction": "0.4285689453418404721456928328",
+                "execution_fees_cny": "0",
+                "expected_sessions": 6,
+                "initial_nav": "100197.890",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.171269075626243227277540475",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "15200"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0E+3",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "broad_etf_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "29.4432300088",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.9633416712737568418543827697",
+                "cash_ratio": "0.03180727845053811987550890009",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0.013158101073495936304669928",
+                "ending_cash_fraction": "0.03180727845053811987550890009",
+                "execution_fees_cny": "13.82",
+                "expected_sessions": 6,
+                "initial_nav": "100197.890",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.323451721388544209863101908",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "29100"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4597362279784534384905710090",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "phase2_adjusted_close_momentum_510300",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "28.9444093649",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.9905884939820470460583783132",
+                "cash_ratio": "0.002806296816050188684300551642",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0.012951258072048131500582480",
+                "ending_cash_fraction": "0.002806296816050188684300551642",
+                "execution_fees_cny": "18.82",
+                "expected_sessions": 6,
+                "initial_nav": "100197.890",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.333534768047510780915646028",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "30200"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4980394297724233514298554590",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "isolated_talib_sma5_20_long_cash",
+              "custom_isolated_strategy": true,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "18.4940444421",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.6501298909816224576756931585",
+                "cash_ratio": "0.0007613884668127580459698706583",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0",
+                "ending_cash_fraction": "0.0007613884668127580459698706583",
+                "execution_fees_cny": "52.47",
+                "expected_sessions": 6,
+                "initial_nav": "100197.890",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.269112752773536448721624777",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "28800"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "1.505945883690764346434840095",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            }
+          ],
+          "cost_case": 1,
+          "etf_stamp_tax_rate": "0",
+          "fee_case": "source_verified_commission_and_minimum",
+          "identical_native_half_seed_all_arms": true,
+          "same_reopened_economic_conditions_all_arms": true,
+          "sma_descriptive_differences_from_baselines": {
+            "broad_etf_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "missed_upside_applicability": "applicable_positive_matched_broad_etf_return",
+              "net_return_difference": "-0.054338968615007761141477131",
+              "requested_matched_broad_etf_missed_upside": "0.054338968615007761141477131",
+              "return_shortfall_relative_to_baseline": "0.054338968615007761141477131",
+              "status": "descriptive_pair"
+            },
+            "cash_no_action": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "net_return_difference": "0.264560860513130565923094788",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "phase2_adjusted_close_momentum_510300": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "net_return_difference": "-0.064422015273974332194021251",
+              "return_shortfall_relative_to_baseline": "0.064422015273974332194021251",
+              "status": "descriptive_pair"
+            },
+            "same_initial_account_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "net_return_difference": "0.097843677147293221444084302",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            }
+          },
+          "source_session_cache_entries": 7
+        },
+        {
+          "arms": [
+            {
+              "arm_id": "cash_no_action",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "6.48074069841",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0",
+                "cash_ratio": "1",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0",
+                "ending_cash_fraction": "1",
+                "execution_fees_cny": "30.22",
+                "expected_sessions": 6,
+                "initial_nav": "100182.990",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.004401745246373660838032484",
+                "observed_sessions": 6,
+                "residual_positions": {},
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.5028079118021931667242113656",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "same_initial_account_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "29.4525804178",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.5361479785919148370410763263",
+                "cash_ratio": "0.4284963865578229576528932635",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0.006978484990835854291499641",
+                "ending_cash_fraction": "0.4284963865578229576528932635",
+                "execution_fees_cny": "0",
+                "expected_sessions": 6,
+                "initial_nav": "100182.990",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.171294548106420061928676714",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "15200"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0E+3",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "broad_etf_hold",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "29.4156251931",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.9635821176474414128736734113",
+                "cash_ratio": "0.03159754213263326930829958285",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0.013161737711212593772689851",
+                "ending_cash_fraction": "0.03159754213263326930829958285",
+                "execution_fees_cny": "27.64",
+                "expected_sessions": 6,
+                "initial_nav": "100182.990",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.323361880095613037702308546",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "29100"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4598046035559529616754301304",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "phase2_adjusted_close_momentum_510300",
+              "custom_isolated_strategy": false,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "28.8982874137",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.9908701594858329570249742643",
+                "cash_ratio": "0.002554579097067642634409225979",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0.012906721224156123980355070",
+                "ending_cash_fraction": "0.002554579097067642634409225979",
+                "execution_fees_cny": "37.64",
+                "expected_sessions": 6,
+                "initial_nav": "100182.990",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.333396517712238374997591907",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "30200"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "0.4981135021025026304365641313",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            },
+            {
+              "arm_id": "isolated_talib_sma5_20_long_cash",
+              "custom_isolated_strategy": true,
+              "execution_gap_ids": [],
+              "input_gap_ids": [],
+              "metrics": {
+                "annualized_sharpe_zero_risk_free": "18.4572180158",
+                "annualized_sortino_zero_target": null,
+                "as_of": "2024-10-08T07:00:00+00:00",
+                "average_capital_occupancy": "0.6494121229590616478795282668",
+                "cash_ratio": "0.003385475245512675107870997762",
+                "complete": true,
+                "currency": "CNY",
+                "daily_return_cvar_95": "0",
+                "ending_cash_fraction": "0.003385475245512675107870997762",
+                "execution_fees_cny": "104.95",
+                "expected_sessions": 6,
+                "initial_nav": "100182.990",
+                "investment_effectiveness_accepted": false,
+                "maximum_drawdown": "0",
+                "model_cost_microusd": 0,
+                "net_return": "0.268224675665998788816344970",
+                "observed_sessions": 6,
+                "residual_positions": {
+                  "510300.SH": "28700"
+                },
+                "risk_adjusted_ratio_precision": "descriptive_short_window_unreliable",
+                "tail_observation_mass": "0.30",
+                "tail_precision": "descriptive_small_sample",
+                "turnover_over_initial_nav": "1.502170178789832485534720016",
+                "unfilled_order_count": 0
+              },
+              "status": "complete"
+            }
+          ],
+          "cost_case": 2,
+          "etf_stamp_tax_rate": "0",
+          "fee_case": "declared_2x_commission_and_minimum_sensitivity",
+          "identical_native_half_seed_all_arms": true,
+          "same_reopened_economic_conditions_all_arms": true,
+          "sma_descriptive_differences_from_baselines": {
+            "broad_etf_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "missed_upside_applicability": "applicable_positive_matched_broad_etf_return",
+              "net_return_difference": "-0.055137204429614248885963576",
+              "requested_matched_broad_etf_missed_upside": "0.055137204429614248885963576",
+              "return_shortfall_relative_to_baseline": "0.055137204429614248885963576",
+              "status": "descriptive_pair"
+            },
+            "cash_no_action": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "net_return_difference": "0.263822930419625127978312486",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            },
+            "phase2_adjusted_close_momentum_510300": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "net_return_difference": "-0.065171842046239586181246937",
+              "return_shortfall_relative_to_baseline": "0.065171842046239586181246937",
+              "status": "descriptive_pair"
+            },
+            "same_initial_account_hold": {
+              "causal_or_superiority_claim": false,
+              "maximum_drawdown_difference": "0",
+              "net_return_difference": "0.096930127559578726887668256",
+              "return_shortfall_relative_to_baseline": "0",
+              "status": "descriptive_pair"
+            }
+          },
+          "source_session_cache_entries": 7
+        }
+      ],
+      "cost_sensitivity": {
+        "broad_etf_hold": {
+          "fee_difference_cny_cost2_minus_cost1": "13.82",
+          "net_return_difference_cost2_minus_cost1": "-0.000089841292931172160793362",
+          "status": "descriptive_pair"
+        },
+        "cash_no_action": {
+          "fee_difference_cny_cost2_minus_cost1": "15.11",
+          "net_return_difference_cost2_minus_cost1": "-0.000150147014032221960497505",
+          "status": "descriptive_pair"
+        },
+        "isolated_talib_sma5_20_long_cash": {
+          "fee_difference_cny_cost2_minus_cost1": "52.48",
+          "net_return_difference_cost2_minus_cost1": "-0.000888077107537659905279807",
+          "status": "descriptive_pair"
+        },
+        "phase2_adjusted_close_momentum_510300": {
+          "fee_difference_cny_cost2_minus_cost1": "18.82",
+          "net_return_difference_cost2_minus_cost1": "-0.000138250335272405918054121",
+          "status": "descriptive_pair"
+        },
+        "same_initial_account_hold": {
+          "fee_difference_cny_cost2_minus_cost1": "0",
+          "net_return_difference_cost2_minus_cost1": "0.000025472480176834651136239",
+          "status": "descriptive_pair"
+        }
+      },
+      "expected_sessions": 6,
+      "first_session": "2024-09-24",
+      "last_session": "2024-10-08",
+      "manifest_last_record_binding_used": true,
+      "window_id": "cn-2024-policy-melt-up"
+    }
+  ]
+}

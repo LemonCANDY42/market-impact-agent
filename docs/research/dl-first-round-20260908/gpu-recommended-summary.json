@@ -1,0 +1,152 @@
+{
+  "model": "Qwen/Qwen3.5-9B",
+  "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "fixture_sha256": "5e5d5726626bb704404a426564d17192d9eb142fa12e067da8c620f8379501d6",
+  "load_seconds": 36.588338684000064,
+  "elapsed_seconds": 722.8119699220001,
+  "max_rss_kib": 1677792,
+  "packages": {
+    "vllm": "0.28.0",
+    "torch": "2.13.0",
+    "transformers": "5.16.1",
+    "huggingface-hub": "1.30.0"
+  },
+  "sampling": "official general task settings, one pass per mode, 2048-token ceiling",
+  "enforce_eager": true,
+  "max_model_len": 16384,
+  "max_num_seqs": 1,
+  "modes": [
+    {
+      "thinking": false,
+      "responses": 12,
+      "exact": 9,
+      "valid_json": 12,
+      "field_hits": 31,
+      "field_total": 36,
+      "median_seconds": 1.1600224369999523,
+      "total_output_tokens": 376,
+      "max_memory_mib_after": 26888,
+      "repeat_pairs": 0,
+      "repeat_exact_text": 0,
+      "repeat_equal_parsed": 0,
+      "failures": [
+        {
+          "case": "explicit_correction",
+          "repeat": 0,
+          "parsed": {
+            "growth_pct": 5,
+            "nature": "actual",
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          "finish_reason": "stop"
+        },
+        {
+          "case": "future_source",
+          "repeat": 0,
+          "parsed": {
+            "growth_pct": 30,
+            "nature": "actual",
+            "sources": [
+              "b"
+            ],
+            "conflicting": []
+          },
+          "finish_reason": "stop"
+        },
+        {
+          "case": "wrong_company_period",
+          "repeat": 0,
+          "parsed": {
+            "growth_pct": null,
+            "nature": "unknown",
+            "sources": [
+              "a"
+            ]
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    },
+    {
+      "thinking": true,
+      "responses": 12,
+      "exact": 2,
+      "valid_json": 2,
+      "field_hits": 6,
+      "field_total": 36,
+      "median_seconds": 70.88823864699998,
+      "total_output_tokens": 19258,
+      "max_memory_mib_after": 26888,
+      "repeat_pairs": 0,
+      "repeat_exact_text": 0,
+      "repeat_equal_parsed": 0,
+      "failures": [
+        {
+          "case": "reported_growth",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_decline",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "stop"
+        },
+        {
+          "case": "guidance_only",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "missing_revenue",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "explicit_correction",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "unresolved_conflict",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "future_source",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "source_injection",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "range_guidance",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "wrong_company_period",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        }
+      ]
+    }
+  ],
+  "investment_effectiveness_accepted": false,
+  "pi_runtime_accepted": false
+}

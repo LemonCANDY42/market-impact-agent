@@ -1,0 +1,1164 @@
+{
+  "post_hoc": true,
+  "selection_authority": false,
+  "results": [
+    {
+      "model": "qwen9",
+      "mode": "off",
+      "cases": 26,
+      "normalized_semantic_correct": 21,
+      "original_semantic_correct": 21,
+      "details": [
+        {
+          "case": "tencent-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-revenue",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-claim",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        }
+      ]
+    },
+    {
+      "model": "qwen9",
+      "mode": "thinking",
+      "cases": 26,
+      "normalized_semantic_correct": 22,
+      "original_semantic_correct": 21,
+      "details": [
+        {
+          "case": "tencent-revenue",
+          "edits": [
+            "unwrap_output"
+          ],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-claim",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-growth",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        }
+      ]
+    },
+    {
+      "model": "qwen27",
+      "mode": "off",
+      "cases": 26,
+      "normalized_semantic_correct": 25,
+      "original_semantic_correct": 21,
+      "details": [
+        {
+          "case": "tencent-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-growth",
+          "edits": [
+            "numeric_string"
+          ],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-revenue",
+          "edits": [
+            "numeric_string"
+          ],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-missing",
+          "edits": [
+            "null_unit_derived_from_question"
+          ],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-missing",
+          "edits": [
+            "null_unit_derived_from_question"
+          ],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        }
+      ]
+    },
+    {
+      "model": "qwen27",
+      "mode": "thinking",
+      "cases": 26,
+      "normalized_semantic_correct": 21,
+      "original_semantic_correct": 21,
+      "details": [
+        {
+          "case": "tencent-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-claim",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        }
+      ]
+    },
+    {
+      "model": "gemma12",
+      "mode": "off",
+      "cases": 26,
+      "normalized_semantic_correct": 16,
+      "original_semantic_correct": 15,
+      "details": [
+        {
+          "case": "tencent-revenue",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-claim",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-growth",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-claim",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-growth",
+          "edits": [
+            "numeric_string"
+          ],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "alibaba-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        }
+      ]
+    },
+    {
+      "model": "gemma12",
+      "mode": "thinking",
+      "cases": 26,
+      "normalized_semantic_correct": 21,
+      "original_semantic_correct": 21,
+      "details": [
+        {
+          "case": "tencent-revenue",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "tencent-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-missing",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-revenue",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-revenue",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "netease-growth",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-adjusted_profit",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-claim",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "netease-missing",
+          "edits": [],
+          "normalized_semantic_correct": false,
+          "normalized_all_checks": false,
+          "original_semantic_correct": false
+        },
+        {
+          "case": "xiaomi-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "xiaomi-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": false,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "alibaba-arithmetic",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        },
+        {
+          "case": "tencent-cross_document",
+          "edits": [],
+          "normalized_semantic_correct": true,
+          "normalized_all_checks": true,
+          "original_semantic_correct": true
+        }
+      ]
+    }
+  ]
+}

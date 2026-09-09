@@ -1,0 +1,35 @@
+{
+  "raw_rows": 535676,
+  "initial_version_rows": 231992,
+  "announcement_report_keys_without_initial_version": 75283,
+  "retained_events": 195183,
+  "ambiguous_announcement_report_keys_excluded": 0,
+  "invalid_dates_excluded": 1,
+  "features": [
+    "eps",
+    "bps",
+    "ocfps",
+    "roe",
+    "roa",
+    "roic",
+    "netprofit_margin",
+    "grossprofit_margin",
+    "debt_to_assets",
+    "current_ratio",
+    "ocf_to_or",
+    "netprofit_yoy",
+    "or_yoy"
+  ],
+  "effective_date": "first exchange session strictly after ann_date",
+  "historical_revision_proven": false,
+  "treatment": "use update_flag=0 only; collapse identical initial records; exclude conflicting initial records and keys lacking initial version; preserve newest report period; effective after ann_date",
+  "provider_semantics_source": "https://tushare.pro/document/1?doc_id=122",
+  "quarter_capture": {
+    "complete": true,
+    "periods": 66,
+    "rows": 535676,
+    "historical_vintage_proven": false,
+    "new_route_qualified": false,
+    "source_config_id": "tushare-observation-source-f24e841fba225d475f374f432e81d2d711ee7017160f76b73147bb65441de09f"
+  }
+}

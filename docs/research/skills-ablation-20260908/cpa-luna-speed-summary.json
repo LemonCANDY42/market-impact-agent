@@ -1,0 +1,183 @@
+{
+  "queried_at_utc": "2026-09-08T17:36:05.142136+00:00",
+  "model": "gpt-5.6-luna",
+  "source": "CPA Usage Keeper read-only aggregate; project-specific credential cohort, no identifiers exported",
+  "filter": "timestamp >= 2026-09-01, project cohort",
+  "all": {
+    "n": 589,
+    "success": 581,
+    "failed": 8,
+    "ttft_valid": 581,
+    "period": [
+      "2026-09-01T11:02:11.979254+08:00",
+      "2026-09-06T16:22:08.659702+08:00"
+    ],
+    "latency_seconds": {
+      "p10": 7.193,
+      "median": 51.695,
+      "p90": 201.152
+    },
+    "ttft_seconds": {
+      "p10": 1.643,
+      "median": 2.004,
+      "p90": 3.032
+    },
+    "output_over_request_seconds_tps": {
+      "p10": 31.871555236041218,
+      "median": 52.13614786385214,
+      "p90": 54.7347279669106
+    },
+    "output_over_after_first_event_seconds_tps": {
+      "p10": 45.11573165947431,
+      "median": 54.62899931926481,
+      "p90": 55.39480641560425
+    },
+    "weighted_output_over_request_seconds_tps": 53.38066222936973,
+    "weighted_output_over_after_first_event_seconds_tps": 54.88177784134643,
+    "input_tokens": {
+      "p10": 4330.0,
+      "median": 7983.0,
+      "p90": 22185.0
+    },
+    "output_tokens": {
+      "p10": 249.0,
+      "median": 2720.0,
+      "p90": 10990.0
+    },
+    "reasoning_fraction_of_output": 0.8724626455617536,
+    "input_plus_output_equals_total": true
+  },
+  "max_default": {
+    "n": 505,
+    "success": 505,
+    "failed": 0,
+    "ttft_valid": 505,
+    "period": [
+      "2026-09-02T13:12:22.721965+08:00",
+      "2026-09-06T16:22:08.659702+08:00"
+    ],
+    "latency_seconds": {
+      "p10": 7.1906,
+      "median": 49.4,
+      "p90": 202.58960000000005
+    },
+    "ttft_seconds": {
+      "p10": 1.6438,
+      "median": 1.996,
+      "p90": 2.9972000000000003
+    },
+    "output_over_request_seconds_tps": {
+      "p10": 31.739043937665652,
+      "median": 51.8769912730295,
+      "p90": 54.734707493064995
+    },
+    "output_over_after_first_event_seconds_tps": {
+      "p10": 44.6741815813261,
+      "median": 54.57245390421978,
+      "p90": 55.39670544401375
+    },
+    "weighted_output_over_request_seconds_tps": 53.360409351581424,
+    "weighted_output_over_after_first_event_seconds_tps": 54.85699288185629,
+    "input_tokens": {
+      "p10": 4552.0,
+      "median": 7983.0,
+      "p90": 21743.00000000001
+    },
+    "output_tokens": {
+      "p10": 251.0,
+      "median": 2581.0,
+      "p90": 11002.0
+    },
+    "reasoning_fraction_of_output": 0.8884757057281524,
+    "input_plus_output_equals_total": true
+  },
+  "max_default_output_ge_1000": {
+    "n": 310,
+    "success": 310,
+    "failed": 0,
+    "ttft_valid": 310,
+    "period": [
+      "2026-09-02T13:12:28.463651+08:00",
+      "2026-09-06T16:22:08.659702+08:00"
+    ],
+    "latency_seconds": {
+      "p10": 33.0324,
+      "median": 104.2115,
+      "p90": 260.35810000000004
+    },
+    "ttft_seconds": {
+      "p10": 1.6155000000000002,
+      "median": 1.9620000000000002,
+      "p90": 3.057200000000001
+    },
+    "output_over_request_seconds_tps": {
+      "p10": 51.0082317765293,
+      "median": 53.95432328176736,
+      "p90": 54.829234594895944
+    },
+    "output_over_after_first_event_seconds_tps": {
+      "p10": 53.86276649100914,
+      "median": 55.17016634421742,
+      "p90": 55.42913261657797
+    },
+    "weighted_output_over_request_seconds_tps": 54.12620412251481,
+    "weighted_output_over_after_first_event_seconds_tps": 55.08292774614947,
+    "input_tokens": {
+      "p10": 4501.0,
+      "median": 12637.0,
+      "p90": 21970.800000000007
+    },
+    "output_tokens": {
+      "p10": 1681.0,
+      "median": 5658.0,
+      "p90": 14202.300000000001
+    },
+    "reasoning_fraction_of_output": 0.8975481735295702,
+    "input_plus_output_equals_total": true
+  },
+  "max_default_matched_size": {
+    "n": 162,
+    "success": 162,
+    "failed": 0,
+    "ttft_valid": 162,
+    "period": [
+      "2026-09-02T14:00:59.310741+08:00",
+      "2026-09-06T16:22:08.659702+08:00"
+    ],
+    "latency_seconds": {
+      "p10": 34.8465,
+      "median": 162.714,
+      "p90": 294.1166
+    },
+    "ttft_seconds": {
+      "p10": 1.7590999999999999,
+      "median": 2.0835,
+      "p90": 3.3086
+    },
+    "output_over_request_seconds_tps": {
+      "p10": 50.576648193730115,
+      "median": 54.518415937596295,
+      "p90": 54.979764309011564
+    },
+    "output_over_after_first_event_seconds_tps": {
+      "p10": 53.97273744627166,
+      "median": 55.29264975791526,
+      "p90": 55.438355666892974
+    },
+    "weighted_output_over_request_seconds_tps": 54.390984805385564,
+    "weighted_output_over_after_first_event_seconds_tps": 55.152769669375395,
+    "input_tokens": {
+      "p10": 13349.1,
+      "median": 16520.5,
+      "p90": 31125.1
+    },
+    "output_tokens": {
+      "p10": 1785.6000000000001,
+      "median": 8870.0,
+      "p90": 16134.9
+    },
+    "reasoning_fraction_of_output": 0.9171237502429874,
+    "input_plus_output_equals_total": true
+  },
+  "interpretation": "Client-observed rates include serving overhead; TTFT is telemetry first-event time, not proof of first generated visible token. Not server-only prefill/decode. Historical different tasks, no paired Luna/Q5 quality or speed acceptance."
+}

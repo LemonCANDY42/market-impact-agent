@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "supply-chain-and-policy-incidence",
+  "version": "0.1.0",
+  "description": "Trace supply shocks, tariffs and commodity changes through costs, demand and competitive responses.",
+  "source": "research://skills-ablation-20260908/supply-chain-and-policy-incidence",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "a55c7f61b4ebbeef5d493d769a267582c0ad0168d9f010ea5ad1423b1b71c330",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "baf9cfed267b35c12c0c2f4f5adb92256665398fff55b09239ea3f7e0feba19a"
+}

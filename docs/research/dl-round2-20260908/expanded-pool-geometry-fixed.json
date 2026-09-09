@@ -1,0 +1,11 @@
+{
+  "pool_factors": 20,
+  "minimum_mutual_correlation_eigenvalue": -7.978745439284153e-15,
+  "minimum_joint_target_correlation_eigenvalue": -8.188424465181206e-15,
+  "objective_observed_pairs": 2672261,
+  "prior_invalid_pool_maximum_abs_weight": 72.58560259025279,
+  "factor_observed_pairs_min": 2738354,
+  "factor_observed_pairs_max": 2738354,
+  "training_eligible_pairs": 2738354,
+  "no_heldout_outcomes": true
+}

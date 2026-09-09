@@ -1,0 +1,38 @@
+{
+  "scope": "expanded numerical experiment; earlier language/runtime failures remain in private round-two logs",
+  "failures": [
+    {
+      "stage": "training-only compute profiles",
+      "failure": "caller adapter used pairwise deletion on different asset samples, violating the MSE pool joint correlation geometry",
+      "effect": "invalid profile scores excluded from effectiveness evidence; unfinished profile siblings stopped",
+      "resolution": "same observed-label population for objective correlations; upstream zero imputation retained within eligible universe",
+      "evidence": "expanded-pool-geometry-fixed.json",
+      "recovered_before_formal_fitting": true
+    },
+    {
+      "stage": "formal supervised fitting",
+      "trial": "B-C-ridge-17",
+      "failure": "kernel-confirmed global OOM while Ridge and LightGBM fitting peaks overlapped",
+      "approximate_concurrent_resident_memory_gib": [
+        73.39,
+        48.87
+      ],
+      "effect": "original CPU lane paused; other lanes continued",
+      "resolution": "preserved failed attempt; identical original trial and all remaining CPU jobs completed serially with unchanged 64 threads and frozen adapters",
+      "retry_selected_by_score": false,
+      "recovered": true,
+      "original_controller_exit_code": 2,
+      "final_fixed_matrix_complete": true,
+      "reconciliation": "original controller preserves the failed receipt and paused CPU queue; complete matrix audit independently verifies all 42 successful trial artifacts after serial recovery"
+    },
+    {
+      "stage": "private artifact synchronization",
+      "failure": "local rsync and remote file-list protocol incompatibility",
+      "effect": "initial transfer failed; no model or experiment restarted",
+      "resolution": "use a tar stream over the same authorized SSH connection for the completed-artifact manifest",
+      "transfer_verification_pending": false,
+      "verified_completed_trial_results_and_adapter_hashes": 42,
+      "subsequent_incremental_transfer": "uncompressed rsync with a local file list passed a byte-hash probe and synchronized the next completed trials"
+    }
+  ]
+}

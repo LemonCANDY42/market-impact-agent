@@ -1,0 +1,62 @@
+{
+  "schema": "second-account-pair-result.v1",
+  "run_on": "2026-09-07",
+  "window": "cn-2024-broad-rebound",
+  "original_paid_complete": false,
+  "original_failure": "Event portfolio transmission was a scalar narrative; legacy binding requires an array. Exact references were valid.",
+  "paid_budget": {
+    "physical_requests": 4,
+    "known_cost_microusd": 114890,
+    "reserved_microusd": 0,
+    "unsettled_requests": 0
+  },
+  "approved_cap_microusd": 4000000,
+  "offline_saved_answer_account_complete": true,
+  "offline_new_model_calls": 0,
+  "response_text_unchanged": true,
+  "original_paid_artifacts_unchanged": true,
+  "reports": {
+    "price_only": {
+      "action": "hold",
+      "target_gross_exposure_ratio": null,
+      "intent_count": 0,
+      "fill_count": 0,
+      "initial_nav": "100775.030",
+      "final_nav": "103824.430",
+      "net_return": "0.030259479952523953602395355",
+      "maximum_drawdown": "0",
+      "execution_fees_cny": "0",
+      "observed_sessions": 5,
+      "sunk_model_cost_microusd": 45278,
+      "original_portfolio_status": "completed"
+    },
+    "price_and_event": {
+      "action": "reduce",
+      "target_gross_exposure_ratio": "0.25",
+      "intent_count": 1,
+      "fill_count": 1,
+      "initial_nav": "100775.030",
+      "final_nav": "102088.790",
+      "net_return": "0.013036562727890033870493514",
+      "maximum_drawdown": "0",
+      "execution_fees_cny": "7.64",
+      "observed_sessions": 5,
+      "sunk_model_cost_microusd": 69612,
+      "original_portfolio_status": "failed"
+    }
+  },
+  "event_minus_price_final_nav_cny": "-1735.640",
+  "strict_pit_accepted": false,
+  "investment_effectiveness_accepted": false,
+  "failure_remains_failed": true,
+  "remaining_authorization_not_transferred": true,
+  "offline_reopen": {
+    "passed": true,
+    "before_after_equal": true,
+    "new_model_calls": 0,
+    "new_runtime_events": 0,
+    "new_persisted_fills": 0
+  },
+  "shared_runtime_route_admission_matches": true,
+  "changed_pilot_binding_paid_dispatch_accepted": false
+}

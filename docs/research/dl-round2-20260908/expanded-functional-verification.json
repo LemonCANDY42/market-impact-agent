@@ -1,0 +1,38 @@
+{
+  "scope": "functional checks inside formal training prefix only; not effectiveness evidence",
+  "data_roundtrip": {
+    "dates": 3,
+    "rows": 9,
+    "adjusted_price_equals_raw_times_factor": true,
+    "initial_financial_values_present": true,
+    "financial_age_nonnegative": true
+  },
+  "feature_tiers": {
+    "A": 158,
+    "B": 173,
+    "C": 187
+  },
+  "maintained_qlib_models": {
+    "ridge": "fit and validation/test prediction completed",
+    "lightgbm": "five-round smoke fit and prediction completed"
+  },
+  "account_smoke": {
+    "sessions": 10,
+    "completed": true,
+    "directional_limit_rules": true,
+    "volume_cap": "5% daily adjusted share volume",
+    "costs_applied": true
+  },
+  "formal_development_outcomes_read": false,
+  "feature_parallelism": {
+    "reference_workers": 16,
+    "reference_seconds": 20.6,
+    "selected_workers": 32,
+    "selected_seconds": 12.3,
+    "native_threads_per_worker": 1,
+    "rows": 248450,
+    "columns_including_label": 188,
+    "exact_frame_equality": true,
+    "limitation": "single sequential observations with different filesystem cache state and concurrent GPU jobs; not a controlled speedup estimate"
+  }
+}

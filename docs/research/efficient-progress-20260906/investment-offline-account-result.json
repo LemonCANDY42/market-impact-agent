@@ -1,0 +1,213 @@
+{
+  "schema": "offline-native-saved-response-account-diagnostic.v1",
+  "complete": true,
+  "original_paid_experiment_complete": false,
+  "original_binding_hash": "2ae54655dfc3d26caecd3479e3d83c30d27af391a0ed9b365e8b0610bcab4a19",
+  "original_result_sha256": "4da34d27b63f0d0180ebf59d0ed170c1c60e3d1ca1f39228803efa520ad4389b",
+  "source_artifacts_unchanged": true,
+  "source_binding_hash": "34c7f920453fb1b5be0f9cd02c38d66ed94c5c78b9d9e58938a9fba3917fb6a4",
+  "new_model_calls": 0,
+  "new_model_cost_microusd": 0,
+  "original_budget": {
+    "physical_requests": 4,
+    "known_cost_microusd": 105214,
+    "reserved_microusd": 0,
+    "unsettled_requests": 0
+  },
+  "strict_pit_accepted": false,
+  "investment_effectiveness_accepted": false,
+  "response_import_boundary": "Actual PiRuntimeProvider and pinned pi subprocess; fetch-only local SSE replays exact original assistant text, genuine runtime callbacks create new diagnostic native events. Original raw envelope is preserved separately.",
+  "synthetic_transport_invocations": 2,
+  "synthetic_budget_note": "Two local replay transport attempts have fixture accounting only, not supplier cost or new paid model calls.",
+  "arms": {
+    "price_only": {
+      "decision": {
+        "research_run_id": "isolated-investment-firstpair-paid-2ae54655dfc3d26caecd.price_only.initial.research",
+        "portfolio_run_id": "offline-native-saved-response-v1.price_only",
+        "horizon_sessions": 5,
+        "action": "hold",
+        "decision_ref": "513d296c45b790f019ed9198f655bb2d38a204a1360f32a5841eefbb5a381954"
+      },
+      "binding_checks": {
+        "original_raw_response_hash": "44f82d725397b7e4225146d2f6e24a203e563e24880b0f7cead04586f77b0cb7",
+        "new_native_raw_response_hash": "df104ecebe28f07e4e9603ea966b02593369d4a48d1a12b9b2ba4f68573444f3",
+        "assistant_text_sha256": "8369308cb002cf8af65841b2dd160e2fa729dea5acd481a0b6452b3072b155a4",
+        "assistant_text_equal": true,
+        "inputs_hash": "f1cdca08b281792e38c8225acefd326c8635dffd4c502b8a866fefc195a3da8c",
+        "inputs_equal": true,
+        "research_theses_equal": true,
+        "evidence_choices_equal": true,
+        "evidence_choices_hash": "69be59cb69ab7cc26149389c056422ff66b1a6a670779b67d241a9dc15e8112c",
+        "entire_prompt_projection_equal": true
+      },
+      "intent_count": 0,
+      "fill_count": 0,
+      "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a",
+      "metrics": {
+        "schema_version": "market-impact.continuous-account-measurement.v1",
+        "execution_policy_hash": "34c7f920453fb1b5be0f9cd02c38d66ed94c5c78b9d9e58938a9fba3917fb6a4",
+        "initial_account_hash": "049e776644fa74e6f44d4a9ae1c7aabd2ff0e86fc61334ec3f9dd7270fe65eb3",
+        "initial_nav": "98948.060",
+        "currency": "CNY",
+        "observed_sessions": 5,
+        "expected_sessions": 5,
+        "complete": true,
+        "as_of": "2020-02-07T07:00:00+00:00",
+        "net_return": "-0.0133160771418863593687435610",
+        "maximum_drawdown": "0.0415510925631083621043201858",
+        "daily_return_cvar_95": "-0.0415510925631083621043201858",
+        "tail_observation_mass": "0.25",
+        "tail_precision": "descriptive_small_sample",
+        "turnover_over_initial_nav": "0E+3",
+        "execution_fees_cny": "0",
+        "model_cost_microusd": 40184,
+        "model_cost_deducted_from_cny_nav": false,
+        "unfilled_order_count": 0,
+        "cash_ratio": "0.5141516284979093614841105942",
+        "residual_positions": {
+          "510300.SH": "12200"
+        },
+        "equity_curve": [
+          {
+            "as_of": "2020-02-03T07:00:00+00:00",
+            "nav": "94836.660",
+            "cash": "50196.86"
+          },
+          {
+            "as_of": "2020-02-04T07:00:00+00:00",
+            "nav": "96190.86",
+            "cash": "50196.86"
+          },
+          {
+            "as_of": "2020-02-05T07:00:00+00:00",
+            "nav": "96642.260",
+            "cash": "50196.86"
+          },
+          {
+            "as_of": "2020-02-06T07:00:00+00:00",
+            "nav": "97740.260",
+            "cash": "50196.86"
+          },
+          {
+            "as_of": "2020-02-07T07:00:00+00:00",
+            "nav": "97630.460",
+            "cash": "50196.86"
+          }
+        ],
+        "investment_effectiveness_accepted": false
+      }
+    },
+    "price_and_event": {
+      "decision": {
+        "research_run_id": "isolated-investment-firstpair-paid-2ae54655dfc3d26caecd.price_and_event.initial.research",
+        "portfolio_run_id": "offline-native-saved-response-v1.price_and_event",
+        "horizon_sessions": 5,
+        "action": "reduce",
+        "decision_ref": "44292137b4f266b202ecd0b3f7231a7e36f051444f648c079936dedcc813be4c"
+      },
+      "binding_checks": {
+        "original_raw_response_hash": "38ca8f56a3e81691092ae8e22c485e8111e970fc89d80bf225c5dc6d750c0c68",
+        "new_native_raw_response_hash": "0c94be9f9b864d60b01540f3fc5c41effc7874bc1d457b6d56beaecdc139cc2e",
+        "assistant_text_sha256": "ecc7aa50f6e94986ad1885ffd89a3675cb96946dedcec68b80d596eeeffcf5e2",
+        "assistant_text_equal": true,
+        "inputs_hash": "11e3bddefd7f6acfaf2301bb3c0fa817d5d9d18f91f88674fc79d35c65ef6bfb",
+        "inputs_equal": true,
+        "research_theses_equal": true,
+        "evidence_choices_equal": true,
+        "evidence_choices_hash": "cc587d1c757e8e46e443c74a22eb6ceacc83f6b7e953e80e4102d9555167a2ee",
+        "entire_prompt_projection_equal": true
+      },
+      "intent_count": 1,
+      "fill_count": 1,
+      "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a",
+      "metrics": {
+        "schema_version": "market-impact.continuous-account-measurement.v1",
+        "execution_policy_hash": "34c7f920453fb1b5be0f9cd02c38d66ed94c5c78b9d9e58938a9fba3917fb6a4",
+        "initial_account_hash": "049e776644fa74e6f44d4a9ae1c7aabd2ff0e86fc61334ec3f9dd7270fe65eb3",
+        "initial_nav": "98948.060",
+        "currency": "CNY",
+        "observed_sessions": 5,
+        "expected_sessions": 5,
+        "complete": true,
+        "as_of": "2020-02-07T07:00:00+00:00",
+        "net_return": "-0.0228038831686038109286831899",
+        "maximum_drawdown": "0.0373842599844807467675465290",
+        "daily_return_cvar_95": "-0.0373842599844807467675465290",
+        "tail_observation_mass": "0.25",
+        "tail_precision": "descriptive_small_sample",
+        "turnover_over_initial_nav": "0.2224096157115157184486487153",
+        "execution_fees_cny": "6.6",
+        "model_cost_microusd": 65030,
+        "model_cost_deducted_from_cny_nav": false,
+        "unfilled_order_count": 0,
+        "cash_ratio": "0.7466751527484376625657269717",
+        "residual_positions": {
+          "510300.SH": "6300"
+        },
+        "equity_curve": [
+          {
+            "as_of": "2020-02-03T07:00:00+00:00",
+            "nav": "95248.960",
+            "cash": "72197.26"
+          },
+          {
+            "as_of": "2020-02-04T07:00:00+00:00",
+            "nav": "95948.26",
+            "cash": "72197.26"
+          },
+          {
+            "as_of": "2020-02-05T07:00:00+00:00",
+            "nav": "96181.360",
+            "cash": "72197.26"
+          },
+          {
+            "as_of": "2020-02-06T07:00:00+00:00",
+            "nav": "96748.360",
+            "cash": "72197.26"
+          },
+          {
+            "as_of": "2020-02-07T07:00:00+00:00",
+            "nav": "96691.660",
+            "cash": "72197.26"
+          }
+        ],
+        "investment_effectiveness_accepted": false
+      }
+    }
+  },
+  "paired_difference_event_minus_price": {
+    "final_nav_cny": "-938.800",
+    "net_return_percentage_points": "-0.9487806026717451559939628900",
+    "maximum_drawdown_percentage_points": "-0.4166832578627615336773656800"
+  },
+  "limitations": [
+    "Opened historical Modeled-PIT development window; not pristine or causal efficacy proof.",
+    "Original paid trial remains failed; this is a separate corrected-parser saved-answer counterfactual.",
+    "One initial decision held for five sessions; no later model reassessment.",
+    "Returns include trading costs; original USD model costs remain separate without an FX conversion."
+  ],
+  "verification_status": "native execution and deterministic reopen passed; independent review found no concrete authority, input, economics, extraction or provenance defect",
+  "deterministic_reopen": {
+    "passed": true,
+    "before_after_equal": true,
+    "reports": {
+      "price_only": {
+        "native_decision_reopened": true,
+        "intents_reopened": 0,
+        "metrics_identical": true,
+        "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a",
+        "fill_count": 0
+      },
+      "price_and_event": {
+        "native_decision_reopened": true,
+        "intents_reopened": 1,
+        "metrics_identical": true,
+        "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a",
+        "fill_count": 1
+      }
+    },
+    "new_model_calls": 0,
+    "new_runtime_events": 0,
+    "new_persisted_fills": 0
+  }
+}

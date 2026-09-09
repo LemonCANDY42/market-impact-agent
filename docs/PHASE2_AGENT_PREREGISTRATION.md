@@ -178,6 +178,16 @@ failed at the network layer. The command therefore returned incomplete coverage,
 no event, and the subsequent real freeze command produced zero bundles. This verifies live
 partial-failure handling, not a healthy three-source cycle or comprehensive coverage.
 
+A bounded source recheck on 2026-09-06 at 14:01 UTC retained the same registration
+and ledger. GDELT returned HTTP 429; EIA returned 13 items and ENTSOG 375 records.
+The cycle retained 36 candidate observations and admitted none. All 36 were blocked
+by incomplete source coverage; occurrence qualification also failed (35 missing
+critical data/loss threshold, one duration threshold, with overlapping excluded
+nature reasons). Ledger validation passed and the due-freeze command produced zero
+bundles. This is a single health check, not continuous coverage or a new H5 paired
+study. No model calls were made and no frozen rules were changed. See the
+[bounded recheck receipt](research/efficient-progress-20260906/prospective-source-recheck.json).
+
 Validate the frozen public contracts with:
 
 ```bash

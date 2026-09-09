@@ -1,0 +1,38 @@
+{
+  "gpu": "RTX 5090",
+  "gpu_total_mib": 32607,
+  "driver": "595.84",
+  "sampling_target_interval_seconds": 0.5,
+  "measurements": [
+    {
+      "file": "gpu-monitor.csv",
+      "samples": 1800,
+      "sampled_max_memory_mib": 26888.0,
+      "sampled_max_gpu_utilization_percent": 99.0,
+      "sampled_max_power_watts": 444.58,
+      "duration_seconds": 968.5494665109998
+    },
+    {
+      "file": "gpu-monitor-context.csv",
+      "samples": 310,
+      "sampled_max_memory_mib": 28514.0,
+      "sampled_max_gpu_utilization_percent": 100.0,
+      "sampled_max_power_watts": 567.86,
+      "duration_seconds": 166.74625162899974
+    }
+  ],
+  "host_memory_limit": "vLLM main process RSS is measured; a complete worker-family peak was not captured. Do not treat main RSS as total host RAM.",
+  "final_state": {
+    "gpu_memory_mib": 18,
+    "gpu_utilization_percent": 0,
+    "root_disk_available_gib_rounded": 192,
+    "memory_available_mib": 125755,
+    "model_service_listeners": 0,
+    "probe_processes_stopped": true
+  },
+  "paid_api_calls": 0,
+  "local_generation_requests": 62,
+  "local_returned_outputs": 61,
+  "local_cancelled_inflight": 1,
+  "note": "Budget-exhausted generation outputs count as returned outputs, not completed extraction tasks. Different configurations are not pooled into one quality score."
+}

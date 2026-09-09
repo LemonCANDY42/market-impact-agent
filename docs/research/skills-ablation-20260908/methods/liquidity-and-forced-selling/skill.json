@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "liquidity-and-forced-selling",
+  "version": "0.1.0",
+  "description": "Assess whether a selloff reflects cash-flow damage, forced selling, or impaired liquidity.",
+  "source": "research://skills-ablation-20260908/liquidity-and-forced-selling",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "513f7e5f8e7b37d90aa987927b1093c59decc467bdf38dfa07b461d397253fe2",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "41c5fbf25a9b0deea8d0ab9131494220fe685a333e6877b7c3724afad8845b3a"
+}

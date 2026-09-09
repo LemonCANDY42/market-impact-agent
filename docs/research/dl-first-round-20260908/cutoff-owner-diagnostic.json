@@ -1,0 +1,37 @@
+{
+  "calls": [
+    {
+      "repeat": 0,
+      "remaining_sources": [
+        "a"
+      ],
+      "parsed": {
+        "growth_pct": 3,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "raw_text": "{\n  \"growth_pct\": 3,\n  \"nature\": \"actual\",\n  \"sources\": [\"a\"]\n}",
+      "elapsed_seconds": 1.3029550969999946
+    },
+    {
+      "repeat": 1,
+      "remaining_sources": [
+        "a"
+      ],
+      "parsed": {
+        "growth_pct": 3,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "raw_text": "{\n  \"growth_pct\": 3,\n  \"nature\": \"actual\",\n  \"sources\": [\"a\"]\n}",
+      "elapsed_seconds": 1.0851902900003552
+    }
+  ],
+  "original_failures_preserved": true
+}

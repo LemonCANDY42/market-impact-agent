@@ -1,0 +1,154 @@
+{
+  "started_at": "2026-09-08T02:42:58.569403+00:00",
+  "source_revision": "259687e8f316994426416c530a94842a2fe6405e",
+  "seed": 17,
+  "steps_per_arm": 4096,
+  "rollout_steps": 512,
+  "pool_capacity": 10,
+  "segments": {
+    "train": [
+      "2008-01-01",
+      "2014-12-03"
+    ],
+    "valid": [
+      "2015-01-01",
+      "2016-12-02"
+    ],
+    "test": [
+      "2017-01-01",
+      "2020-08-01"
+    ]
+  },
+  "target": "Ref(close, -20) / close - 1",
+  "dataset_adaptation": "OHLCV only; VWAP absent and its token masked in both arms",
+  "test_role": "already observed historical period, no fresh investment confirmation",
+  "packages": {
+    "pyqlib": "0.9.7",
+    "torch": "2.13.0",
+    "stable-baselines3": "2.9.0",
+    "sb3-contrib": "2.9.0",
+    "gymnasium": "1.3.0",
+    "numpy": "2.2.6",
+    "pandas": "2.2.3"
+  },
+  "training_data": {
+    "days": 1664,
+    "stocks": 506,
+    "finite_fraction": {
+      "$open": 0.5648582577705383,
+      "$close": 0.5648582577705383,
+      "$high": 0.5648582577705383,
+      "$low": 0.5648582577705383,
+      "$volume": 0.5648582577705383,
+      "$vwap": 0.0
+    }
+  },
+  "runs": [
+    {
+      "arm": "random",
+      "action_steps": 4096,
+      "completed_expression_attempts": 26,
+      "pool_admission_attempts": 24,
+      "elapsed_seconds": 67.9264548530009,
+      "pool_size": 10,
+      "pool": {
+        "exprs": [
+          "Delta(Add(Add(Abs(Less(-0.01,$high)),-10.0),Less(Delta($open,20d),0.5)),5d)",
+          "$open",
+          "Mul(Cov(Div(1.0,Greater(Div(Greater($low,$close),-2.0),$high)),$low,20d),-10.0)",
+          "Less(1.0,$high)",
+          "Less(5.0,Min($close,5d))",
+          "Mad(Delta(Log(Med(Mul(-10.0,Min(Less($low,$volume),10d)),10d)),20d),1d)",
+          "Sub(Sub(Sub(0.5,Var($volume,20d)),-5.0),Cov(Mul($volume,10.0),$volume,10d))",
+          "Greater(Less(10.0,$low),Max(Div(Var(Log($volume),10d),Less($low,-0.01)),40d))",
+          "Mul(Log(Min(Mad(Mad($high,5d),10d),5d)),Add($open,Ref($close,40d)))",
+          "Mul(Less($close,Cov(Log($volume),$open,20d)),-2.0)"
+        ],
+        "weights": [
+          0.0021900844113925387,
+          0.018530559613993827,
+          0.013036480526099438,
+          -0.0040306071525159776,
+          -0.003227790876729408,
+          -9.824432167005401e-05,
+          0.003643220515917652,
+          -0.006842008638774692,
+          -0.0046824761188242305,
+          0.009870326917002053
+        ]
+      },
+      "train": {
+        "ic": 0.02715100161731243,
+        "rankic": 0.05284225568175316
+      },
+      "valid": {
+        "ic": -0.004559650551527739,
+        "rankic": 0.014576890505850315
+      },
+      "test": {
+        "ic": -0.0015877631958574057,
+        "rankic": 0.0043343487195670605
+      }
+    },
+    {
+      "arm": "rl",
+      "action_steps": 4096,
+      "completed_expression_attempts": 58,
+      "pool_admission_attempts": 48,
+      "elapsed_seconds": 195.67542526800025,
+      "pool_size": 10,
+      "pool": {
+        "exprs": [
+          "Greater(-1.0,Sub(Delta($close,5d),-1.0))",
+          "$open",
+          "Delta(Log(Var(Div(Greater(-30.0,Add(Mul($high,-5.0),-30.0)),$high),10d)),40d)",
+          "Less(Greater(-0.5,$low),Div(Mul(-0.5,$volume),0.5))",
+          "Var(Min(Log(Mul(Div(WMA(Add(-0.5,$close),5d),0.5),$volume)),10d),40d)",
+          "Sub(Max(Var(Add(10.0,$volume),5d),20d),-30.0)",
+          "Div(-1.0,$close)",
+          "Std(Less(2.0,$high),10d)",
+          "Min(Mul($low,$volume),10d)",
+          "Div(Add(Mad(Greater(0.5,$close),40d),-30.0),$volume)"
+        ],
+        "weights": [
+          -0.009817590291142065,
+          0.015321088600313702,
+          0.00762612408912678,
+          0.006057432515871196,
+          0.005203763171853904,
+          0.008207017463949787,
+          -0.008005474395622632,
+          0.0068645241411152596,
+          -0.030200581900351294,
+          -0.008888789609168234
+        ]
+      },
+      "train": {
+        "ic": 0.04777459055185318,
+        "rankic": 0.03136972337961197
+      },
+      "valid": {
+        "ic": 0.09028764069080353,
+        "rankic": 0.08229433000087738
+      },
+      "test": {
+        "ic": -0.026196565479040146,
+        "rankic": -0.055393870919942856
+      }
+    }
+  ],
+  "fixed_reversal": {
+    "train": {
+      "ic": 0.029959794133901596,
+      "rankic": 0.013661469332873821
+    },
+    "valid": {
+      "ic": 0.12004465609788895,
+      "rankic": 0.09641340374946594
+    },
+    "test": {
+      "ic": 0.003136536804959178,
+      "rankic": -0.002912816358730197
+    }
+  }
+}

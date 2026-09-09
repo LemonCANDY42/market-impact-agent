@@ -1,0 +1,431 @@
+{
+  "fixture_sha256": "6d6f011340c621cf5dfe4133a4fbf4a5cf71255cd2c383a426d6f6c34e305c5a",
+  "case_count": 40,
+  "development": 26,
+  "confirmation": 14,
+  "cases": [
+    {
+      "id": "tencent-revenue",
+      "split": "development",
+      "kind": "revenue",
+      "question": "依据PDF第1页2Q2025业绩摘要的亿元约数，腾讯2025年第二季总收入折合多少人民币百万元？不要改用后文更精确的报表金额。",
+      "documents": [
+        "tencent"
+      ]
+    },
+    {
+      "id": "tencent-growth",
+      "split": "development",
+      "kind": "growth",
+      "question": "腾讯2Q2025总收入披露的同比增长百分比是多少？",
+      "documents": [
+        "tencent"
+      ]
+    },
+    {
+      "id": "tencent-adjusted_profit",
+      "split": "development",
+      "kind": "adjusted_profit",
+      "question": "依据PDF第1页摘要约数，腾讯2Q2025按非国际财务报告准则的本公司权益持有人归属盈利是多少人民币百万元？不要用剔除联营/合营公司盈利后的数值。",
+      "documents": [
+        "tencent"
+      ]
+    },
+    {
+      "id": "tencent-arithmetic",
+      "split": "development",
+      "kind": "arithmetic",
+      "question": "依据PDF第1页摘要约数，腾讯2Q2025非国际财务报告准则期内盈利减去国际财务报告准则期内盈利，差额为多少人民币百万元？这里问期内盈利，不是归属权益持有人盈利。",
+      "documents": [
+        "tencent"
+      ]
+    },
+    {
+      "id": "tencent-claim",
+      "split": "development",
+      "kind": "claim",
+      "question": "核查说法：腾讯2Q2025按国际财务报告准则的经营利润率为33%。仅输出supported或contradicted作为value，并引用原文。",
+      "documents": [
+        "tencent"
+      ]
+    },
+    {
+      "id": "tencent-missing",
+      "split": "development",
+      "kind": "missing",
+      "question": "所提供页面明确披露的2025年第三季度总收入分析师一致预期是多少人民币百万元？只认页面明确给出的分析师一致预期，不推算。",
+      "documents": [
+        "tencent"
+      ]
+    },
+    {
+      "id": "xiaomi-revenue",
+      "split": "development",
+      "kind": "revenue",
+      "question": "根据PDF第1页表格，小米截至2025年6月30日止三个月收入是多少人民币百万元？保留表格精度。",
+      "documents": [
+        "xiaomi"
+      ]
+    },
+    {
+      "id": "xiaomi-growth",
+      "split": "development",
+      "kind": "growth",
+      "question": "小米2025年第二季度收入披露的同比增长百分比是多少？不要取上半年的同比增速。",
+      "documents": [
+        "xiaomi"
+      ]
+    },
+    {
+      "id": "xiaomi-adjusted_profit",
+      "split": "development",
+      "kind": "adjusted_profit",
+      "question": "根据PDF第1页表格，小米2025年第二季度经调整净利润是多少人民币百万元？",
+      "documents": [
+        "xiaomi"
+      ]
+    },
+    {
+      "id": "xiaomi-arithmetic",
+      "split": "development",
+      "kind": "arithmetic",
+      "question": "根据PDF第1页精确表格，小米第二季度期间利润减去经调整净利润是多少人民币百万元？",
+      "documents": [
+        "xiaomi"
+      ]
+    },
+    {
+      "id": "xiaomi-claim",
+      "split": "development",
+      "kind": "claim",
+      "question": "核查说法：小米2025年上半年收入为115956.1百万元人民币。仅输出supported或contradicted作为value，引用正确的半年金额。",
+      "documents": [
+        "xiaomi"
+      ]
+    },
+    {
+      "id": "xiaomi-missing",
+      "split": "development",
+      "kind": "missing",
+      "question": "所提供页面明确披露的2025年第三季度收入分析师一致预期是多少人民币百万元？不以经营展望代替数值。",
+      "documents": [
+        "xiaomi"
+      ]
+    },
+    {
+      "id": "alibaba-revenue",
+      "split": "development",
+      "kind": "revenue",
+      "question": "阿里巴巴截至2025年6月30日止季度收入为多少人民币百万元？将业绩概要的亿元转换为百万元。",
+      "documents": [
+        "alibaba"
+      ]
+    },
+    {
+      "id": "alibaba-growth",
+      "split": "development",
+      "kind": "growth",
+      "question": "阿里巴巴该季度未经剔除已处置业务的实际报告收入同比增长百分比是多少？",
+      "documents": [
+        "alibaba"
+      ]
+    },
+    {
+      "id": "alibaba-adjusted_profit",
+      "split": "development",
+      "kind": "adjusted_profit",
+      "question": "阿里巴巴截至2025年6月30日止季度非公认会计准则净利润是多少人民币百万元？不要取经调整EBITA或归属股东净利润。",
+      "documents": [
+        "alibaba"
+      ]
+    },
+    {
+      "id": "alibaba-arithmetic",
+      "split": "development",
+      "kind": "arithmetic",
+      "question": "按照PDF第3页业绩概要，阿里巴巴该季度自由现金流相较2024年同期的变动额是多少人民币百万元？定义为本期减上期，流出为负数。",
+      "documents": [
+        "alibaba"
+      ]
+    },
+    {
+      "id": "alibaba-claim",
+      "split": "development",
+      "kind": "claim",
+      "question": "核查说法：阿里巴巴该季度实际报告收入同比增长2%，剔除处置业务后的同口径增速为10%。仅输出supported或contradicted作为value。",
+      "documents": [
+        "alibaba"
+      ]
+    },
+    {
+      "id": "alibaba-missing",
+      "split": "development",
+      "kind": "missing",
+      "question": "所提供页面明确给出的下一季度集团收入分析师一致预期是多少人民币百万元？不要使用本期收入或管理层定性展望。",
+      "documents": [
+        "alibaba"
+      ]
+    },
+    {
+      "id": "netease-revenue",
+      "split": "development",
+      "kind": "revenue",
+      "question": "根据PDF第1页主要财务业绩的亿元约数，网易2025年第二季度净收入为多少人民币百万元？不要改用后文更精确的报表金额。",
+      "documents": [
+        "netease"
+      ]
+    },
+    {
+      "id": "netease-growth",
+      "split": "development",
+      "kind": "growth",
+      "question": "网易云音乐在2025年第二季度净收入同比变动百分比是多少？下降必须用负数。",
+      "documents": [
+        "netease"
+      ]
+    },
+    {
+      "id": "netease-adjusted_profit",
+      "split": "development",
+      "kind": "adjusted_profit",
+      "question": "根据PDF第1页亿元约数，网易2025年第二季度非公认会计准则下归属于公司股东的净利润为多少人民币百万元？",
+      "documents": [
+        "netease"
+      ]
+    },
+    {
+      "id": "netease-arithmetic",
+      "split": "development",
+      "kind": "arithmetic",
+      "question": "根据PDF第1页亿元约数，网易2025年第二季度非公认会计准则归属股东净利润减去公认会计准则归属股东净利润，为多少人民币百万元？",
+      "documents": [
+        "netease"
+      ]
+    },
+    {
+      "id": "netease-claim",
+      "split": "development",
+      "kind": "claim",
+      "question": "核查说法：网易2025年第二季度四个收入分部全部同比增长。仅输出supported或contradicted作为value，至少引用一个下降分部。",
+      "documents": [
+        "netease"
+      ]
+    },
+    {
+      "id": "netease-missing",
+      "split": "development",
+      "kind": "missing",
+      "question": "所提供页面明确披露的网易2025年第三季度净收入分析师一致预期是多少人民币百万元？不要自行预测。",
+      "documents": [
+        "netease"
+      ]
+    },
+    {
+      "id": "baidu-revenue",
+      "split": "confirmation",
+      "kind": "revenue",
+      "question": "根据PDF第2页百度集团表格，2025年第二季度总收入为多少人民币百万元？不是百度核心分部，也不是美元金额。",
+      "documents": [
+        "baidu"
+      ]
+    },
+    {
+      "id": "baidu-growth",
+      "split": "confirmation",
+      "kind": "growth",
+      "question": "根据PDF第2页表格，百度集团2025年第二季度总收入披露的按年变动百分比是多少？下降以负数表示。",
+      "documents": [
+        "baidu"
+      ]
+    },
+    {
+      "id": "baidu-adjusted_profit",
+      "split": "confirmation",
+      "kind": "adjusted_profit",
+      "question": "根据PDF第2页集团表格，百度2025年第二季度归属百度的净利润（非公认会计准则）是多少人民币百万元？",
+      "documents": [
+        "baidu"
+      ]
+    },
+    {
+      "id": "baidu-arithmetic",
+      "split": "confirmation",
+      "kind": "arithmetic",
+      "question": "根据PDF第2页集团表格，2025年第二季度非公认会计准则归属百度净利润减去公认会计准则归属百度净利润，为多少人民币百万元？",
+      "documents": [
+        "baidu"
+      ]
+    },
+    {
+      "id": "baidu-claim",
+      "split": "confirmation",
+      "kind": "claim",
+      "question": "核查说法：百度2025年第二季度归属百度净利润在公认和非公认会计准则两个口径下都同比增长。仅输出supported或contradicted作为value。",
+      "documents": [
+        "baidu"
+      ]
+    },
+    {
+      "id": "baidu-missing",
+      "split": "confirmation",
+      "kind": "missing",
+      "question": "所提供页面明确披露的百度下一季度总收入分析师一致预期是多少人民币百万元？不要将实际收入当成预期。",
+      "documents": [
+        "baidu"
+      ]
+    },
+    {
+      "id": "meituan-revenue",
+      "split": "confirmation",
+      "kind": "revenue",
+      "question": "根据PDF第1页三个月表格，美团2025年第二季度收入为多少人民币百万元？注意原表单位是人民币千元。",
+      "documents": [
+        "meituan"
+      ]
+    },
+    {
+      "id": "meituan-growth",
+      "split": "confirmation",
+      "kind": "growth",
+      "question": "美团截至2025年6月30日止三个月收入的同比增长百分比是多少？不要取六个月增速。",
+      "documents": [
+        "meituan"
+      ]
+    },
+    {
+      "id": "meituan-adjusted_profit",
+      "split": "confirmation",
+      "kind": "adjusted_profit",
+      "question": "根据PDF第1页，美团2025年第二季度经调整溢利净额是多少人民币百万元？不要取EBITDA，注意千元单位。",
+      "documents": [
+        "meituan"
+      ]
+    },
+    {
+      "id": "meituan-arithmetic",
+      "split": "confirmation",
+      "kind": "arithmetic",
+      "question": "仅使用PDF第1页第二季度收入与第2页半年收入，反推出美团2025年第一季度收入为多少人民币百万元？",
+      "documents": [
+        "meituan"
+      ]
+    },
+    {
+      "id": "meituan-claim",
+      "split": "confirmation",
+      "kind": "claim",
+      "question": "核查说法：美团2025年第二季度集团整体仍录得正的经营溢利。仅输出supported或contradicted作为value，依据集团整体而非新业务分部。",
+      "documents": [
+        "meituan"
+      ]
+    },
+    {
+      "id": "meituan-missing",
+      "split": "confirmation",
+      "kind": "missing",
+      "question": "所提供页面明确披露的美团2025年第三季度收入分析师一致预期是多少人民币百万元？不接受自行外推。",
+      "documents": [
+        "meituan"
+      ]
+    },
+    {
+      "id": "tencent-cross_document",
+      "split": "development",
+      "kind": "cross_document",
+      "question": "根据两份PDF第1页摘要的亿元约数，腾讯2025年第二季度总收入是网易同期净收入的多少倍？结果保留两位小数，引用两份文件。",
+      "documents": [
+        "tencent",
+        "netease"
+      ]
+    },
+    {
+      "id": "xiaomi-cross_document",
+      "split": "development",
+      "kind": "cross_document",
+      "question": "小米2025年第二季度收入同比增速减去阿里巴巴同期实际报告收入同比增速，相差多少个百分点？阿里巴巴不得使用剔除处置业务口径。引用两份文件。",
+      "documents": [
+        "xiaomi",
+        "alibaba"
+      ]
+    },
+    {
+      "id": "baidu-cross_document",
+      "split": "confirmation",
+      "kind": "cross_document",
+      "question": "将百度集团和美团2025年第二季度总收入相加，合计多少人民币百万元？分别依据百度PDF第2页和美团PDF第1页精确表格，留意单位。",
+      "documents": [
+        "baidu",
+        "meituan"
+      ]
+    },
+    {
+      "id": "meituan-cross_document",
+      "split": "confirmation",
+      "kind": "cross_document",
+      "question": "按表格披露的增速，美团2025年第二季度收入同比增速减去百度集团同期收入按年变动，相差多少个百分点？下降视为负数。",
+      "documents": [
+        "meituan",
+        "baidu"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "tencent",
+      "url": "https://static.www.tencent.com/uploads/2025/08/13/ecefb761a973b6813629ba87514f7477.pdf",
+      "pdf_sha256": "7ad084b68b67e360767b5e25b01674e8bbadd855877df8b3ed873b72827127e5"
+    },
+    {
+      "id": "xiaomi",
+      "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0819/2025081900869_c.pdf",
+      "pdf_sha256": "e5217cd3e90833364988fd1d2628295ee3a4cd749600ab14d2ce5c6a081ce438"
+    },
+    {
+      "id": "alibaba",
+      "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0829/2025082901541_c.pdf",
+      "pdf_sha256": "d1c69fa344bf9bdd60b62c2e705e6a161e5a10084ed6ca4e0e4733d492256769"
+    },
+    {
+      "id": "netease",
+      "url": "https://ir.netease.com/system/files-encrypted/nasdaq_kms/assets/2025/08/14/4-05-39/SC-2025%E5%B9%B4%E4%BA%8C%E5%AD%A3%E6%8A%A5.pdf",
+      "pdf_sha256": "ce247afb1e6a0f1c72a73bc2d79fe5a1ce9d902580646c89e14dfd7f60b4b0f5"
+    },
+    {
+      "id": "baidu",
+      "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0820/2025082000719_c.pdf",
+      "pdf_sha256": "a9f5fcd4edc198742d0f739ef14f01faef27a66326be577b55c62f9b14284b70"
+    },
+    {
+      "id": "meituan",
+      "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0827/2025082700398_c.pdf",
+      "pdf_sha256": "f332e0070f471601bf92f894a093b520fd83820de1e95df5cb7002b5484f67c4"
+    }
+  ],
+  "reference_audit": {
+    "visual_pages_reviewed": {
+      "tencent": [
+        1
+      ],
+      "xiaomi": [
+        1,
+        2
+      ],
+      "alibaba": [
+        2,
+        3
+      ],
+      "netease": [
+        1
+      ],
+      "baidu": [
+        2
+      ],
+      "meituan": [
+        1,
+        2
+      ]
+    },
+    "all_numeric_anchors_present": true,
+    "answer_key_not_sent_to_models": true
+  }
+}

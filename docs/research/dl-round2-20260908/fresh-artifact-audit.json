@@ -1,0 +1,41 @@
+{
+  "complete": true,
+  "candidate": "lgb-B",
+  "trials": 3,
+  "accounts": 6,
+  "size_diagnostics": 3,
+  "summary_sha256": "f08bf78fa7d643ecf766f2a83060f405e5ba8d95bee3e272b7037d1abeb98007",
+  "rows": [
+    {
+      "seed": 17,
+      "result_sha256": "265f6893089d6556923b91621f424310d54380afd9581667de0cdf1c85d6d4fb",
+      "adapter_sha256": "c12a6bd53fced8ed3486b7005dffc4c1472a827ea0a6bc68e9adc07177799fa6",
+      "paired_dates": 402,
+      "dates_by_year": {
+        "2025": 243,
+        "2026": 159
+      }
+    },
+    {
+      "seed": 29,
+      "result_sha256": "3eafc8d970343d7399251e2206f858f9e175e44f46c7ef07b187516c0917e547",
+      "adapter_sha256": "c12a6bd53fced8ed3486b7005dffc4c1472a827ea0a6bc68e9adc07177799fa6",
+      "paired_dates": 402,
+      "dates_by_year": {
+        "2025": 243,
+        "2026": 159
+      }
+    },
+    {
+      "seed": 43,
+      "result_sha256": "da9686e0cb05afcbdcc8948a9ca255ded12d2f658038d7822f0bdc16ad1da619",
+      "adapter_sha256": "c12a6bd53fced8ed3486b7005dffc4c1472a827ea0a6bc68e9adc07177799fa6",
+      "paired_dates": 402,
+      "dates_by_year": {
+        "2025": 243,
+        "2026": 159
+      }
+    }
+  ],
+  "scope": "artifact identity and fixed configuration; predictive gate is unchanged in the separate summary"
+}

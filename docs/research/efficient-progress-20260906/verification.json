@@ -1,0 +1,32 @@
+{
+  "preexisting_files_checked": 744,
+  "modified_preexisting_files": [
+    "docs/ACCOUNT_DECISION_LOOP.md",
+    "docs/TUSHARE_DATA.md",
+    "src/market_impact_agent/prospective_mock_execution.py",
+    "src/market_impact_agent/tushare_observation.py",
+    "tests/test_tushare_observation.py"
+  ],
+  "unrelated_preexisting_changes": [],
+  "ruff": "passed",
+  "format": "passed",
+  "pyright": "passed",
+  "pytest": {
+    "passed": 2228,
+    "warnings": 212,
+    "seconds": 594.97,
+    "scope": "full repository including authorized evidence ID parser fix"
+  },
+  "news_independent_review": "no concrete issue",
+  "lifecycle_independent_review": "no concrete issue",
+  "real_news_requests": 5,
+  "real_model_calls": 4,
+  "broker_calls": 0,
+  "investment_pilot_review": "P2 binding coverage corrected; targeted re-review no concrete issue",
+  "investment_pilot_synthetic": "two complete native account paths; replay adds no requests or fills",
+  "paid_budget_authorization": "user approved single pair USD 4 cap; four calls settled at USD 0.105214",
+  "investment_binding_hash": "2ae54655dfc3d26caecd3479e3d83c30d27af391a0ed9b365e8b0610bcab4a19",
+  "portfolio_parser_verification": "11 targeted tests passed; full Ruff, format, Pyright and pytest passed",
+  "portfolio_parser_independent_review": "no concrete defect",
+  "offline_saved_response_diagnostic": "both original responses parse and pass policy with exact frozen inputs; native account replay blocked by response durability gate; zero additional model calls"
+}

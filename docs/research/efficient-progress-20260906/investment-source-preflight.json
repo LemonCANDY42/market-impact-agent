@@ -1,0 +1,73 @@
+{
+  "window_id": "cn-2020-covid-closure-shock",
+  "cutoff": "2020-02-03T01:25:00+00:00",
+  "sessions": [
+    "2020-02-03",
+    "2020-02-04",
+    "2020-02-05",
+    "2020-02-06",
+    "2020-02-07"
+  ],
+  "source_binding_hash": "34c7f920453fb1b5be0f9cd02c38d66ed94c5c78b9d9e58938a9fba3917fb6a4",
+  "source_bindings_unchanged": true,
+  "profile_schema_valid": true,
+  "profile_route_unchanged": true,
+  "current_build_and_route_permitted": true,
+  "per_role_ceiling": {
+    "maximum_physical_requests": 4,
+    "maximum_cost_microusd": 917504
+  },
+  "four_role_ceiling_microusd": 3670016,
+  "pricing_basis": "existing local provider profile; no live price verification",
+  "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a",
+  "paid_dispatch_allowed": false,
+  "old_budget_authority_reused": false,
+  "model_calls": 0,
+  "strict_pit_accepted": false,
+  "investment_effectiveness_accepted": false,
+  "remaining_gates": [
+    "Research and portfolio serialized contexts have not been built or measured",
+    "ContinuousPortfolioRuntime paired decision driver and synthetic-wire acceptance not yet implemented",
+    "Fresh explicit paid budget authority required before dispatch"
+  ],
+  "coverage": [
+    {
+      "session": "2020-01-23",
+      "execution_ready": true,
+      "gaps": [],
+      "source_hash_count": 21476
+    },
+    {
+      "session": "2020-02-03",
+      "execution_ready": true,
+      "gaps": [],
+      "source_hash_count": 21476
+    },
+    {
+      "session": "2020-02-04",
+      "execution_ready": true,
+      "gaps": [],
+      "source_hash_count": 21476
+    },
+    {
+      "session": "2020-02-05",
+      "execution_ready": true,
+      "gaps": [],
+      "source_hash_count": 21476
+    },
+    {
+      "session": "2020-02-06",
+      "execution_ready": true,
+      "gaps": [],
+      "source_hash_count": 21476
+    },
+    {
+      "session": "2020-02-07",
+      "execution_ready": true,
+      "gaps": [],
+      "source_hash_count": 21476
+    }
+  ],
+  "stage": "source_only_before_driver_preparation",
+  "subsequent_readiness_receipt": "investment-readiness.json"
+}

@@ -1,0 +1,192 @@
+{
+  "status": "PASS",
+  "role": "post-outcome descriptive diagnostic; not a new holdout or causal attribution",
+  "account_dates": [
+    "2025-01-03",
+    "2026-08-31"
+  ],
+  "days": 402,
+  "benchmark": {
+    "name": "CSI300 context, not exposure matched; no benchmark transaction costs",
+    "compound_return": 0.2106300669989778,
+    "max_drawdown": -0.10491513273061392,
+    "peak": "2025-03-19",
+    "trough": "2025-04-07"
+  },
+  "accounts": [
+    {
+      "seed": 17,
+      "cost_multiplier": 1,
+      "net_return": 0.32708826181557416,
+      "net_max_drawdown": -0.33910674983411093,
+      "drawdown_peak": "2026-05-11",
+      "drawdown_trough": "2026-07-30",
+      "benchmark_return_during_strategy_drawdown": -0.08120558156326163,
+      "mean_end_of_day_equity_exposure": 0.7312438138649969,
+      "calendar_period_returns": {
+        "2025": {
+          "days": 242,
+          "net_return": 0.38548491804949525,
+          "benchmark_return": 0.21190077456670764
+        },
+        "2026": {
+          "days": 160,
+          "net_return": -0.04214889348354145,
+          "benchmark_return": -0.0010485244290585616
+        }
+      },
+      "mean_global_rankic_on_drawdown_feature_dates": 0.10848895904796656,
+      "rankic_feature_date_count": 57
+    },
+    {
+      "seed": 17,
+      "cost_multiplier": 2,
+      "net_return": 0.29665200582835904,
+      "net_max_drawdown": -0.3326665146856391,
+      "drawdown_peak": "2026-05-11",
+      "drawdown_trough": "2026-07-30",
+      "benchmark_return_during_strategy_drawdown": -0.08120558156326163,
+      "mean_end_of_day_equity_exposure": 0.7431234888534352,
+      "calendar_period_returns": {
+        "2025": {
+          "days": 242,
+          "net_return": 0.3443494193885235,
+          "benchmark_return": 0.21190077456670764
+        },
+        "2026": {
+          "days": 160,
+          "net_return": -0.03547992275837131,
+          "benchmark_return": -0.0010485244290585616
+        }
+      },
+      "mean_global_rankic_on_drawdown_feature_dates": 0.10848895904796656,
+      "rankic_feature_date_count": 57
+    },
+    {
+      "seed": 29,
+      "cost_multiplier": 1,
+      "net_return": 0.32015678587035823,
+      "net_max_drawdown": -0.34222888449691724,
+      "drawdown_peak": "2026-04-20",
+      "drawdown_trough": "2026-07-30",
+      "benchmark_return_during_strategy_drawdown": -0.043662652285264,
+      "mean_end_of_day_equity_exposure": 0.7692579894791152,
+      "calendar_period_returns": {
+        "2025": {
+          "days": 242,
+          "net_return": 0.34476244935269573,
+          "benchmark_return": 0.21190077456670764
+        },
+        "2026": {
+          "days": 160,
+          "net_return": -0.018297405236279762,
+          "benchmark_return": -0.0010485244290585616
+        }
+      },
+      "mean_global_rankic_on_drawdown_feature_dates": 0.07506966048040005,
+      "rankic_feature_date_count": 69
+    },
+    {
+      "seed": 29,
+      "cost_multiplier": 2,
+      "net_return": 0.19561228224080973,
+      "net_max_drawdown": -0.3586967285697503,
+      "drawdown_peak": "2026-02-24",
+      "drawdown_trough": "2026-07-30",
+      "benchmark_return_during_strategy_drawdown": -0.03352593720037911,
+      "mean_end_of_day_equity_exposure": 0.7807123172284959,
+      "calendar_period_returns": {
+        "2025": {
+          "days": 242,
+          "net_return": 0.3007606489027863,
+          "benchmark_return": 0.21190077456670764
+        },
+        "2026": {
+          "days": 160,
+          "net_return": -0.08083606061627857,
+          "benchmark_return": -0.0010485244290585616
+        }
+      },
+      "mean_global_rankic_on_drawdown_feature_dates": 0.07189951648472047,
+      "rankic_feature_date_count": 107
+    },
+    {
+      "seed": 43,
+      "cost_multiplier": 1,
+      "net_return": 0.28387258199687815,
+      "net_max_drawdown": -0.3499974904809223,
+      "drawdown_peak": "2026-02-27",
+      "drawdown_trough": "2026-07-30",
+      "benchmark_return_during_strategy_drawdown": -0.034162603207357756,
+      "mean_end_of_day_equity_exposure": 0.704849208205898,
+      "calendar_period_returns": {
+        "2025": {
+          "days": 242,
+          "net_return": 0.33296388050348,
+          "benchmark_return": 0.21190077456670764
+        },
+        "2026": {
+          "days": 160,
+          "net_return": -0.03682867872463036,
+          "benchmark_return": -0.0010485244290585616
+        }
+      },
+      "mean_global_rankic_on_drawdown_feature_dates": 0.06836414988707101,
+      "rankic_feature_date_count": 104
+    },
+    {
+      "seed": 43,
+      "cost_multiplier": 2,
+      "net_return": 0.21810800454317048,
+      "net_max_drawdown": -0.35468883390797834,
+      "drawdown_peak": "2026-02-27",
+      "drawdown_trough": "2026-07-30",
+      "benchmark_return_during_strategy_drawdown": -0.034162603207357756,
+      "mean_end_of_day_equity_exposure": 0.7153472883042633,
+      "calendar_period_returns": {
+        "2025": {
+          "days": 242,
+          "net_return": 0.29242074797965656,
+          "benchmark_return": 0.21190077456670764
+        },
+        "2026": {
+          "days": 160,
+          "net_return": -0.0574988784052356,
+          "benchmark_return": -0.0010485244290585616
+        }
+      },
+      "mean_global_rankic_on_drawdown_feature_dates": 0.06836414988707101,
+      "rankic_feature_date_count": 104
+    }
+  ],
+  "double_cost_seed_daily_return_correlations": {
+    "17-29": 0.9615322937316219,
+    "17-43": 0.9494339639076019,
+    "29-43": 0.9535067136059693
+  },
+  "checks": [
+    "402 identical dates and benchmark rows",
+    "net return reconciles to final NAV",
+    "drawdown independently reconciles to NAV"
+  ],
+  "limitations": [
+    "No holdings-level industry, size, beta, top-50-tail or delisting attribution.",
+    "Global forward-five-day RankIC on feature dates is not an attribution of same-day held portfolio PnL.",
+    "Cost scenarios are separate account paths; differences include changed future holdings, not only fee subtraction.",
+    "CSI300 is a context benchmark with different universe exposure.",
+    "Adjusted-price research accounts retain the original PIT and native-execution limitations.",
+    "Seeds share the same market history and are not independent economic samples."
+  ],
+  "input_sha256": {
+    "expanded-data/supervised/F-B-lgb-17/account-cost1.csv": "1b0559d404f5e6578ba7575ae4eef318b50c451b521b26325836567fead5b8a4",
+    "expanded-data/supervised/F-B-lgb-17/test-daily.csv": "f39cf0a5ba5d912397431479b8514f76b666ee9258c5d7d158fe4e1fdf92245e",
+    "expanded-data/supervised/F-B-lgb-17/account-cost2.csv": "f6c4270979fa79eb364842947ece3a5e6d647ef841c6dc2d1c05ce86b30963e1",
+    "expanded-data/supervised/F-B-lgb-29/account-cost1.csv": "5a9932a60103851e4695c7c47c18318de0178e9c474024de30105f1a927f0233",
+    "expanded-data/supervised/F-B-lgb-29/test-daily.csv": "5d325dadd0085897cd1f198351376c35c5cbf5dcd1f9d0d6f243586bf28230ac",
+    "expanded-data/supervised/F-B-lgb-29/account-cost2.csv": "27cd3103e6cb0d0184bf0af220a4247e1a1811b492c68a814d3d1396bf30cfd2",
+    "expanded-data/supervised/F-B-lgb-43/account-cost1.csv": "af6b4b7d01131588ae6154ee6157d932a03201e02ecce097540ec1cbb061c8da",
+    "expanded-data/supervised/F-B-lgb-43/test-daily.csv": "520b9e7c80ff411be2016d25710655608262bac6f783e6f72e398f1052303443",
+    "expanded-data/supervised/F-B-lgb-43/account-cost2.csv": "5f2e488a7ba870c4972aff4106eee8103921e33e0d297d482bf6429a1a1d6394"
+  },
+  "script_sha256": "0d8ca9136e09292c0edcd667d68c6830977012cd7b973d3ccbfddfeb1995e213"
+}

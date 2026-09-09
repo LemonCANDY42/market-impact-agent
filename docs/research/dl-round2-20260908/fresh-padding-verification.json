@@ -1,0 +1,17 @@
+{
+  "synthetic_only": true,
+  "same_feature_dates": true,
+  "n_days": 100,
+  "stocks": 3,
+  "exactly_equal_expressions": [
+    "$close",
+    "Ref($close,5d)",
+    "Mean($close,20d)",
+    "Sub(Div(Ref($close,-6d),Ref($close,-1d)),1)"
+  ],
+  "upstream_future_padding": [
+    30,
+    6
+  ],
+  "purpose": "declared six-session target works at available-data edge without invented future sessions or dropping 24 valid dates"
+}

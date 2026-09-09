@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "earnings-quality-and-value",
+  "version": "0.1.0",
+  "description": "Compare earnings surprises, profitability and valuation while testing value-trap explanations.",
+  "source": "research://skills-ablation-20260908/earnings-quality-and-value",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "fbd821b097d590a76c22a7d5decce3f3e8766f15a408741458b69be006afbb4f",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "22cc91690a08b351998555ac459cd96b0bea58e91e08f37b06b056e843d1d3d1"
+}

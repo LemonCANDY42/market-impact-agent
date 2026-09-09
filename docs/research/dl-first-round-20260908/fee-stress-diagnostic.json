@@ -1,0 +1,9 @@
+{
+  "case": "2015 Alpha158 Ridge doubled commission",
+  "base_last_100_purchase_date": "2015-06-23",
+  "stress_last_100_purchase_date": "2015-06-30",
+  "later_purchase_price_saving_cny": "42.600",
+  "extra_seed_and_window_fees_cny": "38.60",
+  "ending_nav_difference_cny": "4.00",
+  "explanation": "Higher fees delayed the final affordable 100-unit lot to a cheaper session; this discrete sizing effect does not make higher fees beneficial in general."
+}

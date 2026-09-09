@@ -1,0 +1,38 @@
+[
+  {
+    "repo": "TA-Lib/ta-lib-python",
+    "head": "290dd191d1bd8bc07ce7da65b8b70c38f174124b",
+    "head_date": "2026-08-29T21:29:31Z",
+    "archived": false
+  },
+  {
+    "repo": "microsoft/qlib",
+    "head": "79633dd9506ea689e5400dea0197717b5b3d74b7",
+    "head_date": "2026-07-23T08:15:29Z",
+    "archived": false
+  },
+  {
+    "repo": "AI4Finance-Foundation/FinRL",
+    "head": "2334a5fe6d30629157f13c3b0319e1637e15e123",
+    "head_date": "2026-07-12T06:22:09Z",
+    "archived": false
+  },
+  {
+    "repo": "AI4Finance-Foundation/FinRL-Meta",
+    "head": "15405db81ef46790d430341166700a61ba51b70d",
+    "head_date": "2026-04-02T01:24:53Z",
+    "archived": false
+  },
+  {
+    "repo": "AI4Finance-Foundation/ElegantRL",
+    "head": "24228304867bdc80165de435a598ef90b1893598",
+    "head_date": "2026-02-20T04:33:56Z",
+    "archived": false
+  },
+  {
+    "repo": "AI4Finance-Foundation/FinRL-Trading",
+    "head": "e65d6f0483ead7d2ef4a5fc940cdf960392a25c1",
+    "head_date": "2026-05-02T15:12:36Z",
+    "archived": false
+  }
+]

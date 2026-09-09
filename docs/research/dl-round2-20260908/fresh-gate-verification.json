@@ -1,0 +1,15 @@
+{
+  "synthetic_only": true,
+  "cases": [
+    {
+      "synthetic_raw_rankic": 0.04,
+      "synthetic_size_partial_rankic": 0.02,
+      "passes": true
+    },
+    {
+      "synthetic_raw_rankic": 0.04,
+      "synthetic_size_partial_rankic": 0.0,
+      "passes": false
+    }
+  ]
+}

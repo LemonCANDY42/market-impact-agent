@@ -1,0 +1,190 @@
+{
+  "label": "q5-one-pair-supplement-v2",
+  "completed_pairs": 0,
+  "completed_days": {
+    "ordinary.A": 1,
+    "ordinary.B": 0
+  },
+  "business_seconds_to_safe_checkpoint": 913.400595249841,
+  "dispatch_budget_seconds": 3600.0,
+  "timer_expired": false,
+  "failed_or_incomplete_days": 1,
+  "equivalent_five_year_fraction": 0.0,
+  "five_year_pairs": 1210,
+  "budget": {
+    "physical_requests": 22,
+    "known_cost_microusd": 0,
+    "reserved_microusd": 0,
+    "unsettled_requests": 0
+  },
+  "frozen_code_unchanged": true,
+  "formal_five_year_ready": false,
+  "investment_effectiveness_accepted": false,
+  "history_isolation": "each arm/window has a distinct account and Recall arm scope; only immutable source cache is shared",
+  "stop_reason": "registered_canary_complete",
+  "registration_sha256": "2a5cec4942e4900f8dc0e9e3abdc411cc1230988eed57325aebc6255a8d8695c",
+  "results_sha256": "c864d7c534fd3f6b0a450cd553b421222abb653a783fe40e86135df0bae0fea8",
+  "preparation": {
+    "seconds": 55.85024291602895,
+    "finished_at": "2026-09-08T16:39:38.242533+00:00",
+    "panels_prepared": 1
+  },
+  "started": {
+    "at": "2026-09-08T16:39:38.242784+00:00"
+  },
+  "arms": {
+    "A": {
+      "complete_days": 1,
+      "incomplete_days": 0,
+      "wall_seconds": 465.4675076249987,
+      "input_tokens": 145880,
+      "cached_tokens": 105373,
+      "output_tokens": 25884,
+      "token_usage_scope": "completed native response receipts only; timed-out or interrupted requests may add unknown usage"
+    },
+    "B": {
+      "complete_days": 0,
+      "incomplete_days": 1,
+      "wall_seconds": 447.8554774168879,
+      "input_tokens": 262314,
+      "cached_tokens": 214005,
+      "output_tokens": 23927,
+      "token_usage_scope": "completed native response receipts only; timed-out or interrupted requests may add unknown usage"
+    }
+  },
+  "days": [
+    {
+      "window": "ordinary",
+      "arm": "A",
+      "index": 0,
+      "cutoff_day": "20200603",
+      "execution_day": "20200604",
+      "complete": true,
+      "elapsed_seconds": 465.4675076249987,
+      "error": null,
+      "detail": null,
+      "candidate_data_preparation_seconds": 12.730484709143639,
+      "method_catalog_visible": false,
+      "intents": 0,
+      "nav": "200000",
+      "cash": "200000",
+      "native_result_hash": "2301926c6d4944fe8528d5eba5797fb98bd5159d3ddea6631a44e24506225e9c",
+      "fills": 0,
+      "method_reads": [],
+      "method_citations": []
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "index": 0,
+      "cutoff_day": "20200603",
+      "execution_day": "20200604",
+      "complete": false,
+      "elapsed_seconds": 447.8554774168879,
+      "error": "RuntimeError",
+      "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.research')",
+      "candidate_data_preparation_seconds": 20.841092917136848,
+      "method_catalog_visible": true,
+      "intents": null,
+      "nav": null,
+      "cash": null,
+      "native_result_hash": null,
+      "fills": 0,
+      "method_reads": [
+        {
+          "role": "discovery",
+          "name": "portfolio-risk-and-reentry",
+          "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b",
+          "successful_body_read": true,
+          "receipt_hash": "971648253b06647c30f86822ff354e32235e5572c8bb10b06fd8d6396d9b9bc8",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.discovery.pi-invocation.1.tool.pi-call-adae8e98dab1a9a96a6c9c3fa04bbda667ff7000bd73a31779a86630615f5111",
+          "journal_event_hash": "8a21184a7488212cb612a2ee66f54d69a4ad98f0fd022165a8a76effa1309de7"
+        },
+        {
+          "role": "discovery",
+          "name": "trend-and-reversal",
+          "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a",
+          "successful_body_read": true,
+          "receipt_hash": "1deef8ec23030df05467b2ab26cdce797b0b8f493af21bdaa5c59b3300fc99c4",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.discovery.pi-invocation.1.tool.pi-call-e4524c5b2ed8c336e88ff09e0f4f0069a09d0073bb2b093fee40ebd87d3e2cca",
+          "journal_event_hash": "e42296e7cf4bce1bd926b89b75b5430712fa921f2058b904ecee27fa050d6661"
+        },
+        {
+          "role": "discovery",
+          "name": "liquidity-and-forced-selling",
+          "instructions_hash": "513f7e5f8e7b37d90aa987927b1093c59decc467bdf38dfa07b461d397253fe2",
+          "successful_body_read": true,
+          "receipt_hash": "3b6f7b9705d22df5f86e3801e8877ed52c11364b1f90dd6fcc4e94be9eb4c2f1",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.discovery.pi-invocation.1.tool.pi-call-78b4bd32b0c34ca7229f5ac1af3c170885f6b3bc11d1aa328552a24e0fac30a6",
+          "journal_event_hash": "5486a58990d09e4c1b9dcabf23bbe993322910eb2c6163c99fe7395397374448"
+        },
+        {
+          "role": "research",
+          "name": "portfolio-risk-and-reentry",
+          "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b",
+          "successful_body_read": true,
+          "receipt_hash": "971648253b06647c30f86822ff354e32235e5572c8bb10b06fd8d6396d9b9bc8",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-9106913d2bf7161812fed57dce0b43a597d1bcdc541a040a06efb50ffbc67358",
+          "journal_event_hash": "9ca8e6b44aa1a723260c6a0d72f95b2c7137f83cd4160ab4337af576b838af56"
+        },
+        {
+          "role": "research",
+          "name": "earnings-quality-and-value",
+          "instructions_hash": "fbd821b097d590a76c22a7d5decce3f3e8766f15a408741458b69be006afbb4f",
+          "successful_body_read": true,
+          "receipt_hash": "e06a9b6da65a9c9135a73c0a8313b9f8e06de512a482f6cef97aa223f7aa8e2b",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-a0831442f031ad35ac8348a48d3eb54b1c8efe50c7dd739938d5177e95eff2cf",
+          "journal_event_hash": "e8198122ff605fe8eb3ce12e793f8ad903fb435653d8e59a07a97b515cb0f25b"
+        },
+        {
+          "role": "research",
+          "name": "trend-and-reversal",
+          "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a",
+          "successful_body_read": true,
+          "receipt_hash": "1deef8ec23030df05467b2ab26cdce797b0b8f493af21bdaa5c59b3300fc99c4",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-230526f9a0c44fe015276794b671dc2e77a342bec6d5454f49d7496ea8707777",
+          "journal_event_hash": "ea0685cf17d13e3d682c9677559506a2703c181d82566b62477da300ec1a2a38"
+        },
+        {
+          "role": "research",
+          "name": "policy-transmission",
+          "instructions_hash": "70fd1289e02d156babf1f3131cc9f05a32a9303f0e9f03b8117c56250cc7a2a4",
+          "successful_body_read": true,
+          "receipt_hash": "bb4704a3e2196b13241fbf568e0faf7be3e4cbb838a8d59f7c687c43975930ed",
+          "journal_event_id": "q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-c5bd9dc43f8ffc0207f1df3e04ed1a8e81f4866234f54db951d2a7dcbda2982b",
+          "journal_event_hash": "92f211ec04f8fa514dc4297a0187df9fe15f028f7d79fcbdae046bacf4f1778d"
+        }
+      ],
+      "method_citations": [
+        {
+          "role": "discovery",
+          "name": "liquidity-and-forced-selling",
+          "kind": "literal_name_in_final_response_not_proof_of_application"
+        },
+        {
+          "role": "discovery",
+          "name": "portfolio-risk-and-reentry",
+          "kind": "literal_name_in_final_response_not_proof_of_application"
+        },
+        {
+          "role": "discovery",
+          "name": "trend-and-reversal",
+          "kind": "literal_name_in_final_response_not_proof_of_application"
+        },
+        {
+          "role": "research",
+          "name": "trend-and-reversal",
+          "kind": "literal_name_in_final_response_not_proof_of_application"
+        }
+      ]
+    }
+  ],
+  "matched_baselines": {},
+  "throughput": {
+    "complete_pairs_per_hour": 0.0,
+    "five_year_hours_at_observed_rate": null,
+    "finite_upper_bound_supported": false,
+    "includes_data_coverage_expansion": false,
+    "is_completed_five_year_progress": false
+  }
+}

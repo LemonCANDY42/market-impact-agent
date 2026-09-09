@@ -1,0 +1,144 @@
+{
+  "candidate": "Qlib Alpha158 nine close-only features",
+  "windows": [
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "status": "passed",
+      "native_features": 9,
+      "future_variants": 3,
+      "input_hash": "c0bc2bf7f87272e255270287ea54aff3a285e4ba1b206e0a16bfaf909fe97eeb",
+      "feature_result_hash": "66c810d5d9aaee94d2c6e8f4386f7e8d49d278bc95f87632af4d7c9e4d70ff55",
+      "prefix_invariant": true,
+      "max_formula_error": 2.7466090513073027e-08,
+      "future_expression_rejected": true,
+      "label_columns": 0
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "status": "passed",
+      "native_features": 9,
+      "future_variants": 3,
+      "input_hash": "1f2a980b9c90d88f9518e3c1eb44d2c46b8dc5124fd046969c3662ffa825e87c",
+      "feature_result_hash": "552b03ba16b7615a99e27ea3f5158cb88178ce4c7665a99029b17c7b5dbfa144",
+      "prefix_invariant": true,
+      "max_formula_error": 2.6030830602152832e-08,
+      "future_expression_rejected": true,
+      "label_columns": 0
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "status": "passed",
+      "native_features": 9,
+      "future_variants": 3,
+      "input_hash": "e87813972901695828ee533eca8e70d9aa53dea56935b3f66e7ba1444c2b0a97",
+      "feature_result_hash": "a2cd6b8a9551ec9569e91133e7059eeaf0c2e1ea8336b8bcb243942a0b11376d",
+      "prefix_invariant": true,
+      "max_formula_error": 5.7800976449584596e-08,
+      "future_expression_rejected": true,
+      "label_columns": 0
+    }
+  ],
+  "fault_checks": [
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "fault": "tampered_input",
+      "rejected": true,
+      "reason": "input_hash_mismatch"
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "fault": "future_request",
+      "rejected": true,
+      "reason": "future_request"
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "fault": "warmup_gap",
+      "rejected": true,
+      "reason": "warmup_gap"
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "fault": "missing_row",
+      "rejected": true,
+      "reason": "calendar_gap"
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "fault": "missing_price",
+      "rejected": true,
+      "reason": "price_gap"
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "fault": "tampered_input",
+      "rejected": true,
+      "reason": "input_hash_mismatch"
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "fault": "future_request",
+      "rejected": true,
+      "reason": "future_request"
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "fault": "warmup_gap",
+      "rejected": true,
+      "reason": "warmup_gap"
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "fault": "missing_row",
+      "rejected": true,
+      "reason": "calendar_gap"
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "fault": "missing_price",
+      "rejected": true,
+      "reason": "price_gap"
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "fault": "tampered_input",
+      "rejected": true,
+      "reason": "input_hash_mismatch"
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "fault": "future_request",
+      "rejected": true,
+      "reason": "future_request"
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "fault": "warmup_gap",
+      "rejected": true,
+      "reason": "warmup_gap"
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "fault": "missing_row",
+      "rejected": true,
+      "reason": "calendar_gap"
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "fault": "missing_price",
+      "rejected": true,
+      "reason": "price_gap"
+    }
+  ],
+  "training_runs": 0,
+  "model_calls": 0,
+  "source_calls": 0,
+  "broker_access": false,
+  "execution_authority": false,
+  "economic_result": null,
+  "elapsed_seconds": 47.592,
+  "interpretation": "Native feature and isolated-process feasibility only; no prediction model or investment return was reproduced.",
+  "evidence_lane": "opened_historical_modeled_pit",
+  "strict_pit_accepted": false,
+  "availability_limit": "Trading-date-filtered historical source versions; actual historical receipt availability is not established. Prefix invariance demonstrates computational invariance only."
+}

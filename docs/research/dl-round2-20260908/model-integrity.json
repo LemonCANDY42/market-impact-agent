@@ -1,0 +1,20 @@
+[
+  {
+    "repo": "unsloth/Qwen3.8-27B-GGUF",
+    "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+    "filename": "Qwen3.8-27B-UD-Q5_K_M.gguf",
+    "size": 19771509664,
+    "sha256": "2de73110cb254cbf09b54b717578dadff12ef1194e7271527e68202f39ba4bfd",
+    "elapsed_seconds": 2370.0224987950023,
+    "verified": true
+  },
+  {
+    "repo": "unsloth/gemma-4-12B-it-GGUF",
+    "revision": "fc034cfff751157913579611efad8462ac1be606",
+    "filename": "gemma-4-12b-it-Q5_K_M.gguf",
+    "size": 8413576000,
+    "sha256": "32c554c7d1338a23837ae39b3db482213a4a642f96df3b2619f516a2375d16cd",
+    "elapsed_seconds": 879.0492620210025,
+    "verified": true
+  }
+]

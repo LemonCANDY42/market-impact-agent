@@ -1,0 +1,364 @@
+{
+  "holdout_model_outcomes_opened": true,
+  "nomination": {
+    "candidate": "lgb-B",
+    "family": "lgb",
+    "tier": "B",
+    "seeds": [
+      17,
+      29,
+      43
+    ],
+    "development_summary_sha256": "7739829ab1339618f1961d34748f0d29412db7d52cce1a11f6b7f396a04c64dc",
+    "recorded_at_unix": 1788865449.69014,
+    "holdout_model_outcomes_opened": false,
+    "segments": "train through 2022; validation 2023-2024; confirmation 2025 through six-session-purged 2026-09-07",
+    "uncertainty": "equal calendar-year weight, 2000 within-year 60-session moving blocks, seed 17029",
+    "configuration": "unchanged original models; advanced fold F bounds and upstream available-edge padding",
+    "random_targets": {},
+    "adapters": {
+      "fresh_train.py": "c12a6bd53fced8ed3486b7005dffc4c1472a827ea0a6bc68e9adc07177799fa6",
+      "fresh_rl.py": "93692ca8a7b5d959a674d403f40b5865fdfd411583dfe508c2729dbbe686c282",
+      "fresh_features.py": "ada8a58e0ec7f6ee91c468d790f0404fe95fc9e2b6513a0af81f163e5f6296cc"
+    }
+  },
+  "raw_interval": {
+    "mean": 0.1028359762892522,
+    "lower_95": 0.06380925282646258,
+    "upper_95": 0.12463560456823619
+  },
+  "size_partial_interval": {
+    "mean": 0.09972362379170457,
+    "lower_95": 0.06786449163334958,
+    "upper_95": 0.12331636490111615
+  },
+  "raw_yearly": {
+    "2025": 0.11618329152132303,
+    "2026": 0.08948866105718138
+  },
+  "size_partial_yearly": {
+    "2025": 0.11210975638030457,
+    "2026": 0.08733749120310458
+  },
+  "seed_raw_means": [
+    0.10597232551418878,
+    0.10584032601528236,
+    0.10506225106585226
+  ],
+  "seed_size_partial_means": [
+    0.10256879009212537,
+    0.10252404973331607,
+    0.10184247287386927
+  ],
+  "checks": {
+    "raw_positive_both_years": true,
+    "size_partial_positive_both_years": true,
+    "raw_lower_bound_positive": true,
+    "size_partial_lower_bound_positive": true,
+    "seed_stability": true
+  },
+  "accounts": {
+    "F-B-lgb-17": {
+      "1": {
+        "start": "2025-01-03 00:00:00",
+        "end": "2026-08-31 00:00:00",
+        "account": 100000000,
+        "benchmark": "SH000300",
+        "strategy": {
+          "topk": 50,
+          "n_drop": 5,
+          "only_tradable": true,
+          "forbid_all_trade_at_limit": false
+        },
+        "exchange": {
+          "codes": "market",
+          "limit_threshold": [
+            "($raw_close >= $up_limit) | ($up_limit != $up_limit)",
+            "($raw_close <= $down_limit) | ($down_limit != $down_limit)"
+          ],
+          "deal_price": "close",
+          "volume_threshold": [
+            "cum",
+            "0.05 * $volume"
+          ],
+          "open_cost": 0.0005,
+          "close_cost": 0.0015,
+          "min_cost": 5
+        },
+        "claim": "upstream adjusted-price research account only; not native execution acceptance",
+        "days": 402,
+        "elapsed_seconds": 28.72385272000247,
+        "qlib_arithmetic_excess_risk": {
+          "mean": 0.00027728905057669453,
+          "std": 0.012643702378356185,
+          "annualized_return": 0.0659947940372533,
+          "information_ratio": 0.33833500623388896,
+          "max_drawdown": -0.3899106294040241
+        },
+        "compound_net_total_return": 0.32708826181557416,
+        "compound_benchmark_total_return": 0.2106306552886963,
+        "compound_relative_wealth_return": 0.09619581828539325,
+        "net_equity_max_drawdown": -0.33910674983411093,
+        "mean_daily_turnover": 0.1509711750674025,
+        "cost_sum": 0.0603765617542606,
+        "limitations": [
+          "adjusted-price upstream simulator",
+          "no native lot/T+1/corporate-action/reconciliation acceptance",
+          "missing final delisting proceeds are not established by daily quotes",
+          "transaction cost multipliers are sensitivities, not measured market impact"
+        ]
+      },
+      "2": {
+        "start": "2025-01-03 00:00:00",
+        "end": "2026-08-31 00:00:00",
+        "account": 100000000,
+        "benchmark": "SH000300",
+        "strategy": {
+          "topk": 50,
+          "n_drop": 5,
+          "only_tradable": true,
+          "forbid_all_trade_at_limit": false
+        },
+        "exchange": {
+          "codes": "market",
+          "limit_threshold": [
+            "($raw_close >= $up_limit) | ($up_limit != $up_limit)",
+            "($raw_close <= $down_limit) | ($down_limit != $down_limit)"
+          ],
+          "deal_price": "close",
+          "volume_threshold": [
+            "cum",
+            "0.05 * $volume"
+          ],
+          "open_cost": 0.001,
+          "close_cost": 0.003,
+          "min_cost": 10
+        },
+        "claim": "upstream adjusted-price research account only; not native execution acceptance",
+        "days": 402,
+        "elapsed_seconds": 28.80158842400124,
+        "qlib_arithmetic_excess_risk": {
+          "mean": 0.00022070664338486718,
+          "std": 0.012717107657979069,
+          "annualized_return": 0.052528181125598386,
+          "information_ratio": 0.26774140404223223,
+          "max_drawdown": -0.4067825521861685
+        },
+        "compound_net_total_return": 0.29665200582835904,
+        "compound_benchmark_total_return": 0.2106306552886963,
+        "compound_relative_wealth_return": 0.07105499118486258,
+        "net_equity_max_drawdown": -0.3326665146856391,
+        "mean_daily_turnover": 0.15282774693522055,
+        "cost_sum": 0.12217556523209167,
+        "limitations": [
+          "adjusted-price upstream simulator",
+          "no native lot/T+1/corporate-action/reconciliation acceptance",
+          "missing final delisting proceeds are not established by daily quotes",
+          "transaction cost multipliers are sensitivities, not measured market impact"
+        ]
+      }
+    },
+    "F-B-lgb-29": {
+      "1": {
+        "start": "2025-01-03 00:00:00",
+        "end": "2026-08-31 00:00:00",
+        "account": 100000000,
+        "benchmark": "SH000300",
+        "strategy": {
+          "topk": 50,
+          "n_drop": 5,
+          "only_tradable": true,
+          "forbid_all_trade_at_limit": false
+        },
+        "exchange": {
+          "codes": "market",
+          "limit_threshold": [
+            "($raw_close >= $up_limit) | ($up_limit != $up_limit)",
+            "($raw_close <= $down_limit) | ($down_limit != $down_limit)"
+          ],
+          "deal_price": "close",
+          "volume_threshold": [
+            "cum",
+            "0.05 * $volume"
+          ],
+          "open_cost": 0.0005,
+          "close_cost": 0.0015,
+          "min_cost": 5
+        },
+        "claim": "upstream adjusted-price research account only; not native execution acceptance",
+        "days": 402,
+        "elapsed_seconds": 29.231183732998034,
+        "qlib_arithmetic_excess_risk": {
+          "mean": 0.00027742398284458063,
+          "std": 0.013466390964910977,
+          "annualized_return": 0.06602690791701019,
+          "information_ratio": 0.31782002823148253,
+          "max_drawdown": -0.42781116545878983
+        },
+        "compound_net_total_return": 0.32015678587035823,
+        "compound_benchmark_total_return": 0.2106306552886963,
+        "compound_relative_wealth_return": 0.09047030991920768,
+        "net_equity_max_drawdown": -0.34222888449691724,
+        "mean_daily_turnover": 0.1545586482592695,
+        "cost_sum": 0.061836191282426824,
+        "limitations": [
+          "adjusted-price upstream simulator",
+          "no native lot/T+1/corporate-action/reconciliation acceptance",
+          "missing final delisting proceeds are not established by daily quotes",
+          "transaction cost multipliers are sensitivities, not measured market impact"
+        ]
+      },
+      "2": {
+        "start": "2025-01-03 00:00:00",
+        "end": "2026-08-31 00:00:00",
+        "account": 100000000,
+        "benchmark": "SH000300",
+        "strategy": {
+          "topk": 50,
+          "n_drop": 5,
+          "only_tradable": true,
+          "forbid_all_trade_at_limit": false
+        },
+        "exchange": {
+          "codes": "market",
+          "limit_threshold": [
+            "($raw_close >= $up_limit) | ($up_limit != $up_limit)",
+            "($raw_close <= $down_limit) | ($down_limit != $down_limit)"
+          ],
+          "deal_price": "close",
+          "volume_threshold": [
+            "cum",
+            "0.05 * $volume"
+          ],
+          "open_cost": 0.001,
+          "close_cost": 0.003,
+          "min_cost": 10
+        },
+        "claim": "upstream adjusted-price research account only; not native execution acceptance",
+        "days": 402,
+        "elapsed_seconds": 29.658605764998356,
+        "qlib_arithmetic_excess_risk": {
+          "mean": 2.9926890284849552e-05,
+          "std": 0.013435953015565962,
+          "annualized_return": 0.0071225998877941935,
+          "information_ratio": 0.03436225002641502,
+          "max_drawdown": -0.48205228756127194
+        },
+        "compound_net_total_return": 0.19561228224080973,
+        "compound_benchmark_total_return": 0.2106306552886963,
+        "compound_relative_wealth_return": -0.012405412817095063,
+        "net_equity_max_drawdown": -0.3586967285697503,
+        "mean_daily_turnover": 0.15581087906737984,
+        "cost_sum": 0.12466504070339213,
+        "limitations": [
+          "adjusted-price upstream simulator",
+          "no native lot/T+1/corporate-action/reconciliation acceptance",
+          "missing final delisting proceeds are not established by daily quotes",
+          "transaction cost multipliers are sensitivities, not measured market impact"
+        ]
+      }
+    },
+    "F-B-lgb-43": {
+      "1": {
+        "start": "2025-01-03 00:00:00",
+        "end": "2026-08-31 00:00:00",
+        "account": 100000000,
+        "benchmark": "SH000300",
+        "strategy": {
+          "topk": 50,
+          "n_drop": 5,
+          "only_tradable": true,
+          "forbid_all_trade_at_limit": false
+        },
+        "exchange": {
+          "codes": "market",
+          "limit_threshold": [
+            "($raw_close >= $up_limit) | ($up_limit != $up_limit)",
+            "($raw_close <= $down_limit) | ($down_limit != $down_limit)"
+          ],
+          "deal_price": "close",
+          "volume_threshold": [
+            "cum",
+            "0.05 * $volume"
+          ],
+          "open_cost": 0.0005,
+          "close_cost": 0.0015,
+          "min_cost": 5
+        },
+        "claim": "upstream adjusted-price research account only; not native execution acceptance",
+        "days": 402,
+        "elapsed_seconds": 29.504190028004814,
+        "qlib_arithmetic_excess_risk": {
+          "mean": 0.00020205392399453472,
+          "std": 0.013088619425117442,
+          "annualized_return": 0.048088833910699263,
+          "information_ratio": 0.2381562194587009,
+          "max_drawdown": -0.4494518319414085
+        },
+        "compound_net_total_return": 0.28387258199687815,
+        "compound_benchmark_total_return": 0.2106306552886963,
+        "compound_relative_wealth_return": 0.06049898570486478,
+        "net_equity_max_drawdown": -0.3499974904809223,
+        "mean_daily_turnover": 0.1520390424892093,
+        "cost_sum": 0.06085373598900909,
+        "limitations": [
+          "adjusted-price upstream simulator",
+          "no native lot/T+1/corporate-action/reconciliation acceptance",
+          "missing final delisting proceeds are not established by daily quotes",
+          "transaction cost multipliers are sensitivities, not measured market impact"
+        ]
+      },
+      "2": {
+        "start": "2025-01-03 00:00:00",
+        "end": "2026-08-31 00:00:00",
+        "account": 100000000,
+        "benchmark": "SH000300",
+        "strategy": {
+          "topk": 50,
+          "n_drop": 5,
+          "only_tradable": true,
+          "forbid_all_trade_at_limit": false
+        },
+        "exchange": {
+          "codes": "market",
+          "limit_threshold": [
+            "($raw_close >= $up_limit) | ($up_limit != $up_limit)",
+            "($raw_close <= $down_limit) | ($down_limit != $down_limit)"
+          ],
+          "deal_price": "close",
+          "volume_threshold": [
+            "cum",
+            "0.05 * $volume"
+          ],
+          "open_cost": 0.001,
+          "close_cost": 0.003,
+          "min_cost": 10
+        },
+        "claim": "upstream adjusted-price research account only; not native execution acceptance",
+        "days": 402,
+        "elapsed_seconds": 29.371081691002473,
+        "qlib_arithmetic_excess_risk": {
+          "mean": 7.060435389155608e-05,
+          "std": 0.012998973913681542,
+          "annualized_return": 0.016803836226190347,
+          "information_ratio": 0.08379360774247785,
+          "max_drawdown": -0.4720162675934303
+        },
+        "compound_net_total_return": 0.21810800454317048,
+        "compound_benchmark_total_return": 0.2106306552886963,
+        "compound_relative_wealth_return": 0.0061764083222319854,
+        "net_equity_max_drawdown": -0.35468883390797834,
+        "mean_daily_turnover": 0.1541202236937516,
+        "cost_sum": 0.12337364096244355,
+        "limitations": [
+          "adjusted-price upstream simulator",
+          "no native lot/T+1/corporate-action/reconciliation acceptance",
+          "missing final delisting proceeds are not established by daily quotes",
+          "transaction cost multipliers are sensitivities, not measured market impact"
+        ]
+      }
+    }
+  },
+  "passes_fresh_predictive_confirmation": true,
+  "claim": "retrospective predictive confirmation only; provider vintage, delisting proceeds, native account and execution acceptance remain unresolved; no replacement candidate chosen from holdout"
+}

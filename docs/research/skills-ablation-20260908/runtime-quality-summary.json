@@ -1,0 +1,90 @@
+{
+  "qualification_only": true,
+  "pre2021_or_synthetic": true,
+  "same_eight_cases": true,
+  "candidate_results": [
+    {
+      "label": "q5-64k-v2",
+      "cases": 8,
+      "passed": 8,
+      "total_seconds": 46.10226453980431,
+      "output_tokens": 2453,
+      "method_reads": 3,
+      "failures": [],
+      "raw_results_sha256": "5bcf6f34eb62a63a50554d4d956343f0a919147d2dba4db71ac6f37b10166ffc",
+      "registration_sha256": "dd889213d3459f75df912a4589e068739ea57e343d448321ecad99dcc7bbd50d"
+    },
+    {
+      "label": "qat-batch2-quality",
+      "cases": 8,
+      "passed": 8,
+      "total_seconds": 29.876190416747704,
+      "output_tokens": 3417,
+      "method_reads": 3,
+      "failures": [],
+      "raw_results_sha256": "8bc8ca135ce13f1b96e8020476f771a1c12301f31a3a6609be1f44a3bac1c663",
+      "registration_sha256": "3e92ac5e56a616238746471926488260691532236734dadf2126da8ac692aa3d"
+    },
+    {
+      "label": "qat-eager64k",
+      "cases": 8,
+      "passed": 7,
+      "total_seconds": 397.57399637717754,
+      "output_tokens": 1437,
+      "method_reads": 3,
+      "failures": [
+        {
+          "case": "concentration",
+          "error": "TimeoutError",
+          "detail": ""
+        }
+      ],
+      "raw_results_sha256": "e0e4e38eb0a95e86c9293cc6c13c7b9a0377a8d805d5410718351a5f2ab2305d",
+      "registration_sha256": "17394147b03c3094fc076d9420e5d718a353e08e8a5b9c705137db8b5be20313"
+    },
+    {
+      "label": "qat-fp8kv-quality",
+      "cases": 8,
+      "passed": 8,
+      "total_seconds": 56.29466241574846,
+      "output_tokens": 5642,
+      "method_reads": 3,
+      "failures": [],
+      "raw_results_sha256": "c39a323f2d944b438b1f55209f051af5a599eb3beb7cc8169224039b68fdf86a",
+      "registration_sha256": "8d2caf1b9547253d2e50193c786119eeaa25118ca968fd3c9c82fcff4c8d987d"
+    },
+    {
+      "label": "qat-graph64k",
+      "cases": 8,
+      "passed": 8,
+      "total_seconds": 59.05054095922969,
+      "output_tokens": 4229,
+      "method_reads": 4,
+      "failures": [],
+      "raw_results_sha256": "f52914c71f33e18035bb351ae8813e142e063a0d7783f36e990b640689b21634",
+      "registration_sha256": "746c03bb81fa674958f28fc8950c96c5b825ea0f6fd5580a77455d75c1ae9da0"
+    },
+    {
+      "label": "qat-mtp2-64k",
+      "cases": 8,
+      "passed": 8,
+      "total_seconds": 34.88466454204172,
+      "output_tokens": 3845,
+      "method_reads": 5,
+      "failures": [],
+      "raw_results_sha256": "0ee8439176bced0f4323a143741bd0d5a20694ca231a290764d658a1e989b7af",
+      "registration_sha256": "32727b0cc153a6d5dff9e18ca2072df9936708620bd33669068247a9e7cc304e"
+    },
+    {
+      "label": "qat-mtp2-prefix90-64k",
+      "cases": 8,
+      "passed": 8,
+      "total_seconds": 23.388049124274403,
+      "output_tokens": 2459,
+      "method_reads": 3,
+      "failures": [],
+      "raw_results_sha256": "7afcc5059dba3dacb508388aa90dd31eb156ccb6f3be4e82542301df80530a25",
+      "registration_sha256": "214f059f00a32453039386d3983e88173c3c69802c7c0dae6d7f64c46d8a5833"
+    }
+  ]
+}

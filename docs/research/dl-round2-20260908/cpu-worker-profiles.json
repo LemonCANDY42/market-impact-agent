@@ -1,0 +1,42 @@
+[
+  {
+    "workers": 32,
+    "exit_code": 0,
+    "wall_seconds": 18.61924413000088,
+    "sampled_cpu_seconds": 307.69,
+    "average_cpu_cores_observed": 16.525375458406725,
+    "peak_sum_process_rss_bytes_shared_pages_may_repeat": 6966906880,
+    "minimum_system_available_bytes": 127179534336,
+    "stopped_for_memory_margin": false
+  },
+  {
+    "workers": 64,
+    "exit_code": 0,
+    "wall_seconds": 14.95407606399749,
+    "sampled_cpu_seconds": 315.09,
+    "average_cpu_cores_observed": 21.070509381625467,
+    "peak_sum_process_rss_bytes_shared_pages_may_repeat": 13067436032,
+    "minimum_system_available_bytes": 124215615488,
+    "stopped_for_memory_margin": false
+  },
+  {
+    "workers": 128,
+    "exit_code": 0,
+    "wall_seconds": 12.379920923998725,
+    "sampled_cpu_seconds": 332.52,
+    "average_cpu_cores_observed": 26.859622290107144,
+    "peak_sum_process_rss_bytes_shared_pages_may_repeat": 24931557376,
+    "minimum_system_available_bytes": 124557692928,
+    "stopped_for_memory_margin": false
+  },
+  {
+    "workers": 192,
+    "exit_code": 0,
+    "wall_seconds": 14.31093134099865,
+    "sampled_cpu_seconds": 327.59,
+    "average_cpu_cores_observed": 22.89089313576009,
+    "peak_sum_process_rss_bytes_shared_pages_may_repeat": 36938911744,
+    "minimum_system_available_bytes": 126413344768,
+    "stopped_for_memory_margin": false
+  }
+]

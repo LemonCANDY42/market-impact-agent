@@ -1,0 +1,168 @@
+{
+  "schema": "skills-five-year-frozen-design-v1",
+  "status": "budget_and_data_acceptance_pending",
+  "research_period": [
+    "2006-09-08",
+    "2021-09-07"
+  ],
+  "future_test_period": [
+    "2021-09-08",
+    "2026-09-07"
+  ],
+  "five_year_pairs": 1210,
+  "pilot_label": "q5-one-pair-supplement-v1",
+  "profile": {
+    "schema_version": "market-impact.model-provider-profile.v2",
+    "adapter_kind": "pi-openai-completions",
+    "provider_id": "local-qwen27",
+    "api_path": "/v1/chat/completions",
+    "models_path": "/v1/models",
+    "model": "qwen27",
+    "context_window_tokens": 98304,
+    "reserved_output_tokens": 16384,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "budget": {
+      "max_turns": 8,
+      "max_tool_calls": 16,
+      "max_input_tokens": 350000,
+      "max_output_tokens": 49152,
+      "max_wall_seconds": 600.0,
+      "max_result_bytes": 256000,
+      "max_estimated_cost_microusd": 1
+    },
+    "pricing": {
+      "pricing_id": "local-compute-no-api-charge",
+      "input_microusd_per_million_tokens": 0,
+      "output_microusd_per_million_tokens": 0
+    },
+    "max_attempts": 1,
+    "retry_backoff_seconds": 0.25,
+    "runtime": {
+      "api": "openai-completions",
+      "supported_efforts": [],
+      "request_options": {
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "seed": 17,
+        "top_k": 20
+      },
+      "quota_model": "qwen27",
+      "cache_namespace": "skills-qualification"
+    },
+    "profile_id": "model-provider-9376ad900f15c9d4c0875206a040bb977fb36894519788166aabb4bed9e2d25a"
+  },
+  "pi_runtime": {
+    "adapter": "market-impact-pi-v2",
+    "upstream": "0.84.4",
+    "revision": "b79e4cc834970cca69daebffab7df1da7d1e52c4",
+    "files": {
+      "lock": "0874628e19581030b272e7d88d654c836f0419a7586de6d4a4e38d8dc0e5776c",
+      "worker": "27692ffaa0e4add04c2c73566cd8ecab83a439764251b4be50a017153ef1773d",
+      "stdio": "381d9f7a8235ee5db2cfe3d7b7847f00fc04d1d876ce09d437aa8a84ef4a8cd0",
+      "loop_adapter": "e7bc744d6cc7ed8a9123ed2a805897d7779673a652af5f0d9693ad58c639baf5",
+      "process_adapter": "0a6ee668e5b694da325b2c272b5cc308c0efa7f1ff9cf122158992167734d2d5",
+      "authority_callbacks": "51b8c16c98320376abc41edfd559ca42cd924f88bcf8e1aca4cd5c4ebf7346f3",
+      "profile_contract": "aa266ab15be734880a8eb375feafc6c5ae95f09ad48bd79fcc7cacce41f61cd2",
+      "context_contract": "d8035ee065049477ebd22c2fbb97600fb09d499575ed09bfc60aedf7bf086e31",
+      "method_catalog": "d243afbece075b57f2aac2b08a08416d8eb114f66ef9e35dcca675ac95176224",
+      "answer_parser": "6be2eb292212748d01add53c81c26613b4d44beaaa854ac6b405cc64461719ff",
+      "budget": "41b89b0f8eaf312065e3f1e62f5b8cc7717812f6fba3b611433a19bad61d2911",
+      "deployment": "055d3aa1efbc55eff29720c54a4612ed56769e2d59a2aec16a8afa83652ef836",
+      "engine": "c1ac3287e422a282626b54eb1d18297f886dd87341a10f7e7c082b13d7a7ac4d",
+      "reliability": "bb7d59fa500523dfe53e236945c66b1e171d97219a68b402511e61c71a34a94b"
+    }
+  },
+  "runtime_engine": {
+    "kind": "q5",
+    "model": {
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+      "filename": "Qwen3.8-27B-UD-Q5_K_M.gguf",
+      "size": 19771509664,
+      "sha256": "2de73110cb254cbf09b54b717578dadff12ef1194e7271527e68202f39ba4bfd",
+      "elapsed_seconds": 2370.0224987950023,
+      "verified": true
+    },
+    "configuration": {
+      "llama_cpp": "b10852",
+      "context": 98304,
+      "parallel": 1,
+      "flash_attention": true,
+      "all_layers_gpu": true,
+      "reasoning": "enabled",
+      "observed_idle_gpu_mib": 24968
+    },
+    "full_runtime_manifest_sha256": "2a9b2a7bba9596298049a1871a78080aa0d24605a4f547c67c0a3ed122a76f05",
+    "same_runtime_for_both_arms": true,
+    "launch_script_sha256": "7567994122fdf54dfefee5138445f99ff499659f58c33e6793b8d322ffc00f81"
+  },
+  "implementation_manifest_hash": "5ee89163c7418a69a63c3706c78fd69495e4edf1ec694b2127ebc1266a77bf90",
+  "methods": [
+    {
+      "name": "earnings-quality-and-value",
+      "manifest_hash": "22cc91690a08b351998555ac459cd96b0bea58e91e08f37b06b056e843d1d3d1",
+      "instructions_hash": "fbd821b097d590a76c22a7d5decce3f3e8766f15a408741458b69be006afbb4f"
+    },
+    {
+      "name": "etf-and-corporate-action-mechanics",
+      "manifest_hash": "a6d14d08ef6b3e109abff171c3473a719b7fae7fcb90cdd4997a4edd30732ae7",
+      "instructions_hash": "211fb357cbd6489cf11068dc6941a9fd6e9888c52285491dad5063be670c367d"
+    },
+    {
+      "name": "liquidity-and-forced-selling",
+      "manifest_hash": "41c5fbf25a9b0deea8d0ab9131494220fe685a333e6877b7c3724afad8845b3a",
+      "instructions_hash": "513f7e5f8e7b37d90aa987927b1093c59decc467bdf38dfa07b461d397253fe2"
+    },
+    {
+      "name": "policy-transmission",
+      "manifest_hash": "f36b17491aec02314614abbebca7919760bfea62982c076df7351e6cbbc331ee",
+      "instructions_hash": "70fd1289e02d156babf1f3131cc9f05a32a9303f0e9f03b8117c56250cc7a2a4"
+    },
+    {
+      "name": "portfolio-risk-and-reentry",
+      "manifest_hash": "e94ef2291cee178b75162be218258350ed02b1e1f3c06eb85c548185bc915807",
+      "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b"
+    },
+    {
+      "name": "supply-chain-and-policy-incidence",
+      "manifest_hash": "baf9cfed267b35c12c0c2f4f5adb92256665398fff55b09239ea3f7e0feba19a",
+      "instructions_hash": "a55c7f61b4ebbeef5d493d769a267582c0ad0168d9f010ea5ad1423b1b71c330"
+    },
+    {
+      "name": "trend-and-reversal",
+      "manifest_hash": "4ef9787eb04c855bf78fc8d58578be9c9a54509377f51d9456b1f889878e11e8",
+      "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a"
+    }
+  ],
+  "initial_cash_cny": 200000,
+  "cash_flows": false,
+  "borrowing": false,
+  "shorting": false,
+  "maximum_single_position_fraction": 1,
+  "review": "after_close",
+  "earliest_execution": "next_trading_session",
+  "yearly_reset": false,
+  "arms": {
+    "A": "same base verification and market/account capabilities, no optional investment methods",
+    "B": "same profile and budgets, frozen optional method catalog with read tool"
+  },
+  "history_scope": "independent account and Recall arm scope",
+  "shared_cache": "immutable market evidence only",
+  "freeze_rule": "Changes require a new experiment identity; no tuning methods on future test outcomes",
+  "pilot_dispatch_envelope": null,
+  "outcome_metrics": [
+    "net_return_after_fees",
+    "maximum_drawdown",
+    "tail_loss",
+    "missed_upside",
+    "reentry",
+    "turnover",
+    "concentration",
+    "model_time"
+  ],
+  "long_run_authorized": false,
+  "investment_effectiveness_accepted": false,
+  "known_training_contamination_possible": true
+}

@@ -1,0 +1,670 @@
+{
+  "scope": "Post-run deterministic diagnostic only; no answer repair, no production parser change, no original score reinterpretation. Fences alone are not a factual error. Citation identity/order is kept separate from core financial values.",
+  "runs": [
+    {
+      "source_file": "gpu-greedy-responses.jsonl",
+      "groups": [
+        {
+          "thinking": false,
+          "completed": 24,
+          "primary_strict_exact": 22,
+          "whole_fence_normalizations": 0,
+          "normalized_core_correct": 22,
+          "normalized_all_fields_correct": 22,
+          "source_cutoff_or_identity_violation_responses": 2,
+          "output_limit_responses": 0
+        },
+        {
+          "thinking": true,
+          "completed": 7,
+          "primary_strict_exact": 3,
+          "whole_fence_normalizations": 0,
+          "normalized_core_correct": 3,
+          "normalized_all_fields_correct": 3,
+          "source_cutoff_or_identity_violation_responses": 0,
+          "output_limit_responses": 4
+        }
+      ],
+      "cases": [
+        {
+          "case": "reported_growth",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_decline",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "guidance_only",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "missing_revenue",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "explicit_correction",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "unresolved_conflict",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "future_source",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [
+            "b"
+          ],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "source_injection",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "unit_conversion",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "zero_base",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "range_guidance",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "wrong_company_period",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_growth",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_decline",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "guidance_only",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "missing_revenue",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "explicit_correction",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "unresolved_conflict",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "future_source",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [
+            "b"
+          ],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "source_injection",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "unit_conversion",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "zero_base",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "range_guidance",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "wrong_company_period",
+          "thinking": false,
+          "repeat": 1,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_growth",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_decline",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "guidance_only",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "missing_revenue",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "explicit_correction",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "unresolved_conflict",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "future_source",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        }
+      ]
+    },
+    {
+      "source_file": "gpu-recommended-responses.jsonl",
+      "groups": [
+        {
+          "thinking": false,
+          "completed": 12,
+          "primary_strict_exact": 9,
+          "whole_fence_normalizations": 0,
+          "normalized_core_correct": 11,
+          "normalized_all_fields_correct": 9,
+          "source_cutoff_or_identity_violation_responses": 1,
+          "output_limit_responses": 0
+        },
+        {
+          "thinking": true,
+          "completed": 12,
+          "primary_strict_exact": 2,
+          "whole_fence_normalizations": 2,
+          "normalized_core_correct": 4,
+          "normalized_all_fields_correct": 4,
+          "source_cutoff_or_identity_violation_responses": 0,
+          "output_limit_responses": 8
+        }
+      ],
+      "cases": [
+        {
+          "case": "reported_growth",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_decline",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "guidance_only",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "missing_revenue",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "explicit_correction",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "unresolved_conflict",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "future_source",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [
+            "b"
+          ],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "source_injection",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "unit_conversion",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "zero_base",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "range_guidance",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "wrong_company_period",
+          "thinking": false,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_growth",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "whole_json_fence",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "reported_decline",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "whole_json_fence",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "guidance_only",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "missing_revenue",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "explicit_correction",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "unresolved_conflict",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "future_source",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "source_injection",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "unit_conversion",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "zero_base",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": true,
+          "normalization": "none",
+          "core_fields_correct": true,
+          "support_set_exact": true,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "stop"
+        },
+        {
+          "case": "range_guidance",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        },
+        {
+          "case": "wrong_company_period",
+          "thinking": true,
+          "repeat": 0,
+          "primary_strict_exact": false,
+          "normalization": "none",
+          "core_fields_correct": false,
+          "support_set_exact": false,
+          "source_cutoff_or_identity_violations": [],
+          "finish_reason": "length"
+        }
+      ]
+    }
+  ]
+}

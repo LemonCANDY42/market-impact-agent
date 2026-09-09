@@ -1,0 +1,102 @@
+{
+  "treatment": "B",
+  "reads": [
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "discovery",
+      "name": "portfolio-risk-and-reentry",
+      "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b",
+      "successful_body_read": true,
+      "receipt_hash": "971648253b06647c30f86822ff354e32235e5572c8bb10b06fd8d6396d9b9bc8",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.discovery.pi-invocation.1.tool.pi-call-693531cea80ca1c37e5047c6f76103ac7b1198785185b72e96f4f2a4b0cbdb06",
+      "journal_event_hash": "817f6b52034094bdd36646dec0385f5b653c18a32b0c4bb8e9632cf053beae88"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "discovery",
+      "name": "trend-and-reversal",
+      "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a",
+      "successful_body_read": true,
+      "receipt_hash": "1deef8ec23030df05467b2ab26cdce797b0b8f493af21bdaa5c59b3300fc99c4",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.discovery.pi-invocation.1.tool.pi-call-98b7932e69721c7cd1f6292924de8c800ad4b686400a8653bda8d08a74251494",
+      "journal_event_hash": "cde338fc5e1d0f5cccdc4fd47176ae03c516367ea338164eaf1c5385773d2cfb"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "discovery",
+      "name": "liquidity-and-forced-selling",
+      "instructions_hash": "513f7e5f8e7b37d90aa987927b1093c59decc467bdf38dfa07b461d397253fe2",
+      "successful_body_read": true,
+      "receipt_hash": "3b6f7b9705d22df5f86e3801e8877ed52c11364b1f90dd6fcc4e94be9eb4c2f1",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.discovery.pi-invocation.1.tool.pi-call-0ddc65f262f6b09b840e6b692f8581706a9482e7b3812aed1c93c23281c4dfe8",
+      "journal_event_hash": "878987d2a4cc266a92af9b22f695236ab48ac09ccf6068a75241f768b5a4f378"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "research",
+      "name": "portfolio-risk-and-reentry",
+      "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b",
+      "successful_body_read": true,
+      "receipt_hash": "971648253b06647c30f86822ff354e32235e5572c8bb10b06fd8d6396d9b9bc8",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-7434b25b7cee474d64ce553b0dd41d668075955a70d7dcc7f735a735e174951c",
+      "journal_event_hash": "9114887c30be3621d11b686b265a1bb747c141916f7f94eaba27f5355ea28a62"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "research",
+      "name": "trend-and-reversal",
+      "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a",
+      "successful_body_read": true,
+      "receipt_hash": "1deef8ec23030df05467b2ab26cdce797b0b8f493af21bdaa5c59b3300fc99c4",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-f594d63ac3f42b8552fefc42496ea3acb9022e439221d4d6bce0e2f30d231c43",
+      "journal_event_hash": "ff57ede656db60df3889bfbf468e62e74c17320f4327f4e207bd97c58847c547"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "research",
+      "name": "etf-and-corporate-action-mechanics",
+      "instructions_hash": "211fb357cbd6489cf11068dc6941a9fd6e9888c52285491dad5063be670c367d",
+      "successful_body_read": true,
+      "receipt_hash": "ac17bf7649a3da2e05d871dc1d6f8a3b639f9d92dd92f01f122a0cfb3520552e",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.research.pi-invocation.1.tool.pi-call-f203371babeada888dbb9c4ce6be3ab1d2bb2d5b204eaf002268f033011d74c5",
+      "journal_event_hash": "2564f2fe7de923f32e70dba691bcff91dfd938e0181b3c12f0cebe9494351c4d"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "portfolio",
+      "name": "portfolio-risk-and-reentry",
+      "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b",
+      "successful_body_read": true,
+      "receipt_hash": "971648253b06647c30f86822ff354e32235e5572c8bb10b06fd8d6396d9b9bc8",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.portfolio.pi-invocation.1.tool.pi-call-1d76a00013644d0026bc76232a3a81549cd404604e7091b59f6b39b0e4017041",
+      "journal_event_hash": "1e2d002824ae2210028e3f349a0a5ecd6f64bd5c0f20a161afe48e4d16eba9d9"
+    },
+    {
+      "window": "ordinary",
+      "arm": "B",
+      "day_index": 0,
+      "role": "portfolio",
+      "name": "trend-and-reversal",
+      "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a",
+      "successful_body_read": true,
+      "receipt_hash": "1deef8ec23030df05467b2ab26cdce797b0b8f493af21bdaa5c59b3300fc99c4",
+      "journal_event_id": "q5-one-pair-supplement-v3.1230421aa4d5f59c.B.0.portfolio.pi-invocation.1.tool.pi-call-66f3a34bd9bbb80130683a79747dcdda5593b693b77e91eb52fc3bb8c15dc21f",
+      "journal_event_hash": "bc8efdbf15c441ee82b0cc78f47bdd156c1ecd38f5cbce735032ab59815150b5"
+    }
+  ],
+  "interpretation": "Body exposure, exact final name mention, and investment effectiveness are separate."
+}

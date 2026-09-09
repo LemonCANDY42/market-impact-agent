@@ -1,0 +1,191 @@
+{
+  "schema": "investment-assessment-artifact-manifest.v1",
+  "date": "2026-09-06",
+  "scope": "Public summaries and code/config provenance; excludes raw market rows, account journals and credentials. Paths are repository-relative.",
+  "files": [
+    {
+      "path": ".market-impact/investment-assessment-20260906/export_qlib_inputs.py",
+      "sha256": "ed31ca1bec309f8362746d8b32395008bda28c327aa5ddc35c91964dabadd5e6"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/native-rule/README.md",
+      "sha256": "304d7031614b9052fcddf6de24114c816729c92d53d828e0b5a44183ccb7f037"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/native-rule/results.json",
+      "sha256": "1692216e7317b48b33cc4b87f815af623850d4949880547551b6832ee6b4fc9c"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/native-rule/run.py",
+      "sha256": "f9900aae95a01f3d7b605591890ddc5ba3257006945f369698e0db67290cfaad"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/qlib-results.json",
+      "sha256": "fcaf3bb30a0c4128684c74df26f73d49e730218a4f068569e3a7d62281b9178c"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/qlib_features.py",
+      "sha256": "3348ff3c63f00a7cbd0eec6f88488198ebbd16c7e641a06fdaf5d476fa499eb7"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/selection.json",
+      "sha256": "4fe7e172d2c455f2ccd52fb00ff1cfe9ada257aaae00004292b2219072d9ea43"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/ElegantRL/LICENSE",
+      "sha256": "0c6b3fda3363677b473fafb4a65e319cfaabdc617d43c865962d413cda663173"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/ElegantRL/README.md",
+      "sha256": "d97643758fd7391772004d73fc3b3599984b8cfd96ce134b5b422bcefc98532b"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/ElegantRL/metadata.json",
+      "sha256": "9bc03bbf4ffaadc3732e3c1efa00a36b939a9e8e622e4cb9cc8fe63cd4f21951"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL/LICENSE",
+      "sha256": "486a06be9075686b75b35649de0adf9076508c5d0cc5b00af7928b7a96bffe65"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL/README.md",
+      "sha256": "68a2b25cb83218c08fd2be10b9cce6896e2bdf8f0ae3fa87bd174c3d3ace5926"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL/metadata.json",
+      "sha256": "6fc531d7470190bc3deffde3f79537e73454e9bc9d66881250cad8e5b7a4831f"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL-Meta/LICENSE",
+      "sha256": "2a3183a35138275582698c16b07e9b33992d822434bb4c7728673c6204bb1848"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL-Meta/README.md",
+      "sha256": "1c23f322c615980c8bc630cce5438bf14f2d768e171b92b3e95145471c35ae43"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL-Meta/metadata.json",
+      "sha256": "806eea2b309e070782e07aa28b7247ce27f562cc4aa88f08052c972267c0d9b2"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL-Trading/LICENSE",
+      "sha256": "ef3d97b5113a0f224425680aceb7a9ed3baaa4fd9aa21e8ff445cb963fddcbf5"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL-Trading/README.md",
+      "sha256": "87b6d384f7b9f98ab2d091cf52391c5a0246a342c61213bf5cf7eec1c366d6d2"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/FinRL-Trading/metadata.json",
+      "sha256": "b364fe4fad8fdc1768014951368959ae6db5318595f90bc3b47f6c5485c0adb8"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/README.md",
+      "sha256": "75f4357305c367c4e52db8006cd057e86577f8028b4d9e4ba403ce346512ee7c"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/examples/benchmarks/LightGBM/workflow_config_lightgbm_Alpha158.yaml",
+      "sha256": "0cbe1f729f43a2b8cd735759e6244c2e9f8db967555bfe24a7143fce4605d680"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/examples/benchmarks/README.md",
+      "sha256": "bfc70f5d3193412ce18b6eee494fbe34be9110ac93bfb164c1fb22dcb05cb529"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/metadata.json",
+      "sha256": "4cdbec95ba859fd8109149e7082cd47c1d93d6c6dcf9e117eac5d64e9032c2ce"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/qlib/backtest/exchange.py",
+      "sha256": "4affc13ab45af464cfb5b55663b80b2fc3dadb4769045d34d0fd218f760d7e08"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/qlib/contrib/data/handler.py",
+      "sha256": "b621481c6009c39066c67c71390fd2bea635f56daf9f2c4e38817eff268e3232"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/qlib/contrib/data/loader.py",
+      "sha256": "814b7f7ab3d418ae3c87ce352220080b239eba2670eac9e38376b794be4075cb"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/qlib/contrib/strategy/signal_strategy.py",
+      "sha256": "b1b4145e94065879768cfc9750c08a7c3af8880d3c338e0de675f5fb6b78d932"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/qlib/scripts/dump_bin.py",
+      "sha256": "b8f34c57ce1ef4b1772f3909735e66058f21b25bd7ab8a5f16318822401fe53f"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/repository-pins.json",
+      "sha256": "5aef549ef89b57bfea88c81e3f46761a5c38f9e3feb2fab611d2423959b6e532"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/ta-lib-python/LICENSE",
+      "sha256": "78dbb65a3526ca5cf3c9eb8a0648d6293651ca40f6d414a626b45ef2406ae5d0"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/ta-lib-python/README.md",
+      "sha256": "7bef1f99ccf004db31619c313c314888bafaa00d7d05a7f96d66d9fd627c2312"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/sources/ta-lib-python/metadata.json",
+      "sha256": "294e77d8ff2139d43b25035de12bd62073769f886859b622ae2a3efe254862b4"
+    },
+    {
+      "path": ".market-impact/investment-assessment-20260906/workspace-before.json",
+      "sha256": "380d7af7b64aa0361eac87fc324f6a0451c8699297f0181c95833e7c55268da5"
+    },
+    {
+      "path": "docs/INVESTMENT_CAPABILITY_ASSESSMENT_20260906.md",
+      "sha256": "a6790ee958803dd77a045cd6bbc5471cb23ef592f1d9ddfbea9e74d28fe9658c"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/account-results.md",
+      "sha256": "436f909826eb51bd18cc45ea74f69c24c9b57daec5c91de6b913fc126da1ff2d"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/audit-summary.json",
+      "sha256": "b70f2f3e2c9e0c155676fe60953b067404dc4c77d631400a4c666af2fa764ac5"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/evidence.md",
+      "sha256": "0c214ea335dfc5ebb128a98bed9d7b520097cb843fd3e7d8b5a70177cb1d9230"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/native-rule-results.json",
+      "sha256": "1692216e7317b48b33cc4b87f815af623850d4949880547551b6832ee6b4fc9c"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/qlib-results.json",
+      "sha256": "fcaf3bb30a0c4128684c74df26f73d49e730218a4f068569e3a7d62281b9178c"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/repository-pins.json",
+      "sha256": "5aef549ef89b57bfea88c81e3f46761a5c38f9e3feb2fab611d2423959b6e532"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/reproduction.md",
+      "sha256": "f46cc6af1599ae21e79115140dba923ca762a1fa1804e9c24ab8b815fa0b3b4e"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/review.md",
+      "sha256": "bce100fadf168621985b6c701815626b136b19b766b04972f152ba6f55b13c10"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/runtime-versions.json",
+      "sha256": "3f6c59455aa856c616abc32763c33221f93dd05a1133548524a94016f0f1378f"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/selection.json",
+      "sha256": "4fe7e172d2c455f2ccd52fb00ff1cfe9ada257aaae00004292b2219072d9ea43"
+    },
+    {
+      "path": "docs/research/investment-assessment-20260906/verification.json",
+      "sha256": "3c764ada474c0a7a8e384235ba1323fda221a78848921c6ddb682a5ff39f2dad"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Conditional news increment: readiness assessment
+
+Checked 2026-09-08 while numerical development was still running. This does not start a news experiment or alter numerical nomination.
+
+The current [Tushare short-news documentation](https://tushare.pro/document/2?doc_id=143) advertises historical coverage and exposes news time, content, title and channels. The [long-news documentation](https://tushare.pro/document/2?doc_id=195) exposes publication time, title, optional body and source. Both require separate entitlement. These documented fields do not establish an immutable initial payload, publisher revision chain, or historical delivery/authority timestamp. This is an assessment of documented evidence, not a claim that the vendor cannot supply stronger exports. No new entitlement was purchased or requested.
+
+Use the existing project [PIT evidence lanes](../../PIT_EVIDENCE_RECOVERY.md): historical discovery or today's historical query does not become strict historical evidence. Actual future receipt has an existing contract; retain immutable source content, source time when available, receipt, hash, entity mapping and subsequent revisions. Current local language models may have seen historical events during pretraining, so clean source timestamps alone cannot establish that historical text judgments are free of outcome knowledge.
+
+If numerical confirmation passes, the smallest defensible next experiment is a frozen paired prospective record: the selected market-only candidate and the same candidate with fixed event inputs, using a fixed extractor and delayed/shuffled event control. Record outputs before their return horizon matures. Train the news-conditioned component only on earlier eligible observations; do not fit it to the confirmation returns just opened to assess the numerical candidate. Existing historical news may support an explicitly labeled exploratory pipeline diagnostic, but it does not complete this prospective effectiveness test.
+
+No positive news-investment claim can be completed today from data that must first accrue. This limitation does not invalidate a positive retrospective numerical diagnostic; the claims have different evidence requirements. The numerical result and the document-extraction comparison should each be reported independently.

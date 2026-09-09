@@ -1,0 +1,29 @@
+{
+  "scripts": {
+    ".market-impact/dl-research-20260908/long_probe.py": "5332c0b6671fb6fbf1f0abe81ce0ff5c4765649fb4dfdfe1d4e4ddb7645297c2",
+    ".market-impact/dl-research-20260908/verify_model.py": "fbd541890d79c04040a9a4c8d2701ade01c8590cea2647aaa510a2540eb3566e",
+    ".market-impact/dl-research-20260908/mechanical_extraction.py": "29910894a1881f5734963479e3bc78d994cbb3aadc2dd743576088272aec1d0a",
+    ".market-impact/dl-research-20260908/gpu_monitor_context.py": "c70351f93fcb2ffda3020c804b887d2a6b612351faa8fca78ef6760f4c603de7",
+    ".market-impact/dl-research-20260908/accounts.py": "e41053ad3c8cf03f75f63b3ab836441f06a6d7382284184f15d9f26b18dfaf1e",
+    ".market-impact/dl-research-20260908/gpu_monitor.py": "6f7b44a7565a7061c4049ad8f684a19a51d7a3a9dfea5b129ee10312e7d0de1b",
+    ".market-impact/dl-research-20260908/audit_extraction.py": "c8262e62150271804d7c8208aa2a9cca38b6e006f45b48114f38f3e8c7d8792e",
+    ".market-impact/dl-research-20260908/process_memory.py": "533b74ce6840cbda12c0e550840e9e39f361cb23583c3ef54276eaec076c32c7",
+    ".market-impact/dl-research-20260908/export.py": "e733e4e389e3bfe40b0eaba086ce9899e5727027e21cc14457bd84e086a6d210",
+    ".market-impact/dl-research-20260908/gpu_probe.py": "3ea593e5ea38ac02e9b35ffec4381191fd91100b5c53c9da383c9b52ff19f364",
+    ".market-impact/dl-research-20260908/prefix_check.py": "6fc0675872cd18d9748e86e8025e187417be96a54fcf758703bb958a21e9c10a",
+    ".market-impact/dl-research-20260908/gpu_probe_recommended.py": "bf3a33f5ca38dadc997061c2a4b6d0195cf71fda29f416a1b26103661f64e66b",
+    ".market-impact/dl-research-20260908/train.py": "0ce3ba7411025d07baebc2ea1df419d4421c5333f60d3cf84c96a86037131c8e",
+    ".market-impact/dl-research-20260908/model_audit.py": "4ec508775c05499026eeb0cda03fef7e058c5fd344dfb99f85f064601babbdf0",
+    ".market-impact/dl-research-20260908/risk.py": "b37b39de79731e9b66f01583427350f3350751a821235b3600784d677ab29b12",
+    ".market-impact/dl-research-20260908/plot_accounts.py": "aee79046ee23648b56d4f3b3a79f9158a2fb8c72374df4a01f70547d2647ec54",
+    ".market-impact/dl-research-20260908/make_cases.py": "26c6070cff814fd59f511dea95845235d1cc5be98ba2fb6387971e8234667c31",
+    ".market-impact/dl-research-20260908/gpu_probe_v1_failed.py": "f9220554c271f6ca9764c805eafe2ee237985f6743fd779c8315cb3544918c9f",
+    ".market-impact/dl-research-20260908/inventory.py": "c11925fabec1247ef519a760e8278d802f2b56a19ccc2e3c30b7e66f623db266",
+    ".market-impact/investment-assessment-20260906/native-rule/run.py": "f9900aae95a01f3d7b605591890ddc5ba3257006945f369698e0db67290cfaad"
+  },
+  "data_export_sha256": "fd9a3d418565994f3e500c821b872c20810c13d3434b3325bb5a755d572aefd1",
+  "fixture_sha256": "5e5d5726626bb704404a426564d17192d9eb142fa12e067da8c620f8379501d6",
+  "production_source_modified_by_this_round": false,
+  "private_artifacts_required": true,
+  "note": "Ignored experiment scripts are retained at these exact local paths. The prior native research executor is reused without editing its source."
+}

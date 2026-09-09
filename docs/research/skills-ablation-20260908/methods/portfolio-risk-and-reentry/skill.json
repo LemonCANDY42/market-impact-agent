@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "portfolio-risk-and-reentry",
+  "version": "0.1.0",
+  "description": "Assess concentration, volatility and drawdown alongside the cost of reducing exposure and missing recovery.",
+  "source": "research://skills-ablation-20260908/portfolio-risk-and-reentry",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "f5f3d26b8a327c86f637beb86aaa1e1fe17a86ca3816cb6dbddcd487b740ca6b",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "e94ef2291cee178b75162be218258350ed02b1e1f3c06eb85c548185bc915807"
+}

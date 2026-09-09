@@ -1,0 +1,90 @@
+{
+  "valid_training_only_profiles": [
+    {
+      "fold": "A",
+      "arm": "lstm",
+      "seed": 17,
+      "action_budget": 8192,
+      "valid_candidate_target": 0,
+      "pool_capacity": 20,
+      "factor_cache_size": 64,
+      "pool_weight_device": "cpu",
+      "segments": {
+        "train": [
+          "2010-06-02",
+          "2015-12-22"
+        ]
+      },
+      "target": "Ref(close,-6)/Ref(close,-1)-1",
+      "data_days": 1349,
+      "stocks": 2916,
+      "eligible_pairs": 2738354,
+      "source_revision": "259687e8f316994426416c530a94842a2fe6405e",
+      "adapter": "exclude ineligible assets; retain upstream zero imputation within eligible universe; use one observed-label population for all MSE correlations",
+      "profile_only": true,
+      "parameters": 298609,
+      "factor_cache": {
+        "hits": 14714,
+        "misses": 379,
+        "maxsize": 64,
+        "currsize": 64
+      },
+      "weight_optimization_calls": 271,
+      "weight_optimization_seconds": 47.01747262795834,
+      "ppo_epoch_updates": 160,
+      "adapter_sha256": "909bd97056b5fb08ce5abaf9afba015fe83a8365990faf39e134f136d13328d4",
+      "action_steps": 8192,
+      "completed_expression_attempts": 379,
+      "pool_admission_attempts": 272,
+      "unique_admission_candidates": 272,
+      "unique_completed_formulas": 363,
+      "search_seconds": 76.55551510900113,
+      "peak_cuda_allocated": 3200240640,
+      "scores": {}
+    },
+    {
+      "fold": "A",
+      "arm": "transformer",
+      "seed": 17,
+      "action_budget": 8192,
+      "valid_candidate_target": 0,
+      "pool_capacity": 20,
+      "factor_cache_size": 64,
+      "pool_weight_device": "cpu",
+      "segments": {
+        "train": [
+          "2010-06-02",
+          "2015-12-22"
+        ]
+      },
+      "target": "Ref(close,-6)/Ref(close,-1)-1",
+      "data_days": 1349,
+      "stocks": 2916,
+      "eligible_pairs": 2738354,
+      "source_revision": "259687e8f316994426416c530a94842a2fe6405e",
+      "adapter": "exclude ineligible assets; retain upstream zero imputation within eligible universe; use one observed-label population for all MSE correlations",
+      "profile_only": true,
+      "parameters": 3216753,
+      "factor_cache": {
+        "hits": 24750,
+        "misses": 702,
+        "maxsize": 64,
+        "currsize": 64
+      },
+      "weight_optimization_calls": 495,
+      "weight_optimization_seconds": 86.11134351896544,
+      "ppo_epoch_updates": 160,
+      "adapter_sha256": "909bd97056b5fb08ce5abaf9afba015fe83a8365990faf39e134f136d13328d4",
+      "action_steps": 8192,
+      "completed_expression_attempts": 702,
+      "pool_admission_attempts": 496,
+      "unique_admission_candidates": 445,
+      "unique_completed_formulas": 560,
+      "search_seconds": 134.097980732,
+      "peak_cuda_allocated": 2433998336,
+      "scores": {}
+    }
+  ],
+  "older_expanded_profiles": "invalid pairwise-mask geometry; retained privately, superseded by these corrected profiles",
+  "concurrency": "the two corrected profiles overlapped; these are resource observations, not a pure speedup ratio"
+}
