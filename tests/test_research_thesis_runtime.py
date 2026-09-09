@@ -96,6 +96,13 @@ def _repository(
 
 def _answer() -> dict[str, object]:
     return {
+        "event_support": "supported",
+        "expectations": "Consensus revenue was 100.",
+        "revision_conclusion": "Initial conclusion based on frozen results.",
+        "revision_new_facts": [
+            "The frozen revenue release is the evidence available for this review."
+        ],
+        "revision_old_assumptions": ["Prior consensus reflected slower revenue growth."],
         "horizon_band": "tactical",
         "primary_horizon_sessions": 5,
         "base_case_direction": "up",
@@ -133,6 +140,8 @@ def thesis_network(monkeypatch: pytest.MonkeyPatch) -> tuple[ModelProviderProfil
     async def spawn(program: str, *args: str, **kwargs: Any):
         spawns.append(program)
         kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(_answer())
+        if os.environ.get("ROLE_JSON_WRAPPER_FIXTURE"):
+            kwargs["env"]["ROLE_JSON_WRAPPER_FIXTURE"] = os.environ["ROLE_JSON_WRAPPER_FIXTURE"]
         if os.environ.get("ROLE_TOOL_FIXTURE"):
             kwargs["env"]["ROLE_TOOL_FIXTURE"] = os.environ["ROLE_TOOL_FIXTURE"]
         return await original(
@@ -276,15 +285,20 @@ def test_relative_date_presentation_changes_only_structured_time_labels() -> Non
 @pytest.mark.parametrize(
     "presentation", [DatePresentation.TRUE_DATE, DatePresentation.RELATIVE_OFFSET]
 )
+@pytest.mark.parametrize("missing_revision", [False, True])
 def test_later_review_reopens_signed_prior_thesis_without_summary_substitution(
     tmp_path: Path,
     thesis_network: tuple[ModelProviderProfile, list[str]],
     presentation: DatePresentation,
+    missing_revision: bool,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile, spawns = thesis_network
 
     answer = _answer()
+    if missing_revision:
+        answer.pop("revision_new_facts")
+        answer.pop("revision_old_assumptions")
     answer["thesis"] = "The 2020-02-02 release changes the outlook relative to February 1, 2020."
     monkeypatch.setattr(__name__ + "._answer", lambda: answer)
 
@@ -320,6 +334,10 @@ def test_later_review_reopens_signed_prior_thesis_without_summary_substitution(
                 ),
                 prior_thesis_run_id="review-0",
             )
+            if missing_revision:
+                assert second["status"] == "incomplete"
+                assert second["reason"] == "ValueError"
+                return
             assert second["status"] == "completed"
             binding = cast(
                 dict[str, object],
@@ -656,5 +674,249 @@ def test_native_research_corrects_query_error_with_durable_replay(
         finally:
             journal.append = append
             await provider.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("event_support", ["unsupported", "supported"])
+def test_v2_unknown_roundtrips_real_pi_and_signed_reopen(
+    tmp_path: Path,
+    thesis_network: tuple[ModelProviderProfile, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    event_support: str,
+) -> None:
+    answer = {
+        **_answer(),
+        "base_case_direction": "unknown",
+        "event_support": event_support,
+        "transmission": [],
+        "evidence_refs": _answer()["evidence_refs"] if event_support == "supported" else [],
+        "typed_unknowns": ["No event-specific evidence establishes transmission."],
+    }
+    monkeypatch.setattr("tests.test_research_thesis_runtime._answer", lambda: answer)
+
+    async def scenario() -> None:
+        profile, spawns = thesis_network
+        store = LocalDataSnapshotStore(tmp_path / "harness")
+        authority = ResearchThesisAuthority(
+            store, experiment_id="unknown-test", arm_id="arm", clock=lambda: NOW
+        )
+        inputs = ResearchThesisRunInputs(_repository(), "INDEX.ETF", "epoch", frozenset({5}))
+        selected = await inputs.selected_inputs()
+        metadata = cast(list[dict[str, object]], selected["evidence_metadata"])
+        assert metadata[0]["source_ref"] == "official://issuer/release"
+        assert metadata[0]["availability_age_seconds"] == 600
+        assert metadata[0]["publication_age_seconds"] == 600
+        assert metadata[0]["event_age_seconds"] is None
+        provider = PiRuntimeProvider(profile)
+        try:
+            terminal = await authority.analyze(
+                run_id="unknown-v2", provider=provider, inputs=inputs
+            )
+            assert terminal["status"] == "completed"
+            thesis, _ = reopen_completed_research_thesis(
+                journal=authority.journal, artifact_store=store.artifacts, run_id="unknown-v2"
+            )
+            assert thesis.to_dict()["schema_version"] == "market-impact.research-thesis.v2"
+            assert thesis.base_case_direction.value == "unknown"
+            assert thesis.transmission == ()
+            assert authority.replay("unknown-v2") == terminal
+            assert len(spawns) == 1
+        finally:
+            await provider.close()
+
+    asyncio.run(scenario())
+
+
+def test_source_metadata_ignores_evidence_id_and_receipt_novelty() -> None:
+    from dataclasses import replace
+
+    from market_impact_agent.research_thesis_runtime import research_evidence_metadata
+
+    reference = _repository().evidence_pack.evidence[0]
+    old = NOW - timedelta(days=10)
+    document: dict[str, object] = {
+        "articles": [
+            {
+                "evidence_record_id": "source-publication",
+                "published_at": old.isoformat(),
+                "available_at": old.isoformat(),
+            }
+        ],
+        "retrieved_at": NOW.isoformat(),
+    }
+    reference = replace(reference, available_at=NOW)
+    metadata = research_evidence_metadata(reference, document, NOW)
+    renamed = research_evidence_metadata(
+        replace(reference, evidence_id="price-looks-new"), document, NOW
+    )
+    assert {key: item for key, item in metadata.items() if key != "evidence_id"} == {
+        key: item for key, item in renamed.items() if key != "evidence_id"
+    }
+    assert metadata["category"] == "dated_publication"
+    assert metadata["availability_age_seconds"] == 0
+    assert metadata["publication_age_seconds"] == 10 * 86400
+    assert metadata["event_age_seconds"] is None
+    receipt_only = research_evidence_metadata(
+        reference,
+        {
+            "observations": [
+                {
+                    "times": {
+                        "occurred_at": NOW.isoformat(),
+                        "retrieved_at": NOW.isoformat(),
+                        "occurrence_basis": "retrieval_observed",
+                    }
+                }
+            ]
+        },
+        NOW,
+    )
+    assert receipt_only["category"] == "background"
+    assert receipt_only["event_age_seconds"] is None
+    assert receipt_only["publication_records"] == []
+    prices = research_evidence_metadata(
+        reference,
+        {
+            "source_api": "daily",
+            "fields": ["trade_date", "close"],
+            "rows": [["2026-09-01", 10], ["2026-09-02", 11]],
+            "retrieved_at": NOW.isoformat(),
+        },
+        NOW,
+    )
+    assert prices["category"] == "price_session_history"
+    assert cast(dict[str, object], prices["coverage"])["session_end"] == "2026-09-02"
+    assert prices["publication_records"] == []
+    identity = research_evidence_metadata(
+        reference,
+        {"source_api": "stock_basic", "rows": [{"ts_code": "000001.SZ", "list_date": "19910403"}]},
+        NOW,
+    )
+    assert identity["category"] == "security_identity"
+    assert identity["event_age_seconds"] is None
+
+
+def test_source_metadata_preserves_time_basis_without_inventing_dates() -> None:
+    from dataclasses import replace
+
+    from market_impact_agent.research_thesis_runtime import research_evidence_metadata
+
+    reference = replace(
+        _repository().evidence_pack.evidence[0], available_at=NOW - timedelta(days=2)
+    )
+    published = NOW - timedelta(days=3)
+    effective = NOW - timedelta(days=1)
+    received = NOW - timedelta(hours=12)
+    metadata = research_evidence_metadata(
+        reference,
+        {
+            "records": [
+                {
+                    "evidence_record_id": "modeled-source-record",
+                    "published_at": published.isoformat(),
+                    "available_at": published.isoformat(),
+                    "effective_at": effective.isoformat(),
+                    "retrieved_at": received.isoformat(),
+                    "availability_basis": "source_reported_exact_pubdate",
+                    "historical_authentication": (
+                        "modeled_pit_current_page_not_strict_historical_receipt"
+                    ),
+                }
+            ]
+        },
+        NOW,
+    )
+    record = cast(list[dict[str, object]], metadata["publication_records"])[0]
+    assert record["published_at"] == published.isoformat().replace("+00:00", "Z")
+    assert record["occurred_at"] is None
+    assert record["effective_at"] == effective.isoformat().replace("+00:00", "Z")
+    assert record["retrieved_at"] == received.isoformat().replace("+00:00", "Z")
+    assert record["availability_basis"] == "source_reported_exact_pubdate"
+    assert record["historical_authentication"] == (
+        "modeled_pit_current_page_not_strict_historical_receipt"
+    )
+    semantics = cast(dict[str, str], metadata["time_semantics"])
+    assert "modeled PIT or actual receipt" in semantics["available_at"]
+    assert "never derived" in semantics["effective_at"]
+
+    missing_dates = research_evidence_metadata(
+        reference,
+        {
+            "records": [
+                {
+                    "evidence_record_id": "source-without-effective-date",
+                    "published_at": published.isoformat(),
+                    "available_at": published.isoformat(),
+                }
+            ]
+        },
+        NOW,
+    )
+    missing_record = cast(list[dict[str, object]], missing_dates["publication_records"])[0]
+    assert missing_record["effective_at"] is None
+    assert missing_record["retrieved_at"] is None
+
+
+def test_candidate_model_choices_resolve_to_frozen_full_proofs() -> None:
+    from market_impact_agent.decision_thesis import parse_research_thesis_v2
+
+    for proofs in ({"UNREGISTERED": ("release",)}, {"INDEX.ETF": ("invented",)}, {"INDEX.ETF": ()}):
+        with pytest.raises(ValueError, match="bind offered targets and frozen evidence"):
+            ResearchThesisRunInputs(
+                _repository(), "INDEX.ETF", "choices", frozenset({5}), candidate_proofs=proofs
+            )
+
+    async def scenario() -> None:
+        inputs = ResearchThesisRunInputs(
+            _repository(),
+            "INDEX.ETF",
+            "choices",
+            frozenset({5}),
+            candidate_proofs={"INDEX.ETF": ("market", "release")},
+        )
+        selected = await inputs.selected_inputs()
+        choices = cast(dict[str, str], selected["evidence_choices"])
+        offered = cast(dict[str, list[str]], selected["candidate_proofs"])["INDEX.ETF"]
+        assert "market" not in offered
+        assert tuple(choices[label] for label in offered) == inputs.candidate_proofs["INDEX.ETF"]
+        value = {
+            **_answer(),
+            "candidate_comparisons": [
+                {
+                    "candidate_ref": "INDEX.ETF",
+                    "transmission": ["release -> earnings"],
+                    "support_refs": [offered[0]],
+                    "counter_refs": [offered[1]],
+                    "comparison_reason": "Relevant exposure",
+                    "gaps": [],
+                }
+            ],
+        }
+        thesis = parse_research_thesis_v2(
+            value,
+            root_event_id="root",
+            thesis_epoch="choices",
+            as_of=NOW,
+            target_id="INDEX.ETF",
+            evidence_ids=frozenset({"release", "market"}),
+            candidate_proofs=inputs.candidate_proofs,
+            evidence_choices=choices,
+        )
+        assert thesis.candidate_comparisons[0].support_refs == ("market",)
+        assert thesis.candidate_comparisons[0].counter_refs == ("release",)
+        comparison = cast(list[dict[str, object]], value["candidate_comparisons"])[0]
+        comparison["support_refs"] = [offered[0] + " approximately"]
+        with pytest.raises(ValueError, match="outside candidate proof"):
+            parse_research_thesis_v2(
+                value,
+                root_event_id="root",
+                thesis_epoch="choices",
+                as_of=NOW,
+                target_id="INDEX.ETF",
+                evidence_ids=frozenset({"release", "market"}),
+                candidate_proofs=inputs.candidate_proofs,
+                evidence_choices=choices,
+            )
 
     asyncio.run(scenario())

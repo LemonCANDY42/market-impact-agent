@@ -1,0 +1,92 @@
+{
+  "status": "operationally_stopped_sampling_configuration_diagnostic",
+  "planned": 48,
+  "completed": 31,
+  "cancelled_inflight": 1,
+  "not_started": 16,
+  "cancelled_case": "source_injection",
+  "original_responses_preserved": true,
+  "groups": [
+    {
+      "thinking": false,
+      "planned": 24,
+      "completed": 24,
+      "exact": 22,
+      "valid_json": 24,
+      "length_exhausted": 0,
+      "median_seconds": 1.1154577600000266,
+      "total_output_tokens": 704,
+      "failures": [
+        {
+          "case": "future_source",
+          "repeat": 0,
+          "parsed": {
+            "growth_pct": 30,
+            "nature": "actual",
+            "sources": [
+              "b"
+            ]
+          },
+          "finish_reason": "stop"
+        },
+        {
+          "case": "future_source",
+          "repeat": 1,
+          "parsed": {
+            "growth_pct": 30,
+            "nature": "actual",
+            "sources": [
+              "b"
+            ]
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    },
+    {
+      "thinking": true,
+      "planned": 24,
+      "completed": 7,
+      "exact": 3,
+      "valid_json": 3,
+      "length_exhausted": 4,
+      "median_seconds": 70.80186417100003,
+      "total_output_tokens": 12402,
+      "failures": [
+        {
+          "case": "reported_decline",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "missing_revenue",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "explicit_correction",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        },
+        {
+          "case": "future_source",
+          "repeat": 0,
+          "parsed": null,
+          "finish_reason": "length"
+        }
+      ]
+    }
+  ],
+  "reason": "Repeated output-budget exhaustion; replace with separately registered official sampling settings, do not reinterpret original failures",
+  "inflight_output_tokens": "unknown; bounded by 2048",
+  "first_response_seconds": 116.5385052539998,
+  "max_after_response_memory_mib": 26888,
+  "nonthinking_repeat": {
+    "pairs": 12,
+    "equal_raw_text": 12,
+    "equal_parsed": 12
+  }
+}

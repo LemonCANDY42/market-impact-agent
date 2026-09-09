@@ -1,0 +1,29 @@
+[
+  {
+    "threads": 64,
+    "rounds": 100,
+    "wall_seconds": 11.281651620996854,
+    "initialization_seconds": 2.808378299996548,
+    "median_iteration_seconds": 0.087780316500357,
+    "last_50_mean_iteration_seconds": 0.08143676508014323,
+    "training_prefix_only": true
+  },
+  {
+    "threads": 128,
+    "rounds": 100,
+    "wall_seconds": 11.9265140230018,
+    "initialization_seconds": 2.440173421000509,
+    "median_iteration_seconds": 0.09743820549920201,
+    "last_50_mean_iteration_seconds": 0.08882416312029819,
+    "training_prefix_only": true
+  },
+  {
+    "threads": 192,
+    "rounds": 100,
+    "wall_seconds": 93.99945561200002,
+    "initialization_seconds": 2.5014075720027904,
+    "median_iteration_seconds": 0.14243746050124173,
+    "last_50_mean_iteration_seconds": 0.9241428120797355,
+    "training_prefix_only": true
+  }
+]

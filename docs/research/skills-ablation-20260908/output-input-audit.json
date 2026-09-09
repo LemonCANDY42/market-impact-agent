@@ -1,0 +1,2257 @@
+{
+  "tokenization_note": "Separately encoded native content fragments using frozen QAT tokenizer from same base model; excludes wrappers and separators, approximate decomposition only. Response output counts remain billing authority. No generation invoked.",
+  "parts": [
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 1,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 843,
+      "fragment_tokens": 635,
+      "characters": 2512
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 843,
+      "fragment_tokens": 28,
+      "characters": 87
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 843,
+      "fragment_tokens": 29,
+      "characters": 85
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 843,
+      "fragment_tokens": 29,
+      "characters": 87
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 2,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 2098,
+      "fragment_tokens": 2028,
+      "characters": 5506
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 2,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 2098,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 2,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 2098,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 3,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 703,
+      "fragment_tokens": 565,
+      "characters": 1646
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 703,
+      "fragment_tokens": 28,
+      "characters": 87
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 703,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 703,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 4,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 1219,
+      "fragment_tokens": 613,
+      "characters": 1879
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 4,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 1219,
+      "fragment_tokens": 603,
+      "characters": 1830,
+      "json_parse": false
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 1,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 877,
+      "fragment_tokens": 744,
+      "characters": 2660
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read_current_thesis",
+      "response_output_tokens": 877,
+      "fragment_tokens": 1,
+      "characters": 2
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 877,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 877,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "search_prior_decisions",
+      "response_output_tokens": 877,
+      "fragment_tokens": 19,
+      "characters": 42
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 2,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 5908,
+      "fragment_tokens": 5859,
+      "characters": 23207
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 2,
+      "kind": "toolCall",
+      "name": "search_prior_decisions",
+      "response_output_tokens": 5908,
+      "fragment_tokens": 19,
+      "characters": 42
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 3,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 4946,
+      "fragment_tokens": 4887,
+      "characters": 17046
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "search_prior_decisions",
+      "response_output_tokens": 4946,
+      "fragment_tokens": 30,
+      "characters": 63
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 4,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 3211,
+      "fragment_tokens": 27,
+      "characters": 125
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 4,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 3211,
+      "fragment_tokens": 3181,
+      "characters": 12031,
+      "fields": {
+        "primary_horizon_sessions": {
+          "type": "int",
+          "characters": 1,
+          "items": null
+        },
+        "base_case_direction": {
+          "type": "str",
+          "characters": 12,
+          "items": null
+        },
+        "event_support": {
+          "type": "str",
+          "characters": 13,
+          "items": null
+        },
+        "thesis": {
+          "type": "str",
+          "characters": 2177,
+          "items": null
+        },
+        "expectations": {
+          "type": "str",
+          "characters": 1246,
+          "items": null
+        },
+        "priced_in_assessment": {
+          "type": "str",
+          "characters": 673,
+          "items": null
+        },
+        "transmission": {
+          "type": "list",
+          "characters": 855,
+          "items": 4
+        },
+        "counter_scenario": {
+          "type": "str",
+          "characters": 445,
+          "items": null
+        },
+        "evidence_refs": {
+          "type": "list",
+          "characters": 228,
+          "items": 2
+        },
+        "counterevidence_refs": {
+          "type": "list",
+          "characters": 228,
+          "items": 2
+        },
+        "invalidation_conditions": {
+          "type": "list",
+          "characters": 676,
+          "items": 5
+        },
+        "review_after_sessions": {
+          "type": "int",
+          "characters": 1,
+          "items": null
+        },
+        "typed_unknowns": {
+          "type": "list",
+          "characters": 1123,
+          "items": 8
+        },
+        "revision_new_facts": {
+          "type": "list",
+          "characters": 421,
+          "items": 2
+        },
+        "revision_old_assumptions": {
+          "type": "list",
+          "characters": 260,
+          "items": 1
+        },
+        "revision_conclusion": {
+          "type": "str",
+          "characters": 523,
+          "items": null
+        },
+        "candidate_comparisons": {
+          "type": "list",
+          "characters": 2432,
+          "items": 2
+        }
+      }
+    },
+    {
+      "arm": "A",
+      "role": "portfolio",
+      "number": 1,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 5388,
+      "fragment_tokens": 3978,
+      "characters": 15100
+    },
+    {
+      "arm": "A",
+      "role": "portfolio",
+      "number": 1,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 5388,
+      "fragment_tokens": 1407,
+      "characters": 5195,
+      "fields": {
+        "requested_action": {
+          "type": "str",
+          "characters": 6,
+          "items": null
+        },
+        "rationale": {
+          "type": "str",
+          "characters": 1423,
+          "items": null
+        },
+        "primary_horizon_sessions": {
+          "type": "int",
+          "characters": 1,
+          "items": null
+        },
+        "priced_in_assessment": {
+          "type": "str",
+          "characters": 790,
+          "items": null
+        },
+        "transmission": {
+          "type": "list",
+          "characters": 867,
+          "items": 4
+        },
+        "counter_scenario": {
+          "type": "str",
+          "characters": 590,
+          "items": null
+        },
+        "review_after_sessions": {
+          "type": "int",
+          "characters": 1,
+          "items": null
+        },
+        "evidence_refs": {
+          "type": "list",
+          "characters": 145,
+          "items": 5
+        },
+        "counterevidence_refs": {
+          "type": "list",
+          "characters": 29,
+          "items": 1
+        },
+        "invalidation_conditions": {
+          "type": "list",
+          "characters": 1011,
+          "items": 5
+        }
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 1,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 1410,
+      "fragment_tokens": 1216,
+      "characters": 4826
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 1410,
+      "fragment_tokens": 45,
+      "characters": 143
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 1410,
+      "fragment_tokens": 46,
+      "characters": 135
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 1410,
+      "fragment_tokens": 47,
+      "characters": 145
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 2,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 277,
+      "fragment_tokens": 90,
+      "characters": 340
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 2,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 277,
+      "fragment_tokens": 46,
+      "characters": 229,
+      "json_parse": false
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 2,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 277,
+      "fragment_tokens": 30,
+      "characters": 85
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 2,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 277,
+      "fragment_tokens": 29,
+      "characters": 90
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 3,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 2582,
+      "fragment_tokens": 2265,
+      "characters": 6763
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 3,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 2582,
+      "fragment_tokens": 176,
+      "characters": 623,
+      "json_parse": false
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 2582,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 2582,
+      "fragment_tokens": 13,
+      "characters": 23
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 3,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 2582,
+      "fragment_tokens": 30,
+      "characters": 88
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 4,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 1509,
+      "fragment_tokens": 1304,
+      "characters": 4723
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 4,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 1509,
+      "fragment_tokens": 133,
+      "characters": 534,
+      "json_parse": false
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 4,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 1509,
+      "fragment_tokens": 30,
+      "characters": 89
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 5,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 1745,
+      "fragment_tokens": 882,
+      "characters": 3065
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 5,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 1745,
+      "fragment_tokens": 860,
+      "characters": 2843,
+      "json_parse": false
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 6,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 76,
+      "fragment_tokens": 40,
+      "characters": 189
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 6,
+      "kind": "toolCall",
+      "name": "lookup_market_security",
+      "response_output_tokens": 76,
+      "fragment_tokens": 12,
+      "characters": 23
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 7,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 820,
+      "fragment_tokens": 66,
+      "characters": 307
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 7,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 820,
+      "fragment_tokens": 751,
+      "characters": 2464,
+      "fields": {
+        "symbols": {
+          "type": "list",
+          "characters": 26,
+          "items": 2
+        },
+        "rationale": {
+          "type": "str",
+          "characters": 2299,
+          "items": null
+        },
+        "methods_cited": {
+          "type": "list",
+          "characters": 84,
+          "items": 3
+        }
+      }
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 12611,
+      "fragment_tokens": 12208,
+      "characters": 42384
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read_current_thesis",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 1,
+      "characters": 2
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 45,
+      "characters": 143
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 46,
+      "characters": 135
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 52,
+      "characters": 151
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "search_prior_decisions",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 23,
+      "characters": 64
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 30,
+      "characters": 88
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "screen_market",
+      "response_output_tokens": 12611,
+      "fragment_tokens": 28,
+      "characters": 87
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 2,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 10429,
+      "fragment_tokens": 6324,
+      "characters": 20787
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 2,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 10429,
+      "fragment_tokens": 4102,
+      "characters": 14268,
+      "fields": {
+        "primary_horizon_sessions": {
+          "type": "int",
+          "characters": 1,
+          "items": null
+        },
+        "base_case_direction": {
+          "type": "str",
+          "characters": 12,
+          "items": null
+        },
+        "event_support": {
+          "type": "str",
+          "characters": 13,
+          "items": null
+        },
+        "thesis": {
+          "type": "str",
+          "characters": 2817,
+          "items": null
+        },
+        "expectations": {
+          "type": "str",
+          "characters": 1201,
+          "items": null
+        },
+        "priced_in_assessment": {
+          "type": "str",
+          "characters": 793,
+          "items": null
+        },
+        "transmission": {
+          "type": "list",
+          "characters": 2,
+          "items": 0
+        },
+        "counter_scenario": {
+          "type": "str",
+          "characters": 952,
+          "items": null
+        },
+        "evidence_refs": {
+          "type": "list",
+          "characters": 87,
+          "items": 3
+        },
+        "counterevidence_refs": {
+          "type": "list",
+          "characters": 87,
+          "items": 3
+        },
+        "invalidation_conditions": {
+          "type": "list",
+          "characters": 857,
+          "items": 5
+        },
+        "review_after_sessions": {
+          "type": "int",
+          "characters": 1,
+          "items": null
+        },
+        "typed_unknowns": {
+          "type": "list",
+          "characters": 1338,
+          "items": 8
+        },
+        "revision_new_facts": {
+          "type": "list",
+          "characters": 444,
+          "items": 1
+        },
+        "revision_old_assumptions": {
+          "type": "list",
+          "characters": 339,
+          "items": 1
+        },
+        "revision_conclusion": {
+          "type": "str",
+          "characters": 387,
+          "items": null
+        },
+        "candidate_comparisons": {
+          "type": "list",
+          "characters": 4172,
+          "items": 2
+        }
+      }
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 1,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 3210,
+      "fragment_tokens": 3081,
+      "characters": 11877
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 3210,
+      "fragment_tokens": 45,
+      "characters": 143
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 1,
+      "kind": "toolCall",
+      "name": "read",
+      "response_output_tokens": 3210,
+      "fragment_tokens": 46,
+      "characters": 135
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 2,
+      "kind": "thinking",
+      "name": null,
+      "response_output_tokens": 2248,
+      "fragment_tokens": 509,
+      "characters": 1778
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 2,
+      "kind": "text",
+      "name": null,
+      "response_output_tokens": 2248,
+      "fragment_tokens": 1736,
+      "characters": 5792,
+      "json_parse": false
+    }
+  ],
+  "tools": [
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "all",
+        "offset": 0,
+        "sort_by": "turnover_cny"
+      },
+      "result_bytes": 5260,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "511990.SH",
+        "511880.SH",
+        "601318.SH",
+        "000725.SZ",
+        "002456.SZ",
+        "002400.SZ",
+        "002475.SZ",
+        "000100.SZ",
+        "000858.SZ",
+        "300059.SZ"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "all",
+        "offset": 0,
+        "sort_by": "return_20d"
+      },
+      "result_bytes": 5268,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "603392.SH",
+        "300830.SZ",
+        "600834.SH",
+        "002985.SZ",
+        "002400.SZ",
+        "002046.SZ",
+        "600185.SH",
+        "000564.SZ",
+        "920726.BJ",
+        "603439.SH"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "etf",
+        "offset": 0,
+        "sort_by": "turnover_cny"
+      },
+      "result_bytes": 5204,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "511990.SH",
+        "511880.SH",
+        "515050.SH",
+        "159995.SZ",
+        "510900.SH",
+        "518880.SH",
+        "510300.SH",
+        "159920.SZ",
+        "510050.SH",
+        "512760.SH"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "601318.SH"
+      },
+      "result_bytes": 461,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "601318.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "510300.SH"
+      },
+      "result_bytes": 445,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "510300.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "all",
+        "offset": 0,
+        "sort_by": "turnover_cny"
+      },
+      "result_bytes": 5260,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "511990.SH",
+        "511880.SH",
+        "601318.SH",
+        "000725.SZ",
+        "002456.SZ",
+        "002400.SZ",
+        "002475.SZ",
+        "000100.SZ",
+        "000858.SZ",
+        "300059.SZ"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "601318.SH"
+      },
+      "result_bytes": 461,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "601318.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "510300.SH"
+      },
+      "result_bytes": 445,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "510300.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "name": "read_current_thesis",
+      "arguments": {},
+      "result_bytes": 24,
+      "result_keys": [
+        "current_thesis"
+      ]
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "601318.SH"
+      },
+      "result_bytes": 461,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "601318.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "510300.SH"
+      },
+      "result_bytes": 445,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "510300.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "name": "search_prior_decisions",
+      "arguments": {
+        "instrument_id": "601318.SH",
+        "limit": 8
+      },
+      "result_bytes": 31,
+      "result_keys": [
+        "evidence",
+        "hits"
+      ]
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "name": "search_prior_decisions",
+      "arguments": {
+        "instrument_id": "510300.SH",
+        "limit": 8
+      },
+      "result_bytes": 31,
+      "result_keys": [
+        "evidence",
+        "hits"
+      ]
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "name": "search_prior_decisions",
+      "arguments": {
+        "limit": 4,
+        "query": "601318 Ping An cash portfolio 20200603"
+      },
+      "result_bytes": 31,
+      "result_keys": [
+        "evidence",
+        "hits"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/portfolio-risk-and-reentry/SKILL.md"
+      },
+      "result_bytes": 2882,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/trend-and-reversal/SKILL.md"
+      },
+      "result_bytes": 2651,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/liquidity-and-forced-selling/SKILL.md"
+      },
+      "result_bytes": 2865,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "etf",
+        "offset": 0,
+        "sort_by": "return_20d"
+      },
+      "result_bytes": 5179,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "513030.SH",
+        "513880.SH",
+        "513000.SH",
+        "513520.SH",
+        "512690.SH",
+        "513800.SH",
+        "513050.SH",
+        "159936.SZ",
+        "159996.SZ",
+        "515650.SH"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "equity",
+        "offset": 0,
+        "sort_by": "turnover_cny"
+      },
+      "result_bytes": 5261,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "601318.SH",
+        "000725.SZ",
+        "002456.SZ",
+        "002400.SZ",
+        "002475.SZ",
+        "000100.SZ",
+        "000858.SZ",
+        "300059.SZ",
+        "002600.SZ",
+        "000977.SZ"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "601318.SH"
+      },
+      "result_bytes": 461,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "601318.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "000858.SZ"
+      },
+      "result_bytes": 461,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "000858.SZ"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "equity",
+        "offset": 0,
+        "sort_by": "return_20d"
+      },
+      "result_bytes": 5267,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "603392.SH",
+        "300830.SZ",
+        "600834.SH",
+        "002985.SZ",
+        "002400.SZ",
+        "002046.SZ",
+        "600185.SH",
+        "000564.SZ",
+        "920726.BJ",
+        "603439.SH"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "screen_market",
+      "arguments": {
+        "descending": false,
+        "instrument_class": "equity",
+        "offset": 0,
+        "sort_by": "return_20d"
+      },
+      "result_bytes": 5165,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "600083.SH",
+        "600146.SH",
+        "000673.SZ",
+        "600978.SH",
+        "603316.SH",
+        "002219.SZ",
+        "603555.SH",
+        "603109.SH",
+        "600107.SH",
+        "920351.BJ"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "name": "lookup_market_security",
+      "arguments": {
+        "symbol": "601318.SH"
+      },
+      "result_bytes": 461,
+      "result_keys": [
+        "day",
+        "panel_hash",
+        "rows",
+        "unknown"
+      ],
+      "row_count": 1,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "601318.SH"
+      ],
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "read_current_thesis",
+      "arguments": {},
+      "result_bytes": 24,
+      "result_keys": [
+        "current_thesis"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/portfolio-risk-and-reentry/SKILL.md"
+      },
+      "result_bytes": 2882,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/trend-and-reversal/SKILL.md"
+      },
+      "result_bytes": 2651,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/etf-and-corporate-action-mechanics/SKILL.md"
+      },
+      "result_bytes": 2840,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "search_prior_decisions",
+      "arguments": {
+        "limit": 8,
+        "query": "601318.SH portfolio review cash reentry"
+      },
+      "result_bytes": 31,
+      "result_keys": [
+        "evidence",
+        "hits"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "equity",
+        "offset": 0,
+        "sort_by": "return_20d"
+      },
+      "result_bytes": 5267,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "603392.SH",
+        "300830.SZ",
+        "600834.SH",
+        "002985.SZ",
+        "002400.SZ",
+        "002046.SZ",
+        "600185.SH",
+        "000564.SZ",
+        "920726.BJ",
+        "603439.SH"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "name": "screen_market",
+      "arguments": {
+        "descending": true,
+        "instrument_class": "all",
+        "offset": 0,
+        "sort_by": "turnover_cny"
+      },
+      "result_bytes": 5260,
+      "result_keys": [
+        "day",
+        "equity_count",
+        "etf_count",
+        "missing",
+        "missing_sort_values",
+        "next_offset",
+        "panel_hash",
+        "pit",
+        "rows",
+        "sort_by",
+        "stock_partition_hashes",
+        "universe_count"
+      ],
+      "row_count": 10,
+      "row_fields": [
+        "close",
+        "execution_qualification",
+        "instrument_class",
+        "listing_date",
+        "normal_mainboard_candidate",
+        "pb",
+        "pct_chg",
+        "pe_ttm",
+        "return_20d",
+        "total_mv",
+        "ts_code",
+        "turnover_cny"
+      ],
+      "observed_symbols": [
+        "511990.SH",
+        "511880.SH",
+        "601318.SH",
+        "000725.SZ",
+        "002456.SZ",
+        "002400.SZ",
+        "002475.SZ",
+        "000100.SZ",
+        "000858.SZ",
+        "300059.SZ"
+      ],
+      "universe_count": 4252,
+      "equity_count": 3921,
+      "etf_count": 331,
+      "day": "20200603"
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/portfolio-risk-and-reentry/SKILL.md"
+      },
+      "result_bytes": 2882,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "name": "read",
+      "arguments": {
+        "path": "/Users/kennymccormick/github/market-impact-agent/docs/research/skills-ablation-20260908/methods/trend-and-reversal/SKILL.md"
+      },
+      "result_bytes": 2651,
+      "result_keys": [
+        "body",
+        "instructions_hash",
+        "name"
+      ]
+    }
+  ],
+  "request_artifacts": [
+    {
+      "arm": "A",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "57bf4ad0f2c92fe61c48ec19dadf93a560fd1983c1e40040897e828b64061cf7"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "606cd53b70254f70c3fa0fbc4e80e0f781b0ab3dbfe3ef043e36e4a832782d66"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "a8acd1aa5820d5f8bae56f3b8bc8ec1a565bdf170a5f644fe9179c8e649e76d6"
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "8daeb64b478e115add89edeea10d077d826934d37cecbbd7d9fb39ce9d665275"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "750667e2cdacc6c398beb017595298b23bdd035de8c54a1081128506d40c282a"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "4813117392df81d9b93be4160885cbd7645c0663f49134bea10a06271d999fd7"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "f445037b54139075ea095703fc69d14ec05234232af7f662d0f83967a546accf"
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "688c2d190998597a1d12e13c619663186ac40211266a11b1be1e2f42ad0fb415"
+    },
+    {
+      "arm": "A",
+      "role": "portfolio",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "7dadfe3b7121ce2f29a10ed31db96c4339ffc570d61aa7f755f60c8144ce5092"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "abf8b54f01d58941c8c16d998b75de064d8851b3508f5b6182fab5b44a9a0c02"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "8ce6b1380dc6afbb3d086297aebb17326bcd13ee69738c3c41cd7e450a72aa42"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "20327278f068568a9c61718b1e3d760fcc67ddd46b1e0633c3fb380a960d30f6"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "4cf7e97c45bd1ab6c3861e7d5836e10ff6958ca67f8be60094556166d0b68515"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "2fd95d7f242eaa153cbbd48ed459b089b29936e734ec52504c5b0da393181fee"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "acf877ff3fd74afd9e48ff38923fbe35fd374f3c80c828ff4e77b79d9b516491"
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "3842943447969cc3dc6d4f9393bcd2423a3ec17da41c63d6972b675034a506dc"
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "81d8d4fb308396fcb10079ab619943547a32aefde9d917f8fcd76368b5652661"
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "455076e63a21a4aa9755f3294aec44c5c1417dba22826cff73493b6d7244d2a3"
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "64f618161fe4157fa515cb059e1062901f0c0943cc28810468b8b4150826a7cc"
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "keys": [
+        "context",
+        "context_estimate",
+        "number",
+        "purpose",
+        "runtime"
+      ],
+      "artifact_hash": "fd3ade9c218fe64c8022d8a0cb780987865e820fe5900eec418005cb2562fafb"
+    }
+  ],
+  "fragment_summary": {
+    "thinking": 47321,
+    "text_including_intermediate_commentary": 12995,
+    "tool_arguments": 865,
+    "sum": 61181,
+    "authoritative_output_tokens": 62110,
+    "unallocated_wrappers_and_fragment_tokenization_difference": 929
+  },
+  "format_correction": {
+    "arm": "B",
+    "role": "discovery",
+    "cause": "non-JSON prose after tool gathering",
+    "additional_response_numbers": [
+      6,
+      7
+    ],
+    "additional_output_tokens": 896,
+    "additional_request_seconds": 15.255192749999987,
+    "transport_retry": false
+  },
+  "input_coverage": {
+    "cutoff_day": "2020-06-03",
+    "decision_time": "18:00 Asia/Shanghai",
+    "earliest_execution_day": "2020-06-04",
+    "panel_equities": 3921,
+    "panel_etfs": 331,
+    "panel_membership_fully_historically_accepted": false,
+    "market_tool_page_size": 10,
+    "unique_market_rows_seen_all_roles": {
+      "A": 27,
+      "B": 41
+    },
+    "discovery_unique_market_rows": {
+      "A": 27,
+      "B": 39
+    },
+    "shortlist_max": 2,
+    "research_evidence_documents": {
+      "A": 2,
+      "B": 3
+    },
+    "research_price_rows_per_document": 21,
+    "daily_screen_fields": [
+      "close",
+      "pct_chg",
+      "return_20d",
+      "turnover_cny",
+      "pe_ttm",
+      "pb",
+      "total_mv",
+      "listing_date",
+      "execution_qualification"
+    ],
+    "historical_price_fields": [
+      "raw_close",
+      "cutoff_adjusted_close",
+      "volume_lots",
+      "amount_thousand_cny"
+    ],
+    "decision_input_contains_same_day_open_price": false,
+    "decision_input_contains_next_day_open_price": false,
+    "raw_daily_capture_can_contain_ohlc": true,
+    "next_day_open_used_by_execution_only": true,
+    "news_macro_and_issuer_statements_complete": false
+  }
+}

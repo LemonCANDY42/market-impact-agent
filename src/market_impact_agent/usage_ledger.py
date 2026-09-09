@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -214,24 +215,45 @@ class UsageLedger:
 
     def records(self) -> tuple[StoredUsageRecord, ...]:
         with self._connect() as connection:
-            rows = connection.execute("SELECT * FROM usage_records ORDER BY sequence").fetchall()
-        records = tuple(_stored(row) for row in rows)
-        previous: str | None = None
-        for stored in records:
-            if stored.previous_hash != previous:
-                raise ValueError("Usage Ledger hash chain is broken")
-            previous = stored.record_hash
-        return records
+            return _read_usage_records(connection)
 
     @property
     def ledger_hash(self) -> str:
-        records = self.records()
-        return canonical_hash(
-            {
-                "schema_version": "market-impact.usage-ledger.v1",
-                "record_hashes": [item.record_hash for item in records],
-            }
-        )
+        return usage_ledger_hash(self.records())
+
+
+def usage_ledger_hash(records: tuple[StoredUsageRecord, ...]) -> str:
+    """Identify exactly the verified record tuple being consumed by an audit."""
+
+    return canonical_hash(
+        {
+            "schema_version": "market-impact.usage-ledger.v1",
+            "record_hashes": [item.record_hash for item in records],
+        }
+    )
+
+
+def read_existing_usage_ledger(path: Path) -> tuple[StoredUsageRecord, ...]:
+    """Read and verify a ledger without initializing its schema or permissions."""
+
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Usage Ledger must be an existing real file")
+    with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as connection:
+        connection.row_factory = sqlite3.Row
+        return _read_usage_records(connection)
+
+
+def _read_usage_records(connection: sqlite3.Connection) -> tuple[StoredUsageRecord, ...]:
+    """Use the canonical chain verifier within the caller's read snapshot."""
+
+    rows = connection.execute("SELECT * FROM usage_records ORDER BY sequence").fetchall()
+    records = tuple(_stored(row) for row in rows)
+    previous: str | None = None
+    for stored in records:
+        if stored.previous_hash != previous:
+            raise ValueError("Usage Ledger hash chain is broken")
+        previous = stored.record_hash
+    return records
 
 
 def reconcile_usage_ledgers(paths: tuple[Path, ...]) -> UsageLedgerUnion:
@@ -247,7 +269,7 @@ def reconcile_usage_ledgers(paths: tuple[Path, ...]) -> UsageLedgerUnion:
     for path in resolved:
         if not path.is_file():
             raise ValueError("Usage Ledger reconciliation requires real ledger files")
-        for stored in UsageLedger(path).records():
+        for stored in read_existing_usage_ledger(path):
             payload_hash = canonical_hash(stored.record.to_dict())
             existing = by_run_id.get(stored.record.run_id)
             if existing is None:

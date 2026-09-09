@@ -1,0 +1,187 @@
+{
+  "schema": "experimental-method-source-register.v1",
+  "research_start": "2006-09-08",
+  "research_cutoff": "2021-09-07",
+  "retrieved_at": "2026-09-08",
+  "production_promotion": false,
+  "sources": {
+    "policy2018": {
+      "publication_date": "2018-09-18",
+      "title": "ECB: Deconstructing Monetary Policy Surprises",
+      "url": "https://www.ecb.europa.eu/press/conferences/shared/pdf/20180925_annual_research_conference/jarocinski_conference_paper.pdf",
+      "supported_scope": "Policy and information shocks have different interpretations; observational sign classification is imperfect."
+    },
+    "quants2008": {
+      "publication_date": "2008-11",
+      "title": "Khandani and Lo: What Happened to the Quants in August 2007?",
+      "url": "https://www.nber.org/papers/w14465",
+      "supported_scope": "Transaction/factor analysis supports deleveraging and withdrawal of liquidity; simulations do not identify every actual fund position."
+    },
+    "earnings2007": {
+      "publication_date": "2007-05",
+      "title": "Lamont and Frazzini: Earnings Announcement Premium and Trading Volume",
+      "url": "https://www.nber.org/papers/w13090",
+      "supported_scope": "Announcement attention and volume can move prices separately from incremental earnings information."
+    },
+    "profit2010": {
+      "publication_date": "2010-04",
+      "title": "Novy-Marx: The Other Side of Value",
+      "url": "https://www.nber.org/papers/w15940",
+      "supported_scope": "Gross profitability and valuation are jointly informative in the study; long-short historical evidence is not a long-only trading guarantee."
+    },
+    "quality2018": {
+      "publication_date": "2018-11-05",
+      "title": "Asness, Frazzini and Pedersen: Quality Minus Junk",
+      "url": "https://www.aqr.com/Insights/Research/Working-Paper/Quality-Minus-Junk",
+      "supported_scope": "Global quality research supports examining profitability, growth and safety; source evidence is largely long-short."
+    },
+    "oil2015": {
+      "publication_date": "2015-03-10",
+      "title": "Bank of England: Oil price falls, what consequences for monetary policy?",
+      "url": "https://www.bankofengland.co.uk/speech/2015/oil-price-falls-what-consequences-for-monetary-policy",
+      "supported_scope": "The supply/demand distinction changes the interpretation of the 2014-15 oil price decline."
+    },
+    "commerce2019": {
+      "publication_date": "2019-03",
+      "title": "Amiti, Redding and Weinstein: The Impact of the 2018 Trade War",
+      "url": "https://www.nber.org/papers/w25672",
+      "supported_scope": "2018 tariff incidence affected domestic input/final prices; protecting output does not remove input costs."
+    },
+    "manufacturing2019": {
+      "publication_date": "2019-12",
+      "title": "Flaaen and Pierce: Disentangling the Effects of 2018-2019 Tariffs",
+      "url": "https://www.federalreserve.gov/econres/feds/files/2019086pap.pdf",
+      "supported_scope": "Import protection, input costs and retaliation must be considered jointly; manufacturing effects contradict simple sector beneficiary claims."
+    },
+    "momentum2016": {
+      "publication_date": "2016-11-30",
+      "title": "Daniel and Moskowitz: Momentum Crashes",
+      "url": "https://www.aqr.com/Insights/Research/Journal-Article/Momentum-Crashes",
+      "supported_scope": "Rebounds of prior losers can hurt long-short momentum after market stress; this is not the same payoff as a long-only trend strategy."
+    },
+    "vol2016": {
+      "publication_date": "2016-06",
+      "title": "Moreira and Muir: Volatility Managed Portfolios",
+      "url": "https://www.nber.org/papers/w22208",
+      "supported_scope": "The paper reports improved historical risk-adjusted outcomes from volatility scaling across selected factors."
+    },
+    "vol2020": {
+      "publication_date": "2020-05-01",
+      "title": "Cederburg et al.: On the performance of volatility-managed portfolios",
+      "url": "https://www.lehigh.edu/~xuy219/research/COWY.pdf",
+      "supported_scope": "Broader 103-strategy tests do not systematically favor managed portfolios; ex post spanning weights are not executable in real time."
+    },
+    "etf2014": {
+      "publication_date": "2014-06",
+      "title": "Ben-David, Franzoni and Moussawi: Do ETFs Increase Volatility?",
+      "url": "https://www.nber.org/papers/w20071",
+      "supported_scope": "ETF arbitrage links can transmit non-fundamental volatility; ETF ownership alone does not identify a directional return."
+    },
+    "flash2010": {
+      "publication_date": "2010-09-30",
+      "title": "Joint CFTC-SEC report on the May 6, 2010 market events",
+      "url": "https://www.sec.gov/news/studies/2010/marketevents-report.pdf",
+      "supported_scope": "The event shows severe dislocations including ETFs and rapid recovery; it does not establish a general daily dip-buying rule."
+    }
+  },
+  "cards": [
+    {
+      "name": "policy-transmission",
+      "families": [
+        "货币、财政、通胀与信用周期",
+        "恐慌、政策修复与重新入场"
+      ],
+      "source_ids": [
+        "policy2018"
+      ],
+      "evidence_status": "Conditional analytical framework; fiscal and credit-cycle validation remains a gap."
+    },
+    {
+      "name": "liquidity-and-forced-selling",
+      "families": [
+        "流动性、杠杆与被迫卖出",
+        "恐慌、政策修复与重新入场"
+      ],
+      "source_ids": [
+        "quants2008",
+        "flash2010"
+      ],
+      "evidence_status": "Case-informed hypothesis; two different mechanisms, not repeated proof of one profitable entry rule."
+    },
+    {
+      "name": "earnings-quality-and-value",
+      "families": [
+        "盈利、指引与预期修正",
+        "质量、估值与价值陷阱"
+      ],
+      "source_ids": [
+        "earnings2007",
+        "profit2010",
+        "quality2018"
+      ],
+      "evidence_status": "Cross-sample research motivates a framework; no standalone A-share alpha or specific issuer case validated."
+    },
+    {
+      "name": "supply-chain-and-policy-incidence",
+      "families": [
+        "产业、库存与资本开支周期",
+        "供给冲击、贸易与监管事件"
+      ],
+      "source_ids": [
+        "oil2015",
+        "commerce2019",
+        "manufacturing2019"
+      ],
+      "evidence_status": "Conditional transmission framework; sector timing and capital-expenditure cycle rules remain hypotheses."
+    },
+    {
+      "name": "trend-and-reversal",
+      "families": [
+        "趋势、动量与反转",
+        "恐慌、政策修复与重新入场"
+      ],
+      "source_ids": [
+        "momentum2016"
+      ],
+      "evidence_status": "Conditional hypothesis informed by long-short momentum evidence; no calibrated long-only rule."
+    },
+    {
+      "name": "portfolio-risk-and-reentry",
+      "families": [
+        "回撤、相关性与集中暴露",
+        "恐慌、政策修复与重新入场"
+      ],
+      "source_ids": [
+        "vol2016",
+        "vol2020"
+      ],
+      "evidence_status": "Conflicting empirical evidence; risk-scaling effectiveness is unresolved for this account."
+    },
+    {
+      "name": "etf-and-corporate-action-mechanics",
+      "families": [
+        "公司行动、资金流与 ETF",
+        "流动性、杠杆与被迫卖出"
+      ],
+      "source_ids": [
+        "etf2014",
+        "flash2010"
+      ],
+      "evidence_status": "Mechanism and case evidence; corporate-action event alpha remains a gap."
+    }
+  ],
+  "excluded": [
+    {
+      "source": "2019 FOMC staff memo released in 2025",
+      "reason": "Creation date is not public availability; outside research publication cutoff."
+    },
+    {
+      "source": "2024 and later volatility-management research",
+      "reason": "Outside research publication cutoff."
+    },
+    {
+      "source": "2005 first versions of fire-sale/Friday earnings papers",
+      "reason": "Useful historical background, but not counted as sources or cases published within this research interval."
+    }
+  ]
+}

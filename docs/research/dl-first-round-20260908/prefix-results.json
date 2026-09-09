@@ -1,0 +1,54 @@
+{
+  "checks": [
+    {
+      "first_test_session": "2015-06-15",
+      "cutoff": "2015-06-12",
+      "variant": "prefix",
+      "features": 158,
+      "byte_equal_values": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "first_test_session": "2015-06-15",
+      "cutoff": "2015-06-12",
+      "variant": "future_changed",
+      "features": 158,
+      "byte_equal_values": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "first_test_session": "2018-01-25",
+      "cutoff": "2018-01-24",
+      "variant": "prefix",
+      "features": 158,
+      "byte_equal_values": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "first_test_session": "2018-01-25",
+      "cutoff": "2018-01-24",
+      "variant": "future_changed",
+      "features": 158,
+      "byte_equal_values": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "first_test_session": "2024-09-24",
+      "cutoff": "2024-09-23",
+      "variant": "prefix",
+      "features": 158,
+      "byte_equal_values": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "first_test_session": "2024-09-24",
+      "cutoff": "2024-09-23",
+      "variant": "future_changed",
+      "features": 158,
+      "byte_equal_values": true,
+      "max_abs_difference": 0.0
+    }
+  ],
+  "elapsed_seconds": 20.40591241700008,
+  "scope": "computational prefix invariance only, not historical source authentication"
+}

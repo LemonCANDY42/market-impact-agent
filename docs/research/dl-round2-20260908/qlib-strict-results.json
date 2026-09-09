@@ -1,0 +1,77 @@
+{
+  "declared_before_fit": true,
+  "label": "Ref($close, -2) / Ref($close, -1) - 1",
+  "train_end": "2014-12-29 00:00:00",
+  "valid_end": "2016-12-28 00:00:00",
+  "test_role": "sensitivity on already observed historical test, not fresh confirmation",
+  "runs": [
+    {
+      "name": "linear",
+      "metrics": {
+        "Long-Short Ann Sharpe": 3.808135683579779,
+        "1day.pos": 0.0,
+        "Long-Avg Ann Sharpe": 0.46241363883018494,
+        "1day.excess_return_without_cost.max_drawdown": -0.1479306429460246,
+        "IC": 0.03864946747356511,
+        "1day.excess_return_with_cost.annualized_return": 0.08720128552750796,
+        "Long-Avg Ann Return": 0.09302546828985214,
+        "1day.pa": 0.0,
+        "1day.excess_return_without_cost.std": 0.004857558868814415,
+        "Rank ICIR": 0.3553874003601446,
+        "1day.excess_return_with_cost.information_ratio": 1.1639026669844144,
+        "1day.ffr": 1.0,
+        "1day.excess_return_with_cost.max_drawdown": -0.16895685436756896,
+        "1day.excess_return_without_cost.information_ratio": 1.7307734157457415,
+        "ICIR": 0.29565333368854485,
+        "1day.excess_return_without_cost.mean": 0.0005449665045502352,
+        "Long-Short Ann Return": 0.22747567771473826,
+        "1day.excess_return_with_cost.mean": 0.0003663919559979326,
+        "Rank IC": 0.04741323573329425,
+        "1day.excess_return_with_cost.std": 0.004856436846554887,
+        "1day.excess_return_without_cost.annualized_return": 0.12970202808295597
+      },
+      "double_cost_risk": {
+        "mean": 0.00018757097081985582,
+        "std": 0.004855321444186363,
+        "annualized_return": 0.044641891055125685,
+        "information_ratio": 0.5959860812715293,
+        "max_drawdown": -0.19029534386770366
+      },
+      "recorder_id": "a82c93d9b7ca4612ad9acd72764f659c",
+      "days": 871
+    },
+    {
+      "name": "lgb",
+      "metrics": {
+        "1day.pos": 0.0,
+        "1day.excess_return_without_cost.max_drawdown": -0.08733252962131705,
+        "IC": 0.048107331218609786,
+        "1day.excess_return_with_cost.annualized_return": 0.12790201223139355,
+        "1day.pa": 0.0,
+        "1day.excess_return_without_cost.std": 0.005667743817238983,
+        "Rank ICIR": 0.4225827487728769,
+        "1day.excess_return_with_cost.information_ratio": 1.4634078806881583,
+        "1day.ffr": 1.0,
+        "1day.excess_return_with_cost.max_drawdown": -0.09676075871638029,
+        "1day.excess_return_without_cost.information_ratio": 1.9891316484894095,
+        "l2.valid": 0.995221529841679,
+        "ICIR": 0.39990059886868207,
+        "1day.excess_return_without_cost.mean": 0.0007307776570988141,
+        "1day.excess_return_with_cost.mean": 0.0005374034127369477,
+        "Rank IC": 0.049239643402345115,
+        "1day.excess_return_with_cost.std": 0.005665307784130388,
+        "l2.train": 0.9622993880953604,
+        "1day.excess_return_without_cost.annualized_return": 0.17392508238951776
+      },
+      "double_cost_risk": {
+        "mean": 0.0003439641394161799,
+        "std": 0.00566038496599662,
+        "annualized_return": 0.08186346518105082,
+        "information_ratio": 0.9374663255593099,
+        "max_drawdown": -0.11549792213714799
+      },
+      "recorder_id": "c14a21fed5344b748bb22bb0e3d1ee45",
+      "days": 871
+    }
+  ]
+}

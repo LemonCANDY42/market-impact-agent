@@ -1,0 +1,47 @@
+[
+  {
+    "threads": 16,
+    "boost_rounds": 20,
+    "fit_seconds": 9.680768898000679,
+    "cpu_seconds": 112.85,
+    "average_cpu_cores": 11.657131906465233,
+    "max_process_rss_kib_since_start": 17662080,
+    "test_outcomes_read": false
+  },
+  {
+    "threads": 32,
+    "boost_rounds": 20,
+    "fit_seconds": 6.528530332001537,
+    "cpu_seconds": 140.45000000000002,
+    "average_cpu_cores": 21.513264526250644,
+    "max_process_rss_kib_since_start": 17662080,
+    "test_outcomes_read": false
+  },
+  {
+    "threads": 64,
+    "boost_rounds": 20,
+    "fit_seconds": 5.950329953000619,
+    "cpu_seconds": 205.80999999999997,
+    "average_cpu_cores": 34.58799791366436,
+    "max_process_rss_kib_since_start": 17662080,
+    "test_outcomes_read": false
+  },
+  {
+    "threads": 128,
+    "boost_rounds": 20,
+    "fit_seconds": 5.72478883200165,
+    "cpu_seconds": 389.07,
+    "average_cpu_cores": 67.96233213443494,
+    "max_process_rss_kib_since_start": 17662080,
+    "test_outcomes_read": false
+  },
+  {
+    "threads": 192,
+    "boost_rounds": 20,
+    "fit_seconds": 35.10751631400126,
+    "cpu_seconds": 5934.219999999999,
+    "average_cpu_cores": 169.0299008031328,
+    "max_process_rss_kib_since_start": 17662080,
+    "test_outcomes_read": false
+  }
+]

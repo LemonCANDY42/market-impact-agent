@@ -13,14 +13,14 @@ import asyncio
 import hmac
 import json
 import re
-from collections.abc import Callable
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.agent_contracts import EvidenceReference, canonical_hash
 from market_impact_agent.agent_engine import (
     RunMetrics,
     _PrivilegedEventSink,  # pyright: ignore[reportPrivateUsage]
@@ -31,11 +31,14 @@ from market_impact_agent.decision_thesis import (
     BaseCaseDirection,
     HorizonBand,
     ResearchThesisV1,
+    ResearchThesisV2,
     parse_research_thesis,
+    parse_research_thesis_v2,
     research_thesis_text_normalizations,
 )
 from market_impact_agent.dynamic_effectiveness import DatePresentation
 from market_impact_agent.frozen_research import FrozenResearchRepository
+from market_impact_agent.method_catalog import FrozenMethodCatalog
 from market_impact_agent.model_json import load_model_json
 from market_impact_agent.model_provider import ModelProvider
 from market_impact_agent.pi_execution import (
@@ -90,6 +93,41 @@ Never use facts after the new cutoff and never abstain.
 \nReturn exactly""" + RESEARCH_THESIS_PROMPT.split("Return exactly", maxsplit=1)[1]
 
 
+RESEARCH_THESIS_V2_PROMPT = """Act as a senior public-equity analyst using only frozen
+point-in-time inputs. State a defensible direction up/down/rangebound/unknown and
+separately assess event_support supported/uncertain/unsupported. Context or a recent
+retrieval is not proof of a new event. Empty transmission and evidence_refs are valid
+when event evidence is absent; explain the gaps in typed_unknowns. Unknown is an
+analytical conclusion and conveys no portfolio action.
+Distinguish source-stated facts, your hypothesized transmission mechanisms, and
+unknowns. A plausible mechanism is not evidence that a policy action occurred.
+Treat publication, policy effective date, modeled availability, and actual receipt
+as distinct times; absent source dates remain unknown. Availability alone does not
+establish novelty or what investors expected. Compare prices on one consistent
+basis, using cutoff-adjusted closes for returns when supplied; never mix raw and
+adjusted levels. Label priced-in assessments as hypotheses unless evidenced.
+Return exactly one JSON object: primary_horizon_sessions (an allowed value),
+base_case_direction, event_support, thesis (text), expectations (text),
+priced_in_assessment (text),
+transmission (string array), counter_scenario (text), evidence_refs (string array),
+counterevidence_refs (string array), invalidation_conditions (nonempty string array),
+review_after_sessions (integer), typed_unknowns (string array, not an object),
+revision_new_facts (string array), revision_old_assumptions (string array),
+revision_conclusion (text; explain retained or changed conclusion on review), and
+candidate_comparisons (zero to five objects: candidate_ref, transmission, support_refs,
+counter_refs, comparison_reason, gaps). Evidence refs may use the exact descriptive
+choices or exact frozen IDs. Candidate comparisons must cite only the candidate's
+frozen candidate_proofs, and distinguish event linkage from mere investability.
+Each candidate_ref must be an exact key of candidate_proofs. Evidence about an
+additional benchmark does not add it to that candidate list; discuss benchmark
+and cash comparisons in thesis or expectations instead. Narrative text fields
+must be strings, not arrays or objects.
+When prior_thesis is supplied, revision_new_facts and revision_old_assumptions must
+be nonempty explanations; explicitly say if no new facts changed the old assumption.
+The Harness binds target and identity. Do not author IDs, timestamps, quantity or orders.
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchThesisRunInputs:
     repository: FrozenResearchRepository
@@ -100,8 +138,27 @@ class ResearchThesisRunInputs:
     candidate_theses: tuple[ResearchThesisV1, ...] = ()
     research_question: str | None = None
     watch_delegation: ResearchThesisWatchDelegation | None = None
+    schema_version: str = "market-impact.research-thesis-inputs.v2"
+    candidate_proofs: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: dict[str, tuple[str, ...]]()
+    )
 
     def __post_init__(self) -> None:
+        if self.schema_version not in {
+            "market-impact.research-thesis-inputs.v1",
+            "market-impact.research-thesis-inputs.v2",
+        }:
+            raise ValueError("unsupported research input version")
+        if self.candidate_proofs and self.schema_version.endswith(".v1"):
+            raise ValueError("candidate proof comparison requires V2 inputs")
+        if len(self.candidate_proofs) > 5:
+            raise ValueError("candidate proofs exceed five")
+        pack = self.repository.evidence_pack
+        frozen_ids = {item.evidence_id for item in pack.evidence}
+        for candidate, refs in self.candidate_proofs.items():
+            if candidate not in pack.allowed_targets or not refs or not set(refs) <= frozen_ids:
+                raise ValueError("candidate proofs must bind offered targets and frozen evidence")
+
         for value, name in (
             (self.target_id, "target_id"),
             (self.thesis_epoch, "thesis_epoch"),
@@ -137,7 +194,8 @@ class ResearchThesisRunInputs:
             evidence_ids = {item.evidence_id for item in pack.evidence}
             for thesis in self.candidate_theses:
                 if (
-                    thesis.root_event_id != pack.event_id
+                    (isinstance(thesis, ResearchThesisV2) and thesis.target_id != self.target_id)
+                    or thesis.root_event_id != pack.event_id
                     or thesis.as_of != pack.as_of
                     or thesis.primary_horizon_sessions not in self.allowed_horizons
                     or not set(thesis.evidence_refs + thesis.counterevidence_refs) <= evidence_ids
@@ -163,6 +221,22 @@ class ResearchThesisRunInputs:
             "evidence": evidence,
             "pattern_packs": patterns,
         }
+        if self.schema_version.endswith(".v2"):
+            value["schema_version"] = self.schema_version
+            choices = {
+                f"{index + 1}. {item.summary}": item.evidence_id
+                for index, item in enumerate(pack.evidence)
+            }
+            labels = {ref: label for label, ref in choices.items()}
+            value["evidence_choices"] = choices
+            value["candidate_proofs"] = {
+                candidate: [labels[ref] for ref in refs]
+                for candidate, refs in self.candidate_proofs.items()
+            }
+            value["evidence_metadata"] = [
+                research_evidence_metadata(item, _object(loaded)["document"], pack.as_of)
+                for item, loaded in zip(pack.evidence, evidence, strict=True)
+            ]
         if self.candidate_theses:
             value["candidate_analyses"] = [thesis.to_dict() for thesis in self.candidate_theses]
         if self.date_presentation is DatePresentation.RELATIVE_OFFSET:
@@ -172,6 +246,16 @@ class ResearchThesisRunInputs:
     def identity_dict(self) -> dict[str, object]:
         pack = self.repository.evidence_pack
         return {
+            **(
+                {
+                    "schema_version": self.schema_version,
+                    "candidate_proofs": {
+                        key: list(refs) for key, refs in self.candidate_proofs.items()
+                    },
+                }
+                if self.schema_version.endswith(".v2")
+                else {}
+            ),
             "root_event_id": pack.event_id,
             "evidence_pack_id": pack.pack_id,
             "evidence_pack_hash": canonical_hash(pack.to_dict()),
@@ -192,6 +276,175 @@ class ResearchThesisRunInputs:
         }
 
 
+def research_evidence_metadata(
+    reference: EvidenceReference,
+    document: object,
+    cutoff: datetime,
+) -> dict[str, object]:
+    """Describe source content and time without deriving facts from receipt or IDs."""
+    payload = cast(dict[str, object], document) if isinstance(document, dict) else {}
+    raw_api = payload.get("source_api")
+    source_api = raw_api if isinstance(raw_api, str) else None
+    fields = payload.get("fields", [])
+    names = (
+        [item for item in cast(list[object], fields) if isinstance(item, str)]
+        if isinstance(fields, list)
+        else []
+    )
+    field_names = set(names)
+    rows: list[dict[str, object]] = []
+    has_collection = False
+    for key in ("articles", "records", "rows", "observations"):
+        raw = payload.get(key)
+        if not isinstance(raw, list):
+            continue
+        has_collection = True
+        for item in cast(list[object], raw):
+            if isinstance(item, dict):
+                row = dict(cast(dict[str, object], item))
+                for nested_key in ("times", "modeled_fact"):
+                    nested = row.get(nested_key)
+                    if isinstance(nested, dict):
+                        row.update(cast(dict[str, object], nested))
+                rows.append(row)
+            elif isinstance(item, list) and isinstance(fields, list):
+                values = cast(list[object], item)
+                if len(values) == len(names):
+                    rows.append(dict(zip(names, values, strict=True)))
+    if not has_collection:
+        rows = [payload] if payload else []
+
+    def timestamp(value: object) -> datetime | None:
+        if not isinstance(value, str):
+            return None
+        try:
+            at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return at if at.tzinfo is not None else None
+
+    def source_label(value: object) -> str | None:
+        return value if isinstance(value, str) and value.strip() else None
+
+    document_retrieved_at = timestamp(payload.get("retrieved_at"))
+
+    publications: list[dict[str, object]] = []
+    published_times: list[datetime] = []
+    event_times: list[datetime] = []
+    for row in rows:
+        availability_basis = source_label(
+            row.get("availability_basis", payload.get("availability_basis"))
+        )
+        source_published = timestamp(row.get("published_at"))
+        modeled_published = (
+            source_published if availability_basis == "modeled_source_date_eod_plus_5m" else None
+        )
+        published = None if modeled_published is not None else source_published
+        occurred = (
+            None
+            if row.get("occurrence_basis")
+            in {"aggregator_snapshot", "retrieval_observed", "retrospective_series"}
+            else timestamp(row.get("occurred_at"))
+        )
+        effective = timestamp(row.get("effective_at"))
+        retrieved = timestamp(row.get("retrieved_at")) or document_retrieved_at
+        if source_published is None and occurred is None:
+            continue
+        record: dict[str, object] = {}
+        identity = row.get("evidence_record_id")
+        if isinstance(identity, str):
+            record["evidence_record_id"] = identity
+        for key, at in (
+            ("published_at", published),
+            ("modeled_published_at", modeled_published),
+            ("occurred_at", occurred),
+            ("effective_at", effective),
+            ("available_at", timestamp(row.get("available_at"))),
+            ("retrieved_at", retrieved),
+        ):
+            record[key] = _timestamp(at) if at is not None else None
+        record["availability_basis"] = availability_basis
+        record["historical_authentication"] = source_label(
+            row.get("historical_authentication", payload.get("historical_authentication"))
+        )
+        record["publication_age_seconds"] = (
+            (cutoff - published).total_seconds() if published else None
+        )
+        record["event_age_seconds"] = (cutoff - occurred).total_seconds() if occurred else None
+        publications.append(record)
+        if published is not None:
+            published_times.append(published)
+        if occurred is not None:
+            event_times.append(occurred)
+    session_dates = sorted({str(row["trade_date"]) for row in rows if row.get("trade_date")})
+    price_shape = bool(session_dates) and (
+        bool(field_names & {"raw_close", "cutoff_adjusted_close", "close", "open"})
+        or any(set(row) & {"raw_close", "cutoff_adjusted_close", "close", "open"} for row in rows)
+    )
+    category = (
+        "price_session_history"
+        if source_api in {"daily", "fund_daily", "index_daily"} or price_shape
+        else "security_identity"
+        if source_api in {"stock_basic", "fund_basic", "etf_basic"}
+        or any("ts_code" in row and set(row) & {"list_date", "exchange", "market"} for row in rows)
+        else "dated_publication"
+        if publications
+        else "background"
+    )
+    return {
+        "evidence_id": reference.evidence_id,
+        "source_ref": reference.source_ref,
+        "source_api": source_api,
+        "source_tier": reference.source_tier.value,
+        "category": category,
+        "coverage": {
+            "record_count": len(rows),
+            "session_start": session_dates[0] if session_dates else None,
+            "session_end": session_dates[-1] if session_dates else None,
+            "status": payload.get("status"),
+            "gaps": payload.get("gaps", []),
+        },
+        "time_semantics": {
+            "available_at": (
+                "frozen evidence-availability gate; it may be modeled PIT or actual receipt "
+                "only as the source-provided availability_basis states, and is not a "
+                "publication, occurrence, or effective time"
+            ),
+            "published_at": "source-stated publication time; null when absent from the source",
+            "modeled_published_at": (
+                "conservative modeled publication boundary for a date-only source; it is not a "
+                "source-stated publication time"
+            ),
+            "occurred_at": (
+                "source-stated occurrence time; null when absent or when the source marks it as "
+                "retrieval-observed"
+            ),
+            "effective_at": (
+                "source-stated policy or economic effective time; null when absent and never "
+                "derived from publication or availability"
+            ),
+            "retrieved_at": (
+                "recorded source capture time; it establishes actual receipt only when the "
+                "source-provided availability_basis says actual receipt"
+            ),
+            "historical_authentication": (
+                "source-provided historical lane label; a modeled-PIT label does not establish "
+                "contemporaneous receipt"
+            ),
+        },
+        "available_at": _timestamp(reference.available_at),
+        "retrieved_at": _timestamp(document_retrieved_at)
+        if document_retrieved_at is not None
+        else None,
+        "availability_age_seconds": (cutoff - reference.available_at).total_seconds(),
+        "publication_age_seconds": (cutoff - max(published_times)).total_seconds()
+        if published_times
+        else None,
+        "event_age_seconds": (cutoff - max(event_times)).total_seconds() if event_times else None,
+        "publication_records": publications,
+    }
+
+
 class ResearchThesisAuthority:
     """Produce and replay one signed ResearchThesis terminal."""
 
@@ -205,6 +458,7 @@ class ResearchThesisAuthority:
         prior_adoption_validator: Callable[[str, str, str, datetime], dict[str, object]]
         | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        method_catalog: FrozenMethodCatalog | None = None,
     ) -> None:
         for value, name in ((experiment_id, "experiment_id"), (arm_id, "arm_id")):
             if not value or value != value.strip():
@@ -216,6 +470,7 @@ class ResearchThesisAuthority:
         self.account_scope = account_scope
         self.prior_adoption_validator = prior_adoption_validator
         self.clock = clock
+        self.method_catalog = method_catalog
         self.usage_ledger = UsageLedger(store.index_path)
         key = (store.root / ".harness-event-hmac.key").read_bytes()
         self._events = _PrivilegedEventSink(
@@ -235,6 +490,7 @@ class ResearchThesisAuthority:
         prior_adoption_ref: str | None = None,
         readonly_tools: tuple[ToolDescriptor, ...] = (),
     ) -> dict[str, object]:
+        method_catalog = self.method_catalog
         output_limit = (
             provider.profile.reserved_output_tokens
             if max_output_tokens is None
@@ -306,6 +562,8 @@ class ResearchThesisAuthority:
                         )
                     )
                     or _object(prior_binding["inputs"]).get("target_id") != inputs.target_id
+                    or prior_binding.get("method_catalog")
+                    != (None if method_catalog is None else method_catalog.identity())
                 ):
                     raise ValueError("prior thesis is not an earlier compatible review state")
                 selected["prior_thesis"] = (
@@ -337,6 +595,14 @@ class ResearchThesisAuthority:
                 if prior is not None
                 else RESEARCH_THESIS_PROMPT
             )
+            if inputs.schema_version.endswith(".v2"):
+                role_prompt = RESEARCH_THESIS_V2_PROMPT + (
+                    "\nCompare both candidate analyses from original evidence; do not count votes."
+                    if inputs.candidate_theses
+                    else "\nReview the prior signed opinion using new facts and old assumptions."
+                    if prior is not None
+                    else ""
+                )
             binding: dict[str, object] = {
                 "schema_version": "market-impact.research-thesis-binding.v1",
                 "harness_authority_id": self.store.harness_authority_id,
@@ -356,6 +622,11 @@ class ResearchThesisAuthority:
                 "arm_id": self.arm_id,
                 "account_scope": self.account_scope,
                 "readonly_tool_hashes": sorted(t.manifest_hash for t in readonly_tools),
+                **(
+                    {"method_catalog": method_catalog.identity()}
+                    if method_catalog is not None
+                    else {}
+                ),
                 "prompt": role_prompt,
                 "max_output_tokens": output_limit,
                 "budget_owner": {
@@ -432,6 +703,8 @@ class ResearchThesisAuthority:
                     timeout_seconds=provider.profile.budget.max_wall_seconds,
                     attempt_observer=lambda event: self._observe_attempt(run_id, event),
                     readonly_tools=readonly_tools,
+                    method_catalog=method_catalog,
+                    expect_json=bool(method_catalog or readonly_tools),
                     initial_history=""
                     if prior is None
                     else json.dumps(
@@ -442,8 +715,10 @@ class ResearchThesisAuthority:
                 )
                 parsed = load_model_json(_string(turn.assistant_message, "content"))
                 pack = inputs.repository.evidence_pack
-                thesis = parse_research_thesis(
+                thesis = _parse_versioned_thesis(
                     parsed.value,
+                    selected=selected,
+                    inputs=inputs.identity_dict(),
                     root_event_id=pack.event_id,
                     thesis_epoch=inputs.thesis_epoch,
                     as_of=pack.as_of,
@@ -556,8 +831,10 @@ class ResearchThesisAuthority:
             evidence_ids = frozenset(
                 _string(_object(_object(item)["reference"]), "evidence_id") for item in references
             )
-            thesis = parse_research_thesis(
+            thesis = _parse_versioned_thesis(
                 parsed.value,
+                selected=selected,
+                inputs=inputs,
                 root_event_id=_string(inputs, "root_event_id"),
                 thesis_epoch=_string(inputs, "thesis_epoch"),
                 as_of=_datetime(_string(inputs, "as_of")),
@@ -694,25 +971,58 @@ def reopen_completed_research_thesis(
         raise PermissionError("research thesis has no signed completed terminal")
     value = _object(terminal["thesis"])
     inputs = _object(binding["inputs"])
-    thesis = ResearchThesisV1(
-        root_event_id=_string(value, "root_event_id"),
-        thesis_epoch=_string(value, "thesis_epoch"),
-        as_of=_datetime(_string(value, "as_of")),
-        horizon_band=HorizonBand(_string(value, "horizon_band")),
-        primary_horizon_sessions=_integer(value, "primary_horizon_sessions"),
-        base_case_direction=BaseCaseDirection(_string(value, "base_case_direction")),
-        thesis=_string(value, "thesis"),
-        priced_in_assessment=_string(value, "priced_in_assessment"),
-        transmission=tuple(_strings(value["transmission"], "transmission")),
-        counter_scenario=_string(value, "counter_scenario"),
-        evidence_refs=tuple(_strings(value["evidence_refs"], "evidence_refs")),
-        counterevidence_refs=tuple(_strings(value["counterevidence_refs"], "counterevidence_refs")),
-        invalidation_conditions=tuple(
-            _strings(value["invalidation_conditions"], "invalidation_conditions")
-        ),
-        review_after_sessions=_integer(value, "review_after_sessions"),
-        typed_unknowns=tuple(_strings(value["typed_unknowns"], "typed_unknowns")),
-    )
+    if value.get("schema_version") == "market-impact.research-thesis.v2":
+        selected = _object(
+            artifact_store.read_json(_string(binding, "selected_inputs_artifact_hash"))
+        )
+        model_fields = {
+            key: item
+            for key, item in value.items()
+            if key
+            not in {
+                "schema_version",
+                "thesis_id",
+                "root_event_id",
+                "thesis_epoch",
+                "as_of",
+                "target_id",
+            }
+        }
+        thesis = _parse_versioned_thesis(
+            model_fields,
+            selected=selected,
+            inputs=inputs,
+            root_event_id=_string(value, "root_event_id"),
+            thesis_epoch=_string(value, "thesis_epoch"),
+            as_of=_datetime(_string(value, "as_of")),
+            evidence_ids=frozenset(
+                _string(_object(_object(item)["reference"]), "evidence_id")
+                for item in cast(list[object], selected["evidence"])
+            ),
+            allowed_horizons=frozenset(_integers(inputs["allowed_horizons"], "allowed_horizons")),
+        )
+    else:
+        thesis = ResearchThesisV1(
+            root_event_id=_string(value, "root_event_id"),
+            thesis_epoch=_string(value, "thesis_epoch"),
+            as_of=_datetime(_string(value, "as_of")),
+            horizon_band=HorizonBand(_string(value, "horizon_band")),
+            primary_horizon_sessions=_integer(value, "primary_horizon_sessions"),
+            base_case_direction=BaseCaseDirection(_string(value, "base_case_direction")),
+            thesis=_string(value, "thesis"),
+            priced_in_assessment=_string(value, "priced_in_assessment"),
+            transmission=tuple(_strings(value["transmission"], "transmission")),
+            counter_scenario=_string(value, "counter_scenario"),
+            evidence_refs=tuple(_strings(value["evidence_refs"], "evidence_refs")),
+            counterevidence_refs=tuple(
+                _strings(value["counterevidence_refs"], "counterevidence_refs")
+            ),
+            invalidation_conditions=tuple(
+                _strings(value["invalidation_conditions"], "invalidation_conditions")
+            ),
+            review_after_sessions=_integer(value, "review_after_sessions"),
+            typed_unknowns=tuple(_strings(value["typed_unknowns"], "typed_unknowns")),
+        )
     if (
         thesis.to_dict() != value
         or thesis.root_event_id != _string(inputs, "root_event_id")
@@ -726,6 +1036,46 @@ def reopen_completed_research_thesis(
         "thesis": thesis.to_dict(),
         "journal_hash": journal.journal_hash(run_id),
     }
+
+
+def _parse_versioned_thesis(
+    value: object,
+    *,
+    selected: dict[str, object],
+    inputs: dict[str, object],
+    root_event_id: str,
+    thesis_epoch: str,
+    as_of: datetime,
+    evidence_ids: frozenset[str],
+    allowed_horizons: frozenset[int],
+) -> ResearchThesisV1:
+    if inputs.get("schema_version") == "market-impact.research-thesis-inputs.v2":
+        proofs = _object(inputs.get("candidate_proofs", {}))
+        choices = _object(selected.get("evidence_choices", {}))
+        return parse_research_thesis_v2(
+            value,
+            root_event_id=root_event_id,
+            thesis_epoch=thesis_epoch,
+            as_of=as_of,
+            target_id=_string(inputs, "target_id"),
+            evidence_ids=evidence_ids,
+            allowed_horizons=allowed_horizons,
+            candidate_proofs={
+                key: tuple(_strings(refs, "candidate proofs")) for key, refs in proofs.items()
+            },
+            evidence_choices={key: _string(choices, key) for key in choices},
+            requires_revision=selected.get("prior_thesis") is not None,
+        )
+    if inputs.get("schema_version") not in {None, "market-impact.research-thesis-inputs.v1"}:
+        raise ValueError("unsupported frozen research input version")
+    return parse_research_thesis(
+        value,
+        root_event_id=root_event_id,
+        thesis_epoch=thesis_epoch,
+        as_of=as_of,
+        evidence_ids=evidence_ids,
+        allowed_horizons=allowed_horizons,
+    )
 
 
 def theses_semantically_disagree(first: ResearchThesisV1, second: ResearchThesisV1) -> bool:

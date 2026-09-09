@@ -1,0 +1,36 @@
+{
+  "schema": "isolated-investment-assessment-selection.v1",
+  "selected_on": "2026-09-06",
+  "purpose": "Feasibility, input semantics and native account integration; no investment promotion",
+  "source_manifest_directory": ".market-impact/continuous-20260905/study/research-inputs-cash-only-inception-v4",
+  "windows": ["cn-2015-disorder-deleveraging", "cn-2018-bear-market", "cn-2024-policy-melt-up"],
+  "window_reason": "Previously opened development cases covering a shock, extended bear and policy rally; selected for existing source/account artifacts, not new candidate outcomes. Preserve all three even if inputs are incomplete.",
+  "candidate_1": {
+    "name": "TA-Lib SMA5/20 long/cash",
+    "library": "TA-Lib==0.6.8",
+    "rule": "At each registered preopen cutoff use completed adjusted closes only; SMA5>SMA20 targets long, otherwise cash. Insufficient/missing history is a gap, not cash.",
+    "parameters": {"fast": 5, "slow": 20},
+    "execution": "Existing source-backed native Nautilus account and deterministic baseline sizing primitives, same overnight half-ETF seed; no broker or production admission",
+    "target": "510300.SH",
+    "baselines": ["same_initial_account_hold", "broad_etf_hold", "cash_no_action", "phase2_adjusted_close_momentum_510300"],
+    "cost_cases": [1, 2]
+  },
+  "candidate_2": {
+    "name": "Native Qlib Alpha158 close-only feature subset",
+    "library": "pyqlib==0.9.7",
+    "config": {"rolling": {"windows": [5, 20, 60], "include": ["ROC", "MA", "STD"]}},
+    "purpose": "Native feature extraction and cutoff/prefix reproducibility. Nine explicit features, not full Alpha158, a fitted model, or a profitable trading rule.",
+    "normalization_fit": "none",
+    "training": "none",
+    "target": "510300.SH"
+  },
+  "candidate_3": {
+    "name": "FinRL/ElegantRL policy",
+    "execution_condition": "Only run if bounded official source review identifies source-verifiable compatible trained weights with training cutoff, feature order/scaling, universe and action semantics. Otherwise record a vacant slot. Random policy and full training are excluded."
+  },
+  "pre_registered_checks": ["future row rejection", "warmup gap", "missing observation gap", "identical cashflow/seed", "cost stress", "non-executable source gap", "native journal replay", "Qlib prefix invariance"],
+  "new_paid_model_calls": 0,
+  "broker_access": false,
+  "roadmap_mutation": false,
+  "investment_effectiveness_accepted": false
+}

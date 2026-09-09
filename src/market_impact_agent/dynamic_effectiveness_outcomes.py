@@ -145,6 +145,13 @@ def score_dynamic_result(
     direction = thesis.get("base_case_direction")
     if not isinstance(horizon, int) or horizon not in {1, 3, 5, 10, 20, 60}:
         raise ValueError("completed thesis has an invalid primary horizon")
+    if direction == "unknown":
+        return {
+            **row,
+            "status": "unscored_unknown_direction",
+            "direction": "unknown",
+            "primary_horizon_sessions": horizon,
+        }
     if direction not in {"up", "down", "rangebound"}:
         raise ValueError("completed thesis has an invalid direction")
     start = date.fromisoformat(case_id)

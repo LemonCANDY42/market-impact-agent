@@ -360,3 +360,16 @@ def test_cadence_preflight_rejects_sparse_checkpoints_without_model_calls(
     assert report["one_shot_ready"] is False
     assert report["model_requests"] == 0
     assert "D1-through-D60" in cast(str, report["blocker"])
+
+
+def test_unknown_direction_is_unscored_instead_of_cash_or_rangebound() -> None:
+    row: dict[str, object] = {
+        "case_id": "2026-09-04",
+        "run_id": "unknown",
+        "topology": "luna_max",
+        "repetition": "base",
+    }
+    result = score_dynamic_result(row, _thesis("unknown", 5), _panel().series[0])
+    assert result["status"] == "unscored_unknown_direction"
+    assert result["direction"] == "unknown"
+    assert "signed_return" not in result

@@ -1,0 +1,70 @@
+{
+  "schema": "prospective-source-recheck.v1",
+  "cycle_started_at": "2026-09-06T14:01:01.105794Z",
+  "cycle_completed_at": "2026-09-06T14:01:28.725118Z",
+  "coverage_receipt_id": "coverage-receipt-d568cb351dc518e1a2b02ad571110063669385a2fd4a387ffadf75bb30228ea5",
+  "coverage_receipt_hash": "d568cb351dc518e1a2b02ad571110063669385a2fd4a387ffadf75bb30228ea5",
+  "coverage_complete": false,
+  "attempts": [
+    {
+      "content_hash": null,
+      "error_class": "HTTPError",
+      "error_summary": "HTTP status 429",
+      "provider_id": "gdelt-energy-discovery",
+      "record_count": null,
+      "requested_at": "2026-09-06T14:01:01.105798Z",
+      "retrieved_at": null,
+      "succeeded": false
+    },
+    {
+      "content_hash": "1fc0718e6cff08db9100a930d49c8c7d2505337c7ce736485e96bb3f78b34a2c",
+      "error_class": null,
+      "error_summary": null,
+      "provider_id": "eia-today-in-energy",
+      "record_count": 13,
+      "requested_at": "2026-09-06T14:01:14.893231Z",
+      "retrieved_at": "2026-09-06T14:01:24.152889Z",
+      "succeeded": true
+    },
+    {
+      "content_hash": "1674c4d1ff3a37a086dc5c67e4ca5a95fdde79222776cf1abc4b944326292d1d",
+      "error_class": null,
+      "error_summary": null,
+      "provider_id": "entsog-umm",
+      "record_count": 375,
+      "requested_at": "2026-09-06T14:01:24.154534Z",
+      "retrieved_at": "2026-09-06T14:01:28.721195Z",
+      "succeeded": true
+    }
+  ],
+  "candidate_count": 36,
+  "admitted_count": 0,
+  "nonadmission_reason_counts": {
+    "loss_threshold_not_met": 35,
+    "missing_critical_data": 35,
+    "source_coverage_incomplete": 36,
+    "event_nature_excluded": 12,
+    "duration_threshold_not_met": 1
+  },
+  "ledger_validation": {
+    "accrued_event_count": 0,
+    "cohort_complete": false,
+    "decision_count": 36,
+    "execution_capability": "none",
+    "last_decision_hash": "761c00693d1ae4969bc05d12b3a26a129669b42596c0c728dc396436418d0ccc",
+    "ledger_hash": "761c00693d1ae4969bc05d12b3a26a129669b42596c0c728dc396436418d0ccc",
+    "ledger_path": "/Users/kennymccormick/github/market-impact-agent/.market-impact/accrual/live-source-acceptance/ledger.sqlite3",
+    "registration_id": "agent-study-0e5df98482c956d76b53f6330814dd287f692cf1328119b5678cb1a429ae1aaa",
+    "target_event_count": 5,
+    "valid": true
+  },
+  "freeze_result": {
+    "execution_capability": "none",
+    "frozen": [],
+    "frozen_count": 0,
+    "pending_event_ids": []
+  },
+  "new_model_calls": 0,
+  "rules_changed": false,
+  "claim": "Single actual-source health check; not continuous coverage or new paired H5 evidence."
+}

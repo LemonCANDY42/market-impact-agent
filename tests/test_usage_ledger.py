@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -119,3 +120,25 @@ def test_usage_ledger_union_rejects_symlinked_ledgers(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="real ledger files"):
         reconcile_usage_ledgers((link,))
+
+
+def test_reconciliation_does_not_initialize_a_non_ledger_database(tmp_path: Path) -> None:
+    path = tmp_path / "unrelated.sqlite3"
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("CREATE TABLE unrelated (value TEXT)")
+        connection.commit()
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        reconcile_usage_ledgers((path,))
+    with closing(sqlite3.connect(path)) as connection:
+        tables = connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    assert tables == [("unrelated",)]
+
+
+def test_reconciliation_preserves_existing_source_permissions(tmp_path: Path) -> None:
+    ledger = UsageLedger(tmp_path / "source" / "usage.sqlite3")
+    ledger.append(_record("completed-run", RunStatus.COMPLETED, 10))
+    ledger.path.chmod(0o640)
+    ledger.path.parent.chmod(0o750)
+    assert reconcile_usage_ledgers((ledger.path,)).total_estimated_cost_microusd == 10
+    assert ledger.path.stat().st_mode & 0o777 == 0o640
+    assert ledger.path.parent.stat().st_mode & 0o777 == 0o750

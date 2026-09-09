@@ -6,10 +6,11 @@ Completed daily closes are reference marks, never fresh executable intraday quot
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.ashare_security_qualification import (
     AShareSecurityQualification,
     SourceBackedAShareRulePolicy,
@@ -24,6 +25,7 @@ from market_impact_agent.historical_ashare_inputs import (
     _day,  # pyright: ignore[reportPrivateUsage]
     _decimal,  # pyright: ignore[reportPrivateUsage]
 )
+from market_impact_agent.paper_execution import PriceBasis
 from market_impact_agent.streaming_nautilus_account import HistoricalInstrumentSpec
 
 
@@ -65,11 +67,91 @@ class ProspectiveAShareInputs(HistoricalAShareInputs):
     def qualification(self, symbol: str, cutoff: datetime) -> AShareSecurityQualification:
         return qualify_ashare_security(self, symbol, cutoff, self.qualification_policy)
 
+    def calendar_state(self, exchange: str, cutoff: datetime) -> dict[str, object]:
+        """Distinguish a received closed day from missing or conflicting calendar facts."""
+        if exchange not in {"SSE", "SZSE"}:
+            raise ValueError("unsupported calendar exchange")
+        day = cutoff.astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d")
+        records = {
+            digest: row
+            for table in self._tables()
+            if table.api == "trade_cal"
+            and table.snapshot.completed_at <= cutoff
+            and all(item.times.retrieved_at <= cutoff for item in table.snapshot.observations)
+            for row, digest in table.rows
+            if row.get("exchange") == exchange and row.get("cal_date") == day
+        }
+        flags = {str(row.get("is_open")) for row in records.values()}
+        state = "open" if flags == {"1"} else "closed" if flags == {"0"} else "unknown"
+        return {
+            "exchange": exchange,
+            "day": day,
+            "state": state,
+            "source_record_hashes": sorted(records),
+        }
+
     def _rule(
         self, symbol: str, cutoff: datetime
     ) -> tuple[HistoricalInstrumentSpec | None, tuple[str, ...]]:
         result = self.qualification(symbol, cutoff)
         return result.spec, (*result.source_record_hashes, result.qualification_artifact_hash)
+
+    def reference_valuation(self, symbol: str, cutoff: datetime) -> PriceBasis:
+        """Value a closed-market holding from its last completed raw session.
+
+        Calendar continuity establishes freshness for valuation only. This basis
+        is deliberately outside the executable-price allowlist.
+        """
+        reference = ProspectiveAShareInputs.reopen_security(self, symbol, cutoff)
+        gaps = set(reference.gaps) - {"fresh_intraday_quote_missing"}
+        local = cutoff.astimezone(ZoneInfo("Asia/Shanghai"))
+        exchange = "SSE" if symbol.endswith(".SH") else "SZSE"
+        calendar = self.calendar_state(exchange, cutoff)
+        if calendar["state"] == "unknown":
+            gaps.add("reference_valuation_calendar_unknown")
+        if calendar["state"] == "open" and time(9, 30) <= local.time() < time(15):
+            gaps.add("reference_valuation_requires_closed_market")
+        if reference.raw_price is None or reference.raw_price_observed_at is None:
+            gaps.add("completed_reference_mark_missing")
+        if gaps:
+            raise PermissionError("held_position_valuation_missing:" + ",".join(sorted(gaps)))
+        assert reference.raw_price is not None and reference.raw_price_observed_at is not None
+        rows: dict[str, dict[str, object]] = {
+            digest: row
+            for table in self._tables()
+            if table.api == "trade_cal"
+            and table.snapshot.completed_at <= cutoff
+            and all(item.times.retrieved_at <= cutoff for item in table.snapshot.observations)
+            for row, digest in table.rows
+            if row.get("exchange") == exchange
+        }
+        day = reference.raw_price_observed_at.astimezone(ZoneInfo("Asia/Shanghai")).date()
+        hashes: list[str] = []
+        while day <= local.date():
+            matching = [
+                (digest, row) for digest, row in rows.items() if _day(row["cal_date"]) == day
+            ]
+            flags = {str(row.get("is_open")) for _, row in matching}
+            if flags not in ({"0"}, {"1"}):
+                raise PermissionError("held_position_valuation_calendar_discontinuous")
+            hashes.extend(digest for digest, _ in matching)
+            day += timedelta(days=1)
+        valid_until = (
+            _at(local.date(), time(9, 30))
+            if calendar["state"] == "open" and local.time() < time(9, 30)
+            else _at(local.date() + timedelta(days=1), time(0))
+        )
+        return PriceBasis(
+            symbol,
+            "CNY",
+            "per_share",
+            "raw_completed_session_valuation",
+            reference.raw_price,
+            "source-qualified-completed-session-valuation",
+            canonical_hash({"reference": reference.to_dict(), "calendar_hashes": sorted(hashes)}),
+            reference.raw_price_observed_at.astimezone(UTC),
+            valid_until.astimezone(UTC),
+        )
 
     def reopen_security(self, symbol: str, cutoff: datetime) -> HistoricalSecurityEvidence:
         qualification = self.qualification(symbol, cutoff)

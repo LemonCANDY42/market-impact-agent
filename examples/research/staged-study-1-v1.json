@@ -1,0 +1,62 @@
+{
+  "schema_version": "market-impact.staged-research-study.v1",
+  "study_name": "research-continuous-stage-1-development-v1",
+  "stage": 1,
+  "profile_id": "model-provider-7d3c04afa0b04a1a6466da7918d585c7e7df630857016b99504b35a973d34034",
+  "predecessor_result_hash": null,
+  "candidate_limit": 5,
+  "primary_evaluation_horizon": 5,
+  "auxiliary_evaluation_horizon": 1,
+  "research_contract": "market-impact.research-thesis-inputs.v2",
+  "portfolio_contract": "market-impact.portfolio-review-binding.v6",
+  "continuous_protocol": "research-continuous-v2",
+  "research_question": "Using only cutoff-visible evidence, assess the specified target, separate event support from direction, compare relevant alternatives, identify expectations and the counter-scenario.",
+  "selection_policy": "inspect_listed_source_windows_in_this_order_without_model_calls_or_outcome_based_replacement",
+  "fixed_seed_symbols": [
+    "510300.SH",
+    "510500.SH"
+  ],
+  "dynamic_candidate_permission": "source-proven_A_share_equities_and_unlevered_equity_ETFs_via_registered_native_tools",
+  "windows": [
+    {
+      "window_id": "cn-2024-broad-rebound",
+      "decision_session": "2024-02-06",
+      "observation_end": "2024-02-20",
+      "sessions": [
+        "2024-02-06",
+        "2024-02-07",
+        "2024-02-08",
+        "2024-02-19",
+        "2024-02-20"
+      ],
+      "session_count": 5,
+      "target_id": "510300.SH",
+      "sample_role": "development",
+      "development_reversal_case": true,
+      "source_refs": [
+        "research-window-price-path"
+      ],
+      "business_exposure_proof_required": false
+    },
+    {
+      "window_id": "cn-2020-covid-closure-shock",
+      "decision_session": "2020-02-03",
+      "observation_end": "2020-02-07",
+      "sessions": [
+        "2020-02-03",
+        "2020-02-04",
+        "2020-02-05",
+        "2020-02-06",
+        "2020-02-07"
+      ],
+      "session_count": 5,
+      "target_id": "510300.SH",
+      "sample_role": "development",
+      "development_reversal_case": false,
+      "source_refs": [
+        "https://www.sse.com.cn/aboutus/mediacenter/hotandd/c/c_20200202_4991648.shtml"
+      ],
+      "business_exposure_proof_required": false
+    }
+  ]
+}

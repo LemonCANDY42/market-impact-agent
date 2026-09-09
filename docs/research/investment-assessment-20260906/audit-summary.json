@@ -1,0 +1,103 @@
+{
+  "news_diagnostic": {
+    "snapshot_id": "data-snapshot-7cc01f612a14cb5201611d51a5e00ff5fae5cc19ba58196dd14c7e787f4057b7",
+    "coverage_complete": false,
+    "request_status": "data_gap",
+    "request_error_kind": "source_coverage_incomplete",
+    "source_attempts": [
+      {
+        "provider_id": "tushare-observation",
+        "provider_version": "1",
+        "upstream_source": "tushare-news",
+        "required": true,
+        "status": "error",
+        "retrieved_at": "2026-09-06T07:45:59.970255Z",
+        "raw_response_hash": "70d71813b0fecc770aaac8962272d26b377cf4fa8a952556730b0b7f2b5aec97",
+        "received_count": 0,
+        "accepted_count": 0,
+        "rejected_missing_availability": 0,
+        "rejected_after_cutoff": 0,
+        "rejected_missing_authority": 0,
+        "rejected_authority_after_cutoff": 0,
+        "rejected_lane_mismatch": 0,
+        "error_kind": "duplicate_primary_key"
+      }
+    ],
+    "interpretation": "Zero qualified records came from duplicate_primary_key rejection, not an empty news window. Original price-only prospective forecast remains unchanged; source parser investigation is separate from its scoring.",
+    "model_calls": 0,
+    "diagnostic_hash": "ad017fd4f1854a93c8bf47f9adf1ce1ede1fd4a6b0a81365a47ae9de8b90d98a"
+  },
+  "news_readonly_parser_audit": {
+    "raw_capture_relative_path": ".market-impact/stage1-model-pilot-20260906-usd140/authority/artifacts/70d71813b0fecc770aaac8962272d26b377cf4fa8a952556730b0b7f2b5aec97",
+    "page_rows": [
+      1000,
+      1000,
+      1000
+    ],
+    "distinct_full_rows": 2999,
+    "identical_repeated_full_rows": 1,
+    "other_cross_page_duplicates": 0,
+    "page_body_hashes_verified": true,
+    "current_parser_replay": [
+      "passed",
+      "passed",
+      "duplicate_primary_key"
+    ],
+    "complete_coverage": false,
+    "page_four_collected": false,
+    "method": "Independent read-only source audit and parser replay of captured bytes; no news text included."
+  },
+  "historical_collection_supervisor": {
+    "schema_version": "market-impact.prospective-supervisor-receipt.v1",
+    "receipt_id": "prospective-supervisor-receipt-84aaffced904893571f51a7a680c453ee4bc71c2718ba8589f06e68e061a2e70",
+    "accepted": true,
+    "accepted_at": "2026-08-28T14:39:36.411089Z",
+    "gates": [
+      {
+        "gate": "disabled_install",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "environment_isolation",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "service_lifecycle",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "failure_recovery",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "health_visibility",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "log_redaction",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "rollback_reinstall",
+        "passed": true,
+        "reasons": []
+      },
+      {
+        "gate": "machine_registry",
+        "passed": true,
+        "reasons": []
+      }
+    ],
+    "model_authority": false,
+    "execution_capability": false,
+    "observed_successful_run_count": 16,
+    "runtime_evidence_hash": "5044af63f606ce1a429d8895a7de420398608a4dcce10fc300808807b02ef7fc"
+  },
+  "scope": "Historical collection acceptance is not current health, account autonomy, broker acceptance or investment effectiveness."
+}

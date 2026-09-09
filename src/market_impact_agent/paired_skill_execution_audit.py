@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
+import sqlite3
 import tempfile
 from collections.abc import Mapping
+from contextlib import closing
 from pathlib import Path
 from typing import cast
 
@@ -39,7 +42,7 @@ from market_impact_agent.paired_skill_ablation_runner import (
 )
 from market_impact_agent.pi_runtime import PiRuntimeProvider
 from market_impact_agent.runtime_store import ArtifactStore, RunJournal
-from market_impact_agent.usage_ledger import UsageLedger
+from market_impact_agent.usage_ledger import read_existing_usage_ledger, usage_ledger_hash
 
 
 def audit_paired_execution_state(
@@ -87,23 +90,24 @@ def audit_paired_execution_state(
             temporary_root=temporary_root,
             experiment_id=_string(registration, "experiment_id"),
         )
-    _validate_binding_artifacts(
-        experiment_root=experiment_root,
-        report=report,
-        expected_bindings=expected_bindings,
-    )
-    _validate_usage_ledger_bindings(
-        experiment_root=experiment_root,
-        repository=repository,
-        profile_config=profile_config,
-        provider=provider,
-        instruction=instruction,
-        skill_root=skill_root,
-        registration=registration,
-        report=report,
-        expected_arms=expected_arms,
-        expected_bindings=expected_bindings,
-    )
+        _validate_binding_artifacts(
+            experiment_root=experiment_root,
+            report=report,
+            expected_bindings=expected_bindings,
+        )
+        _validate_usage_ledger_bindings(
+            experiment_root=experiment_root,
+            replay_root=temporary_root / "replay",
+            repository=repository,
+            profile_config=profile_config,
+            provider=provider,
+            instruction=instruction,
+            skill_root=skill_root,
+            registration=registration,
+            report=report,
+            expected_arms=expected_arms,
+            expected_bindings=expected_bindings,
+        )
     return {arm_id: binding.binding_hash for arm_id, binding in expected_bindings.items()}
 
 
@@ -207,6 +211,7 @@ def _validate_binding_artifacts(
 def _validate_usage_ledger_bindings(
     *,
     experiment_root: Path,
+    replay_root: Path,
     repository: FrozenResearchRepository,
     profile_config: RuntimeConfig,
     provider: PiRuntimeProvider,
@@ -220,10 +225,10 @@ def _validate_usage_ledger_bindings(
     ledger_path = experiment_root / "usage.sqlite3"
     if ledger_path.is_symlink() or not ledger_path.is_file():
         raise ValueError("paired execution Usage Ledger is unavailable")
-    ledger = UsageLedger(ledger_path)
-    if ledger.ledger_hash != report.get("usage_ledger_hash"):
+    stored_records = read_existing_usage_ledger(ledger_path)
+    if usage_ledger_hash(stored_records) != report.get("usage_ledger_hash"):
         raise ValueError("paired execution report does not bind its Usage Ledger")
-    records = tuple(item.record for item in ledger.records())
+    records = tuple(item.record for item in stored_records)
     if len(records) != 6 or len({item.run_id for item in records}) != 6:
         raise ValueError("paired execution Usage Ledger must contain six unique runs")
     record_by_run_id = {item.run_id: item for item in records}
@@ -254,8 +259,12 @@ def _validate_usage_ledger_bindings(
                 or record.provider_profile_hash != registration.get("provider_profile_hash")
             ):
                 raise ValueError("paired execution Usage Ledger binding drifted")
-            run_directory = experiment_root / "runs" / arm_id / f"replicate-{replicate_index}"
+            source_directory = experiment_root / "runs" / arm_id / f"replicate-{replicate_index}"
+            run_directory = replay_root / arm_id / f"replicate-{replicate_index}"
+            _copy_run_for_audit(source_directory, run_directory)
             journal = RunJournal(run_directory / "run.sqlite3")
+            if not journal.get_run(run_id).status.terminal:
+                raise ValueError("paired execution audit requires an existing terminal Run")
             if journal.journal_hash(run_id) != record.run_journal_hash:
                 raise ValueError("paired execution run journal drifted from Usage Ledger")
             replayed = _replay_terminal_result(
@@ -301,6 +310,32 @@ def _validate_usage_ledger_bindings(
             raise ValueError("paired execution report arm differs from terminal run evidence")
     if reported_run_ids != set(record_by_run_id):
         raise ValueError("paired execution report and Usage Ledger run sets differ")
+
+
+def _copy_run_for_audit(source: Path, destination: Path) -> None:
+    """Give legacy engine replay a private copy, including committed WAL pages."""
+
+    database = source / "run.sqlite3"
+    artifacts = source / "artifacts"
+    if (
+        source.is_symlink()
+        or not source.is_dir()
+        or database.is_symlink()
+        or not database.is_file()
+        or artifacts.is_symlink()
+        or not artifacts.is_dir()
+    ):
+        raise ValueError("paired execution audit source must contain real existing state")
+    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+    with (
+        closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as reader,
+        closing(sqlite3.connect(destination / "run.sqlite3")) as replica,
+    ):
+        # Never copy just the live .sqlite3 file: committed state may be in its WAL.
+        reader.backup(replica)
+    # CAS payloads are immutable and are still checked by the existing validators.
+    # Preserve symlinks as symlinks so ArtifactStore rejects them instead of following them.
+    shutil.copytree(artifacts, destination / "artifacts", symlinks=True)
 
 
 def _replay_terminal_result(

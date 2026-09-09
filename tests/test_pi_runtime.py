@@ -45,12 +45,25 @@ from .test_agent_engine import SimulatedCrash, make_engine, request
 
 
 @pytest.mark.parametrize("boundary", ["pi.response.received", "pi.role.response.completed"])
+@pytest.mark.parametrize("native_estimator", [False, True])
 def test_single_turn_role_replays_native_completion_not_a_new_request(
-    tmp_path: Path, offline_network: None, boundary: str
+    tmp_path: Path, offline_network: None, boundary: str, native_estimator: bool
 ):
     async def scenario():
         profile = pi_profile()
-        provider = PiRuntimeProvider(profile)
+        if native_estimator:
+            raw = profile.to_dict()
+            cast(dict[str, object], raw["runtime"])["context_estimator"] = "pi-usage-v1"
+            raw.update(context_window_tokens=65536, compaction_trigger_tokens=57344)
+            raw.pop("profile_id")
+            raw["profile_id"] = f"model-provider-{canonical_hash(raw)}"
+            profile = model_provider_profile_from_dict(raw)
+        provider = PiRuntimeProvider(
+            profile,
+            permit=PiRuntimePermit(
+                canonical_hash(runtime_identity()), (profile.route_identity,), "offline-test"
+            ),
+        )
         journal = RunJournal(tmp_path / "runs.sqlite3")
         journal.start_run(
             run_id="role", config_hash=canonical_hash("frozen"), created_at=datetime.now(UTC)
@@ -71,7 +84,13 @@ def test_single_turn_role_replays_native_completion_not_a_new_request(
         journal.append = crash_after
         arguments = {
             "context": context,
-            "messages": ({"role": "user", "content": "Classify the frozen input."},),
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "Classify the frozen input."
+                    + ("x" * 70000 if native_estimator else ""),
+                },
+            ),
             "max_output_tokens": 256,
             "timeout_seconds": 20,
             "attempt_observer": events.append,
@@ -84,6 +103,19 @@ def test_single_turn_role_replays_native_completion_not_a_new_request(
             assert response.tool_calls == ()
             assert response.usage.input_tokens == 100
             assert sum(event.phase.value == "dispatched" for event in events) == 1
+            if native_estimator:
+                frozen = next(
+                    event
+                    for event in journal.events("role")
+                    if event.event_type == "pi.context.frozen"
+                )
+                receipt = cast(
+                    dict[str, object],
+                    context.artifacts.read_json(cast(str, frozen.payload["artifact_hash"])),
+                )
+                estimate = cast(dict[str, object], receipt["context_estimate"])
+                assert estimate["kind"] == "pi-usage-v1"
+                assert cast(int, estimate["tokens"]) < 57344
             assert (
                 ModelBudget(
                     journal,
@@ -233,12 +265,24 @@ def offline_network(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
 
 
+@pytest.mark.parametrize("native_estimator", [False, True])
 def test_real_pi_loop_consumes_tool_result_and_replays_terminal(
-    tmp_path: Path, offline_network: None
+    tmp_path: Path, offline_network: None, native_estimator: bool
 ):
     async def scenario():
         profile = pi_profile()
-        provider = PiRuntimeProvider(profile)
+        if native_estimator:
+            raw = profile.to_dict()
+            cast(dict[str, object], raw["runtime"])["context_estimator"] = "pi-usage-v1"
+            raw.pop("profile_id")
+            raw["profile_id"] = f"model-provider-{canonical_hash(raw)}"
+            profile = model_provider_profile_from_dict(raw)
+        provider = PiRuntimeProvider(
+            profile,
+            permit=PiRuntimePermit(
+                canonical_hash(runtime_identity()), (profile.route_identity,), "offline-test"
+            ),
+        )
         calls: list[str] = []
         engine = make_engine(
             tmp_path, provider, handler_calls=calls, config=profile.runtime_config()
@@ -254,6 +298,8 @@ def test_real_pi_loop_consumes_tool_result_and_replays_terminal(
             assert result.metrics.input_tokens == 200
             assert result.metrics.output_tokens == 40
             assert result.judgment is not None
+            if native_estimator:
+                assert result.judgment.context_estimator_id == "pi-usage-v1"
             assert result.judgment.proposal.summary == "Frozen outage evidence was read."
             await provider.close()
             replay = await engine.run(request())

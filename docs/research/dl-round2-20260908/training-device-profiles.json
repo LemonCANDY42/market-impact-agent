@@ -1,0 +1,65 @@
+{
+  "training_only": true,
+  "equal_action_budget_not_equal_expression_count": true,
+  "runs": [
+    {
+      "device": "cpu",
+      "architecture": "lstm",
+      "steps": 2048,
+      "parameters": 298609,
+      "elapsed_seconds": 48.819083323000086,
+      "completed_expression_attempts": 17,
+      "pool_admission_attempts": 14,
+      "peak_cuda_allocated": null,
+      "max_rss_kib": 1126440,
+      "heldout_scores_read": false,
+      "dataset": "training-only original public CSI300, not expanded Tushare data",
+      "network": {
+        "n_layers": "2",
+        "d_model": "128",
+        "dropout": "0.1",
+        "device": "cpu"
+      }
+    },
+    {
+      "device": "cuda",
+      "architecture": "lstm",
+      "steps": 2048,
+      "parameters": 298609,
+      "elapsed_seconds": 9.10065615500207,
+      "completed_expression_attempts": 11,
+      "pool_admission_attempts": 9,
+      "peak_cuda_allocated": 276051968,
+      "max_rss_kib": 2331372,
+      "heldout_scores_read": false,
+      "dataset": "training-only original public CSI300, not expanded Tushare data",
+      "network": {
+        "n_layers": "2",
+        "d_model": "128",
+        "dropout": "0.1",
+        "device": "cuda"
+      }
+    },
+    {
+      "device": "cuda",
+      "architecture": "transformer",
+      "steps": 2048,
+      "parameters": 3216753,
+      "elapsed_seconds": 16.995510921999085,
+      "completed_expression_attempts": 21,
+      "pool_admission_attempts": 18,
+      "peak_cuda_allocated": 315791360,
+      "max_rss_kib": 2337176,
+      "heldout_scores_read": false,
+      "dataset": "training-only original public CSI300, not expanded Tushare data",
+      "network": {
+        "n_encoder_layers": "4",
+        "d_model": "256",
+        "n_head": "8",
+        "d_ffn": "1024",
+        "dropout": "0.1",
+        "device": "cuda"
+      }
+    }
+  ]
+}

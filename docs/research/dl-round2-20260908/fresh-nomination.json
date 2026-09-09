@@ -1,0 +1,22 @@
+{
+  "candidate": "lgb-B",
+  "family": "lgb",
+  "tier": "B",
+  "seeds": [
+    17,
+    29,
+    43
+  ],
+  "development_summary_sha256": "7739829ab1339618f1961d34748f0d29412db7d52cce1a11f6b7f396a04c64dc",
+  "recorded_at_unix": 1788865449.69014,
+  "holdout_model_outcomes_opened": false,
+  "segments": "train through 2022; validation 2023-2024; confirmation 2025 through six-session-purged 2026-09-07",
+  "uncertainty": "equal calendar-year weight, 2000 within-year 60-session moving blocks, seed 17029",
+  "configuration": "unchanged original models; advanced fold F bounds and upstream available-edge padding",
+  "random_targets": {},
+  "adapters": {
+    "fresh_train.py": "c12a6bd53fced8ed3486b7005dffc4c1472a827ea0a6bc68e9adc07177799fa6",
+    "fresh_rl.py": "93692ca8a7b5d959a674d403f40b5865fdfd411583dfe508c2729dbbe686c282",
+    "fresh_features.py": "ada8a58e0ec7f6ee91c468d790f0404fe95fc9e2b6513a0af81f163e5f6296cc"
+  }
+}

@@ -590,7 +590,18 @@ async def run_research_thesis_watch_callback(
                 terminal_artifact_id=result_hash,
             )
             return result
-        if dispatcher.run_journal.event(f"{run_id}.research-review.started") is not None:
+        attempts = tuple(
+            event
+            for event in dispatcher.run_journal.events(run_id)
+            if event.event_type
+            in {"research.watch.review.started", "research.watch.review.pending"}
+        )
+        pending = (
+            attempts[-1]
+            if attempts and attempts[-1].event_type == "research.watch.review.pending"
+            else None
+        )
+        if attempts and pending is None:
             return {"status": "reconciliation_required", "callback_run_id": run_id}
         now = resolver.clock()
         if now > delegation.episode_deadline or dispatch.wake.created_at > now:
@@ -642,9 +653,10 @@ async def run_research_thesis_watch_callback(
             callback.profile,
         )
         resolver.parent_budget.check_cancel()
-        dispatcher.run_journal.append(
+        attempt = dispatcher.run_journal.append(
             run_id=run_id,
-            event_id=f"{run_id}.research-review.started",
+            event_id=f"{run_id}.research-review.started"
+            + ("" if pending is None else ".resume." + pending.event_hash),
             event_type="research.watch.review.started",
             observed_at=now,
             payload={"binding_id": binding.binding_id, "episode_id": delegation.episode_id},
@@ -652,6 +664,22 @@ async def run_research_thesis_watch_callback(
         result = await review(context)
         result_hash = dispatcher.artifacts.put_json(result).content_hash
         finished_at = resolver.clock()
+        # A known acquisition wait may reopen its existing child authority. A
+        # crash after the next started marker remains unknown and cannot retry.
+        from market_impact_agent.prospective_discovery_runtime import discovery_recoverable_wait
+
+        proof_hash = result.get("proof_artifact_hash")
+        if isinstance(proof_hash, str) and discovery_recoverable_wait(
+            _object(resolver.store.artifacts.read_json(proof_hash))
+        ):
+            dispatcher.run_journal.append(
+                run_id=run_id,
+                event_id=f"{run_id}.research-review.pending." + attempt.event_hash,
+                event_type="research.watch.review.pending",
+                observed_at=finished_at,
+                payload={"result_hash": result_hash},
+            )
+            return result
         dispatcher.run_journal.append(
             run_id=run_id,
             event_id=f"{run_id}.research-review.completed",

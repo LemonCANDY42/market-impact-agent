@@ -1,0 +1,377 @@
+{
+  "models": [
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "features": "alpha158",
+      "model": "lightgbm",
+      "model_sha256": "75ac97e1184e786527e9f058aae0c1c8817fc4fd109c096bb4bfdc4e02ec6a2f",
+      "prediction_min": -0.0160150351831117,
+      "prediction_max": 0.0471958264073568,
+      "importance_type": "training split gain, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "CORR10",
+          "value": 0.3150286157615483
+        },
+        {
+          "feature": "CORD60",
+          "value": 0.18605471844784915
+        },
+        {
+          "feature": "IMXD20",
+          "value": 0.1666076355613768
+        },
+        {
+          "feature": "RSQR60",
+          "value": 0.13547633853158914
+        },
+        {
+          "feature": "CORD30",
+          "value": 0.12101197533775121
+        }
+      ]
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "features": "alpha158",
+      "model": "ridge",
+      "model_sha256": "3345e32d2dac0eacf06081afb0485cfec0182e357a94ce227afbba6f8d4c9492",
+      "prediction_min": 0.0513217151165008,
+      "prediction_max": 1.0193582773208618,
+      "importance_type": "coefficient per training-standardized feature, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "QTLD60",
+          "value": 0.03824000060558319
+        },
+        {
+          "feature": "CNTP30",
+          "value": 0.03284892067313194
+        },
+        {
+          "feature": "CNTN30",
+          "value": 0.032342102378606796
+        },
+        {
+          "feature": "MIN20",
+          "value": 0.027765268459916115
+        },
+        {
+          "feature": "RSQR60",
+          "value": 0.023925641551613808
+        }
+      ]
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "features": "close9",
+      "model": "lightgbm",
+      "model_sha256": "b1cf7f49eed3f8e32b598c1c96f75aaed22e36e73975576ea6108538496eed12",
+      "prediction_min": -0.0092364167767687,
+      "prediction_max": 0.0627853328202699,
+      "importance_type": "training split gain, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "ROC20",
+          "value": 0.4989203777513467
+        },
+        {
+          "feature": "ROC60",
+          "value": 0.36903473889105953
+        },
+        {
+          "feature": "MA60",
+          "value": 0.3101203549595084
+        },
+        {
+          "feature": "STD5",
+          "value": 0.18996429408434778
+        },
+        {
+          "feature": "STD20",
+          "value": 0.16546674456913024
+        }
+      ]
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "features": "close9",
+      "model": "ridge",
+      "model_sha256": "72b959585f9396171c2220ede1b6d17416f54cf5541b623cb871a518a06f90e9",
+      "prediction_min": -0.1840790957212448,
+      "prediction_max": 0.2037917524576187,
+      "importance_type": "coefficient per training-standardized feature, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "STD60",
+          "value": -0.042767226696014404
+        },
+        {
+          "feature": "MA20",
+          "value": 0.02854236029088497
+        },
+        {
+          "feature": "ROC60",
+          "value": -0.019040314480662346
+        },
+        {
+          "feature": "STD20",
+          "value": 0.01630506105720997
+        },
+        {
+          "feature": "MA60",
+          "value": -0.015538492240011692
+        }
+      ]
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "features": "alpha158",
+      "model": "lightgbm",
+      "model_sha256": "b8b64ccf3d0f0b973c2a2ce5178efe0cf7b2dd84176cc1d36295a55151869332",
+      "prediction_min": -0.0765633362368654,
+      "prediction_max": 0.0247941149285284,
+      "importance_type": "training split gain, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "QTLU60",
+          "value": 0.5111924102529883
+        },
+        {
+          "feature": "BETA60",
+          "value": 0.47819022834300995
+        },
+        {
+          "feature": "MA20",
+          "value": 0.4321489930152893
+        },
+        {
+          "feature": "ROC20",
+          "value": 0.37544318987056613
+        },
+        {
+          "feature": "VSUMP30",
+          "value": 0.32979249954223633
+        }
+      ]
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "features": "alpha158",
+      "model": "ridge",
+      "model_sha256": "564351e19464fca27c5226b5d5d2a8d3b34f571082d3027f2ace05a4a27c45c1",
+      "prediction_min": -0.0574910044670105,
+      "prediction_max": 0.0429844930768013,
+      "importance_type": "coefficient per training-standardized feature, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "MAX60",
+          "value": 0.06560902297496796
+        },
+        {
+          "feature": "STD30",
+          "value": 0.04242764040827751
+        },
+        {
+          "feature": "MAX30",
+          "value": -0.038741838186979294
+        },
+        {
+          "feature": "RANK20",
+          "value": -0.03756071627140045
+        },
+        {
+          "feature": "MAX10",
+          "value": 0.036730192601680756
+        }
+      ]
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "features": "close9",
+      "model": "lightgbm",
+      "model_sha256": "ab2f988c07447da6b9b4a3aebb4331d91c96ab512a2edcc9afdff650d2f0e399",
+      "prediction_min": -0.0865525623573787,
+      "prediction_max": 0.0151528197254438,
+      "importance_type": "training split gain, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "MA60",
+          "value": 1.3780894810333848
+        },
+        {
+          "feature": "ROC20",
+          "value": 1.245425052009523
+        },
+        {
+          "feature": "STD60",
+          "value": 1.1366891503566876
+        },
+        {
+          "feature": "MA20",
+          "value": 0.9426897518569604
+        },
+        {
+          "feature": "ROC60",
+          "value": 0.6849037739448249
+        }
+      ]
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "features": "close9",
+      "model": "ridge",
+      "model_sha256": "38cdb16aff05ed5a6853fb72f79678283751a3af341da63b2344c5322b073caf",
+      "prediction_min": -0.0048478622920811,
+      "prediction_max": 0.0144904013723135,
+      "importance_type": "coefficient per training-standardized feature, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "ROC20",
+          "value": -0.013076418079435825
+        },
+        {
+          "feature": "MA60",
+          "value": 0.006653446704149246
+        },
+        {
+          "feature": "ROC5",
+          "value": -0.006414155475795269
+        },
+        {
+          "feature": "MA20",
+          "value": 0.006037116050720215
+        },
+        {
+          "feature": "STD60",
+          "value": -0.004310613963752985
+        }
+      ]
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "features": "alpha158",
+      "model": "lightgbm",
+      "model_sha256": "14eb344b1ea00b009cc5884377e57649ab80ce18ed6ab9e210d820a4315333d9",
+      "prediction_min": -0.0012312361106872,
+      "prediction_max": 0.0218749846888183,
+      "importance_type": "training split gain, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "QTLU60",
+          "value": 0.5635752137750387
+        },
+        {
+          "feature": "MAX30",
+          "value": 0.48391149286180735
+        },
+        {
+          "feature": "STD60",
+          "value": 0.39796680491417646
+        },
+        {
+          "feature": "BETA60",
+          "value": 0.33042556745931506
+        },
+        {
+          "feature": "RSQR30",
+          "value": 0.3300723787397146
+        }
+      ]
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "features": "alpha158",
+      "model": "ridge",
+      "model_sha256": "b974a4ed927bc61c89629594e77965f5d5e18a9a7df3cda9dd3af632a83c346b",
+      "prediction_min": -0.0132814720273017,
+      "prediction_max": 0.0411805845797061,
+      "importance_type": "coefficient per training-standardized feature, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "STD30",
+          "value": 0.023743897676467896
+        },
+        {
+          "feature": "LOW0",
+          "value": -0.021366149187088013
+        },
+        {
+          "feature": "HIGH0",
+          "value": -0.02103952132165432
+        },
+        {
+          "feature": "OPEN0",
+          "value": 0.016487199813127518
+        },
+        {
+          "feature": "MAX60",
+          "value": 0.0158445555716753
+        }
+      ]
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "features": "close9",
+      "model": "lightgbm",
+      "model_sha256": "a3aef4e8ed3945c6799d3b384e551e5bc24a72e2601a5510980d73218e6a3bf2",
+      "prediction_min": -0.0090035643563872,
+      "prediction_max": 0.0289199531019422,
+      "importance_type": "training split gain, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "STD60",
+          "value": 1.6743001446593553
+        },
+        {
+          "feature": "MA60",
+          "value": 0.8191202711313963
+        },
+        {
+          "feature": "STD20",
+          "value": 0.8186910953372717
+        },
+        {
+          "feature": "ROC60",
+          "value": 0.8140215880703181
+        },
+        {
+          "feature": "ROC20",
+          "value": 0.6188358520157635
+        }
+      ]
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "features": "close9",
+      "model": "ridge",
+      "model_sha256": "21467e913baf0e8413812b30fe56cc4e94809fad2c904a78e8000e331ebf77a7",
+      "prediction_min": 0.0004379854071885,
+      "prediction_max": 0.0106083191931247,
+      "importance_type": "coefficient per training-standardized feature, not causal effect",
+      "largest_absolute_importance": [
+        {
+          "feature": "ROC20",
+          "value": -0.006370363291352987
+        },
+        {
+          "feature": "MA20",
+          "value": 0.0043551442213356495
+        },
+        {
+          "feature": "ROC5",
+          "value": -0.002098014811053872
+        },
+        {
+          "feature": "STD20",
+          "value": 0.0018692571902647614
+        },
+        {
+          "feature": "MA5",
+          "value": 0.0016721510328352451
+        }
+      ]
+    }
+  ],
+  "prediction_sha256": "53c96350e67cc51d854dd591218c8575728ff58a0ea5a44b635811e4e1e1eb35"
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import cast
@@ -47,7 +48,12 @@ async def run_prospective_watch_review(
     ]
     | None,
     portfolio_authority_factory: Callable[
-        [ResearchThesisRunInputs, FrozenDataSnapshotInput, AccountStateSnapshot, SecurityAdmission],
+        [
+            ResearchThesisRunInputs,
+            FrozenDataSnapshotInput,
+            AccountStateSnapshot,
+            SecurityAdmission | None,
+        ],
         PortfolioReviewAuthority,
     ]
     | None,
@@ -58,6 +64,7 @@ async def run_prospective_watch_review(
     source_templates: tuple[ResearchSourceTemplate, ...] = (),
     source_snapshot_ids: tuple[str, ...] = (),
     maximum_runs: int = 2,
+    held_targets: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Reopen actual new receipts, then prior-aware research and current-account review.
 
@@ -159,9 +166,11 @@ async def run_prospective_watch_review(
         ):
             original = limits.get(name)
             limits[name] = cap if original is None else min(int(cast(int, original)), cap)
-        remaining = (context.episode_deadline - resolver.clock()).total_seconds()
-        if remaining <= 0:
+        if context.episode_deadline <= resolver.clock():
             raise PermissionError("Watch callback Episode expired")
+        # Keep the original delegate Profile stable across acquisition waits.
+        # The callback and acquisition owners still enforce the current deadline.
+        remaining = (context.episode_deadline - context.cutoff).total_seconds()
         limits["max_wall_seconds"] = min(
             float(cast(float, limits["max_wall_seconds"])), remaining / maximum_runs
         )
@@ -179,12 +188,15 @@ async def run_prospective_watch_review(
         )
         journal = dispatcher.admission_service.journal
         refs = journal.observation_version_refs_by_ids(context.new_version_ids)
+        started = dispatcher.run_journal.event(context.callback_run_id + ".research-review.started")
+        if started is None:
+            raise PermissionError("Watch review lacks its durable original start")
         selected = journal.freeze_version_selection_snapshot(
             selection_id="research-watch-selection-" + canonical_hash(context.callback_run_id),
             readiness_report_id=dispatcher.reopen_dispatch(run_id).binding.binding_id,
             version_ids=tuple(ref.version_id for ref in refs),
             as_of=context.cutoff,
-            frozen_at=resolver.clock(),
+            frozen_at=started.observed_at,
         )
         documents: dict[str, object] = {}
         evidence: list[EvidenceReference] = []
@@ -241,6 +253,18 @@ async def run_prospective_watch_review(
             date_presentation=DatePresentation(
                 str(cast(dict[str, object], parent_binding["inputs"])["date_presentation"])
             ),
+            schema_version=str(
+                cast(dict[str, object], parent_binding["inputs"]).get(
+                    "schema_version", "market-impact.research-thesis-inputs.v1"
+                )
+            ),
+            candidate_proofs={
+                symbol: tuple(refs)
+                for symbol, refs in cast(
+                    dict[str, list[str]],
+                    cast(dict[str, object], parent_binding["inputs"]).get("candidate_proofs", {}),
+                ).items()
+            },
         )
         authority = ResearchThesisAuthority(
             resolver.store,
@@ -250,19 +274,23 @@ async def run_prospective_watch_review(
             clock=resolver.clock,
         )
         try:
-            result = await run_prospective_discovery(
-                authority=authority,
-                provider=bounded,
-                inputs=inputs,
-                acquisition=acquisition,
-                account_source=account_source,
-                account_max_age=account_max_age,
-                admission_authority_factory=admission_authority_factory,
-                portfolio_authority_factory=portfolio_authority_factory,
-                portfolio_context_source=portfolio_context_source,
-                maximum_runs=maximum_runs,
-                prior_thesis_run_id=context.parent_run_id,
-            )
+            async with asyncio.timeout(
+                (context.episode_deadline - resolver.clock()).total_seconds()
+            ):
+                result = await run_prospective_discovery(
+                    authority=authority,
+                    provider=bounded,
+                    inputs=inputs,
+                    acquisition=acquisition,
+                    account_source=account_source,
+                    account_max_age=account_max_age,
+                    admission_authority_factory=admission_authority_factory,
+                    portfolio_authority_factory=portfolio_authority_factory,
+                    portfolio_context_source=portfolio_context_source,
+                    maximum_runs=maximum_runs,
+                    prior_thesis_run_id=context.parent_run_id,
+                    held_targets=held_targets,
+                )
             return result.to_dict()
         finally:
             await bounded.close()

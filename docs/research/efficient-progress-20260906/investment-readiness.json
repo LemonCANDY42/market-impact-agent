@@ -1,0 +1,63 @@
+{
+  "binding_hash": "2ae54655dfc3d26caecd3479e3d83c30d27af391a0ed9b365e8b0610bcab4a19",
+  "profile_id": "model-provider-ec95d69e752352aeddea2fe3a117892ef69ca60322432215efee3f0ca1e07ee3",
+  "source_binding_hash": "34c7f920453fb1b5be0f9cd02c38d66ed94c5c78b9d9e58938a9fba3917fb6a4",
+  "protocol": "research-continuous-v2",
+  "candidate_universe": [],
+  "window_id": "cn-2020-covid-closure-shock",
+  "cutoff": "2020-02-03T01:25:00+00:00",
+  "sessions": [
+    "2020-02-03",
+    "2020-02-04",
+    "2020-02-05",
+    "2020-02-06",
+    "2020-02-07"
+  ],
+  "complete": true,
+  "contexts": [
+    {
+      "arm": "price_only",
+      "estimated_tokens": 17078,
+      "serialized_bytes": 17122,
+      "context_hash": "75904b8ecd9a01953beaf4b7aad6fc19606c3d49168339f7add533d611e8d795"
+    },
+    {
+      "arm": "price_only",
+      "estimated_tokens": 13856,
+      "serialized_bytes": 13816,
+      "context_hash": "2c38d81b7d873e02ff303d044be4f835a7947e496b164aa2e466f02ba0905acd"
+    },
+    {
+      "arm": "price_and_event",
+      "estimated_tokens": 43863,
+      "serialized_bytes": 43799,
+      "context_hash": "45eb144fb58a9d39164ccd7ed5a01c82514b6aa7cc70356a091997f06f848845"
+    },
+    {
+      "arm": "price_and_event",
+      "estimated_tokens": 13871,
+      "serialized_bytes": 13831,
+      "context_hash": "2e559f5a7cdfeeb590bce769f482de815003f3b44627f8884db8ef258de941a2"
+    }
+  ],
+  "arms": {
+    "price_only": {
+      "complete": true,
+      "intent_count": 1,
+      "fill_count": 1,
+      "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a"
+    },
+    "price_and_event": {
+      "complete": true,
+      "intent_count": 1,
+      "fill_count": 1,
+      "economic_hash": "200ddfd981e08d973c6accb899dedab4177cb7333027bb1568cef30cf74a952a"
+    }
+  },
+  "conservative_maximum_cost_microusd": 3670016,
+  "proposed_authorization_cap_microusd": 4000000,
+  "actual_paid_requests": 0,
+  "source_bindings_unchanged": true,
+  "investment_effectiveness_accepted": false,
+  "strict_pit_accepted": false
+}

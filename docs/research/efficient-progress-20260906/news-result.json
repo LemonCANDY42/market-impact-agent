@@ -1,0 +1,45 @@
+{
+  "schema_version": "market-impact.efficient-news-probe.v1",
+  "network_requests": 5,
+  "parameters": {
+    "start_date": "2026-09-03 15:45:57",
+    "end_date": "2026-09-06 15:45:57"
+  },
+  "retrieved_at": "2026-09-06T12:53:24.001206+00:00",
+  "page_rows": [
+    1000,
+    1000,
+    1000,
+    1000,
+    13
+  ],
+  "raw_rows": 4013,
+  "unique_full_rows": 4012,
+  "identical_repeats": 1,
+  "coverage_complete": true,
+  "observations": 4012,
+  "snapshot_id": "data-snapshot-a68975050cc264024067e0472f1bf7c448fa06cca721aa50fb815e90f73b257e",
+  "attempts": [
+    {
+      "provider_id": "tushare-observation",
+      "provider_version": "1",
+      "upstream_source": "tushare-news",
+      "required": true,
+      "status": "data",
+      "retrieved_at": "2026-09-06T12:53:24.001206Z",
+      "raw_response_hash": "16c2a4ee63dd7eba4479d8eebce21c820f2e1d0b7ac9e3c2335b78cca8800663",
+      "received_count": 4012,
+      "accepted_count": 4012,
+      "rejected_missing_availability": 0,
+      "rejected_after_cutoff": 0,
+      "rejected_missing_authority": 0,
+      "rejected_authority_after_cutoff": 0,
+      "rejected_lane_mismatch": 0,
+      "error_kind": null
+    }
+  ],
+  "isolated_replay_identical": true,
+  "old_prediction_modified": false,
+  "model_calls": 0,
+  "broker_calls": 0
+}

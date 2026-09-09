@@ -1,0 +1,65 @@
+{
+  "schema": "posthoc-account-attribution.v1",
+  "complete": true,
+  "registration_hash": "153d1a6bc371bb9db9b7336f66814a6dde5815b55137cd2b54db81981bd3fe9b",
+  "source_result_sha256": "5696cc1704e50a99dbe702453e1d4eb76dd4ec436198843d90407bb3168520aa",
+  "attribution": {
+    "price_only": {
+      "pre_executable_gap_cny": "-363.400",
+      "post_executable_exposure_pnl_cny": "3412.800",
+      "execution_fees_cny": "0",
+      "net_pnl_cny": "3049.400",
+      "residual_cny": "0",
+      "model_cost_microusd_separate": 45278
+    },
+    "price_and_event": {
+      "pre_executable_gap_cny": "-363.400",
+      "post_executable_exposure_pnl_cny": "1684.800",
+      "execution_fees_cny": "7.64",
+      "net_pnl_cny": "1313.760",
+      "residual_cny": "0",
+      "model_cost_microusd_separate": 69612
+    }
+  },
+  "native_controls": {
+    "preserve_initial_holdings": {
+      "sold_quantity": "0",
+      "matched_arm": "price_only",
+      "economic_hash": "d6dace71d1cb197d1eb7e2fa95977f591b813f06ba9204fd946f53d796a6b175",
+      "final_nav_cny": "103824.430",
+      "return": "0.030259479952523953602395355",
+      "execution_fees_cny": "0",
+      "fill_count": 0,
+      "native_metrics_equal_to_matched_arm": true,
+      "model_cost_microusd": 0
+    },
+    "posthoc_target_25pct_of_mandate": {
+      "sold_quantity": "8000",
+      "matched_arm": "price_and_event",
+      "economic_hash": "d6dace71d1cb197d1eb7e2fa95977f591b813f06ba9204fd946f53d796a6b175",
+      "final_nav_cny": "102088.790",
+      "return": "0.013036562727890033870493514",
+      "execution_fees_cny": "7.64",
+      "fill_count": 1,
+      "native_metrics_equal_to_matched_arm": true,
+      "model_cost_microusd": 0
+    }
+  },
+  "event_minus_hold": {
+    "gap_difference_cny": "0",
+    "post_executable_exposure_difference_cny": "-1728.000",
+    "additional_fee_cny": "7.64",
+    "net_difference_cny": "-1735.640"
+  },
+  "source_evidence_unchanged": true,
+  "new_model_calls": 0,
+  "new_model_cost_microusd": 0,
+  "new_network_calls": 0,
+  "limitations": [
+    "Matched target was selected after seeing the saved proposal. Equality diagnoses execution mechanics, not predictive selection skill.",
+    "Single opened historical pair; no new independent event.",
+    "Gap is unavoidable given the frozen decision and first executable session, not universally unavoidable.",
+    "USD model cost is separately reported, not converted into CNY NAV."
+  ],
+  "investment_effectiveness_accepted": false
+}

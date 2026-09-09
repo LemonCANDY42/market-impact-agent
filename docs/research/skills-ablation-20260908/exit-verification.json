@@ -1,0 +1,16 @@
+{
+  "checked_at_utc": "2026-09-08T17:24:04Z",
+  "owned_inference_container_stopped": true,
+  "owned_mac_forward_stopped": true,
+  "gpu_compute_processes": 0,
+  "gpu_memory_mib": 18,
+  "gpu_utilization_percent": 0,
+  "netdata": "active",
+  "model_weights_and_caches": "retained",
+  "future_five_year_started": false,
+  "local_services_refresh": "passed",
+  "documentation_sync": {
+    "icloud_local": "ok",
+    "nas": "ok"
+  }
+}

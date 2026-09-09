@@ -1,0 +1,140 @@
+{
+  "rows": [
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "model": "trailing20",
+      "n": 48,
+      "variance_mse": 4.603414059749086e-06,
+      "qlike": -4.770145631586554,
+      "underprediction_fraction": 0.5208333333333334,
+      "mean_predicted_daily_volatility": 0.04143986111782201,
+      "mean_observed_daily_volatility": 0.04304296176280586,
+      "seconds": 0.0004410679999864442
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "model": "train_mean",
+      "n": 48,
+      "variance_mse": 6.39601798883051e-06,
+      "qlike": 0.5787885175272521,
+      "underprediction_fraction": 0.9791666666666666,
+      "mean_predicted_daily_volatility": 0.015591918879888964,
+      "mean_observed_daily_volatility": 0.04304296176280586,
+      "seconds": 0.00039077900009942823
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "model": "ridge",
+      "n": 48,
+      "variance_mse": 5.468240214964644e-06,
+      "qlike": -3.0253973444766262,
+      "underprediction_fraction": 0.8333333333333334,
+      "mean_predicted_daily_volatility": 0.023223344108967463,
+      "mean_observed_daily_volatility": 0.04304296176280586,
+      "seconds": 0.024627496999983123
+    },
+    {
+      "window": "cn-2015-disorder-deleveraging",
+      "model": "lightgbm",
+      "n": 48,
+      "variance_mse": 6.395423802892275e-06,
+      "qlike": 1.1224171859756642,
+      "underprediction_fraction": 0.9791666666666666,
+      "mean_predicted_daily_volatility": 0.015409313248210432,
+      "mean_observed_daily_volatility": 0.04304296176280586,
+      "seconds": 0.04609875899996041
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "model": "trailing20",
+      "n": 116,
+      "variance_mse": 2.9214713274355138e-08,
+      "qlike": -7.383899385106457,
+      "underprediction_fraction": 0.4396551724137931,
+      "mean_predicted_daily_volatility": 0.012055579188850227,
+      "mean_observed_daily_volatility": 0.012092377724880348,
+      "seconds": 0.0004134289999910834
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "model": "train_mean",
+      "n": 116,
+      "variance_mse": 4.354219361077156e-08,
+      "qlike": -7.51855128139266,
+      "underprediction_fraction": 0.08620689655172414,
+      "mean_predicted_daily_volatility": 0.017987062235233504,
+      "mean_observed_daily_volatility": 0.012092377724880348,
+      "seconds": 0.00042342800009009807
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "model": "ridge",
+      "n": 116,
+      "variance_mse": 2.6966065181469426e-08,
+      "qlike": -7.274382704247669,
+      "underprediction_fraction": 0.5689655172413793,
+      "mean_predicted_daily_volatility": 0.010369278034140894,
+      "mean_observed_daily_volatility": 0.012092377724880348,
+      "seconds": 0.00513171800002965
+    },
+    {
+      "window": "cn-2018-bear-market",
+      "model": "lightgbm",
+      "n": 116,
+      "variance_mse": 3.439449644285858e-08,
+      "qlike": -6.946216509887838,
+      "underprediction_fraction": 0.6206896551724138,
+      "mean_predicted_daily_volatility": 0.010457452240368913,
+      "mean_observed_daily_volatility": 0.012092377724880348,
+      "seconds": 0.046136699000044246
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "model": "trailing20",
+      "n": 2,
+      "variance_mse": 9.579430260746242e-06,
+      "qlike": 33.920053871835286,
+      "underprediction_fraction": 1.0,
+      "mean_predicted_daily_volatility": 0.009476211364428312,
+      "mean_observed_daily_volatility": 0.056480972914401247,
+      "seconds": 0.0003943480000998534
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "model": "train_mean",
+      "n": 2,
+      "variance_mse": 8.878981367372239e-06,
+      "qlike": 6.69709544890728,
+      "underprediction_fraction": 1.0,
+      "mean_predicted_daily_volatility": 0.014504423155099384,
+      "mean_observed_daily_volatility": 0.056480972914401247,
+      "seconds": 0.0003742889999784893
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "model": "ridge",
+      "n": 2,
+      "variance_mse": 9.654526382366598e-06,
+      "qlike": 37.43355314983633,
+      "underprediction_fraction": 1.0,
+      "mean_predicted_daily_volatility": 0.008906129905029168,
+      "mean_observed_daily_volatility": 0.056480972914401247,
+      "seconds": 0.0053087569999661355
+    },
+    {
+      "window": "cn-2024-policy-melt-up",
+      "model": "lightgbm",
+      "n": 2,
+      "variance_mse": 9.344078175428759e-06,
+      "qlike": 24.236009333639934,
+      "underprediction_fraction": 1.0,
+      "mean_predicted_daily_volatility": 0.011137121662728785,
+      "mean_observed_daily_volatility": 0.056480972914401247,
+      "seconds": 0.05708919300002435
+    }
+  ],
+  "elapsed_seconds": 0.2153653940000595,
+  "target": "next five close-to-close daily log returns squared mean, not intraday RV",
+  "used_for_sizing": false,
+  "investment_effectiveness_accepted": false
+}

@@ -1,0 +1,40 @@
+{
+  "complete": true,
+  "first": "20100104",
+  "last": "20260907",
+  "calendar_days": 4051,
+  "historical_daily_symbols": 5832,
+  "rows": 14350277,
+  "missing_adj_factor": 0,
+  "missing_limits": 93752,
+  "missing_pe_ttm": 2536212,
+  "vwap_outside_day_range_5cents": 52,
+  "listing_status_diagnostics_not_membership_authority": {
+    "L": {
+      "captured_listing_records": 5558,
+      "with_historical_daily_rows": 5558
+    },
+    "D": {
+      "captured_listing_records": 339,
+      "with_historical_daily_rows": 271
+    },
+    "P": {
+      "captured_listing_records": 0,
+      "with_historical_daily_rows": 0
+    }
+  },
+  "joined_manifest_sha256": "e5d84d9091526f4f8781019030eb0fc83ab21a03942caeb01dc81b1b63f1748d",
+  "capture_rows": {
+    "daily": 14350277,
+    "adj_factor": 15007647,
+    "stk_limit": 14746851,
+    "daily_basic": 14259484
+  },
+  "capture_requests": 20018,
+  "duplicate_keys_or_ohlc_validation_failures": 0,
+  "capture_receipt_and_hash_replay_verified": true,
+  "vwap_outliers_treated_as_missing": true,
+  "missing_limit_execution_policy": "fail closed in the research account",
+  "pit_status": "retrospective current-vintage research, not proof of historical provider versions",
+  "no_model_outcomes_read": true
+}

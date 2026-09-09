@@ -63,6 +63,18 @@ def test_smaller_budget_does_not_revoke_protocol_acceptance():
     assert new.runtime_config().budget.max_estimated_cost_microusd == 10_000
 
 
+def test_native_context_estimator_is_explicit_and_changes_frozen_route():
+    profile = load_builtin_model_provider_profile("pi-cpa-luna-max-v2")
+    data = deepcopy(profile.to_dict())
+    cast(dict[str, object], data["runtime"])["context_estimator"] = "pi-usage-v1"
+    new = model_provider_profile_from_dict(identified(data))
+    assert validate_agent_contract(new.to_dict(), "model-provider-profile.schema.json") == ()
+    assert new.route_identity != profile.route_identity
+    cast(dict[str, object], data["runtime"])["context_estimator"] = "invented-estimator"
+    with pytest.raises(ValueError, match="unsupported pi context estimator"):
+        model_provider_profile_from_dict(identified(data))
+
+
 def test_gpt_56_profile_freezes_recommended_compaction_headroom():
     profile = load_builtin_model_provider_profile("pi-cpa-luna-max-v2")
     assert profile.context_window_tokens == 272_000

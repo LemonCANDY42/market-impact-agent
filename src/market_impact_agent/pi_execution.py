@@ -27,8 +27,9 @@ from market_impact_agent.agent_runtime import (
     ToolSideEffect,
     Utf8TokenEstimator,
 )
+from market_impact_agent.method_catalog import FrozenMethodCatalog
 from market_impact_agent.model_budget import ModelBudget
-from market_impact_agent.model_json import load_model_json
+from market_impact_agent.model_json import MODEL_JSON_REPAIR_POLICY_ID, load_model_json
 from market_impact_agent.pi_runtime import PI_RUNTIME, ModelSlots
 from market_impact_agent.provider_reliability import (
     ProviderAttemptEvent,
@@ -282,15 +283,29 @@ class PiRequestBoundary:
             provider.max_concurrent_requests,
         )
 
+    def context_tokens(self, payload: dict[str, object]) -> int:
+        if (self.profile.runtime or {}).get("context_estimator") == "pi-usage-v1":
+            estimate = payload.get("context_estimate")
+            if not isinstance(estimate, dict):
+                raise ValueError("pinned pi context estimate is missing")
+            estimate = cast(dict[str, object], estimate)
+            if estimate.get("kind") != "pi-usage-v1":
+                raise ValueError("pinned pi context estimate is missing")
+            tokens = estimate.get("tokens")
+            if type(tokens) is not int or tokens < 0:
+                raise ValueError("pi context estimate must be nonnegative tokens")
+            return tokens
+        return self.counter.count_request((cast(dict[str, object], payload["context"]),), ())
+
     async def callback(self, method: str, payload: dict[str, object]) -> dict[str, object] | None:
         from market_impact_agent.agent_engine import _BudgetExceeded, _ModelTurnInterrupted
 
         self.check()
         if method == "context_check":
-            estimate = self.counter.count_request(
-                (cast(dict[str, object], payload["context"]),), ()
-            )
-            return {"compact": estimate >= self.profile.effective_compaction_trigger_tokens}
+            return {
+                "compact": self.context_tokens(payload)
+                >= self.profile.effective_compaction_trigger_tokens
+            }
         if method == "model_admit":
             number = cast(int, payload["number"])
             if payload["runtime"] != PI_RUNTIME or number != self.metrics.turns + 1:
@@ -349,9 +364,7 @@ class PiRequestBoundary:
             self.provider.authorize_dispatch(self.invocation_id, self.budget.owner_run_id)
             if number > self.config.budget.max_turns:
                 raise _BudgetExceeded("run exhausted its model-turn budget including summaries")
-            estimate = self.counter.count_request(
-                (cast(dict[str, object], payload["context"]),), ()
-            )
+            estimate = self.context_tokens(payload)
             if estimate + self.profile.reserved_output_tokens > self.profile.context_window_tokens:
                 raise _BudgetExceeded("pi context exceeds frozen model window")
             if self.metrics.input_tokens + estimate > self.config.budget.max_input_tokens:
@@ -556,6 +569,8 @@ async def execute_pi_once(
     attempt_observer: ProviderAttemptObserver,
     readonly_tools: tuple[ToolDescriptor, ...] = (),
     initial_history: str = "",
+    method_catalog: FrozenMethodCatalog | None = None,
+    expect_json: bool = False,
 ) -> ModelTurn:
     """Execute a role on pi, with bounded Harness-injected read-only capabilities.
 
@@ -571,6 +586,9 @@ async def execute_pi_once(
     from market_impact_agent.agent_engine import _MutableMetrics, sanitized_model_turn
 
     invocation_id = context.invocation_id
+    if method_catalog is not None:
+        method_catalog.persist(context.artifacts)
+        readonly_tools += (method_catalog.read_tool(),)
     profile = provider.profile
     maximum = min(max_output_tokens, profile.reserved_output_tokens)
     if maximum < 1:
@@ -580,7 +598,7 @@ async def execute_pi_once(
         reserved_output_tokens=maximum,
         budget=replace(profile.budget, max_turns=1, max_output_tokens=maximum),
     )
-    if readonly_tools:
+    if readonly_tools or expect_json:
         config = replace(config, budget=profile.budget)
     registry = ToolRegistry(context.artifacts)
     for descriptor in readonly_tools:
@@ -603,6 +621,9 @@ async def execute_pi_once(
         "content_hash": canonical_hash(initial_history),
         "bytes": history_bytes,
     }
+    if expect_json:
+        history_binding["answer_policy"] = MODEL_JSON_REPAIR_POLICY_ID
+    format_corrections = 0
     history_event_id = f"{invocation_id}.history.initial"
     previous_history = context.journal.event(history_event_id)
     if previous_history is not None and previous_history.payload != history_binding:
@@ -733,7 +754,7 @@ async def execute_pi_once(
     )
 
     async def callback(method: str, payload: dict[str, object]) -> dict[str, object]:
-        nonlocal history_bytes
+        nonlocal history_bytes, format_corrections
         serialized = json.dumps(payload, ensure_ascii=False)
         if any(value and value in serialized for value in context.secret_values):
             raise PermissionError("pi role response contains protected secret material")
@@ -800,7 +821,28 @@ async def execute_pi_once(
         if method == "turn_end":
             if result is None:
                 raise PermissionError("role has no authorized response")
-            return {"stop": not bool(result.tool_calls)}
+            if result.tool_calls:
+                return {"stop": False}
+            if expect_json:
+                try:
+                    load_model_json(str(result.assistant_message.get("content") or ""))
+                except ValueError:
+                    if format_corrections >= 2:
+                        raise ValueError(
+                            "role JSON answer remained invalid after two corrections"
+                        ) from None
+                    format_corrections += 1
+                    return {
+                        "stop": False,
+                        "correction": (
+                            "Resubmit the same answer as one complete JSON object. "
+                            "Include no introductory prose, analysis, or trailing commentary. "
+                            "Preserve the proposed values and evidence; this is only a format "
+                            "correction, not a new research task. The original output contract "
+                            "and remaining model, tool, token and time budgets still apply."
+                        ),
+                    }
+            return {"stop": True}
         if method == "compaction_lookup":
             event = context.journal.event(f"{invocation_id}.pi.compaction.{payload['number']}")
             if event is None:
@@ -837,6 +879,7 @@ async def execute_pi_once(
                     "messages": fixed,
                     "nativeMessages": native,
                     "tools": model_tools,
+                    **({"skills": method_catalog.metadata()} if method_catalog is not None else {}),
                 },
                 callback,
             ),

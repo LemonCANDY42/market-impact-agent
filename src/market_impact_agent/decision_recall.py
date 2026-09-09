@@ -25,6 +25,7 @@ MAX_REOPENED_TOKENS = 12_000
 _ALLOWED_SOURCE_SCHEMAS = frozenset(
     {
         "market-impact.research-thesis.v1",
+        "market-impact.research-thesis.v2",
     }
 )
 _FORBIDDEN_KEYS = frozenset(
@@ -188,27 +189,20 @@ class DecisionRecallProjection:
             self._insert(connection, entry)
 
     def read_current_thesis(
-        self, *, root_event_id: str, as_of: datetime
+        self,
+        *,
+        root_event_id: str,
+        as_of: datetime,
+        allowed_source_run_ids: frozenset[str] | None = None,
     ) -> RecallProjectionEntry | None:
-        _text(root_event_id, "root_event_id")
-        require_aware(as_of, "recall as_of")
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT * FROM decision_recall_entries
-                WHERE root_event_id = ? AND source_kind = 'research_thesis'
-                  AND source_as_of <= ?
-                ORDER BY source_as_of DESC, recall_id DESC LIMIT 1
-                """,
-                (root_event_id, _timestamp(as_of)),
-            ).fetchone()
-        if row is None:
-            return None
-        entry = _entry(row)
-        self._verify_source(entry)
-        if entry.source_as_of > as_of:
-            raise PermissionError("recall source is after the decision cutoff")
-        return entry
+        entries = self.search_prior_decisions(
+            root_event_id=root_event_id,
+            as_of=as_of,
+            limit=1,
+            allowed_source_run_ids=allowed_source_run_ids,
+            source_kind="research_thesis",
+        )
+        return entries[0] if entries else None
 
     def search_prior_decisions(
         self,
@@ -220,12 +214,23 @@ class DecisionRecallProjection:
         thesis_epoch: str | None = None,
         query: str | None = None,
         limit: int = MAX_SEARCH_RESULTS,
+        allowed_source_run_ids: frozenset[str] | None = None,
+        source_kind: str | None = None,
     ) -> tuple[RecallProjectionEntry, ...]:
         require_aware(as_of, "recall as_of")
         if isinstance(limit, bool) or not 1 <= limit <= MAX_SEARCH_RESULTS:
             raise ValueError(f"recall search limit must be in [1, {MAX_SEARCH_RESULTS}]")
         clauses = ["source_as_of <= ?"]
         parameters: list[object] = [_timestamp(as_of)]
+        if allowed_source_run_ids is not None:
+            if not allowed_source_run_ids:
+                return ()
+            authorized = sorted(allowed_source_run_ids)
+            clauses.append("source_run_id IN (" + ",".join("?" for _ in authorized) + ")")
+            parameters.extend(authorized)
+        if source_kind is not None:
+            clauses.append("source_kind = ?")
+            parameters.append(source_kind)
         for column, value in (
             ("root_event_id", root_event_id),
             ("thesis_epoch", thesis_epoch),
@@ -325,6 +330,7 @@ class DecisionRecallProjection:
             raise ValueError("recall source is not the signed terminal thesis")
         expected_kind = {
             "market-impact.research-thesis.v1": "research_thesis",
+            "market-impact.research-thesis.v2": "research_thesis",
         }[cast(str, source["schema_version"])]
         if entry.source_kind != expected_kind:
             raise ValueError("recall source kind differs from its authoritative artifact")
@@ -421,16 +427,10 @@ def decision_recall_tools(
         return payload
 
     async def current(_: dict[str, object]) -> object:
-        entries = projection.search_prior_decisions(
-            root_event_id=current_root_event_id, as_of=as_of
-        )
-        entry = next(
-            (
-                item
-                for item in entries
-                if allowed_source_run_ids is None or item.source_run_id in allowed_source_run_ids
-            ),
-            None,
+        entry = projection.read_current_thesis(
+            root_event_id=current_root_event_id,
+            as_of=as_of,
+            allowed_source_run_ids=allowed_source_run_ids,
         )
         if entry is None:
             return {"current_thesis": None}
@@ -463,6 +463,7 @@ def decision_recall_tools(
             thesis_epoch=_optional_text(arguments, "thesis_epoch"),
             query=_optional_text(arguments, "query"),
             limit=_optional_integer(arguments, "limit", MAX_SEARCH_RESULTS),
+            allowed_source_run_ids=allowed_source_run_ids,
         )
         return {
             "hits": [
@@ -591,9 +592,12 @@ def _safe_navigation_summary(source: Mapping[str, object]) -> str:
     horizon = source.get("primary_horizon_sessions")
     if type(horizon) is not int or horizon not in {1, 3, 5, 10, 20, 60}:
         raise ValueError("recall source has an invalid horizon")
-    if schema == "market-impact.research-thesis.v1":
+    if schema in {"market-impact.research-thesis.v1", "market-impact.research-thesis.v2"}:
         direction = source.get("base_case_direction")
-        if direction not in {"up", "down", "rangebound"}:
+        allowed_directions = {"up", "down", "rangebound"}
+        if schema == "market-impact.research-thesis.v2":
+            allowed_directions.add("unknown")
+        if direction not in allowed_directions:
             raise ValueError("recall thesis has an invalid direction")
         return f"research_thesis direction={direction} horizon_sessions={horizon}"
     raise ValueError("recall source is not an admitted decision artifact")

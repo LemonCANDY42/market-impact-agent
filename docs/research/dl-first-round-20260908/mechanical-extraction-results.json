@@ -1,0 +1,150 @@
+{
+  "method": "fixed local regex plus timestamp filter, no learning",
+  "cases": [
+    {
+      "case": "reported_growth",
+      "parsed": {
+        "growth_pct": 20.0,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "reported_decline",
+      "parsed": {
+        "growth_pct": -12.0,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "guidance_only",
+      "parsed": {
+        "growth_pct": 10.0,
+        "nature": "guidance",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "missing_revenue",
+      "parsed": {
+        "growth_pct": null,
+        "nature": "unknown",
+        "sources": []
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "explicit_correction",
+      "parsed": {
+        "growth_pct": 5.0,
+        "nature": "actual",
+        "sources": [
+          "b"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "unresolved_conflict",
+      "parsed": {
+        "growth_pct": null,
+        "nature": "conflicting",
+        "sources": [
+          "a",
+          "b"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "future_source",
+      "parsed": {
+        "growth_pct": 3.0,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "source_injection",
+      "parsed": {
+        "growth_pct": 8.0,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "unit_conversion",
+      "parsed": {
+        "growth_pct": null,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": false,
+      "field_hits": 2
+    },
+    {
+      "case": "zero_base",
+      "parsed": {
+        "growth_pct": null,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "range_guidance",
+      "parsed": {
+        "growth_pct": null,
+        "nature": "guidance",
+        "sources": [
+          "a"
+        ]
+      },
+      "exact": true,
+      "field_hits": 3
+    },
+    {
+      "case": "wrong_company_period",
+      "parsed": {
+        "growth_pct": null,
+        "nature": "unknown",
+        "sources": []
+      },
+      "exact": true,
+      "field_hits": 3
+    }
+  ],
+  "exact": 11,
+  "n": 12,
+  "field_hits": 35,
+  "field_total": 36
+}

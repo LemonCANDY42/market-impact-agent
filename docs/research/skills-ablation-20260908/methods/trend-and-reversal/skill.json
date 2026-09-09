@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "trend-and-reversal",
+  "version": "0.1.0",
+  "description": "Evaluate trend continuation and reversal risk without assuming every rebound or trend is tradable.",
+  "source": "research://skills-ablation-20260908/trend-and-reversal",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "e94158f759eb47aeefb66f0c6ee206960f8b51c2cecfc21140c0c4b2fe41eb8a",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "4ef9787eb04c855bf78fc8d58578be9c9a54509377f51d9456b1f889878e11e8"
+}

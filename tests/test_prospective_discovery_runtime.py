@@ -33,6 +33,7 @@ from market_impact_agent.historical_ashare_inputs import (
     ModeledHistoricalPolicy,
 )
 from market_impact_agent.model_budget import ModelBudget
+from market_impact_agent.native_candidate_proof import prove_native_candidates
 from market_impact_agent.on_demand_research import OnDemandResearch, ResearchSourceTemplate
 from market_impact_agent.pi_deployment import PiRuntimePermit
 from market_impact_agent.pi_runtime import PiRuntimeProvider, runtime_identity
@@ -42,7 +43,7 @@ from market_impact_agent.research_thesis_runtime import (
     ResearchThesisAuthority,
     ResearchThesisRunInputs,
 )
-from market_impact_agent.runtime_store import RunJournal
+from market_impact_agent.runtime_store import RunClaim, RunJournal, RunStatus
 from market_impact_agent.streaming_nautilus_account import HistoricalStreamingAccount
 from market_impact_agent.tushare_observation import (
     TushareObservationProvider,
@@ -180,6 +181,7 @@ def test_native_discovery_successor_and_source_admission(
 
     async def spawn(program: str, *args: str, **kwargs: Any):
         kwargs["env"]["DISCOVERY_WATCH"] = "1" if mode == "watch" else "0"
+        kwargs["env"]["DISCOVERY_WATCH_WAIT"] = "1" if mode == "watch" else "0"
         kwargs["env"]["DISCOVERY_NO_CANDIDATE"] = "1" if mode == "no_candidate" else "0"
         return await original(
             program,
@@ -203,6 +205,7 @@ def test_native_discovery_successor_and_source_admission(
         "510300.SH",
         "epoch",
         frozenset({1}),
+        schema_version="market-impact.research-thesis-inputs.v1",
         research_question=(
             "Identify a company or ETF implicated by the news "
             "and investigate it through the source tools."
@@ -245,8 +248,8 @@ def test_native_discovery_successor_and_source_admission(
             allowed_parent_agent_types=(RESEARCH_WATCH_PARENT_TYPE,),
             preloaded_skills=(),
             skill_manifest_hashes=(),
-            callback_max_turns=4,
-            callback_max_input_tokens=64000,
+            callback_max_turns=6,
+            callback_max_input_tokens=256000,
             callback_max_output_tokens=16000,
             callback_max_cost_microusd=400000,
         )
@@ -256,8 +259,8 @@ def test_native_discovery_successor_and_source_admission(
             model_profile_hash=profile.profile_hash,
             preloaded_skills=(),
             skill_manifest_hashes=(),
-            max_turns=4,
-            max_input_tokens=64000,
+            max_turns=6,
+            max_input_tokens=256000,
             max_output_tokens=16000,
             max_cost_microusd=400000,
         )
@@ -301,9 +304,10 @@ def test_native_discovery_successor_and_source_admission(
             final: ResearchThesisRunInputs,
             frozen: FrozenDataSnapshotInput,
             account: AccountStateSnapshot,
-            security: SecurityAdmission,
+            security: SecurityAdmission | None,
         ) -> PortfolioReviewAuthority:
-            assert engine is not None and historical is not None and security.execution_ready
+            assert engine is not None and historical is not None
+            assert security is not None and security.execution_ready
 
             market = historical
 
@@ -386,6 +390,15 @@ def test_native_discovery_successor_and_source_admission(
                 assert len(reports) == 2
                 assert reports[0].payload["proof_artifact_hash"] == original_proof
                 assert reports[1].payload["previous_report_event_id"] == reports[0].event_id
+            if not qualified:
+                proven = prove_native_candidates(
+                    authority, acquisition, result.acquisition.acquisitions
+                )
+                assert tuple(item.symbol for item in proven) == (
+                    () if mode in {"no_candidate", "wrong_identity"} else ("000001.SZ",)
+                )
+                if proven:
+                    assert proven[0].provenance["request_id"] is not None
             assert inputs.repository.evidence_pack.to_dict() == original_pack
             if mode in {"no_candidate", "wrong_identity"}:
                 assert result.status == "incomplete" and result.candidate is None
@@ -471,6 +484,34 @@ def test_native_discovery_successor_and_source_admission(
                     admission_authority_factory=admission_source,
                     portfolio_authority_factory=portfolio_source,
                     source_snapshot_ids=historical.snapshot_ids,
+                    source_templates=tuple(templates),
+                    maximum_runs=3,
+                )
+                # Hold the real acquisition lock while the callback records its
+                # request, then release it before reopening the callback runtime.
+                original_claim = RunJournal.try_claim_run
+                held_claims: list[RunClaim] = []
+
+                def acquire_elsewhere(self: RunJournal, run_id: str):
+                    if run_id.startswith("discovery-budget.research-request-"):
+                        claim = original_claim(self, run_id)
+                        if claim is not None:
+                            held_claims.append(claim)
+                    return original_claim(self, run_id)
+
+                with monkeypatch.context() as concurrent:
+                    concurrent.setattr(RunJournal, "try_claim_run", acquire_elsewhere)
+                    waiting = await run_prospective_watch_review(**callback_args)
+                assert waiting["status"] == "incomplete", waiting
+                assert (
+                    dispatcher.run_journal.get_run(dispatch.run.run_id).status is RunStatus.RUNNING
+                )
+                before_resume = budget.summary()["physical_requests"]
+                for claim in held_claims:
+                    claim.release()
+                callback_args["dispatcher"] = AgentWatchWakeDispatcher(
+                    AgentWatchAdmissionService(store, profiles=(), delegation_authority=resolver),
+                    run_journal=RunJournal(tmp_path / "watch-dispatch.sqlite3"),
                 )
                 followup = await run_prospective_watch_review(**callback_args)
                 assert followup["status"] == "portfolio_completed", followup
@@ -485,7 +526,8 @@ def test_native_discovery_successor_and_source_admission(
                 assert followup_binding["profile"]["pricing"] == profile.pricing.to_dict()
                 assert followup_binding["profile"]["budget"]["max_turns"] <= 2
                 after_callback = budget.summary()
-                assert after_callback["physical_requests"] == 7
+                assert after_callback["physical_requests"] == 8
+                assert after_callback["physical_requests"] == before_resume + 2
                 assert await run_prospective_watch_review(**callback_args) == followup
                 assert budget.summary() == after_callback
             before = [len(t.requests) for t in transports], budget.summary()

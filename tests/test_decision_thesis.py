@@ -1,5 +1,7 @@
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from functools import partial
+from typing import cast
 
 import pytest
 
@@ -232,3 +234,120 @@ def test_conditional_judge_triggers_on_direction_or_horizon_not_wording() -> Non
     assert not theses_semantically_disagree(thesis, wording_only)
     assert theses_semantically_disagree(thesis, opposing)
     assert theses_semantically_disagree(thesis, shorter)
+
+
+def test_v2_unknown_preserves_absence_and_binds_descriptive_evidence() -> None:
+    from market_impact_agent.decision_thesis import EventSupport, parse_research_thesis_v2
+
+    value = {
+        **_model_answer(),
+        "base_case_direction": "unknown",
+        "event_support": "unsupported",
+        "expectations": "No event surprise is established by current context.",
+        "revision_conclusion": "Retain uncertainty pending event evidence.",
+        "transmission": [],
+        "evidence_refs": [],
+        "counterevidence_refs": [],
+        "typed_unknowns": ["No event-specific source supplied."],
+    }
+    parse = partial(
+        parse_research_thesis_v2,
+        root_event_id="root",
+        thesis_epoch="epoch",
+        as_of=NOW,
+        target_id="ETF",
+        evidence_ids=frozenset({"earnings-1"}),
+    )
+    thesis = parse(value)
+    assert thesis.base_case_direction is BaseCaseDirection.UNKNOWN
+    assert thesis.event_support is EventSupport.UNSUPPORTED
+    assert thesis.transmission == thesis.evidence_refs == ()
+    assert thesis.target_id == "ETF"
+    assert validate_agent_contract(thesis.to_dict(), "research-thesis-v2.schema.json") == ()
+    with pytest.raises(ValueError, match="explicit gaps"):
+        parse({**value, "typed_unknowns": []})
+    with pytest.raises(ValueError, match="supported event"):
+        parse({**value, "event_support": "supported"})
+    with pytest.raises(ValueError, match="unauthorized"):
+        parse({**value, "target_id": "OTHER"})
+    mapped = parse(
+        {**value, "evidence_refs": ["Revenue release"]},
+        evidence_choices={"Revenue release": "earnings-1"},
+    )
+    assert mapped.evidence_refs == ("earnings-1",)
+    supported = parse(
+        {
+            **value,
+            "event_support": "supported",
+            "evidence_refs": ["earnings-1"],
+            "typed_unknowns": ["The issuer's linkage to this ETF is not established."],
+        }
+    )
+    assert supported.base_case_direction is BaseCaseDirection.UNKNOWN
+    assert supported.event_support is EventSupport.SUPPORTED
+    assert supported.transmission == ()
+    assert validate_agent_contract(supported.to_dict(), "research-thesis-v2.schema.json") == ()
+    with pytest.raises(ValueError, match="explicit gaps"):
+        parse(
+            {
+                **value,
+                "event_support": "supported",
+                "evidence_refs": ["earnings-1"],
+                "typed_unknowns": [],
+            }
+        )
+
+
+def test_v2_candidate_comparison_requires_exact_frozen_proofs() -> None:
+    from market_impact_agent.decision_thesis import parse_research_thesis_v2
+
+    value = {
+        **_model_answer(),
+        "event_support": "supported",
+        "expectations": "Slow growth",
+        "revision_conclusion": "Initial analysis",
+        "candidate_comparisons": [
+            {
+                "candidate_ref": "ETF",
+                "transmission": ["estimate revisions"],
+                "support_refs": ["snapshot-1"],
+                "counter_refs": [],
+                "comparison_reason": "Direct exposure",
+                "gaps": [],
+            }
+        ],
+    }
+    parse = partial(
+        parse_research_thesis_v2,
+        root_event_id="root",
+        thesis_epoch="epoch",
+        as_of=NOW,
+        target_id="ETF",
+        evidence_ids=frozenset({"earnings-1", "margin-1"}),
+    )
+    with pytest.raises(ValueError, match="outside frozen candidate"):
+        parse(value)
+    with pytest.raises(ValueError, match="outside candidate proof"):
+        parse(value, candidate_proofs={"ETF": ("other",)})
+    thesis = parse(value, candidate_proofs={"ETF": ("snapshot-1",)})
+    assert thesis.candidate_comparisons[0].candidate_ref == "ETF"
+    comparison = cast(list[dict[str, object]], value["candidate_comparisons"])[0]
+    comparison["transmission"] = "estimate revisions"
+    comparison["gaps"] = "Sector exposure is not established."
+    normalized = parse(value, candidate_proofs={"ETF": ("snapshot-1",)})
+    assert normalized.candidate_comparisons[0].transmission == ("estimate revisions",)
+    assert normalized.candidate_comparisons[0].gaps == ("Sector exposure is not established.",)
+    assert validate_agent_contract(normalized.to_dict(), "research-thesis-v2.schema.json") == ()
+    assert research_thesis_text_normalizations(value) == (
+        {
+            "path": "candidate_comparisons[0].transmission",
+            "operation": "narrative_string_to_singleton_array",
+        },
+        {
+            "path": "candidate_comparisons[0].gaps",
+            "operation": "narrative_string_to_singleton_array",
+        },
+    )
+    comparison["support_refs"] = "snapshot-1"
+    with pytest.raises(ValueError, match="support_refs must be a string array"):
+        parse(value, candidate_proofs={"ETF": ("snapshot-1",)})

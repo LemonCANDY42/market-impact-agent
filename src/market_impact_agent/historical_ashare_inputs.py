@@ -48,6 +48,7 @@ class ModeledHistoricalPolicy:
     limit_basis: str = "reported_stk_limit"
     research_projection: str = "completed_raw_prices_v1"
     cash_only_inception_at: datetime | None = None
+    review_timing: str = "preopen"
 
     def to_dict(self) -> dict[str, object]:
         """Preserve legacy serialized identities when the new basis is not selected."""
@@ -63,6 +64,8 @@ class ModeledHistoricalPolicy:
             result["research_projection"] = self.research_projection
         if self.cash_only_inception_at is not None:
             result["cash_only_inception_at"] = self.cash_only_inception_at.isoformat()
+        if self.review_timing != "preopen":
+            result["review_timing"] = self.review_timing
         return result
 
     def validate_bootstrap(self, session: date) -> None:
@@ -72,6 +75,8 @@ class ModeledHistoricalPolicy:
             raise ValueError("cash-only inception differs from registered bootstrap open")
 
     def __post_init__(self) -> None:
+        if self.review_timing not in {"preopen", "after_close"}:
+            raise ValueError("unsupported historical review timing")
         if self.research_projection not in {"completed_raw_prices_v1", "dynamic_ashare_sources_v1"}:
             raise ValueError("unsupported historical research projection")
         if (self.limit_basis == CASH_ONLY_INCEPTION_BASIS) != (
@@ -196,23 +201,18 @@ class HistoricalAShareInputs:
         self, api: str, arguments: Mapping[str, object], cutoff: datetime
     ) -> str | None:
         """Authorize only dated raw price research through a completed registered session."""
-        if (
-            self.policy.research_projection == "dynamic_ashare_sources_v1"
-            and self.qualification_policy is not None
-            and api
-            in {
-                "stock_basic",
-                "etf_basic",
-                "fund_basic",
-                "trade_cal",
-                "suspend_d",
-                "stk_limit",
-                "adj_factor",
-                "fund_adj",
-                "dividend",
-                "fund_div",
-            }
-        ):
+        if self.policy.research_projection == "dynamic_ashare_sources_v1" and api in {
+            "stock_basic",
+            "etf_basic",
+            "fund_basic",
+            "trade_cal",
+            "suspend_d",
+            "stk_limit",
+            "adj_factor",
+            "fund_adj",
+            "dividend",
+            "fund_div",
+        }:
             if api == "trade_cal":
                 return (
                     None
@@ -257,10 +257,7 @@ class HistoricalAShareInputs:
         self, snapshot: DataSnapshot, api: str, cutoff: datetime
     ) -> dict[str, object]:
         """Project only route-specific dated facts; mutable current metadata is absent."""
-        if (
-            self.policy.research_projection != "dynamic_ashare_sources_v1"
-            or self.qualification_policy is None
-        ):
+        if self.policy.research_projection != "dynamic_ashare_sources_v1":
             raise PermissionError("historical source projection is not registered")
         identity_fields = {
             "stock_basic": {"ts_code", "symbol", "exchange", "list_date", "delist_date"},
@@ -394,6 +391,78 @@ class HistoricalAShareInputs:
             else [],
             "source_snapshots": list(self.snapshot_ids),
         }
+
+    def calendar_window(self, exchange: str, start: date, end: date) -> dict[str, object]:
+        """Reopen a complete dated calendar without substituting weekdays for sessions."""
+        if exchange not in {"SSE", "SZSE"} or start > end:
+            raise ValueError("calendar window requires an exchange and ordered dates")
+        records: dict[date, tuple[bool, str]] = {}
+        for row, digest in self._rows("trade_cal", None):
+            if row.get("exchange") != exchange:
+                continue
+            day = _day(row["cal_date"])
+            if not start <= day <= end:
+                continue
+            value = str(row.get("is_open"))
+            if value not in {"0", "1"}:
+                raise ValueError("calendar source has an unknown open/closed value")
+            if day in records and records[day][0] != (value == "1"):
+                raise ValueError("calendar contains unresolved source revisions")
+            records[day] = value == "1", digest
+        missing = [
+            (start + timedelta(days=offset)).isoformat()
+            for offset in range((end - start).days + 1)
+            if start + timedelta(days=offset) not in records
+        ]
+        return {
+            "exchange": exchange,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "sessions": [day.isoformat() for day, (opened, _) in sorted(records.items()) if opened],
+            "missing_dates": missing,
+            "source_record_hashes": sorted({digest for _, digest in records.values()}),
+            "source_snapshots": list(self.snapshot_ids),
+        }
+
+    def research_identity(
+        self, symbol: str, cutoff: datetime
+    ) -> tuple[str, str, tuple[str, ...]] | None:
+        """Listing identity for a research recommendation, without trading qualification.
+
+        The same registered historical projection used by native tools removes
+        current names/classifications and future listing facts. Fees, prices and
+        permission remain the separate execution admission's responsibility.
+        """
+        if self.policy.research_projection != "dynamic_ashare_sources_v1":
+            return None
+        identities: set[tuple[str, str]] = set()
+        hashes: set[str] = set()
+        for table in self._tables():
+            if table.api not in {"stock_basic", "etf_basic"}:
+                continue
+            projection = self.research_projection(table.snapshot, table.api, cutoff)
+            for item in cast(list[dict[str, object]], projection["rows"]):
+                row = cast(dict[str, object], item["record"])
+                if row.get("ts_code") != symbol:
+                    continue
+                expected = "SSE" if symbol.endswith(".SH") else "SZSE"
+                if row.get("exchange") not in (
+                    {"SSE", "SH", "XSHG"} if expected == "SSE" else {"SZSE", "SZ", "XSHE"}
+                ):
+                    raise PermissionError("research listing identity differs from its exchange")
+                identities.add(
+                    (
+                        "XSHG" if expected == "SSE" else "XSHE",
+                        "equity" if table.api == "stock_basic" else "exchange_traded_fund",
+                    )
+                )
+                hashes.add(str(item["source_record_hash"]))
+        if len(identities) > 1:
+            raise PermissionError("research listing sources contain conflicting instrument classes")
+        if not identities:
+            return None
+        venue, instrument_class = next(iter(identities))
+        return venue, instrument_class, tuple(sorted(hashes))
 
     def _tables(self) -> tuple[_Table, ...]:
         # One verified immutable graph per frozen source binding. New bindings
@@ -754,6 +823,8 @@ class HistoricalAShareInputs:
         This method never exposes that day's closing price or daily volume.
         """
         require_aware(cutoff, "historical security cutoff")
+        if self.policy.review_timing == "after_close":
+            return self._after_close_security(symbol, cutoff)
         day = cutoff.astimezone(_SHANGHAI).date()
         spec, rule_hashes = self._rule(symbol, cutoff)
         if spec is None:
@@ -836,7 +907,7 @@ class HistoricalAShareInputs:
         else:
             gaps.add("daily_limits_unverified")
         limit_diagnostics = None
-        if self.policy.limit_basis in QUALIFIED_ETF_BASES:
+        if api == "fund_daily" and self.policy.limit_basis in QUALIFIED_ETF_BASES:
             gaps.discard("daily_limits_unverified")
             lower, upper, limit_diagnostics = self._qualified_limits(
                 symbol, day, spec, gaps, hashes
@@ -883,6 +954,86 @@ class HistoricalAShareInputs:
             source_record_hashes=tuple(sorted(hashes)),
             gaps=tuple(sorted(gaps)),
             limit_diagnostics=limit_diagnostics,
+        )
+
+    def _after_close_security(
+        self, symbol: str, cutoff: datetime
+    ) -> HistoricalSecurityEvidence | None:
+        """Current close facts with provisional next-session normal price bounds.
+
+        No next-session price, halt, factor or reported limit is consulted. These
+        bounds support conservative sizing only; session() must separately qualify
+        actual execution. Announced ex-date effects invalidate normal bounds.
+        """
+        day = cutoff.astimezone(_SHANGHAI).date()
+        if not _at(day, time(15)) < cutoff < _at(day + timedelta(days=1), time(0)):
+            return None
+        spec, _ = self._rule(symbol, cutoff)
+        if spec is None:
+            return None
+        current = self.session(symbol, day)
+        gaps = set(current.gaps)
+        hashes = set(current.source_record_hashes)
+        exchange = "SSE" if symbol.endswith(".SH") else "SZSE"
+        following = sorted(
+            (_day(row["cal_date"]), digest)
+            for row, digest in self._rows("trade_cal", None)
+            if row.get("exchange") == exchange
+            and str(row.get("is_open")) == "1"
+            and _day(row["cal_date"]) > day
+        )
+        next_day = following[0][0] if following else day + timedelta(days=1)
+        if not following:
+            gaps.add("next_trading_calendar_session_unverified")
+        else:
+            hashes.add(following[0][1])
+        action_api = "fund_div" if spec.instrument_class == "exchange_traded_fund" else "dividend"
+        for row, digest in self._rows(action_api, symbol):
+            announced = row.get("ann_date")
+            if not announced or _day(announced) > day:
+                continue
+            if row.get("ex_date") and _day(row["ex_date"]) == next_day:
+                gaps.add("announced_next_session_corporate_action_requires_requalification")
+                hashes.add(digest)
+        close = current.bar.close if current.bar else None
+        limits = (None, None)
+        if close is not None:
+            limits = tuple(
+                (close * (1 + sign * spec.price_limit_ratio) / spec.price_increment).quantize(
+                    Decimal(1), rounding="ROUND_HALF_UP"
+                )
+                * spec.price_increment
+                for sign in (-1, 1)
+            )
+        api = "fund_daily" if spec.instrument_class == "exchange_traded_fund" else "daily"
+        raw = self._one(api, symbol, day)
+        amount = _decimal(raw[0].get("amount")) if raw else None
+        return HistoricalSecurityEvidence(
+            symbol=symbol,
+            venue=spec.venue,
+            instrument_class=spec.instrument_class,
+            cutoff=cutoff,
+            effective_from=_at(day, time(15)),
+            effective_until=_at(next_day, time(9, 30, 0, 1)),
+            raw_price=close,
+            raw_price_observed_at=_at(day, time(15)) if close is not None else None,
+            halted=current.bar.suspended if current.bar else None,
+            lower_limit=limits[0],
+            upper_limit=limits[1],
+            turnover=amount * 1000 if amount is not None else None,
+            corporate_action_status="none"
+            if not any("corporate_action" in g for g in gaps)
+            else None,
+            buy_lot_size=spec.lot_size,
+            price_tick=spec.price_increment,
+            source_record_hashes=tuple(sorted(hashes)),
+            gaps=tuple(sorted(gaps)),
+            limit_diagnostics={
+                "limit_basis": "after_close_provisional_normal_session_v1",
+                "actual_execution_requires_session_requalification": True,
+                "earliest_execution_at": _at(next_day, time(9, 30)).isoformat(),
+                "future_session_observations_used": False,
+            },
         )
 
     def _zero_entitlement_distribution(self, row: Mapping[str, Any], session: date) -> bool:
@@ -996,7 +1147,7 @@ class HistoricalAShareInputs:
                     ):
                         gaps.add("effective_rule_daily_limit_mismatch")
         limit_diagnostics = None
-        if self.policy.limit_basis in QUALIFIED_ETF_BASES:
+        if etf and self.policy.limit_basis in QUALIFIED_ETF_BASES:
             gaps.difference_update(
                 {
                     "daily_limits_unverified",
@@ -1036,6 +1187,20 @@ class HistoricalAShareInputs:
                 continue
             ex_date = _day(row["ex_date"]) if row.get("ex_date") else None
             pay_date = _day(row["pay_date"]) if row.get("pay_date") else None
+            record_date = _day(row["record_date"]) if row.get("record_date") else None
+            inception = self.policy.cash_only_inception_at
+            if (
+                not etf
+                and inception is not None
+                and record_date is not None
+                and ex_date is not None
+                and record_date < ex_date
+                and _at(ex_date, time(15)) < inception
+            ):
+                # This account held no shares on the earlier record date. A
+                # decades-old stock distribution's absent cash payment field
+                # cannot create an entitlement in a newly funded cash account.
+                continue
             if ex_date is None or pay_date is None:
                 gaps.add("corporate_action_dates_unverified")
                 continue

@@ -1,0 +1,81 @@
+{
+  "cases": [
+    {
+      "target_input_tokens": 4000,
+      "fact_position": "beginning",
+      "input_tokens": 3999,
+      "output_tokens": 30,
+      "elapsed_seconds": 1.431053945000258,
+      "raw_text": "{\n  \"growth_pct\": 20,\n  \"nature\": \"actual\",\n  \"sources\": [\"a\"]\n}",
+      "parsed": {
+        "growth_pct": 20,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "json_valid": true,
+      "exact": true,
+      "finish_reason": "stop",
+      "memory_mib_after": 27460
+    },
+    {
+      "target_input_tokens": 4000,
+      "fact_position": "end",
+      "input_tokens": 3999,
+      "output_tokens": 32,
+      "elapsed_seconds": 1.4570911050000177,
+      "raw_text": "{\n  \"growth_pct\": 20.0,\n  \"nature\": \"actual\",\n  \"sources\": [\"a\"]\n}",
+      "parsed": {
+        "growth_pct": 20.0,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "json_valid": true,
+      "exact": true,
+      "finish_reason": "stop",
+      "memory_mib_after": 27460
+    },
+    {
+      "target_input_tokens": 14000,
+      "fact_position": "beginning",
+      "input_tokens": 13999,
+      "output_tokens": 30,
+      "elapsed_seconds": 1.9774549650001063,
+      "raw_text": "{\n  \"growth_pct\": 20,\n  \"nature\": \"actual\",\n  \"sources\": [\"a\"]\n}",
+      "parsed": {
+        "growth_pct": 20,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "json_valid": true,
+      "exact": true,
+      "finish_reason": "stop",
+      "memory_mib_after": 28514
+    },
+    {
+      "target_input_tokens": 14000,
+      "fact_position": "end",
+      "input_tokens": 13999,
+      "output_tokens": 30,
+      "elapsed_seconds": 1.9787984989998222,
+      "raw_text": "{\n  \"growth_pct\": 20,\n  \"nature\": \"actual\",\n  \"sources\": [\"a\"]\n}",
+      "parsed": {
+        "growth_pct": 20,
+        "nature": "actual",
+        "sources": [
+          "a"
+        ]
+      },
+      "json_valid": true,
+      "exact": true,
+      "finish_reason": "stop",
+      "memory_mib_after": 28514
+    }
+  ],
+  "scope": "synthetic capacity/retrieval canary only, eager, one sequence"
+}

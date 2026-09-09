@@ -10,8 +10,16 @@ globalThis.fetch = async (input, init) => {
   }
   if (process.env.ROLE_TOOL_FIXTURE) {
     const queryRepair = process.env.ROLE_TOOL_FIXTURE === 'query_validation';
-    const name = queryRepair ? 'lookup_price_limits' : 'read_frozen_fact';
+    const methodRead = process.env.ROLE_TOOL_FIXTURE === 'method';
+    const name = methodRead ? 'read' : queryRepair ? 'lookup_price_limits' : 'read_frozen_fact';
     const results = body.input.filter(item => item.type === 'function_call_output');
+    const serialized = JSON.stringify(body);
+    if (methodRead) {
+      assert.ok(serialized.includes('<available_skills>'));
+      assert.ok(serialized.includes('optional-test-method'));
+      assert.ok(!serialized.includes('NEVER_READ_METHOD_BODY'));
+      assert.equal(serialized.includes('ONLY_AFTER_READ_METHOD_BODY'), results.length > 0);
+    }
     if (queryRepair && results.length) {
       assert.ok(JSON.stringify(results[0]).includes('invalid_query_arguments'));
       assert.ok(JSON.stringify(results[0]).includes('do not combine'));
@@ -21,7 +29,7 @@ globalThis.fetch = async (input, init) => {
       const argumentsJson = queryRepair ? JSON.stringify({
         ts_code: '600000.SH', start_date: '20260827', end_date: '20260827',
         ...(results.length === 0 ? {trade_date: '20260827'} : {}),
-      }) : '{}';
+      }) : methodRead ? JSON.stringify({path: serialized.match(/<location>([^<]+)<\/location>/)[1]}) : '{}';
       const item = {type: 'function_call', id: `fc-read-${results.length}`, call_id: `read-${results.length + 1}`,
         name, arguments: argumentsJson};
       const frames = [
@@ -36,7 +44,7 @@ globalThis.fetch = async (input, init) => {
       return new Response(frames.map(frame => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`).join(''),
         {headers: {'Content-Type': 'text/event-stream'}});
     }
-    assert.ok(JSON.stringify(body.input).includes(queryRepair ? 'continuation_required' : 'frozen-revenue'));
+    assert.ok(JSON.stringify(body.input).includes(methodRead ? 'ONLY_AFTER_READ_METHOD_BODY' : queryRepair ? 'continuation_required' : 'frozen-revenue'));
   } else assert.ok(!body.tools?.length);
   let answer = process.env.PORTFOLIO_FIXTURE_ANSWER;
   assert.ok(answer);
@@ -90,6 +98,10 @@ globalThis.fetch = async (input, init) => {
       request.signal.addEventListener('abort', () => reject(new Error('synthetic abort')), {once: true});
       if (request.signal.aborted) reject(new Error('synthetic abort'));
     });
+  }
+  if (process.env.ROLE_JSON_WRAPPER_FIXTURE &&
+      (process.env.ROLE_JSON_WRAPPER_FIXTURE === 'always' || !JSON.stringify(body.input).includes('Resubmit the same answer'))) {
+    answer = 'Here is the selected answer:\n```json\n' + answer + '\n```';
   }
   const item = {type: 'message', id: 'msg-portfolio', role: 'assistant',
     content: [{type: 'output_text', text: answer, annotations: []}]};

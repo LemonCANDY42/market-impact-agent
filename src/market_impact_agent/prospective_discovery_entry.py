@@ -322,7 +322,7 @@ async def run_prepared_prospective_discovery(
     """Run each registered model with the same received facts and separate provenance."""
     from market_impact_agent.pi_runtime import PiRuntimeProvider
     from market_impact_agent.prospective_discovery_runtime import (
-        discovery_acquisition_wait,
+        discovery_recoverable_wait,
         latest_discovery_report,
         run_prospective_discovery,
     )
@@ -413,7 +413,7 @@ async def run_prepared_prospective_discovery(
                 if prior_row.get("status") == "incomplete" and "proof_artifact_hash" in prior_row
                 else {}
             )
-            if not discovery_acquisition_wait(proof):
+            if not discovery_recoverable_wait(proof):
                 rows.append(prior_row)
                 continue
             run_ids = cast(list[str], proof["research_run_ids"])
@@ -534,11 +534,21 @@ async def run_prepared_prospective_discovery(
                 if composition is None
                 else composition.capture_context,
                 maximum_runs=int(str(registration["maximum_runs_per_model"])),
+                held_targets=() if composition is None else composition.held_targets(),
             )
             rows.append(
                 {"model": profile.model, "effort": profile.reasoning_effort, **result.to_dict()}
             )
-            if composition is not None and result.portfolio_run_id is not None:
+            if result.execution_gaps:
+                rows[-1].update(
+                    execution_status="waiting_for_evidence",
+                    execution_dispatched=False,
+                )
+            elif (
+                composition is not None
+                and result.portfolio_run_id is not None
+                and result.status == "portfolio_completed"
+            ):
                 from market_impact_agent.prospective_mock_execution import (
                     dispatch_prospective_mock_review,
                 )

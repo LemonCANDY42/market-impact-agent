@@ -1067,3 +1067,103 @@ def test_failed_parse_retains_received_page_in_snapshot_cas(tmp_path: Path) -> N
         attempt.raw_response_hash, media_type="application/octet-stream"
     ).path.read_bytes()
     assert b'"items"' in raw and TOKEN.encode() not in raw
+
+
+def test_news_exact_repeats_preserve_pages_pagination_and_observation_identity(
+    tmp_path: Path,
+) -> None:
+    config = _configs()[0]
+    parameters = _route_specs()[0][-1]
+    row = _values(config.api_name, config.fields)
+    transport = FakeTransport(
+        [_response(config.fields, [row, row]), _response(config.fields, [row])]
+    )
+    provider = TushareObservationProvider(
+        TOKEN, (config,), transport=transport, clock=lambda: RETRIEVED
+    )
+    store = LocalDataSnapshotStore(tmp_path / "capture")
+    harness = DataInputHarness(store)
+    harness.register(provider)
+    snapshot = asyncio.run(
+        harness.execute(_query(provider, config, parameters), mode=DataQueryMode.FETCH_IF_MISSING)
+    )
+    assert snapshot.coverage_complete and len(snapshot.observations) == 1
+    assert [r["params"]["offset"] for r in transport.requests] == [0, 2]  # type: ignore[index]
+    raw_hash = snapshot.attempts[0].raw_response_hash
+    assert raw_hash is not None
+    payload = store.artifacts.get(raw_hash, media_type="application/octet-stream").path.read_bytes()
+    capture = load_tushare_observation_capture_bundle(
+        payload, config=config, parameters=parameters, retrieved_at=RETRIEVED
+    )
+    assert [len(json.loads(p.response_body)["data"]["items"]) for p in capture.pages] == [2, 1]
+    replay = provider.replay((capture,))
+    replay_harness = DataInputHarness(LocalDataSnapshotStore(tmp_path / "replay"))
+    replay_harness.register(replay)
+    replayed = asyncio.run(
+        replay_harness.execute(
+            _query(provider, config, parameters), mode=DataQueryMode.FETCH_IF_MISSING
+        )
+    )
+    assert replayed.snapshot_id == snapshot.snapshot_id
+    reference = TushareObservationProvider(
+        TOKEN,
+        (config,),
+        transport=FakeTransport([_response(config.fields, [row])]),
+        clock=lambda: RETRIEVED,
+    )
+    single = asyncio.run(
+        reference.fetch(
+            query=_query(reference, config, parameters), source=_source(reference, config)
+        )
+    )
+    assert single.observations == snapshot.observations
+    assert len(transport.requests) == 2
+
+
+@pytest.mark.parametrize("across_pages", [False, True])
+def test_news_conflicting_repeat_is_rejected_and_raw_pages_retained(
+    tmp_path: Path, across_pages: bool
+) -> None:
+    config = _configs()[0]
+    row = _values(config.api_name, config.fields)
+    conflicting = list(row)
+    conflicting[config.fields.index("channels")] = "different-channel"
+    pages = [[row, row], [conflicting]] if across_pages else [[row, conflicting]]
+    provider = TushareObservationProvider(
+        TOKEN,
+        (config,),
+        transport=FakeTransport([_response(config.fields, page) for page in pages]),
+        clock=lambda: RETRIEVED,
+    )
+    store = LocalDataSnapshotStore(tmp_path)
+    harness = DataInputHarness(store)
+    harness.register(provider)
+    snapshot = asyncio.run(
+        harness.execute(
+            _query(provider, config, _route_specs()[0][-1]), mode=DataQueryMode.FETCH_IF_MISSING
+        )
+    )
+    assert not snapshot.coverage_complete and not snapshot.observations
+    assert snapshot.attempts[0].error_kind == "duplicate_primary_key"
+    raw_hash = snapshot.attempts[0].raw_response_hash
+    assert raw_hash is not None
+    raw = store.artifacts.get(raw_hash, media_type="application/octet-stream").path.read_bytes()
+    assert b"different-channel" in raw
+
+
+def test_news_all_full_duplicate_pages_do_not_prove_completion() -> None:
+    config = _configs()[0]
+    row = _values(config.api_name, config.fields)
+    provider = TushareObservationProvider(
+        TOKEN,
+        (config,),
+        transport=FakeTransport([_response(config.fields, [row, row])] * 2),
+        clock=lambda: RETRIEVED,
+    )
+    response = asyncio.run(
+        provider.fetch(
+            query=_query(provider, config, _route_specs()[0][-1]), source=_source(provider, config)
+        )
+    )
+    assert response.error_kind == "pagination_limit_exceeded"
+    assert response.status is DataFetchStatus.ERROR and not response.observations

@@ -267,8 +267,12 @@ class TradingMandateV2:
         require_aware(self.valid_until, "valid_until")
         if self.valid_until <= self.valid_from:
             raise ValueError("valid_until must be after valid_from")
-        if self.valid_until - self.valid_from > timedelta(days=1):
-            raise ValueError("Trading Mandate v2 validity cannot exceed one day")
+        if self.valid_until - self.valid_from > self._maximum_validity():
+            raise ValueError(
+                "Trading Mandate v2 validity cannot exceed one day"
+                if self._maximum_validity() == timedelta(days=1)
+                else "historical Trading Mandate validity cannot exceed fourteen days"
+            )
         if self.environment not in self._accepted_environments():
             raise ValueError("Trading Mandate environment is outside its versioned scope")
         if not self.allowed_instruments:
@@ -329,6 +333,9 @@ class TradingMandateV2:
         ):
             raise ValueError("Trading Mandate v2 kill predicates cannot be disabled")
 
+    def _maximum_validity(self) -> timedelta:
+        return timedelta(days=1)
+
     def _accepted_currency(self) -> str:
         return "USD"
 
@@ -374,6 +381,11 @@ class TradingMandateV3(TradingMandateV2):
 
     universe_binding_hash: str
     execution_scope: str = "historical_backtest"
+
+    def _maximum_validity(self) -> timedelta:
+        # A frozen close-to-next-open historical instruction can cross a market
+        # holiday. Source-bound price/venue validity still limits actual admission.
+        return timedelta(days=14 if self.environment is TradingEnvironment.BACKTEST else 1)
 
     def _accepted_currency(self) -> str:
         return "CNY"

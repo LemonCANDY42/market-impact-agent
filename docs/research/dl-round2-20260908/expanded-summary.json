@@ -1,0 +1,774 @@
+{
+  "complete_fixed_trials": 42,
+  "candidates": [
+    {
+      "candidate": "ridge-A",
+      "family": "ridge",
+      "tier": "A",
+      "fold_mean_rankic": {
+        "A": 0.0838576828144826,
+        "B": 0.08331320748376908
+      },
+      "yearly_rankic": {
+        "2021": 0.07628510530859549,
+        "2022": 0.09165487067012061,
+        "2023": 0.06696994939857796,
+        "2024": 0.1000719721304481
+      },
+      "positive_seeds_by_fold": {
+        "A": 1,
+        "B": 1
+      },
+      "raw_rankic_interval": {
+        "mean": 0.08358544514912583,
+        "lower_95": 0.06724750518284135,
+        "upper_95": 0.09359278073952684
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.08458489317349423,
+        "B": 0.08528284201742493
+      },
+      "size_partial_interval": {
+        "mean": 0.08493386759545958,
+        "lower_95": 0.06907989479636649,
+        "upper_95": 0.09406809496072091
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.3207198160995046,
+            "compound_relative_wealth_return": 0.8173417954119846,
+            "net_equity_max_drawdown": -0.28133359271487535,
+            "mean_daily_turnover": 0.17668327904340575
+          },
+          "2": {
+            "compound_net_total_return": 0.17985401884507457,
+            "compound_relative_wealth_return": 0.6235071169481166,
+            "net_equity_max_drawdown": -0.2897409173301221,
+            "mean_daily_turnover": 0.17872797925747277
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.663088595606117,
+            "compound_relative_wealth_return": 0.6230986001759147,
+            "net_equity_max_drawdown": -0.10748411590649165,
+            "mean_daily_turnover": 0.1501387522930917
+          },
+          "2": {
+            "compound_net_total_return": 0.5664767161125299,
+            "compound_relative_wealth_return": 0.528809813167995,
+            "net_equity_max_drawdown": -0.12381969773851331,
+            "mean_daily_turnover": 0.1515354748357917
+          }
+        }
+      },
+      "passes_nomination_gate": true
+    },
+    {
+      "candidate": "ridge-B",
+      "family": "ridge",
+      "tier": "B",
+      "fold_mean_rankic": {
+        "A": 0.09728014564042939,
+        "B": 0.08911799555157386
+      },
+      "yearly_rankic": {
+        "2021": 0.09017508571845284,
+        "2022": 0.10459594886517644,
+        "2023": 0.08263193455941595,
+        "2024": 0.09576895639946462
+      },
+      "positive_seeds_by_fold": {
+        "A": 1,
+        "B": 1
+      },
+      "raw_rankic_interval": {
+        "mean": 0.09319907059600163,
+        "lower_95": 0.07843239186784286,
+        "upper_95": 0.1025034283383194
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.09554129125423613,
+        "B": 0.0889773836514616
+      },
+      "size_partial_interval": {
+        "mean": 0.09225933745284887,
+        "lower_95": 0.07656079826713662,
+        "upper_95": 0.10100699684321918
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.30397277719781557,
+            "compound_relative_wealth_return": 0.7942974726310073,
+            "net_equity_max_drawdown": -0.2179805724509727,
+            "mean_daily_turnover": 0.12989133988725104
+          },
+          "2": {
+            "compound_net_total_return": 0.2241977156889574,
+            "compound_relative_wealth_return": 0.6845250956708611,
+            "net_equity_max_drawdown": -0.22997721810236316,
+            "mean_daily_turnover": 0.132589397193986
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.37279394776608354,
+            "compound_relative_wealth_return": 0.3397842669572466,
+            "net_equity_max_drawdown": -0.17311304667017258,
+            "mean_daily_turnover": 0.13337603479915847
+          },
+          "2": {
+            "compound_net_total_return": 0.25335297597702966,
+            "compound_relative_wealth_return": 0.2232153273188806,
+            "net_equity_max_drawdown": -0.18988386260938528,
+            "mean_daily_turnover": 0.13746035561116185
+          }
+        }
+      },
+      "increment_vs_previous_tier": {
+        "candidate": "ridge-B",
+        "reference": "ridge-A",
+        "mean": 0.009613625446875787,
+        "lower_95": 0.005170249478165207,
+        "upper_95": 0.014742630411371473,
+        "fold_differences": {
+          "A": 0.013422462825946783,
+          "B": 0.005804788067804791
+        }
+      },
+      "passes_nomination_gate": true
+    },
+    {
+      "candidate": "ridge-C",
+      "family": "ridge",
+      "tier": "C",
+      "fold_mean_rankic": {
+        "A": 0.09756888061303381,
+        "B": 0.08934595878429076
+      },
+      "yearly_rankic": {
+        "2021": 0.09036153832315647,
+        "2022": 0.10499000000472954,
+        "2023": 0.08293425760792561,
+        "2024": 0.0959206693125974
+      },
+      "positive_seeds_by_fold": {
+        "A": 1,
+        "B": 1
+      },
+      "raw_rankic_interval": {
+        "mean": 0.09345741969866228,
+        "lower_95": 0.07899141561985494,
+        "upper_95": 0.10265160356000413
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.09573666439457212,
+        "B": 0.08921308588316246
+      },
+      "size_partial_interval": {
+        "mean": 0.09247487513886729,
+        "lower_95": 0.07703219671043074,
+        "upper_95": 0.10106252730246724
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.5512843353440737,
+            "compound_relative_wealth_return": 1.1346040430548694,
+            "net_equity_max_drawdown": -0.14361419435958067,
+            "mean_daily_turnover": 0.12923712750476113
+          },
+          "2": {
+            "compound_net_total_return": 0.4506419819693952,
+            "compound_relative_wealth_return": 0.9961177774996279,
+            "net_equity_max_drawdown": -0.1491511968067185,
+            "mean_daily_turnover": 0.1313614629115431
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.40241337548619516,
+            "compound_relative_wealth_return": 0.3686914771909886,
+            "net_equity_max_drawdown": -0.20195824425809195,
+            "mean_daily_turnover": 0.13353131975133997
+          },
+          "2": {
+            "compound_net_total_return": 0.3345863292103428,
+            "compound_relative_wealth_return": 0.30249537425620754,
+            "net_equity_max_drawdown": -0.21466098484912788,
+            "mean_daily_turnover": 0.13485363352569646
+          }
+        }
+      },
+      "increment_vs_previous_tier": {
+        "candidate": "ridge-C",
+        "reference": "ridge-B",
+        "mean": 0.00025834910266065315,
+        "lower_95": -0.000517920088682246,
+        "upper_95": 0.001247202998163682,
+        "fold_differences": {
+          "A": 0.00028873497260441494,
+          "B": 0.00022796323271689138
+        }
+      },
+      "passes_nomination_gate": true
+    },
+    {
+      "candidate": "lgb-A",
+      "family": "lgb",
+      "tier": "A",
+      "fold_mean_rankic": {
+        "A": 0.08591589780872746,
+        "B": 0.08961608785050304
+      },
+      "yearly_rankic": {
+        "2021": 0.07944944481178126,
+        "2022": 0.09257415237761701,
+        "2023": 0.07097256886282033,
+        "2024": 0.10873359460905901
+      },
+      "positive_seeds_by_fold": {
+        "A": 3,
+        "B": 3
+      },
+      "raw_rankic_interval": {
+        "mean": 0.08776599282961525,
+        "lower_95": 0.0706375288592494,
+        "upper_95": 0.09778367353309483
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.08661940599514643,
+        "B": 0.09049304789216596
+      },
+      "size_partial_interval": {
+        "mean": 0.0885562269436562,
+        "lower_95": 0.07143854327955222,
+        "upper_95": 0.09775291827039019
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.539405831943126,
+            "compound_relative_wealth_return": 1.1182589406082053,
+            "net_equity_max_drawdown": -0.32553322850122574,
+            "mean_daily_turnover": 0.1796442749242995
+          },
+          "2": {
+            "compound_net_total_return": 0.4294363660253393,
+            "compound_relative_wealth_return": 0.9669383469475811,
+            "net_equity_max_drawdown": -0.33597878853044594,
+            "mean_daily_turnover": 0.1807276373593261
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.4302838581061179,
+            "compound_relative_wealth_return": 0.3958917967928058,
+            "net_equity_max_drawdown": -0.2743555213928773,
+            "mean_daily_turnover": 0.17529116468666991
+          },
+          "2": {
+            "compound_net_total_return": 0.316354102826343,
+            "compound_relative_wealth_return": 0.28470155304900047,
+            "net_equity_max_drawdown": -0.2980308034494508,
+            "mean_daily_turnover": 0.1766893884534612
+          }
+        }
+      },
+      "passes_nomination_gate": true
+    },
+    {
+      "candidate": "lgb-B",
+      "family": "lgb",
+      "tier": "B",
+      "fold_mean_rankic": {
+        "A": 0.09857163577140622,
+        "B": 0.09241562543363804
+      },
+      "yearly_rankic": {
+        "2021": 0.09297422735401378,
+        "2022": 0.10433506901473825,
+        "2023": 0.08372877364404827,
+        "2024": 0.10132332938736995
+      },
+      "positive_seeds_by_fold": {
+        "A": 3,
+        "B": 3
+      },
+      "raw_rankic_interval": {
+        "mean": 0.09549363060252214,
+        "lower_95": 0.07921404179358792,
+        "upper_95": 0.10475442482499614
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.09656145491591064,
+        "B": 0.0934953515360602
+      },
+      "size_partial_interval": {
+        "mean": 0.09502840322598542,
+        "lower_95": 0.07826781192426899,
+        "upper_95": 0.10467154268922287
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.41053976350863747,
+            "compound_relative_wealth_return": 0.940936173643094,
+            "net_equity_max_drawdown": -0.30887147066904397,
+            "mean_daily_turnover": 0.154776369672437
+          },
+          "2": {
+            "compound_net_total_return": 0.28765350325393485,
+            "compound_relative_wealth_return": 0.7718417645788782,
+            "net_equity_max_drawdown": -0.3122405892442651,
+            "mean_daily_turnover": 0.15857952075767093
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.371222110676752,
+            "compound_relative_wealth_return": 0.33825022566435387,
+            "net_equity_max_drawdown": -0.36598025099074594,
+            "mean_daily_turnover": 0.15317742679883375
+          },
+          "2": {
+            "compound_net_total_return": 0.31100920127170645,
+            "compound_relative_wealth_return": 0.27948517296297926,
+            "net_equity_max_drawdown": -0.3707861371883034,
+            "mean_daily_turnover": 0.1552573473231828
+          }
+        }
+      },
+      "increment_vs_previous_tier": {
+        "candidate": "lgb-B",
+        "reference": "lgb-A",
+        "mean": 0.007727637772906881,
+        "lower_95": 0.003094751545652029,
+        "upper_95": 0.012025932573874888,
+        "fold_differences": {
+          "A": 0.012655737962678746,
+          "B": 0.002799537583135015
+        }
+      },
+      "passes_nomination_gate": true
+    },
+    {
+      "candidate": "lgb-C",
+      "family": "lgb",
+      "tier": "C",
+      "fold_mean_rankic": {
+        "A": 0.09864862541977781,
+        "B": 0.08845743442032974
+      },
+      "yearly_rankic": {
+        "2021": 0.09233330507934656,
+        "2022": 0.10515126458386596,
+        "2023": 0.0808590297788001,
+        "2024": 0.0962490188408813
+      },
+      "positive_seeds_by_fold": {
+        "A": 3,
+        "B": 3
+      },
+      "raw_rankic_interval": {
+        "mean": 0.09355302992005378,
+        "lower_95": 0.07642368811411468,
+        "upper_95": 0.10349058689402629
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.09546392263747691,
+        "B": 0.08874200614323563
+      },
+      "size_partial_interval": {
+        "mean": 0.09210296439035627,
+        "lower_95": 0.07484862961438006,
+        "upper_95": 0.10263160473686955
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.31647759618009014,
+            "compound_relative_wealth_return": 0.8115044001742499,
+            "net_equity_max_drawdown": -0.32620269582182293,
+            "mean_daily_turnover": 0.16607378443308404
+          },
+          "2": {
+            "compound_net_total_return": 0.2094007194095334,
+            "compound_relative_wealth_return": 0.664164077794586,
+            "net_equity_max_drawdown": -0.3284665827076971,
+            "mean_daily_turnover": 0.16813146436905543
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.35284615474295417,
+            "compound_relative_wealth_return": 0.32031613097340245,
+            "net_equity_max_drawdown": -0.3030599291199387,
+            "mean_daily_turnover": 0.15900404487161124
+          },
+          "2": {
+            "compound_net_total_return": 0.23697117126443681,
+            "compound_relative_wealth_return": 0.20722743324780488,
+            "net_equity_max_drawdown": -0.32420052735028027,
+            "mean_daily_turnover": 0.16037045322555657
+          }
+        }
+      },
+      "increment_vs_previous_tier": {
+        "candidate": "lgb-C",
+        "reference": "lgb-B",
+        "mean": -0.0019406006824683473,
+        "lower_95": -0.0060187339586899305,
+        "upper_95": 0.0018542891411895657,
+        "fold_differences": {
+          "A": 7.698964837160942e-05,
+          "B": -0.003958191013308304
+        }
+      },
+      "passes_nomination_gate": true
+    },
+    {
+      "candidate": "lstm",
+      "family": "lstm",
+      "tier": "A",
+      "fold_mean_rankic": {
+        "A": 0.07703881519527489,
+        "B": 0.06685363322732565
+      },
+      "yearly_rankic": {
+        "2021": 0.0723117907786557,
+        "2022": 0.08190604796323446,
+        "2023": 0.07584908900136364,
+        "2024": 0.05762947942513418
+      },
+      "positive_seeds_by_fold": {
+        "A": 3,
+        "B": 3
+      },
+      "raw_rankic_interval": {
+        "mean": 0.07194622421130027,
+        "lower_95": 0.05683329020382434,
+        "upper_95": 0.0834267080619708
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.07685283732009784,
+        "B": 0.06472305108251662
+      },
+      "size_partial_interval": {
+        "mean": 0.07078794420130724,
+        "lower_95": 0.05566300236884076,
+        "upper_95": 0.07846397886680696
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true,
+        "random_control_matched": false,
+        "paired_gain_over_random_lower_bound_positive": false
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": -0.0951121278043604,
+            "compound_relative_wealth_return": 0.2451471767564183,
+            "net_equity_max_drawdown": -0.2841964328041059,
+            "mean_daily_turnover": 0.2653967784187038
+          },
+          "2": {
+            "compound_net_total_return": -0.20633971203100568,
+            "compound_relative_wealth_return": 0.09209538245929998,
+            "net_equity_max_drawdown": -0.329312176190762,
+            "mean_daily_turnover": 0.2579310905691894
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": 0.0744537135114441,
+            "compound_relative_wealth_return": 0.0486178084329015,
+            "net_equity_max_drawdown": -0.4137849351885767,
+            "mean_daily_turnover": 0.2152527119820433
+          },
+          "2": {
+            "compound_net_total_return": -0.03740375235114431,
+            "compound_relative_wealth_return": -0.060549975376369414,
+            "net_equity_max_drawdown": -0.47674761457692116,
+            "mean_daily_turnover": 0.21495254821821988
+          }
+        }
+      },
+      "passes_nomination_gate": false
+    },
+    {
+      "candidate": "transformer",
+      "family": "transformer",
+      "tier": "A",
+      "fold_mean_rankic": {
+        "A": 0.07980849209390536,
+        "B": 0.0798774559251834
+      },
+      "yearly_rankic": {
+        "2021": 0.07524168152520164,
+        "2022": 0.08451075890829096,
+        "2023": 0.08726528484448072,
+        "2024": 0.07230180084692091
+      },
+      "positive_seeds_by_fold": {
+        "A": 3,
+        "B": 3
+      },
+      "raw_rankic_interval": {
+        "mean": 0.07984297400954438,
+        "lower_95": 0.06418074056224937,
+        "upper_95": 0.09121392455908883
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.078450524697383,
+        "B": 0.07833223441903792
+      },
+      "size_partial_interval": {
+        "mean": 0.07839137955821046,
+        "lower_95": 0.06223599082467205,
+        "upper_95": 0.08690008990181432
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true,
+        "random_control_matched": false,
+        "paired_gain_over_random_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.039954645228217976,
+            "compound_relative_wealth_return": 0.431002260333839,
+            "net_equity_max_drawdown": -0.3034349842731959,
+            "mean_daily_turnover": 0.29151993272960347
+          },
+          "2": {
+            "compound_net_total_return": -0.11532484504514351,
+            "compound_relative_wealth_return": 0.21733399837237255,
+            "net_equity_max_drawdown": -0.32979505226379985,
+            "mean_daily_turnover": 0.28984962239915685
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": -0.13961005121844938,
+            "compound_relative_wealth_return": -0.16029866047887573,
+            "net_equity_max_drawdown": -0.5161242125009938,
+            "mean_daily_turnover": 0.2371713198172942
+          },
+          "2": {
+            "compound_net_total_return": -0.19938344771855784,
+            "compound_relative_wealth_return": -0.21863476863535514,
+            "net_equity_max_drawdown": -0.5492246667924442,
+            "mean_daily_turnover": 0.23565734651849515
+          }
+        }
+      },
+      "passes_nomination_gate": false
+    },
+    {
+      "candidate": "random",
+      "family": "random",
+      "tier": "A",
+      "fold_mean_rankic": {
+        "A": 0.07727160446629297,
+        "B": 0.0711715247192329
+      },
+      "yearly_rankic": {
+        "2021": 0.07159093655226337,
+        "2022": 0.0831207667676031,
+        "2023": 0.07027183406173554,
+        "2024": 0.07209408886802261
+      },
+      "positive_seeds_by_fold": {
+        "A": 3,
+        "B": 3
+      },
+      "raw_rankic_interval": {
+        "mean": 0.07422156459276294,
+        "lower_95": 0.060923422631742316,
+        "upper_95": 0.0839947677968594
+      },
+      "fold_mean_size_partial_rankic": {
+        "A": 0.07501480385303105,
+        "B": 0.06833222371142951
+      },
+      "size_partial_interval": {
+        "mean": 0.07167351378223027,
+        "lower_95": 0.05680445358757252,
+        "upper_95": 0.07961833624413783
+      },
+      "checks": {
+        "positive_raw_both_folds": true,
+        "at_least_three_positive_years": true,
+        "seed_stability": true,
+        "raw_combined_lower_bound_positive": true,
+        "positive_size_partial_both_folds": true,
+        "size_partial_combined_lower_bound_positive": true
+      },
+      "research_accounts_mean_of_independent_seed_runs": {
+        "A": {
+          "1": {
+            "compound_net_total_return": 0.02510186319929079,
+            "compound_relative_wealth_return": 0.4105644799429678,
+            "net_equity_max_drawdown": -0.355490733857659,
+            "mean_daily_turnover": 0.21233043870291315
+          },
+          "2": {
+            "compound_net_total_return": -0.08693315889217686,
+            "compound_relative_wealth_return": 0.25640163199082555,
+            "net_equity_max_drawdown": -0.37592474311921914,
+            "mean_daily_turnover": 0.212750557582998
+          }
+        },
+        "B": {
+          "1": {
+            "compound_net_total_return": -0.0978408580507976,
+            "compound_relative_wealth_return": -0.11953383343357649,
+            "net_equity_max_drawdown": -0.4903879707047339,
+            "mean_daily_turnover": 0.20218526236644407
+          },
+          "2": {
+            "compound_net_total_return": -0.15021959129121953,
+            "compound_relative_wealth_return": -0.17065308758884426,
+            "net_equity_max_drawdown": -0.5241605313201178,
+            "mean_daily_turnover": 0.20192016239383326
+          }
+        }
+      },
+      "passes_nomination_gate": true
+    }
+  ],
+  "paired_comparisons": [
+    {
+      "candidate": "ridge-B",
+      "reference": "ridge-A",
+      "mean": 0.009613625446875787,
+      "lower_95": 0.005170249478165207,
+      "upper_95": 0.014742630411371473,
+      "fold_differences": {
+        "A": 0.013422462825946783,
+        "B": 0.005804788067804791
+      }
+    },
+    {
+      "candidate": "ridge-C",
+      "reference": "ridge-B",
+      "mean": 0.00025834910266065315,
+      "lower_95": -0.000517920088682246,
+      "upper_95": 0.001247202998163682,
+      "fold_differences": {
+        "A": 0.00028873497260441494,
+        "B": 0.00022796323271689138
+      }
+    },
+    {
+      "candidate": "lgb-B",
+      "reference": "lgb-A",
+      "mean": 0.007727637772906881,
+      "lower_95": 0.003094751545652029,
+      "upper_95": 0.012025932573874888,
+      "fold_differences": {
+        "A": 0.012655737962678746,
+        "B": 0.002799537583135015
+      }
+    },
+    {
+      "candidate": "lgb-C",
+      "reference": "lgb-B",
+      "mean": -0.0019406006824683473,
+      "lower_95": -0.0060187339586899305,
+      "upper_95": 0.0018542891411895657,
+      "fold_differences": {
+        "A": 7.698964837160942e-05,
+        "B": -0.003958191013308304
+      }
+    },
+    {
+      "candidate": "lstm",
+      "reference": "random",
+      "mean": -0.0022753403814626725,
+      "lower_95": -0.007374706339206174,
+      "upper_95": 0.0026903634057037482,
+      "fold_differences": {
+        "A": -0.00023278927101809258,
+        "B": -0.004317891491907253
+      }
+    },
+    {
+      "candidate": "transformer",
+      "reference": "random",
+      "mean": 0.005621409416781437,
+      "lower_95": 0.0009653537278939599,
+      "upper_95": 0.009582210532928171,
+      "fold_differences": {
+        "A": 0.002536887627612388,
+        "B": 0.008705931205950486
+      }
+    }
+  ],
+  "nominee_for_fresh_confirmation": "lgb-B",
+  "final_holdout_opened": false,
+  "uncertainty_method": "2000 60-session moving-block draws within each fold, equal fold weights, seed 17029; seeds averaged by date first",
+  "account_aggregation": "means of separately simulated seed runs, not an ensemble account",
+  "claim": "development nomination only; current-vintage retrospective data and upstream account limitations remain"
+}

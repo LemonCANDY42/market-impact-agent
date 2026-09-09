@@ -801,6 +801,12 @@ class AgentEngine:
         self._mcp_snapshots = {item.server_id: item for item in mcp_snapshots}
         self._clock = clock or (lambda: datetime.now(UTC))
 
+    @property
+    def context_estimator_id(self) -> str:
+        if (self.provider.profile.runtime or {}).get("context_estimator") == "pi-usage-v1":
+            return "pi-usage-v1"
+        return self.token_counter.counter_id
+
     def execution_binding(
         self,
         request: AgentRunRequest,
@@ -819,7 +825,7 @@ class AgentEngine:
             request,
             loaded_skills,
             surface=surface,
-            estimator_id=self.token_counter.counter_id,
+            estimator_id=self.context_estimator_id,
             compactor_id=self.compactor_id,
         )
         return AgentExecutionBinding(
@@ -830,7 +836,7 @@ class AgentEngine:
             tool_manifest_hashes=surface.tool_manifest_hashes,
             tool_surface_hash=surface.tool_surface_hash,
             mcp_server_hashes=surface.mcp_binding_hashes,
-            context_estimator_id=self.token_counter.counter_id,
+            context_estimator_id=self.context_estimator_id,
             compactor_id=self.compactor_id,
         )
 
@@ -852,7 +858,7 @@ class AgentEngine:
             raise ValueError("authoritative Agent run must be completed and fully sealed")
         if (
             execution_binding.runtime_config_hash != self.config.config_hash
-            or execution_binding.context_estimator_id != self.token_counter.counter_id
+            or execution_binding.context_estimator_id != self.context_estimator_id
             or execution_binding.compactor_id != self.compactor_id
         ):
             raise ValueError("Agent execution binding differs from the authoritative runtime")
@@ -981,7 +987,7 @@ class AgentEngine:
             request,
             loaded_skills,
             surface=surface,
-            estimator_id=self.token_counter.counter_id,
+            estimator_id=self.context_estimator_id,
             compactor_id=self.compactor_id,
         )
         prompt_hash = canonical_hash([item.to_message() for item in prompt_entries])
@@ -994,7 +1000,7 @@ class AgentEngine:
                 "skill_hashes": [item.manifest.manifest_hash for item in loaded_skills],
                 "execution_surface": surface.to_dict(),
                 "tool_access": _access_dict(request.tool_access),
-                "context_estimator_id": self.token_counter.counter_id,
+                "context_estimator_id": self.context_estimator_id,
                 "compactor_id": self.compactor_id,
                 "strategy_case_plan": (
                     None
@@ -1204,7 +1210,7 @@ class AgentEngine:
             tool_manifest_hashes=surface.tool_manifest_hashes,
             tool_surface_hash=surface.tool_surface_hash,
             mcp_server_hashes=surface.mcp_binding_hashes,
-            context_estimator_id=self.token_counter.counter_id,
+            context_estimator_id=self.context_estimator_id,
             compactor_id=self.compactor_id,
             journal_hash=proposal_event.event_hash,
             transcript_hash=transcript_artifact.content_hash,

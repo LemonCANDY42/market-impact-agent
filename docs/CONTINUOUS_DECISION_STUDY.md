@@ -6,6 +6,25 @@ opened outcomes remain immutable historical evidence. `510300.SH` and `510500.SH
 are initial acceptance seeds. Research and dynamic admission may discover additional
 A-share stocks or equity ETFs under the existing source-route and risk boundaries.
 
+## New work after the 2026-09-06 retrospective
+
+This document preserves the original 18-window study registration and its budget
+and replay contracts. New work follows the separate
+[three-stage preparation](STAGED_RESEARCH_PREPARATION.md): two development windows
+per stage, one frozen Terra high profile, complete paired/three-arm groups and no
+new paid authorization. The original failed terminals, rangebound definition and
+cost denominators are not rewritten. The
+[formal retrospective](CONTINUOUS_STUDY_RETROSPECTIVE_20260906.md#reusable-offline-extraction)
+reopens signed Runs and reconciled Usage read-only; current, prior, cumulative and
+unknown-reservation amounts remain separate.
+
+New comparisons use source-reopened economic conditions through the existing
+Nautilus account integration. Old results receive separate audit conclusions;
+identical initial NAV does not prove equivalence, and differing identity hashes
+alone do not disprove it. Candidate selection, research direction and account
+exposure remain different experimental questions. A completed engineering run
+cannot establish investment effectiveness.
+
 ## Registration and claims
 
 `continuous_study.py` freezes the original 15 cases plus three ordinary windows,

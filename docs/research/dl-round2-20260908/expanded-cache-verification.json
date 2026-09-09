@@ -1,0 +1,15 @@
+{
+  "real_training_dates": 20,
+  "stocks": 8,
+  "expressions": 4,
+  "exact_cached_uncached_equality": true,
+  "correlation_does_not_mutate_cached_values": true,
+  "target_unchanged": true,
+  "prediction_independent_of_future_label_mask": true,
+  "cache": {
+    "hits": 0,
+    "misses": 1,
+    "maxsize": 64,
+    "currsize": 1
+  }
+}

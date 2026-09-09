@@ -1,0 +1,23 @@
+{
+  "ruff": "passed",
+  "format": "passed, 440 files",
+  "pyright": "0 errors, 0 warnings",
+  "pytest_final_log_sha256": "9c889742278fed0d9b68ff62d6dfd765642cec30a61c0ffb6bde71da32a9ab63",
+  "pytest_final_summary": "2245 passed, 212 warnings in 1438.76s (0:23:58)",
+  "typescript_check": "passed",
+  "node_tests": "7 passed",
+  "scope": "current source after generic pi usage estimation and explicit research narrative/candidate prompt; repository contains preserved prior work",
+  "proof_boundaries": [
+    "native pi requests and durable replay",
+    "metadata-only initial method context",
+    "exact-path and content-hash guarded method reads",
+    "original optional capabilities and group binding preserved on replay",
+    "bounded format-only correction and terminal failure",
+    "lossless provenance projection under real native request size",
+    "same-close lookahead forbidden and native account reconciliation",
+    "native usage plus estimated tail; rebuilt context invalidates stale usage",
+    "large native context survives admission and durable replay without redispatch",
+    "completed Q5 v3 A/B account pair with no unsettled physical requests"
+  ],
+  "node_test_log_sha256": "bcf98e6c3255dd51bdc4c14330f1171b4869cd0e495389e57017451d6d76b373"
+}

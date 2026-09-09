@@ -1,0 +1,10 @@
+{
+  "checked_at_unix": 1788866295.104964,
+  "owned_experiment_processes": [],
+  "owned_gpu_sampler_stopped": true,
+  "gpu_compute_process_count": 0,
+  "running_container_count": 0,
+  "netdata_service": "active",
+  "models_and_research_artifacts_retained": true,
+  "changed_default_python_or_gpu_driver": false
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "market-impact.skill-manifest.v1",
+  "name": "policy-transmission",
+  "version": "0.1.0",
+  "description": "Separate policy surprise from economic information and priced expectations.",
+  "source": "research://skills-ablation-20260908/policy-transmission",
+  "instructions_path": "SKILL.md",
+  "instructions_hash": "70fd1289e02d156babf1f3131cc9f05a32a9303f0e9f03b8117c56250cc7a2a4",
+  "required_capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "allowed_tools": [],
+  "allowed_mcp_servers": [],
+  "manifest_hash": "f36b17491aec02314614abbebca7919760bfea62982c076df7351e6cbbc331ee"
+}

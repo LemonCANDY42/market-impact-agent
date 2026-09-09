@@ -11,6 +11,8 @@ from typing import cast
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.autonomous_paper import (
     AutonomousPaperExecutionServiceV2,
+    AutonomousPaperProviderLeaseAuthorityV2,
+    AutonomousPaperProviderLeaseV2,
     AutonomousReconciliationAuthorityV2,
     _issue_autonomous_provider_lease,  # pyright: ignore[reportPrivateUsage]
     _record_accepted_provider_capability,  # pyright: ignore[reportPrivateUsage]
@@ -57,31 +59,83 @@ def open_prospective_mock_execution(
     # autonomous owner therefore get distinct adapters over the same durable facts.
     composition.provider = MockExecutionProvider(provider_path, clock=composition.clock)
     acceptance_provider = MockExecutionProvider(provider_path, clock=composition.clock)
-    # Reconstruct the old snapshot against today's durable provider facts. A new
-    # receipt/fill cannot be concealed behind the account injected into the model.
-    receipts = composition.provider.reconcile()
-    original_receipts = ReconciliationSnapshot.build(
-        provider_id=receipts.provider_id,
-        observed_at=initial.account_state.as_of,
-        complete=receipts.complete,
-        receipts=receipts.receipts,
-        gaps=receipts.gaps,
-    )
+    routes = {
+        symbol: {"provider_instrument_id": symbol, "market": "SYNTHETIC"}
+        for symbol in mandate.allowed_instruments
+    }
+    journal = RunJournal.authoritative(composition.store)
+    lease_event_id = "prospective.mock.execution.lease." + canonical_hash(mandate.to_dict())
+    existing_lease = journal.event(lease_event_id)
     current = [initial]
     refresh_gaps: list[str] = []
-    try:
-        if original_receipts.snapshot_id == initial.account_state.reconciliation_reference:
-            rebuilt = composition.provider.simulated_account_snapshot(
-                price_bases=initial.price_bases, reconciliation_snapshot=original_receipts
-            )
-            if rebuilt != initial.account_state:
-                raise PermissionError("durable Mock facts differ from the frozen account")
-        else:
-            current[0] = composition.refresh_execution_inputs(
-                reconciliation_snapshot=receipts, frozen=reconciliation_input
-            )
-    except PermissionError as exc:
-        refresh_gaps.append(str(exc))
+    receipts: ReconciliationSnapshot | None = None
+    if existing_lease is None:
+        receipts = composition.provider.reconcile()
+    else:
+        lease_id = str(existing_lease.payload["lease_id"])
+        lease_authority = AutonomousPaperProviderLeaseAuthorityV2(composition.store)
+
+        def assert_binding(lease: AutonomousPaperProviderLeaseV2) -> None:
+            manifest = composition.provider.manifest
+            if (
+                lease.harness_authority_id != composition.store.harness_authority_id
+                or lease.provider_id != manifest.provider_id
+                or lease.provider_version != manifest.provider_version
+                or lease.account_reference_hash != mandate.account_id
+                or lease.environment != TradingEnvironment.PAPER.value
+                or lease.instrument_routes_hash != canonical_hash(routes)
+                or lease.mandate_hash != canonical_hash(mandate.to_dict())
+                or lease.markets != manifest.markets
+                or not set(lease.order_types) <= set(manifest.order_types)
+                or "market" not in lease.order_types
+                or lease.time_in_force != ("DAY",)
+                or not lease.allows_risk_reduction(composition.clock())
+            ):
+                raise PermissionError("provider lease does not bind the current Mock observation")
+
+        recovery_required = False
+        # Revoke and Provider observation share the canonical serialization boundary.
+        with composition.store.authority_transaction() as connection:
+            try:
+                lease = lease_authority.resolve_in_transaction(connection, lease_id)
+            except KeyError:
+                recovery_required = True
+            else:
+                assert_binding(lease)
+                receipts = composition.provider.reconcile()
+        if recovery_required:
+            try:
+                lease = lease_authority.resolve_for_recovery(lease_id)
+            except KeyError:
+                raise PermissionError("provider lease lacks durable Harness authority") from None
+            assert_binding(lease)
+            # Only the existing service owner may recover a persisted active claim.
+            # It must finish before any Provider observation or account projection.
+            refresh_gaps.append("provider_claim_recovery_requires_reconciliation")
+
+    # Reconstruct the old snapshot against today's durable provider facts. A new
+    # receipt/fill cannot be concealed behind the account injected into the model.
+    if receipts is not None:
+        original_receipts = ReconciliationSnapshot.build(
+            provider_id=receipts.provider_id,
+            observed_at=initial.account_state.as_of,
+            complete=receipts.complete,
+            receipts=receipts.receipts,
+            gaps=receipts.gaps,
+        )
+        try:
+            if original_receipts.snapshot_id == initial.account_state.reconciliation_reference:
+                rebuilt = composition.provider.simulated_account_snapshot(
+                    price_bases=initial.price_bases, reconciliation_snapshot=original_receipts
+                )
+                if rebuilt != initial.account_state:
+                    raise PermissionError("durable Mock facts differ from the frozen account")
+            else:
+                current[0] = composition.refresh_execution_inputs(
+                    reconciliation_snapshot=receipts, frozen=reconciliation_input
+                )
+        except PermissionError as exc:
+            refresh_gaps.append(str(exc))
 
     def account_source():
         if refresh_gaps:
@@ -108,10 +162,6 @@ def open_prospective_mock_execution(
         views[fresh.exposure_view.exposure_view_id] = fresh.exposure_view
         return fresh.account_state, fresh.exposure_view
 
-    routes = {
-        symbol: {"provider_instrument_id": symbol, "market": "SYNTHETIC"}
-        for symbol in mandate.allowed_instruments
-    }
     owner = PaperExecutionService(
         composition.store.root / "prospective-mock" / composition.seed / "provider-acceptance",
         provider=acceptance_provider,
@@ -130,9 +180,6 @@ def open_prospective_mock_execution(
         clock=composition.clock,
         account_state_source=account_source,
     )
-    journal = RunJournal.authoritative(composition.store)
-    lease_event_id = "prospective.mock.execution.lease." + canonical_hash(mandate.to_dict())
-    existing_lease = journal.event(lease_event_id)
     if existing_lease is None:
         acceptance = owner.record_provider_acceptance(composition.store)
         capability = _record_accepted_provider_capability(

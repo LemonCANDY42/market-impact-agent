@@ -1,0 +1,7 @@
+{
+  "url": "https://raw.githubusercontent.com/microsoft/qlib/79633dd9506ea689e5400dea0197717b5b3d74b7/scripts/dump_bin.py",
+  "revision": "79633dd9506ea689e5400dea0197717b5b3d74b7",
+  "script_sha256": "b8f34c57ce1ef4b1772f3909735e66058f21b25bd7ab8a5f16318822401fe53f",
+  "local_source_equal": true,
+  "note": "Source directory is an extracted tree, not a git repository; parent project git HEAD is not upstream identity."
+}

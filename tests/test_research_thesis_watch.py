@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import pytest
 
+from market_impact_agent.account_review_entry import run_once as run_account_review_once
 from market_impact_agent.agent_contracts import canonical_hash
 from market_impact_agent.agent_watch_admission import (
     AgentWatchAdmissionService,
@@ -39,6 +40,7 @@ from market_impact_agent.research_thesis_watch import (
     run_research_thesis_watch_callback,
 )
 from market_impact_agent.runtime_store import RunJournal, RunStatus
+from tests.test_account_review_entry import bind_calendar
 from tests.test_agent_watch_admission import _event_cluster_profile
 from tests.test_attention_watch import (
     FIRST_RECEIPT,
@@ -48,6 +50,8 @@ from tests.test_attention_watch import (
     snapshot_for_monitoring_test,
 )
 from tests.test_pi_runtime import pi_profile
+from tests.test_portfolio_review import _answer as portfolio_answer
+from tests.test_portfolio_review import _setup as portfolio_setup
 from tests.test_research_thesis_runtime import _answer, _repository
 
 
@@ -65,6 +69,17 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
     interrupted: bool,
     presentation: DatePresentation,
 ) -> None:
+    integrated = not interrupted and presentation is DatePresentation.TRUE_DATE
+    account_fixture = None
+    calendar = None
+    account_scope = "account-one"
+    if integrated:
+        portfolio_at = THIRD_RECEIPT + timedelta(seconds=1)
+        monkeypatch.setattr("tests.test_portfolio_review.AT", portfolio_at)
+        monkeypatch.setattr("tests.test_autonomous_paper.AT", portfolio_at)
+        account_fixture = portfolio_setup(tmp_path)
+        calendar = bind_calendar(account_fixture[0], account_fixture[1], account_fixture[3], "0")
+        account_scope = account_fixture[1][0].account_state.account_reference_hash
     store = LocalDataSnapshotStore(tmp_path / "harness")
     journal = RunJournal.authoritative(store)
     journal.start_run(
@@ -123,6 +138,8 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
 
     monkeypatch.setattr("market_impact_agent.pi_deployment.installed_permit", installed)
     original_spawn = asyncio.create_subprocess_exec
+    portfolio_stage = [False]
+    portfolio_calls: list[str] = []
     arguments = {
         "delegate_profile_id": profile.profile_id,
         "rationale": "Wait for the announced decision before updating the thesis.",
@@ -136,6 +153,16 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
     }
 
     async def spawn(program: str, *args: str, **kwargs: Any):
+        if portfolio_stage[0]:
+            portfolio_calls.append(program)
+            kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(portfolio_answer())
+            return await original_spawn(
+                program,
+                "--import",
+                str(Path(__file__).with_name("portfolio_network.mjs")),
+                *args,
+                **kwargs,
+            )
         kwargs["env"]["WATCH_RELATIVE"] = (
             "1" if presentation is DatePresentation.RELATIVE_OFFSET else "0"
         )
@@ -154,13 +181,13 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
         store,
         experiment_id="study",
         arm_id="luna",
-        account_scope="account-one",
+        account_scope=account_scope,
         clock=lambda: now[0],
     )
     resolver_kwargs: dict[str, Any] = dict(
         experiment_id="study",
         arm_id="luna",
-        account_scope="account-one",
+        account_scope=account_scope,
         target_id="INDEX.ETF",
         parent_budget=budget,
         episode_id=delegation.episode_id,
@@ -321,7 +348,7 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
 
         async def review(context: ResearchThesisWatchReviewContext) -> dict[str, object]:
             calls.append(context)
-            assert context.account_scope == "account-one"
+            assert context.account_scope == account_scope
             assert context.parent_budget is budget
             assert context.parent_run_id == acquisition.run_id
             assert context.episode_id == delegation.episode_id
@@ -333,6 +360,19 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
             assert context.new_version_ids == wake.new_version_ids
             if interrupted:
                 raise RuntimeError("callback interrupted after entering review")
+            if account_fixture is not None:
+                portfolio_stage[0] = True
+                model = PiRuntimeProvider(provider_profile, budget=budget)
+                try:
+                    account_review = await run_account_review_once(
+                        authority=account_fixture[0],
+                        provider=model,
+                        reasons=("watch",),
+                    )
+                finally:
+                    await model.close()
+                assert account_review["status"] == "completed"
+                return {"status": "reviewed", "opportunity_id": account_review["opportunity_id"]}
             return {"status": "reviewed", "prior_thesis_run_id": context.parent_run_id}
 
         run_id = dispatches[0].binding.run_id
@@ -375,5 +415,22 @@ def test_signed_native_proposal_to_receipt_watch_and_same_account_callback(
         assert restarted.run_journal.get_run(run_id).status is RunStatus.COMPLETED
         assert len(restarted.dispatch_wake(wake, dispatched_at=now[0])) == 1
         assert service.watch_service.pending_wakes() == ()
+        if account_fixture is not None:
+            model = PiRuntimeProvider(provider_profile, budget=budget)
+            try:
+                scheduled = await run_account_review_once(
+                    authority=account_fixture[0],
+                    provider=model,
+                    reasons=("schedule",),
+                    scheduled_for=account_fixture[1][0].cutoff,
+                    calendar_source=calendar,
+                    exchanges=("SSE",),
+                )
+            finally:
+                await model.close()
+            assert scheduled["opportunity_id"] == completed["opportunity_id"]
+            assert scheduled["trigger_reasons"] == ["schedule", "watch"]
+            assert scheduled["execution_dispatched"] is False
+            assert len(portfolio_calls) == 1
 
     asyncio.run(scenario())

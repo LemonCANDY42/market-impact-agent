@@ -5,28 +5,55 @@ not begin because an earlier API exists; its acceptance evidence must exist.
 
 ## Current delivery lane
 
-The 2026-09-05 [continuous decision study](docs/CONTINUOUS_DECISION_STUDY.md)
-supersedes the earlier four-case/two-ETF and USD 20 scope for new work. It registers
-18 coverage windows, eight deep windows and 72 intended account trajectories for
-Luna max, Terra high and Sol high under a shared cumulative USD 40 ceiling. Prior
-costs, failures and unknown reservations remain charged; seed ETFs are not the
-entire research or dynamically admitted trading universe.
+The 2026-09-09 [Git closeout](docs/GIT_CLOSEOUT_20260909.md) packages the completed
+engineering and research backlog. The latest [Skills pilot](docs/SKILLS_ABLATION_20260908.md)
+adds optional method reads and native pi context estimates; its completed supplemental
+account pair is a usability observation, not investment-effectiveness acceptance.
+The [DL conclusions](docs/INVESTMENT_CONCLUSIONS_20260908.md) retain their separate
+predictive, account and information-coverage limits. The five-year study has not
+started. Information coverage and the research workflow require a separate next-stage
+design before efficiency changes or further execution are authorized.
 
-The current implementation includes durable on-demand source acquisition,
-candidate admission, scoped Recall, continuous Nautilus accounts, expiry/scheduled/
-event review, initial-decision adoption and reconciled two-step rotation. The
-production historical preflight retains fixed denominators of 54 initial model/case
-diagnostics and 72 rolling paths. Authenticated Shanghai fund-halt coverage now
-allows the complete 2024 policy window through source and executable-baseline
-qualification; model completion is reported separately. Seventeen other windows
-retain effective-rule, daily-limit or corporate-action gaps. Full raw index
-baselines are separate non-executable diagnostics.
+The 2026-09-06 [research and continuous-decision optimization](docs/implementation/RESEARCH_CONTINUOUS_OPTIMIZATION.md)
+is the current engineering and offline acceptance scope. It prepares three independent
+studies: event evidence, industry/security selection, and continuous account review.
+Each starts from two explicitly registered development windows and frozen Terra high;
+this does not promote a model or authorize paid requests, Paper or Live.
 
-Actual-receipt prospective discovery has a production entry and independent
-candidate-to-portfolio integration evidence. Its current CLI has no accepted
-current Mock account or prospective trading-rule authority. Real Mock acceptance,
-unseen validation and investment effectiveness remain open. IBKR has an offline
-preparation entry only; Paper execution is unaccepted and live remains closed.
+The previous [continuous study](docs/CONTINUOUS_DECISION_STUDY.md) retains its original
+18-window registration, 54 initial and 72 rolling opportunity denominators, shared
+cumulative USD 40 scope, and signed failures. The latest source, completion and cost
+facts belong in its [execution report](docs/CONTINUOUS_STUDY_RESULTS_20260905.md), with
+interpretation in the [offline retrospective](docs/CONTINUOUS_STUDY_RETROSPECTIVE_20260906.md).
+Do not reuse its remaining allowance or infer investment value from surviving paths.
+
+Existing on-demand acquisition, Recall, Nautilus account streaming, Watch callbacks,
+account review and two-step rotation are retained. New versioned thesis/portfolio
+bindings remove derivable model fields, preserve unknown research conclusions, and
+support bounded source-proven candidate comparison. The explicit account `run_once`
+entry combines Watch and calendar reasons while existing claims and reconciliation
+own recovery. Preparation and import never activate a recurring service.
+
+[Staged research preparation](docs/STAGED_RESEARCH_PREPARATION.md) owns the concrete
+source inventory, dates, frozen input projections, cost bounds and commands. A
+missing event/exposure record, account source or required predecessor result remains
+an explicit readiness gap. Offline tests establish the pipeline's behavior, not
+real-model usability, natural-event monitoring or investment effectiveness. Paper and
+Live acceptance gates remain closed.
+
+The later authorized follow-through prioritizes zero-model-cost account attribution
+and deterministic exposure controls, then source/predecessor readiness, before new
+paid comparisons. Its sequence and user-decision boundaries are recorded in the
+[current implementation plan](docs/implementation/RESEARCH_CONTINUOUS_OPTIMIZATION.md#authorized-staged-follow-through-after-the-first-account-contrast),
+with actual results in the [progress report](docs/EFFICIENT_PROGRESS_20260906.md).
+Existing stage and broker gates remain unchanged.
+
+The 2026-09-07 [analyst-source extension](docs/implementation/ANALYST_SOURCE_RESEARCH.md)
+prepares a separate prospective information-source ablation: unchanged baseline,
+unweighted author opinions, then conditionally weighted opinions on later dates.
+Source rights, attributable coverage and cutoff-correct skill records are not yet
+accepted; no collection scheduler or paid opinion experiment is active. This does
+not replace existing study prerequisites or spend the historical-pair allowance.
 
 ## Preserved dynamic-horizon development epoch — 2026-09-04
 

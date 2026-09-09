@@ -530,6 +530,7 @@ def _daily_manifest_state(
                 ),
                 lane=_string(policy_value, "lane"),
                 limit_basis=str(policy_value.get("limit_basis", "reported_stk_limit")),
+                review_timing=str(policy_value.get("review_timing", "preopen")),
                 cash_only_inception_at=(
                     datetime.fromisoformat(str(policy_value["cash_only_inception_at"]))
                     if policy_value.get("cash_only_inception_at") is not None

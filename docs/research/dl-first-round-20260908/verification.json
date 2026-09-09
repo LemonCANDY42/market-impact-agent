@@ -1,0 +1,22 @@
+{
+  "ruff_check": {
+    "status": "passed"
+  },
+  "ruff_format": {
+    "status": "passed",
+    "formatted_files": 418
+  },
+  "pyright": {
+    "status": "passed",
+    "errors": 0,
+    "warnings": 0
+  },
+  "pytest": {
+    "status": "passed",
+    "passed": 2229,
+    "warnings": 212,
+    "seconds": 610.54,
+    "private_artifacts_present": true
+  },
+  "scope": "Current dirty workspace; this round changes research documentation and isolated experiment artifacts, not production implementation. Existing warnings retained."
+}

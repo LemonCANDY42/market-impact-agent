@@ -1,0 +1,31 @@
+{
+  "native_context_bytes": 100091,
+  "wire_bytes": 99113,
+  "template_bytes": 96576,
+  "template_tokens": 39407,
+  "context_window": 98304,
+  "reserved_output": 16384,
+  "tokenizer_seconds": 0.29744404199999985,
+  "inference_requests": 0,
+  "method": "Pinned pi wire conversion, llama.cpp apply-template then tokenize, no generation",
+  "frozen_failed_context_artifact_hash": "53ebefc12ea5acafbdead1f7f47eb0904f7074526e29a6a1ab34fe478e7a1a9f",
+  "wire_sha256": "91f698e4588f7d75e9484c8a63b2575f54a95950d36c2b2aafbea6403f5af14c",
+  "interpretation": "Diagnostic tokenizer check only. Runtime now uses generic pinned pi usage-based estimates; no tokenizer service was added.",
+  "source": "https://github.com/ggml-org/llama.cpp/blob/b10852/tools/server/README.md",
+  "pi_usage_estimate": {
+    "kind": "pi-usage-v1",
+    "tokens": 38150,
+    "usageTokens": 38086,
+    "trailingTokens": 64,
+    "lastUsageIndex": 6,
+    "fixedTokens": 0
+  },
+  "pi_rebuilt_size_estimate": {
+    "kind": "pi-usage-v1",
+    "tokens": 23607,
+    "usageTokens": 0,
+    "trailingTokens": 21758,
+    "lastUsageIndex": null,
+    "fixedTokens": 1849
+  }
+}

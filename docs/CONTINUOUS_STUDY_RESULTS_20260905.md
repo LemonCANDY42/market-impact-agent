@@ -4,6 +4,10 @@ This report separates implemented behavior from source qualification, actual mod
 observations and investment acceptance. The owning registration and claim contract
 is [CONTINUOUS_DECISION_STUDY.md](CONTINUOUS_DECISION_STUDY.md).
 
+The subsequent [offline retrospective](CONTINUOUS_STUDY_RETROSPECTIVE_20260906.md)
+adds failure attribution, cost diagnostics and posthoc market-judgment analysis.
+It corrects Recall discovery attribution without changing this signed batch result.
+
 ## Final bounded batch result: 2026-09-05 23:36 UTC
 
 The resumed v4 process exited successfully after all trajectories reached their
@@ -89,8 +93,13 @@ confirmed the relevant refusals. OPEN proposals used the mandate permission clas
 `exchange_traded_fund`; refusal occurs before Nautilus execution. Later invalid
 portfolio references include a truncated continuation ID and a price ID with an
 extra `300`. The Recall ID had never been returned by preceding tools. Original
-outputs, costs and successful account prefixes are retained. These observations
-do not establish a new Harness recovery or execution-engine defect.
+outputs, costs and successful account prefixes are retained. The subsequent offline
+audit confirmed a separate Harness discovery defect in the same Recall Run:
+global limiting before authorization filtering hid a valid prior and returned null.
+That prior was already supplied in the model input, so a causal link to the invented
+ID is unproven. This is one stopped trajectory with mixed attribution, not an
+additional failure or an execution-engine defect; see the
+[retrospective](CONTINUOUS_STUDY_RETROSPECTIVE_20260906.md#failure-attribution).
 
 Several later reviews requested additional price evidence. Existing bounded
 acquisition continuations successfully obtained evidence and resumed research,

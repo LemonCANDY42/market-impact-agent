@@ -4,7 +4,7 @@ import asyncio
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -31,7 +31,7 @@ from market_impact_agent.research_thesis_runtime import (
     ResearchThesisAuthority,
     ResearchThesisRunInputs,
 )
-from market_impact_agent.runtime_store import RunJournal
+from market_impact_agent.runtime_store import RunClaim, RunJournal
 from market_impact_agent.tushare_observation import (
     TushareObservationProvider,
     load_tushare_observation_source,
@@ -48,9 +48,16 @@ from .test_tushare_observation import (  # pyright: ignore[reportPrivateUsage]
 )
 
 
-@pytest.mark.parametrize("fresh_seed", [True, False])
+@pytest.mark.parametrize(
+    "fresh_seed,no_candidate,contended",
+    [(True, False, False), (False, False, False), (True, True, False), (True, True, True)],
+)
 def test_native_current_cny_mock_composition_and_restart(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_seed: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fresh_seed: bool,
+    no_candidate: bool,
+    contended: bool,
 ) -> None:
     market = executable_inputs(tmp_path, symbol="600519.SH")
     seed = executable_inputs(
@@ -166,6 +173,7 @@ def test_native_current_cny_mock_composition_and_restart(
     original = asyncio.create_subprocess_exec
 
     async def spawn(program: str, *args: str, **kwargs: Any):
+        kwargs["env"]["DISCOVERY_NO_CANDIDATE"] = "1" if no_candidate else "0"
         return await original(program, "--import", str(wire), *args, **kwargs)
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
@@ -188,7 +196,42 @@ def test_native_current_cny_mock_composition_and_restart(
         finally:
             await provider.close()
 
-    result = asyncio.run(run())
+    if contended:
+        original_claim = RunJournal.try_claim_run
+        held_claims: list[RunClaim] = []
+
+        def other_worker(self: RunJournal, run_id: str) -> RunClaim | None:
+            if run_id.startswith("portfolio-opportunity-"):
+                claim = original_claim(self, run_id)
+                assert claim is not None
+                held_claims.append(claim)
+            return original_claim(self, run_id)
+
+        with monkeypatch.context() as concurrent:
+            concurrent.setattr(RunJournal, "try_claim_run", other_worker)
+            waiting = asyncio.run(run())
+        assert waiting.status == "in_progress"
+        assert waiting.portfolio_run_id is not None and waiting.portfolio_terminal_ref is None
+        with pytest.raises(KeyError):
+            journal.get_run(waiting.portfolio_run_id)
+        assert budget.summary()["physical_requests"] == 1
+        for claim in held_claims:
+            claim.release()
+        result = asyncio.run(run())
+        assert result.portfolio_run_id == waiting.portfolio_run_id
+    else:
+        result = asyncio.run(run())
+    if no_candidate:
+        assert result.status == "portfolio_completed", result.to_dict()
+        assert result.candidate is None
+        assert result.acquisition.final_inputs.target_id == "ASHARE.RESEARCH"
+        assert len(result.acquisition.run_ids) == 1
+        assert budget.summary()["physical_requests"] == 2
+        assert result.execution_gaps == ()
+        assert composition.portfolio is not None and result.portfolio_run_id is not None
+        terminal = composition.portfolio.replay(result.portfolio_run_id)
+        assert cast(dict[str, object], terminal["proposal"])["requested_action"] == "hold"
+        return
     if not fresh_seed:
         assert result.status == "admission_refused", result.to_dict()
         assert any("current_quote_stale" in gap for gap in result.gaps)

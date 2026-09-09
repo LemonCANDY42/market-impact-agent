@@ -1,0 +1,619 @@
+{
+  "label": "q5-one-pair-supplement-v3",
+  "server_log_sha256": "191dd620231839b8ef83eaebbfc26251d02b0037de94a4e45b49114ff8b6c02f",
+  "request_sequence_matched_output_tokens": true,
+  "requests": [
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 1,
+      "latency_seconds": 25.857720583,
+      "output_tokens": 1410,
+      "input_uncached_tokens": 1641,
+      "input_cached_tokens": 0,
+      "purpose": "decision",
+      "tool_calls": 3,
+      "server_task_id": "167767",
+      "server_prefill": {
+        "seconds": 0.94221,
+        "tokens": 1641,
+        "tokens_per_second": 1741.66
+      },
+      "server_decode": {
+        "seconds": 20.89975,
+        "tokens": 1410,
+        "tokens_per_second": 67.42
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 2,
+      "latency_seconds": 5.130937083000001,
+      "output_tokens": 277,
+      "input_uncached_tokens": 1928,
+      "input_cached_tokens": 3050,
+      "purpose": "decision",
+      "tool_calls": 2,
+      "server_task_id": "169181",
+      "server_prefill": {
+        "seconds": 0.7939700000000001,
+        "tokens": 1928,
+        "tokens_per_second": 2428.31
+      },
+      "server_decode": {
+        "seconds": 4.21117,
+        "tokens": 277,
+        "tokens_per_second": 65.54
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 3,
+      "latency_seconds": 41.408835540999995,
+      "output_tokens": 2582,
+      "input_uncached_tokens": 5378,
+      "input_cached_tokens": 5254,
+      "purpose": "decision",
+      "tool_calls": 3,
+      "server_task_id": "169461",
+      "server_prefill": {
+        "seconds": 1.85258,
+        "tokens": 5378,
+        "tokens_per_second": 2902.98
+      },
+      "server_decode": {
+        "seconds": 39.480760000000004,
+        "tokens": 2582,
+        "tokens_per_second": 65.37
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 4,
+      "latency_seconds": 24.82275729200001,
+      "output_tokens": 1509,
+      "input_uncached_tokens": 3254,
+      "input_cached_tokens": 13213,
+      "purpose": "decision",
+      "tool_calls": 1,
+      "server_task_id": "172048",
+      "server_prefill": {
+        "seconds": 1.2721300000000002,
+        "tokens": 3254,
+        "tokens_per_second": 2557.92
+      },
+      "server_decode": {
+        "seconds": 23.46045,
+        "tokens": 1509,
+        "tokens_per_second": 64.28
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 5,
+      "latency_seconds": 28.759320542,
+      "output_tokens": 1745,
+      "input_uncached_tokens": 2670,
+      "input_cached_tokens": 17975,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "173561",
+      "server_prefill": {
+        "seconds": 1.1508900000000002,
+        "tokens": 2670,
+        "tokens_per_second": 2319.93
+      },
+      "server_decode": {
+        "seconds": 27.47382,
+        "tokens": 1745,
+        "tokens_per_second": 63.48
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 6,
+      "latency_seconds": 1.8283839579999912,
+      "output_tokens": 76,
+      "input_uncached_tokens": 72,
+      "input_cached_tokens": 22389,
+      "purpose": "decision",
+      "tool_calls": 1,
+      "server_task_id": "175310",
+      "server_prefill": {
+        "seconds": 0.49391,
+        "tokens": 72,
+        "tokens_per_second": 145.77
+      },
+      "server_decode": {
+        "seconds": 1.19678,
+        "tokens": 76,
+        "tokens_per_second": 62.67
+      }
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "number": 7,
+      "latency_seconds": 13.426808791999996,
+      "output_tokens": 820,
+      "input_uncached_tokens": 255,
+      "input_cached_tokens": 22536,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "175389",
+      "server_prefill": {
+        "seconds": 0.39419,
+        "tokens": 255,
+        "tokens_per_second": 646.9
+      },
+      "server_decode": {
+        "seconds": 12.934940000000001,
+        "tokens": 820,
+        "tokens_per_second": 63.32
+      }
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 1,
+      "latency_seconds": 211.94515570800004,
+      "output_tokens": 12611,
+      "input_uncached_tokens": 25139,
+      "input_cached_tokens": 0,
+      "purpose": "decision",
+      "tool_calls": 7,
+      "server_task_id": "176211",
+      "server_prefill": {
+        "seconds": 8.226809999999999,
+        "tokens": 25139,
+        "tokens_per_second": 3055.74
+      },
+      "server_decode": {
+        "seconds": 203.6411,
+        "tokens": 12611,
+        "tokens_per_second": 61.92
+      }
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "number": 2,
+      "latency_seconds": 185.339534083,
+      "output_tokens": 10429,
+      "input_uncached_tokens": 20121,
+      "input_cached_tokens": 25135,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "188838",
+      "server_prefill": {
+        "seconds": 8.230739999999999,
+        "tokens": 20121,
+        "tokens_per_second": 2444.62
+      },
+      "server_decode": {
+        "seconds": 176.81559,
+        "tokens": 10429,
+        "tokens_per_second": 58.98
+      }
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 1,
+      "latency_seconds": 58.139036708,
+      "output_tokens": 3210,
+      "input_uncached_tokens": 12152,
+      "input_cached_tokens": 0,
+      "purpose": "decision",
+      "tool_calls": 2,
+      "server_task_id": "199279",
+      "server_prefill": {
+        "seconds": 4.04402,
+        "tokens": 12152,
+        "tokens_per_second": 3004.93
+      },
+      "server_decode": {
+        "seconds": 49.3129,
+        "tokens": 3210,
+        "tokens_per_second": 65.07
+      }
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "number": 2,
+      "latency_seconds": 35.73932004200004,
+      "output_tokens": 2248,
+      "input_uncached_tokens": 1251,
+      "input_cached_tokens": 15361,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "202497",
+      "server_prefill": {
+        "seconds": 0.6317,
+        "tokens": 1251,
+        "tokens_per_second": 1980.37
+      },
+      "server_decode": {
+        "seconds": 35.01168,
+        "tokens": 2248,
+        "tokens_per_second": 64.18
+      }
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 1,
+      "latency_seconds": 15.79771079199994,
+      "output_tokens": 843,
+      "input_uncached_tokens": 825,
+      "input_cached_tokens": 0,
+      "purpose": "decision",
+      "tool_calls": 3,
+      "server_task_id": "204748",
+      "server_prefill": {
+        "seconds": 0.6719299999999999,
+        "tokens": 825,
+        "tokens_per_second": 1227.81
+      },
+      "server_decode": {
+        "seconds": 12.50336,
+        "tokens": 843,
+        "tokens_per_second": 67.34
+      }
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 2,
+      "latency_seconds": 34.67357049999991,
+      "output_tokens": 2098,
+      "input_uncached_tokens": 8132,
+      "input_cached_tokens": 1667,
+      "purpose": "decision",
+      "tool_calls": 2,
+      "server_task_id": "205595",
+      "server_prefill": {
+        "seconds": 2.65788,
+        "tokens": 8132,
+        "tokens_per_second": 3059.58
+      },
+      "server_decode": {
+        "seconds": 31.967650000000003,
+        "tokens": 2098,
+        "tokens_per_second": 65.6
+      }
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 3,
+      "latency_seconds": 11.259570582999965,
+      "output_tokens": 703,
+      "input_uncached_tokens": 475,
+      "input_cached_tokens": 11896,
+      "purpose": "decision",
+      "tool_calls": 3,
+      "server_task_id": "207699",
+      "server_prefill": {
+        "seconds": 0.41270999999999997,
+        "tokens": 475,
+        "tokens_per_second": 1150.92
+      },
+      "server_decode": {
+        "seconds": 10.77985,
+        "tokens": 703,
+        "tokens_per_second": 65.12
+      }
+    },
+    {
+      "arm": "A",
+      "role": "discovery",
+      "number": 4,
+      "latency_seconds": 20.321762499999952,
+      "output_tokens": 1219,
+      "input_uncached_tokens": 3239,
+      "input_cached_tokens": 13073,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "208404",
+      "server_prefill": {
+        "seconds": 1.29802,
+        "tokens": 3239,
+        "tokens_per_second": 2495.34
+      },
+      "server_decode": {
+        "seconds": 18.96349,
+        "tokens": 1219,
+        "tokens_per_second": 64.23
+      }
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 1,
+      "latency_seconds": 20.9008947089999,
+      "output_tokens": 877,
+      "input_uncached_tokens": 16131,
+      "input_cached_tokens": 0,
+      "purpose": "decision",
+      "tool_calls": 4,
+      "server_task_id": "209627",
+      "server_prefill": {
+        "seconds": 5.2321800000000005,
+        "tokens": 16131,
+        "tokens_per_second": 3083.04
+      },
+      "server_decode": {
+        "seconds": 13.602,
+        "tokens": 877,
+        "tokens_per_second": 64.4
+      }
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 2,
+      "latency_seconds": 93.09244941699994,
+      "output_tokens": 5908,
+      "input_uncached_tokens": 542,
+      "input_cached_tokens": 17007,
+      "purpose": "decision",
+      "tool_calls": 1,
+      "server_task_id": "210514",
+      "server_prefill": {
+        "seconds": 0.43538,
+        "tokens": 542,
+        "tokens_per_second": 1244.89
+      },
+      "server_decode": {
+        "seconds": 92.5776,
+        "tokens": 5908,
+        "tokens_per_second": 63.81
+      }
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 3,
+      "latency_seconds": 79.26810491699993,
+      "output_tokens": 4946,
+      "input_uncached_tokens": 46,
+      "input_cached_tokens": 23456,
+      "purpose": "decision",
+      "tool_calls": 1,
+      "server_task_id": "216425",
+      "server_prefill": {
+        "seconds": 0.34614999999999996,
+        "tokens": 46,
+        "tokens_per_second": 132.89
+      },
+      "server_decode": {
+        "seconds": 78.81182000000001,
+        "tokens": 4946,
+        "tokens_per_second": 62.74
+      }
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "number": 4,
+      "latency_seconds": 52.16683308400004,
+      "output_tokens": 3211,
+      "input_uncached_tokens": 46,
+      "input_cached_tokens": 28447,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "221373",
+      "server_prefill": {
+        "seconds": 0.35441,
+        "tokens": 46,
+        "tokens_per_second": 129.79
+      },
+      "server_decode": {
+        "seconds": 51.665330000000004,
+        "tokens": 3211,
+        "tokens_per_second": 62.13
+      }
+    },
+    {
+      "arm": "A",
+      "role": "portfolio",
+      "number": 1,
+      "latency_seconds": 89.45109950000001,
+      "output_tokens": 5388,
+      "input_uncached_tokens": 10185,
+      "input_cached_tokens": 0,
+      "purpose": "decision",
+      "tool_calls": 0,
+      "server_task_id": "224586",
+      "server_prefill": {
+        "seconds": 3.44177,
+        "tokens": 10185,
+        "tokens_per_second": 2959.23
+      },
+      "server_decode": {
+        "seconds": 82.85695,
+        "tokens": 5388,
+        "tokens_per_second": 65.02
+      }
+    }
+  ],
+  "arms": {
+    "A": {
+      "calls": 9,
+      "tool_calls": 14,
+      "request_latency_seconds": 416.9319960019996,
+      "prefill_seconds": 14.850430000000001,
+      "decode_seconds": 393.72805,
+      "prefill_tokens": 39621,
+      "input_uncached_tokens": 39621,
+      "input_cached_tokens": 95546,
+      "output_tokens": 25193,
+      "prefill_weighted_tps": 2668.003552759078,
+      "decode_weighted_tps": 63.985789176056926,
+      "decode_tps_range": [
+        62.13,
+        67.34
+      ]
+    },
+    "B": {
+      "calls": 11,
+      "tool_calls": 19,
+      "request_latency_seconds": 632.3978103320001,
+      "prefill_seconds": 28.03315,
+      "decode_seconds": 594.43894,
+      "prefill_tokens": 73861,
+      "input_uncached_tokens": 73861,
+      "input_cached_tokens": 124913,
+      "output_tokens": 36917,
+      "prefill_weighted_tps": 2634.7734735482813,
+      "decode_weighted_tps": 62.10393955685339,
+      "decode_tps_range": [
+        58.98,
+        67.42
+      ]
+    },
+    "both": {
+      "calls": 20,
+      "tool_calls": 33,
+      "request_latency_seconds": 1049.3298063339996,
+      "prefill_seconds": 42.883579999999995,
+      "decode_seconds": 988.16699,
+      "prefill_tokens": 113482,
+      "input_uncached_tokens": 113482,
+      "input_cached_tokens": 220459,
+      "output_tokens": 62110,
+      "prefill_weighted_tps": 2646.280930836465,
+      "decode_weighted_tps": 62.853749040938915,
+      "decode_tps_range": [
+        58.98,
+        67.42
+      ]
+    }
+  },
+  "roles": [
+    {
+      "arm": "A",
+      "role": "discovery",
+      "calls": 4,
+      "request_seconds": 82.05261437499976,
+      "output_tokens": 4863
+    },
+    {
+      "arm": "A",
+      "role": "research",
+      "calls": 4,
+      "request_seconds": 245.42828212699982,
+      "output_tokens": 14942
+    },
+    {
+      "arm": "A",
+      "role": "portfolio",
+      "calls": 1,
+      "request_seconds": 89.45109950000001,
+      "output_tokens": 5388
+    },
+    {
+      "arm": "B",
+      "role": "discovery",
+      "calls": 7,
+      "request_seconds": 141.234763791,
+      "output_tokens": 8419
+    },
+    {
+      "arm": "B",
+      "role": "research",
+      "calls": 2,
+      "request_seconds": 397.284689791,
+      "output_tokens": 23040
+    },
+    {
+      "arm": "B",
+      "role": "portfolio",
+      "calls": 2,
+      "request_seconds": 93.87835675000004,
+      "output_tokens": 5458
+    }
+  ],
+  "wall_seconds": 1148.1169640840963,
+  "remaining_wall_seconds": 98.78715775009664,
+  "monthly_planning": [
+    {
+      "arm": "A",
+      "monthly_20_day_tokens": {
+        "input_including_cache": 2703340,
+        "cached_input": 1910920,
+        "output_including_reasoning": 503860
+      },
+      "q5_month_20_to_22_days_hours": [
+        2.572351860416691,
+        2.82958704645836
+      ],
+      "luna_standard_usd_per_day_same_usage": {
+        "same_cache_no_writes": 0.04006672,
+        "same_cache_uncached_as_writes": 0.04204777,
+        "no_cache": 0.057265,
+        "no_cache_all_input_as_writes": 0.06402334999999999
+      }
+    },
+    {
+      "arm": "B",
+      "monthly_20_day_tokens": {
+        "input_including_cache": 3975480,
+        "cached_input": 2498260,
+        "output_including_reasoning": 738340
+      },
+      "q5_month_20_to_22_days_hours": [
+        3.8056695620387067,
+        4.186236518242578
+      ],
+      "luna_standard_usd_per_day_same_usage": {
+        "same_cache_no_writes": 0.06157086,
+        "same_cache_uncached_as_writes": 0.06526391000000001,
+        "no_cache": 0.08405520000000001,
+        "no_cache_all_input_as_writes": 0.09399389999999999
+      }
+    },
+    {
+      "arm": "both",
+      "monthly_20_day_tokens": {
+        "input_including_cache": 6678820,
+        "cached_input": 4409180,
+        "output_including_reasoning": 1242200
+      },
+      "q5_month_20_to_22_days_hours": [
+        6.378427578244979,
+        7.016270336069477
+      ],
+      "luna_standard_usd_per_day_same_usage": {
+        "same_cache_no_writes": 0.10163758,
+        "same_cache_uncached_as_writes": 0.10731167999999999,
+        "no_cache": 0.1413202,
+        "no_cache_all_input_as_writes": 0.15801725
+      }
+    }
+  ],
+  "luna_price_basis": {
+    "checked_on": "2026-09-09 Asia/Singapore",
+    "official_url": "https://developers.openai.com/api/docs/pricing",
+    "standard_usd_per_million": {
+      "input": 0.2,
+      "cache_read": 0.02,
+      "cache_write": 0.25,
+      "output": 1.2
+    },
+    "per_request_input_ceiling_for_short_context": 272000,
+    "assumptions": "Q5 token volumes as proxy only. Different tokenizers, reasoning, tool turns, cache behavior, failures and context growth change actual usage. No Luna calls were dispatched. CPA subscription consumption is not an API cash bill."
+  },
+  "luna_same_output_time_scenario": {
+    "historical_output_over_full_request_tps": 54.390984805385564,
+    "pair_seconds": 1240.7043380003452,
+    "interpretation": "Historical Luna request rate includes serving overhead; retain only measured Q5 time outside model requests. Different tasks and tokenizer, not measured same-day result."
+  }
+}

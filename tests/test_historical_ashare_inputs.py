@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -25,6 +26,110 @@ from tests.test_streaming_nautilus_account import intent
 from tests.test_tushare_observation import RETRIEVED, TOKEN, FakeTransport, _query, _response
 
 D = Decimal
+
+
+def test_after_close_uses_current_close_and_never_next_session_observations(
+    source: HistoricalAShareInputs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    market = HistoricalAShareInputs(
+        store=source.store,
+        snapshot_ids=source.snapshot_ids,
+        rule_artifact_hashes=source.rule_artifact_hashes,
+        policy=replace(source.policy, review_timing="after_close"),
+    )
+    current = date(2025, 1, 2)
+    original = market._one
+
+    def no_future(api: str, symbol: str, day: date):  # type: ignore[no-untyped-def]
+        assert day <= current, "after-close decision read next-session observation"
+        return original(api, symbol, day)
+
+    monkeypatch.setattr(market, "_one", no_future)
+    cutoff = datetime(2025, 1, 2, 7, 1, tzinfo=UTC)
+    admitted = DynamicAShareAdmission(market).discover(("000001.SZ",), cutoff)[0]
+    assert admitted.execution_ready, admitted.gaps
+    assert admitted.evidence is not None
+    assert admitted.evidence.raw_price == D(10)
+    assert admitted.evidence.upper_limit == D(11)
+    assert admitted.evidence.raw_price_observed_at == datetime(2025, 1, 2, 7, tzinfo=UTC)
+    assert admitted.evidence.effective_until == datetime(2025, 1, 3, 1, 30, 0, 1, tzinfo=UTC)
+    assert market.policy.to_dict()["review_timing"] == "after_close"
+    assert "review_timing" not in source.policy.to_dict()
+    assert (
+        not DynamicAShareAdmission(market)
+        .discover(("000001.SZ",), datetime(2025, 1, 2, 6, 59, tzinfo=UTC))[0]
+        .execution_ready
+    )
+
+
+def test_qualified_etf_policy_retains_stock_reported_limits(
+    source: HistoricalAShareInputs,
+) -> None:
+    market = HistoricalAShareInputs(
+        store=source.store,
+        snapshot_ids=source.snapshot_ids,
+        rule_artifact_hashes=source.rule_artifact_hashes,
+        policy=replace(source.policy, limit_basis="qualified_seed_etf_exchange_rule_v1"),
+    )
+    assert market.session("000001.SZ", date(2025, 1, 3)).execution_ready
+    stock = market.reopen_security("000001.SZ", datetime(2025, 1, 3, 1, 25, tzinfo=UTC))
+    assert stock is not None and not stock.gaps
+    assert stock.limit_diagnostics is None
+
+
+def test_frozen_listing_research_does_not_require_execution_qualification(
+    source: HistoricalAShareInputs,
+) -> None:
+    market = HistoricalAShareInputs(
+        store=source.store,
+        snapshot_ids=source.snapshot_ids,
+        rule_artifact_hashes=(),
+        policy=replace(source.policy, research_projection="dynamic_ashare_sources_v1"),
+    )
+    cutoff = datetime(2025, 1, 3, 1, 25, tzinfo=UTC)
+    identity = market.research_identity("000001.SZ", cutoff)
+    assert identity is not None and identity[:2] == ("XSHE", "equity")
+    assert not DynamicAShareAdmission(market).discover(("000001.SZ",), cutoff)[0].execution_ready
+    table = next(item for item in market._tables() if item.api == "stock_basic")
+    rows = market.research_projection(table.snapshot, "stock_basic", cutoff)["rows"]
+    assert "name" not in str(rows) and "list_status" not in str(rows)
+
+
+def test_old_stock_distribution_has_no_entitlement_before_cash_inception(
+    tmp_path: Path,
+) -> None:
+    source = _source(tmp_path)
+    old = _capture(
+        source.store,
+        "dividend",
+        {"ts_code": "000001.SZ"},
+        [
+            dict(
+                ts_code="000001.SZ",
+                end_date="19951231",
+                ann_date="19960520",
+                record_date="19960524",
+                ex_date="19960527",
+                pay_date=None,
+                div_proc="实施",
+                stk_div=1,
+            )
+        ],
+    )
+    source = source.with_snapshots((old,))
+    assert "corporate_action_dates_unverified" in source.session("000001.SZ", date(2025, 1, 3)).gaps
+    market = HistoricalAShareInputs(
+        store=source.store,
+        snapshot_ids=source.snapshot_ids,
+        rule_artifact_hashes=source.rule_artifact_hashes,
+        policy=replace(
+            source.policy,
+            limit_basis="qualified_seed_etf_cash_only_inception_v1",
+            cash_only_inception_at=datetime(2025, 1, 2, 1, 30, tzinfo=UTC),
+        ),
+    )
+    reopened = market.session("000001.SZ", date(2025, 1, 3))
+    assert reopened.execution_ready and not reopened.corporate_actions
 
 
 def _capture(

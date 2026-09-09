@@ -90,6 +90,7 @@ async def continuous_study_entry(
                     str(policy["policy_id"]),
                     Decimal(str(policy["daily_open_volume_fraction"])),
                     limit_basis=str(policy.get("limit_basis", "reported_stk_limit")),
+                    review_timing=str(policy.get("review_timing", "preopen")),
                     cash_only_inception_at=(
                         datetime.fromisoformat(str(policy["cash_only_inception_at"]))
                         if policy.get("cash_only_inception_at") is not None
@@ -131,7 +132,7 @@ async def continuous_study_entry(
                 build_continuous_review_frame(
                     repository=repository,
                     market=market,
-                    new_fact_ids=await continuous_event_facts(repository),
+                    new_fact_ids=await continuous_event_facts(repository, version="legacy-v1"),
                 )
             )
         windows.append(

@@ -1,0 +1,114 @@
+{
+  "q5": {
+    "repo": "unsloth/Qwen3.8-27B-GGUF",
+    "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+    "filename": "Qwen3.8-27B-UD-Q5_K_M.gguf",
+    "size": 19771509664,
+    "sha256": "2de73110cb254cbf09b54b717578dadff12ef1194e7271527e68202f39ba4bfd",
+    "elapsed_seconds": 2370.0224987950023,
+    "verified": true
+  },
+  "qat": {
+    "repo": "QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4",
+    "revision": "d8e6fbfa3e3a78899b440222b827430045a05b44",
+    "weight_shards": [
+      {
+        "path": "model-00001-of-00005.safetensors",
+        "size": 2542796928,
+        "sha256": "54d83c1d36631de231876217a8e0c2483eccee8746369a482b79442bdfc5d958",
+        "actual_sha256": "54d83c1d36631de231876217a8e0c2483eccee8746369a482b79442bdfc5d958",
+        "verified": true
+      },
+      {
+        "path": "model-00002-of-00005.safetensors",
+        "size": 4972421472,
+        "sha256": "bb5c367ac5ba8b2ab68f07b9719f1c3ac528ada98c26523be6e2c07f82e299bc",
+        "actual_sha256": "bb5c367ac5ba8b2ab68f07b9719f1c3ac528ada98c26523be6e2c07f82e299bc",
+        "verified": true
+      },
+      {
+        "path": "model-00003-of-00005.safetensors",
+        "size": 4979962888,
+        "sha256": "6bfa358557579f538682984a667e243a72ab361d50c583fbf06ba3148653fda1",
+        "actual_sha256": "6bfa358557579f538682984a667e243a72ab361d50c583fbf06ba3148653fda1",
+        "verified": true
+      },
+      {
+        "path": "model-00004-of-00005.safetensors",
+        "size": 4977289272,
+        "sha256": "260822c66711e7fbd9df0f96b0da0b54b01c2bd77612911885b33f88f18003d7",
+        "actual_sha256": "260822c66711e7fbd9df0f96b0da0b54b01c2bd77612911885b33f88f18003d7",
+        "verified": true
+      },
+      {
+        "path": "model-00005-of-00005.safetensors",
+        "size": 3086810776,
+        "sha256": "08e4c9bcd8ca371240cae47c98e5e1a499a14caeab5ee2ca4a0a07c24c69a24b",
+        "actual_sha256": "08e4c9bcd8ca371240cae47c98e5e1a499a14caeab5ee2ca4a0a07c24c69a24b",
+        "verified": true
+      }
+    ],
+    "all_file_integrity_report_sha256": "067da55ac6c4f5e8b40f8d846890f6c5c1caf2dde572654e0d078b0a4cde5550"
+  },
+  "dependencies_lock_sha256": "d93ec045c42b39c71a56f9ddc1f2cc4584262d9c03f177c480c0b74c53d15074",
+  "qat_candidate_launch_sha256": "d7cde2220dc253c6ade093a8e9c2c4553862387477411eadf5d4a4bece9e6ff0",
+  "qat_candidate": {
+    "vllm": "0.28.0",
+    "torch": "2.13.0+cu130",
+    "context": 98304,
+    "max_sequences": 1,
+    "gpu_memory_utilization": 0.94,
+    "cuda_graph": true,
+    "mtp_speculative_tokens": 2,
+    "prefix_cache": true,
+    "kv_cache": "BF16",
+    "reasoning": "enabled",
+    "tool_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "prompt_token_details": true,
+    "observed_idle_gpu_mib": 28092,
+    "reported_kv_token_capacity": 107042,
+    "reported_kv_memory_gib": 7.48
+  },
+  "q5_candidate": {
+    "llama_cpp": "b10852",
+    "context": 98304,
+    "parallel": 1,
+    "flash_attention": true,
+    "all_layers_gpu": true,
+    "reasoning": "enabled",
+    "observed_idle_gpu_mib": 24968
+  },
+  "same_business_profile": {
+    "reserved_output": 16384,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "seed": 17
+  },
+  "weight_only_benchmark": false,
+  "startup_failures": [
+    {
+      "context": 98304,
+      "gpu_memory_utilization": 0.9,
+      "kv_available_gib": 6.34,
+      "kv_required_gib": 7.0,
+      "suggested_max_model_len": 88000,
+      "physical_business_requests": 0
+    }
+  ],
+  "selected_for_20_minute_pilot": "q5",
+  "selection_reason": "Q5 completed native account day in 441.41 seconds; QAT 96K research timed out at 300-second role budget and did not complete an account day.",
+  "qat_business_canary": {
+    "elapsed_seconds": 395.6175341249909,
+    "completed_days": 0,
+    "requests": 4,
+    "unsettled_final_usage_requests": 1,
+    "server_requests_running_after_timeout": 0,
+    "server_generated_tokens_all_requests": 20402,
+    "mtp_drafted_tokens": 17150,
+    "mtp_accepted_tokens": 11824,
+    "prefix_queries_tokens": 57764,
+    "prefix_hits_tokens": 13600
+  }
+}

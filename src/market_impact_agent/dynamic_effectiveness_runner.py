@@ -41,7 +41,7 @@ from market_impact_agent.dynamic_effectiveness import (
     StudyCase,
 )
 from market_impact_agent.frozen_research import FrozenResearchRepository
-from market_impact_agent.model_budget import ModelBudget, ModelBudgetScope
+from market_impact_agent.model_budget import ModelBudget, ModelBudgetGroupMember, ModelBudgetScope
 from market_impact_agent.model_provider import (
     ModelProviderProfile,
     model_provider_profile_from_dict,
@@ -65,6 +65,7 @@ from market_impact_agent.providers import MockExecutionProvider
 from market_impact_agent.research import EvidenceTier
 from market_impact_agent.research_thesis_runtime import (
     RESEARCH_THESIS_PROMPT,
+    RESEARCH_THESIS_V2_PROMPT,
     ResearchThesisAuthority,
     ResearchThesisRunInputs,
     reopen_completed_research_thesis,
@@ -360,14 +361,18 @@ def _verify_qualification_native_budget(
         raise ValueError("qualification Usage differs from settled native responses")
 
 
-def _qualification_batch_summary(budget: ModelBudget, run_ids: tuple[str, ...]) -> dict[str, int]:
+def _qualification_batch_summary(
+    budget: ModelBudget, run_ids: tuple[str, ...], *, request_keys: frozenset[str] | None = None
+) -> dict[str, int]:
     budget.summary()  # Revalidate the whole parent without erasing historical unknowns.
     reserved: dict[str, int] = {}
     settled: dict[str, int] = {}
     for event in budget.journal.events(budget.owner_run_id):
         key = event.payload.get("request_key")
-        if not isinstance(key, str) or not any(
-            key.startswith(f"{run_id}.pi-invocation.") for run_id in run_ids
+        if not isinstance(key, str) or (
+            key not in request_keys
+            if request_keys is not None
+            else not any(key.startswith(f"{run_id}.pi-invocation.") for run_id in run_ids)
         ):
             continue
         if event.event_type == "pi.budget.reserved":
@@ -386,34 +391,302 @@ def _qualification_batch_summary(budget: ModelBudget, run_ids: tuple[str, ...]) 
     }
 
 
+def _qualification_panel(
+    panel: tuple[AnalysisTopology, ...], profiles: tuple[ModelProviderProfile, ...]
+) -> tuple[ModelProviderProfile, ...]:
+    if (
+        len(panel) not in {2, 3}
+        or len(set(panel)) != len(panel)
+        or any(topology not in _TOPOLOGIES for topology in panel)
+    ):
+        raise ValueError("qualification panel requires two or three distinct known routes")
+    by_route = {(profile.model, profile.reasoning_effort): profile for profile in profiles}
+    if (
+        len(profiles) != len(panel)
+        or len(by_route) != len(panel)
+        or set(by_route) != {_PROFILE_EXPECTATIONS[topology] for topology in panel}
+    ):
+        raise ValueError("qualification profiles must match the exact registered route panel")
+    ordered = tuple(by_route[_PROFILE_EXPECTATIONS[topology]] for topology in panel)
+    if any(
+        profile.context_window_tokens != 272_000
+        or profile.effective_compaction_trigger_tokens != 258_000
+        for profile in ordered
+    ):
+        raise ValueError("GPT-5.6 study Profiles require 272k context and 258k compaction")
+    return ordered
+
+
+def _registered_qualification_panel(
+    registration: dict[str, object],
+) -> tuple[AnalysisTopology, ...]:
+    if registration.get("schema_version") == "market-impact.dynamic-route-qualification.v1":
+        if any(
+            key in registration
+            for key in ("route_panel", "research_inputs_schema_version", "prior_qualification")
+        ):
+            raise ValueError("legacy qualification cannot acquire a new route panel")
+        return _TOPOLOGIES
+    if registration.get("schema_version") != "market-impact.dynamic-route-qualification.v2":
+        raise ValueError("unknown qualification registration version")
+    raw = registration.get("route_panel")
+    if not isinstance(raw, list) or any(
+        not isinstance(item, str) for item in cast(list[object], raw)
+    ):
+        raise ValueError("invalid qualification route panel")
+    panel = tuple(AnalysisTopology(item) for item in cast(list[str], raw))
+    profiles = _object(registration["profiles"])
+    if set(profiles) != {topology.value for topology in panel}:
+        raise ValueError("qualification profiles differ from registered route panel")
+    ordered = _qualification_panel(
+        panel, tuple(model_provider_profile_from_dict(_object(item)) for item in profiles.values())
+    )
+    if any(
+        profiles[topology.value] != profile.to_dict()
+        for topology, profile in zip(panel, ordered, strict=True)
+    ):
+        raise ValueError("qualification profile is bound to the wrong route panel member")
+    if (
+        registration.get("maximum_physical_requests") != 12
+        or registration.get("maximum_cost_microusd") != 1_000_000
+        or registration.get("maximum_output_tokens_per_run") != 4096
+        or registration.get("research_inputs_schema_version")
+        != "market-impact.research-thesis-inputs.v2"
+    ):
+        raise ValueError("qualification panel limits or research contract changed")
+    return panel
+
+
+def _qualification_group_members(
+    panel: tuple[AnalysisTopology, ...],
+) -> tuple[ModelBudgetGroupMember, ...]:
+    return tuple(
+        ModelBudgetGroupMember(topology.value, 12 // len(panel), 1_000_000 // len(panel))
+        for topology in panel
+    )
+
+
+def _qualification_recovery_reference(
+    prior_root: Path,
+    *,
+    profiles: dict[str, object],
+    panel: tuple[AnalysisTopology, ...],
+    shared_binding: object,
+    legacy: bool = False,
+) -> dict[str, object]:
+    prior = load_dynamic_route_qualification(prior_root)
+    if legacy and "prior_qualification" in prior:
+        raise ValueError("legacy qualification recovery must reference the original attempt")
+    if (
+        "route_panel" not in prior
+        or _registered_qualification_panel(prior) != panel
+        or prior["profiles"] != profiles
+        or shared_binding is None
+        or prior.get("shared_budget") != shared_binding
+    ):
+        raise ValueError(
+            "qualification recovery requires the same panel, profiles and shared parent"
+        )
+    report = _verified_qualification_report(prior_root, require_passed=False)
+    if report.get("stage_passed") is not False or report.get("reconciled") is not True:
+        raise ValueError("qualification recovery requires a failed reconciled predecessor")
+    owner = f"dynamic-route-qualification-{prior['registration_hash']}"
+    store = LocalDataSnapshotStore(prior_root / "authority")
+    journal = RunJournal.authoritative(store)
+    record = journal.get_run(owner)
+    if (
+        record.status is not RunStatus.FAILED
+        or record.config_hash != prior["registration_hash"]
+        or store.artifacts.read_json(canonical_hash(report)) != report
+    ):
+        raise ValueError("qualification predecessor lacks its authoritative failed result")
+    raw_cases = report.get("cases")
+    if not isinstance(raw_cases, list) or not raw_cases:
+        raise ValueError("qualification predecessor has no route terminals")
+    cases = tuple(_object(item) for item in cast(list[object], raw_cases))
+    if (
+        len(cases) > len(panel)
+        or [item.get("topology") for item in cases] != [item.value for item in panel[: len(cases)]]
+        or any(item.get("status") != "completed" for item in cases[:-1])
+        or cases[-1].get("status") == "completed"
+    ):
+        raise ValueError("qualification predecessor has an invalid failed route panel")
+    budget = _qualification_budget(prior)
+    assert budget is not None
+    run_ids: list[str] = []
+    for item in cases:
+        topology = _string(item, "topology")
+        run_id = f"{owner}.{topology}"
+        case_store = LocalDataSnapshotStore(prior_root / "cases" / topology)
+        case_journal = RunJournal.authoritative(case_store)
+        case_record = case_journal.get_run(run_id)
+        if (
+            item.get("run_id") != run_id
+            or case_record.status
+            is not (RunStatus.COMPLETED if item.get("status") == "completed" else RunStatus.FAILED)
+            or _object(case_store.artifacts.read_json(_string(item, "terminal_hash"))).get("status")
+            != item.get("status")
+            or item.get("terminal_hash") != case_record.terminal_artifact_id
+            or item.get("journal_hash") != case_journal.journal_hash(run_id)
+            or item.get("usage_ledger_hash") != UsageLedger(case_store.index_path).ledger_hash
+        ):
+            raise ValueError("qualification predecessor route terminal changed")
+        _verify_qualification_native_budget(
+            case_store,
+            run_id,
+            budget,
+            model_provider_profile_from_dict(_object(profiles[topology])),
+        )
+        run_ids.append(run_id)
+    summary = _qualification_batch_summary(budget, tuple(run_ids))
+    if report.get("budget") != summary or summary["unsettled_requests"] != 0:
+        raise ValueError("qualification predecessor has unknown or changed spend")
+    group_id, group_hash = _qualification_group_identity(prior)
+    group = budget.journal.event(f"{budget.owner_run_id}.budget.group.{canonical_hash(group_id)}")
+    if group is None or group.payload != {
+        "binding": budget.binding,
+        "group_id": group_id,
+        "members": [member.to_dict() for member in _qualification_group_members(panel)],
+        "call_graph_hash": group_hash,
+        "scope": budget.scope,
+    }:
+        raise ValueError("qualification predecessor group changed")
+    return {
+        "root": str(prior_root.resolve()),
+        "registration_hash": prior["registration_hash"],
+        "report_hash": report["report_hash"],
+        "group_id": group_id,
+        **(
+            {
+                "schema_version": "market-impact.qualification-recovery-reference.v2",
+                "group_registration_hash": group_hash,
+            }
+            if not legacy
+            else {}
+        ),
+    }
+
+
+def _qualification_group_identity(registration: dict[str, object]) -> tuple[str, str]:
+    prior = registration.get("prior_qualification")
+    if prior is not None:
+        reference = _object(prior)
+        return _string(reference, "group_id"), _string(
+            reference,
+            "group_registration_hash" if "schema_version" in reference else "registration_hash",
+        )
+    registration_hash = _string(registration, "registration_hash")
+    return f"dynamic-route-qualification-{registration_hash}", registration_hash
+
+
+def _qualification_recovery_claim(
+    root: Path,
+    registration: dict[str, object],
+    budget: ModelBudget | None,
+    *,
+    create: bool,
+) -> None:
+    if "prior_qualification" not in registration:
+        return
+    if budget is None:
+        raise ValueError("qualification recovery requires its original shared parent")
+    group_id, _ = _qualification_group_identity(registration)
+    reference = _object(registration["prior_qualification"])
+    predecessor_owner = f"dynamic-route-qualification-{reference['registration_hash']}"
+    event_id = f"{budget.owner_run_id}.qualification.recovery.{canonical_hash(predecessor_owner)}"
+    payload = {
+        "group_id": group_id,
+        "registration_hash": registration["registration_hash"],
+        "root": str(root.resolve()),
+    }
+    claim = budget.journal.try_claim_run(event_id) if create else None
+    if create and claim is None:
+        raise ValueError("qualification recovery claim is busy; retry the same registration")
+    try:
+        previous = budget.journal.event(event_id)
+        if previous is not None:
+            if previous.payload != payload:
+                raise ValueError(
+                    "qualification predecessor already claimed its single recovery attempt"
+                )
+        elif create:
+            budget.journal.append(
+                run_id=budget.owner_run_id,
+                event_id=event_id,
+                event_type="qualification.recovery.claimed",
+                observed_at=datetime.now(UTC),
+                payload=payload,
+            )
+        else:
+            raise ValueError("qualification recovery lacks its parent claim")
+    finally:
+        if claim is not None:
+            claim.release()
+
+
 def prepare_dynamic_route_qualification(
     root: Path,
     *,
-    profiles: tuple[ModelProviderProfile, ModelProviderProfile, ModelProviderProfile],
+    profiles: tuple[ModelProviderProfile, ...],
     verification_path: Path,
+    route_panel: tuple[AnalysisTopology, ...] | None = None,
     registered_at: datetime | None = None,
     shared_budget: ModelBudget | None = None,
+    prior_qualification_root: Path | None = None,
 ) -> dict[str, object]:
     """Freeze the only paid route-qualification batch for the current build."""
 
+    panel = _TOPOLOGIES if route_panel is None else route_panel
+    ordered = _qualification_panel(panel, profiles)
+    frozen_profiles = {
+        topology.value: profile.to_dict() for topology, profile in zip(panel, ordered, strict=True)
+    }
+    recovery = None
+    if prior_qualification_root is not None:
+        if (
+            route_panel is None
+            or shared_budget is None
+            or root.resolve() == prior_qualification_root.resolve()
+        ):
+            raise ValueError(
+                "qualification recovery requires a fresh root, explicit panel and shared parent"
+            )
+        recovery = _qualification_recovery_reference(
+            prior_qualification_root,
+            profiles=cast(dict[str, object], frozen_profiles),
+            panel=panel,
+            shared_binding=_qualification_budget_binding(shared_budget),
+        )
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(root, 0o700)
     path = root / "qualification-registration.json"
     if path.exists():
         existing = load_dynamic_route_qualification(root)
         _qualification_budget(existing, shared_budget=shared_budget)
+        if recovery is not None and "schema_version" not in _object(
+            existing.get("prior_qualification", {})
+        ):
+            recovery = {
+                key: item
+                for key, item in recovery.items()
+                if key not in {"schema_version", "group_registration_hash"}
+            }
+        if (
+            _registered_qualification_panel(existing) != panel
+            or existing["profiles"] != frozen_profiles
+            or (route_panel is not None) != ("route_panel" in existing)
+            or existing.get("prior_qualification") != recovery
+        ):
+            raise ValueError("qualification registration cannot change its panel or profiles")
+        _qualification_recovery_claim(root, existing, shared_budget, create=True)
         return existing
     verification = _verified_build(verification_path)
-    ordered = _ordered_profiles(profiles)
     value: dict[str, object] = {
         "schema_version": "market-impact.dynamic-route-qualification.v1",
         "experiment": "dynamic-horizon-three-model-route-qualification-v1",
         "registered_at": _timestamp(registered_at or datetime.now(UTC)),
         "runtime": runtime_identity(),
-        "profiles": {
-            topology.value: profile.to_dict()
-            for topology, profile in zip(_TOPOLOGIES, ordered, strict=True)
-        },
+        "profiles": frozen_profiles,
         "verification_hash": canonical_hash(verification),
         "maximum_cost_microusd": 1_000_000,
         "maximum_physical_requests": 12,
@@ -421,10 +694,22 @@ def prepare_dynamic_route_qualification(
         "execution_capability": False,
         "live_execution": False,
     }
+    if route_panel is not None:
+        value.update(
+            {
+                "schema_version": "market-impact.dynamic-route-qualification.v2",
+                "experiment": "dynamic-horizon-route-panel-qualification-v2",
+                "route_panel": [topology.value for topology in panel],
+                "research_inputs_schema_version": "market-impact.research-thesis-inputs.v2",
+            }
+        )
     if shared_budget is not None:
         value["shared_budget"] = _qualification_budget_binding(shared_budget)
+    if recovery is not None:
+        value["prior_qualification"] = recovery
     value["registration_hash"] = canonical_hash(value)
     _write_new(path, value)
+    _qualification_recovery_claim(root, value, shared_budget, create=True)
     return value
 
 
@@ -438,6 +723,20 @@ def load_dynamic_route_qualification(root: Path) -> dict[str, object]:
         or value.get("live_execution") is not False
     ):
         raise ValueError("dynamic route qualification changed or belongs to another build")
+    panel = _registered_qualification_panel(value)
+    if "prior_qualification" in value:
+        reference = _object(value["prior_qualification"])
+        version = reference.get("schema_version")
+        if version not in {None, "market-impact.qualification-recovery-reference.v2"}:
+            raise ValueError("unknown qualification recovery reference version")
+        if reference != _qualification_recovery_reference(
+            Path(_string(reference, "root")),
+            profiles=_object(value["profiles"]),
+            panel=panel,
+            shared_binding=value.get("shared_budget"),
+            legacy=version is None,
+        ):
+            raise ValueError("qualification recovery ancestry changed")
     return value
 
 
@@ -448,11 +747,13 @@ async def run_dynamic_route_qualification(
 
     report_path = root / "qualification-report.json"
     registration = load_dynamic_route_qualification(root)
+    panel = _registered_qualification_panel(registration)
     registered_budget = _qualification_budget(registration, shared_budget=shared_budget)
     if report_path.exists():
         return _verified_qualification_report(root, require_passed=False)
     if registration.get("shared_budget") is not None and shared_budget is None:
         raise ValueError("shared qualification requires its registered writable parent budget")
+    _qualification_recovery_claim(root, registration, registered_budget, create=True)
     store = LocalDataSnapshotStore(root / "authority")
     journal = RunJournal.authoritative(store)
     owner = f"dynamic-route-qualification-{registration['registration_hash']}"
@@ -463,12 +764,12 @@ async def run_dynamic_route_qualification(
         created_at=registered_at,
     )
     profiles = cast(dict[str, dict[str, object]], registration["profiles"])
-    run_ids = tuple(f"{owner}.{topology.value}" for topology in _TOPOLOGIES)
+    run_ids = tuple(f"{owner}.{topology.value}" for topology in panel)
     permit = PiRuntimePermit(
         canonical_hash(registration["runtime"]),
         tuple(
             model_provider_profile_from_dict(profiles[topology.value]).route_identity
-            for topology in _TOPOLOGIES
+            for topology in panel
         ),
         cast(str, registration["registration_hash"]),
         run_ids,
@@ -479,12 +780,32 @@ async def run_dynamic_route_qualification(
         owner_run_id=owner,
         max_requests=cast(int, registration["maximum_physical_requests"]),
         max_cost_microusd=cast(int, registration["maximum_cost_microusd"]),
+        scope_limits=(ModelBudgetScope("route_qualification", 1_000_000),)
+        if "route_panel" in registration
+        else (),
+        scope="route_qualification" if "route_panel" in registration else None,
+    )
+    group_id, group_hash = _qualification_group_identity(registration)
+    grouped_budget = (
+        await budget.admit_group(
+            group_id=group_id,
+            members=_qualification_group_members(panel),
+            call_graph_hash=group_hash,
+        )
+        if "route_panel" in registration
+        else None
     )
     results: list[dict[str, object]] = []
-    for topology, run_id in zip(_TOPOLOGIES, run_ids, strict=True):
+    for topology, run_id in zip(panel, run_ids, strict=True):
         profile = model_provider_profile_from_dict(profiles[topology.value])
         case_store = LocalDataSnapshotStore(root / "cases" / topology.value)
-        provider = PiRuntimeProvider(profile, budget=budget, permit=permit)
+        provider = PiRuntimeProvider(
+            profile,
+            budget=budget
+            if grouped_budget is None
+            else grouped_budget.for_group_member(topology.value),
+            permit=permit,
+        )
         authority = ResearchThesisAuthority(
             case_store,
             experiment_id=cast(str, registration["registration_hash"]),
@@ -499,6 +820,13 @@ async def run_dynamic_route_qualification(
                     target_id="SYNTHETIC.BROAD.ETF",
                     thesis_epoch="route-qualification-v1",
                     allowed_horizons=frozenset({1, 3, 5}),
+                    schema_version=cast(
+                        str,
+                        registration.get(
+                            "research_inputs_schema_version",
+                            "market-impact.research-thesis-inputs.v2",
+                        ),
+                    ),
                     research_question=(
                         "What is the defensible direction and horizon for the synthetic proxy?"
                     ),
@@ -524,7 +852,9 @@ async def run_dynamic_route_qualification(
         if registered_budget is None
         else _qualification_batch_summary(budget, run_ids)
     )
-    stage_passed = len(results) == 3 and all(item["status"] == "completed" for item in results)
+    stage_passed = len(results) == len(panel) and all(
+        item["status"] == "completed" for item in results
+    )
     terminal_status = RunStatus.COMPLETED if stage_passed else RunStatus.FAILED
     report: dict[str, object] = {
         "schema_version": "market-impact.dynamic-route-qualification-report.v1",
@@ -550,7 +880,7 @@ async def run_dynamic_route_qualification(
 
 
 def accept_dynamic_route_qualification(root: Path) -> dict[str, object]:
-    """Install only a completed, replay-verified three-route qualification."""
+    """Install only a completed, replay-verified registered route qualification."""
 
     from market_impact_agent.pi_deployment import install_runtime_acceptance
 
@@ -1317,6 +1647,7 @@ def _verified_build(path: Path) -> dict[str, object]:
 
 def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[str, object]:
     registration = load_dynamic_route_qualification(root)
+    panel = _registered_qualification_panel(registration)
     report = _read_object(root / "qualification-report.json")
     core = {key: item for key, item in report.items() if key != "report_hash"}
     if (
@@ -1326,7 +1657,11 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
     ):
         raise ValueError("dynamic route qualification report changed")
     shared_budget = _qualification_budget(registration)
-    if not require_passed and (shared_budget is None or report.get("stage_passed") is not True):
+    _qualification_recovery_claim(root, registration, shared_budget, create=False)
+    if not require_passed and (
+        report.get("stage_passed") is not True
+        or (shared_budget is None and "route_panel" not in registration)
+    ):
         return report
     owner = f"dynamic-route-qualification-{registration['registration_hash']}"
     authority_store = LocalDataSnapshotStore(root / "authority")
@@ -1341,6 +1676,61 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
         or authority_store.artifacts.read_json(owner_record.terminal_artifact_id) != report
     ):
         raise ValueError("dynamic route qualification has no authoritative terminal")
+    if "route_panel" in registration:
+        replay_budget = shared_budget or ModelBudget(
+            journal=owner_journal,
+            owner_run_id=owner,
+            max_requests=12,
+            max_cost_microusd=1_000_000,
+            scope_limits=(ModelBudgetScope("route_qualification", 1_000_000),),
+            scope="route_qualification",
+        )
+        shared_budget = replay_budget
+        group_id, group_hash = _qualification_group_identity(registration)
+        expected_group = {
+            "binding": replay_budget.binding,
+            "group_id": group_id,
+            "members": [member.to_dict() for member in _qualification_group_members(panel)],
+            "call_graph_hash": group_hash,
+            **({"scope": replay_budget.scope} if replay_budget.scope_limits else {}),
+        }
+        group_event = replay_budget.journal.event(
+            f"{replay_budget.owner_run_id}.budget.group.{canonical_hash(group_id)}"
+        )
+        if group_event is None or group_event.payload != expected_group:
+            raise ValueError("qualification group admission changed")
+        for event in replay_budget.journal.events(replay_budget.owner_run_id):
+            key = event.payload.get("request_key")
+            for topology in panel:
+                if (
+                    event.event_type == "pi.budget.reserved"
+                    and isinstance(key, str)
+                    and key.startswith(f"{owner}.{topology.value}.pi-invocation.")
+                    and (
+                        event.payload.get("group_id") != group_id
+                        or event.payload.get("group_member_id") != topology.value
+                    )
+                ):
+                    raise ValueError("qualification request escaped its route group")
+        for member in _qualification_group_members(panel):
+            route_keys = frozenset(
+                _string(event.payload, "request_key")
+                for event in replay_budget.journal.events(replay_budget.owner_run_id)
+                if event.event_type == "pi.budget.reserved"
+                and event.payload.get("group_id") == group_id
+                and event.payload.get("group_member_id") == member.member_id
+            )
+            route_summary = _qualification_batch_summary(
+                replay_budget,
+                (),
+                request_keys=route_keys,
+            )
+            if (
+                route_summary["physical_requests"] > member.max_requests
+                or route_summary["known_cost_microusd"] + route_summary["reserved_microusd"]
+                > member.max_cost_microusd
+            ):
+                raise ValueError("qualification route exceeded its group allowance")
     cases = report.get("cases")
     if not isinstance(cases, list):
         raise ValueError("dynamic route qualification has invalid cases")
@@ -1349,9 +1739,8 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
         raise ValueError("dynamic route qualification has invalid cases")
     typed_cases = cast(list[dict[str, object]], raw_cases)
     if (
-        len(typed_cases) != len(_TOPOLOGIES)
-        or {item.get("topology") for item in typed_cases}
-        != {topology.value for topology in _TOPOLOGIES}
+        len(typed_cases) != len(panel)
+        or {item.get("topology") for item in typed_cases} != {topology.value for topology in panel}
         or any(item.get("status") != "completed" for item in typed_cases)
     ):
         raise ValueError("dynamic route qualification did not complete the exact route panel")
@@ -1381,6 +1770,13 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
             target_id="SYNTHETIC.BROAD.ETF",
             thesis_epoch="route-qualification-v1",
             allowed_horizons=frozenset({1, 3, 5}),
+            schema_version=cast(
+                str,
+                registration.get("research_inputs_schema_version")
+                or _object(binding["inputs"]).get(
+                    "schema_version", "market-impact.research-thesis-inputs.v1"
+                ),
+            ),
             research_question=(
                 "What is the defensible direction and horizon for the synthetic proxy?"
             ),
@@ -1404,12 +1800,19 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
                 BaseCaseDirection.UP,
                 BaseCaseDirection.DOWN,
                 BaseCaseDirection.RANGEBOUND,
+                BaseCaseDirection.UNKNOWN,
             }
             or binding.get("run_id") != expected_run_id
             or binding.get("inputs") != expected_inputs
             or binding.get("profile") != profiles[topology.value]
             or binding.get("runtime") != registration["runtime"]
-            or binding.get("prompt") != RESEARCH_THESIS_PROMPT
+            or binding.get("prompt")
+            != (
+                RESEARCH_THESIS_V2_PROMPT
+                if expected_inputs.get("schema_version")
+                == "market-impact.research-thesis-inputs.v2"
+                else RESEARCH_THESIS_PROMPT
+            )
             or binding.get("max_output_tokens") != registration["maximum_output_tokens_per_run"]
             or source["terminal_hash"] != item.get("terminal_hash")
             or source["journal_hash"] != item.get("journal_hash")
@@ -1417,7 +1820,7 @@ def _verified_qualification_report(root: Path, *, require_passed: bool) -> dict[
         ):
             raise ValueError("dynamic route case differs from its signed native terminal")
     if shared_budget is not None:
-        run_ids = tuple(f"{owner}.{topology.value}" for topology in _TOPOLOGIES)
+        run_ids = tuple(f"{owner}.{topology.value}" for topology in panel)
         summary = _qualification_batch_summary(shared_budget, run_ids)
         if report.get("budget") != summary or report.get("reconciled") != (
             summary["unsettled_requests"] == 0

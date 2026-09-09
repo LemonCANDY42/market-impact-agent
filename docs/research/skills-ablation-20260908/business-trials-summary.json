@@ -1,0 +1,461 @@
+{
+  "all_trials": [
+    {
+      "label": "q5-96-canary1",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 319.33824183396064,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 7,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "866ba068cd3ee09c215b5cf7f5a798c6191aa2d25ea4a853e5e90e7dde9f4a35",
+      "results_sha256": "e0baff3db5d341cd97adc1245b158f1226ec14375ea77023479215dd082b3ef1",
+      "result_sha256": "ad1587628b1f31e7f726b1778303a28c084a17eb8e91bac81e717229d4cdd27f",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 319.31831116694957,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='q5-96-canary1.ordinary.A.0.research')",
+          "candidate_data_preparation_seconds": 5.243093125056475
+        }
+      ]
+    },
+    {
+      "label": "q5-96-canary2",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 317.3365564998239,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 7,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "768b50fbb5b86aeb4c43db6b25dbe1ed9edf72f15a7897e9058a4802122c72a8",
+      "results_sha256": "56072c1a0b967e65a91eca71ac350460edf1b49856b0b992e1dc4b2f0a6bc805",
+      "result_sha256": "34dbc5d520066dcbb83e70114ca413824677f6b75ff1e6ac93d60db1bcb43216",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 317.3228647499345,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='portfolio_run_incomplete', continuation_ref='q5-96-canary2.ordinary.A.0.portfolio')",
+          "candidate_data_preparation_seconds": 5.572501916904002
+        }
+      ]
+    },
+    {
+      "label": "q5-96-canary3",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 441.40858241613023,
+      "completed_pairs": 0,
+      "completed_account_days": 1,
+      "incomplete_account_days": 0,
+      "physical_requests": 8,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "7dab02851e00afb900cf3448cb9ced757ff3e707bb44c01b34ed49f826f3ee19",
+      "results_sha256": "543737e48af8c3351150e9f8ddfb65bb78a5c31d67f0659068d6a4ad721df1a5",
+      "result_sha256": "30b625d1f5c97386c8ca199d64caab63313c758401915505944aef3c6c30cab2",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": true,
+          "elapsed_seconds": 441.36863441602327,
+          "error": null,
+          "detail": null,
+          "candidate_data_preparation_seconds": 7.770853416994214
+        }
+      ]
+    },
+    {
+      "label": "q5-ab-20m-v2",
+      "kind": "formal_20_minute",
+      "elapsed_seconds": 1037.1411675831769,
+      "completed_pairs": 0,
+      "completed_account_days": 1,
+      "incomplete_account_days": 2,
+      "physical_requests": 23,
+      "unsettled_requests": 1,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "f02233eb2fffa94292fc102078e0322b8a6356f61f47830b7ae1a903f66fa83d",
+      "results_sha256": "052917e27dedd7dbff1ee4adbcdc113129c38a292b25c1b0fd8d9d19df9eaefa",
+      "result_sha256": "8646e800ebc3a60c62fda0aa04c56d56f824e7c7013a7e1e7767010dccc54d73",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": true,
+          "elapsed_seconds": 472.12648912495933,
+          "error": null,
+          "detail": null,
+          "candidate_data_preparation_seconds": 4.990409957943484
+        },
+        {
+          "window": "ordinary",
+          "arm": "B",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 453.3070352091454,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='q5-ab-20m-v2.1230421aa4d5f59c.B.0.research')",
+          "candidate_data_preparation_seconds": 7.496964582940564
+        },
+        {
+          "window": "acute",
+          "arm": "B",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 111.63171958294697,
+          "error": "TimeoutError",
+          "detail": "Business dispatch deadline reached; no new physical request",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    },
+    {
+      "label": "q5-canary1",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 133.34216945804656,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 4,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "4c8480f82053e14cf5d5a2304630f95b5d1ee4e5dc3c879ea8e146cb372cd63f",
+      "results_sha256": "0781dc13ea3eb268e9eb564885157fb2eb802920f718b763db5aae529254aee0",
+      "result_sha256": "798bdfb909792650de2ca3bf60e68770a3156f1e2df7eb53a0d1581806df887b",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 133.3263029169757,
+          "error": "_BudgetExceeded",
+          "detail": "pi context exceeds frozen model window",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    },
+    {
+      "label": "q5-canary2",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 180.1602720830124,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 4,
+      "unsettled_requests": 1,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "00d16228ede01d456156875c2dfe991fd090f3ccaaee68ef85e9c9cbfa6d556e",
+      "results_sha256": "718eed53e1f46c99f71607487ad29a2df3b018dab7e4df7e1012b6d4e83f6d97",
+      "result_sha256": "adef1550959dd738feb3020c1c4680e037109b6c3874d32acc71e63563d55ade",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 180.13792916713282,
+          "error": "TimeoutError",
+          "detail": "",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    },
+    {
+      "label": "q5-one-pair-supplement-v1",
+      "kind": "authorized_one_pair_supplement",
+      "elapsed_seconds": 1017.7979809159879,
+      "completed_pairs": 0,
+      "completed_account_days": 1,
+      "incomplete_account_days": 1,
+      "physical_requests": 21,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "2c46d450479830a72f30be65cbb6408a936c65f7c4dbb34e20c0352f87107d42",
+      "results_sha256": "c0385c1ac19c178cee4e34997cc86c0db29e8476300f303df1616d4c02e3ac91",
+      "result_sha256": "c0f4f78e702f5bc871dcadb016620cf5f5a4e312eb49f04a6915ab9d3b6ce324",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": true,
+          "elapsed_seconds": 494.0492094999645,
+          "error": null,
+          "detail": null,
+          "candidate_data_preparation_seconds": 5.897170375101268
+        },
+        {
+          "window": "ordinary",
+          "arm": "B",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 523.530473416904,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='q5-one-pair-supplement-v1.1230421aa4d5f59c.B.0.research')",
+          "candidate_data_preparation_seconds": 11.067207332933322
+        }
+      ]
+    },
+    {
+      "label": "q5-one-pair-supplement-v2",
+      "kind": "authorized_one_pair_supplement",
+      "elapsed_seconds": 913.400595249841,
+      "completed_pairs": 0,
+      "completed_account_days": 1,
+      "incomplete_account_days": 1,
+      "physical_requests": 22,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "2a5cec4942e4900f8dc0e9e3abdc411cc1230988eed57325aebc6255a8d8695c",
+      "results_sha256": "c864d7c534fd3f6b0a450cd553b421222abb653a783fe40e86135df0bae0fea8",
+      "result_sha256": "dc2dcc0b296dadfaa01c1d689f303f29c818b5b675ae6f36c9654ec4e35532ff",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": true,
+          "elapsed_seconds": 465.4675076249987,
+          "error": null,
+          "detail": null,
+          "candidate_data_preparation_seconds": 12.730484709143639
+        },
+        {
+          "window": "ordinary",
+          "arm": "B",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 447.8554774168879,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='q5-one-pair-supplement-v2.1230421aa4d5f59c.B.0.research')",
+          "candidate_data_preparation_seconds": 20.841092917136848
+        }
+      ]
+    },
+    {
+      "label": "q5-one-pair-supplement-v3",
+      "kind": "authorized_one_pair_supplement",
+      "elapsed_seconds": 1148.1169640840963,
+      "completed_pairs": 1,
+      "completed_account_days": 2,
+      "incomplete_account_days": 0,
+      "physical_requests": 20,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "9c593a3a62c072a2a3a303d16321a3b7b9da0fc63474a1f7c1dd4f4fd55284ab",
+      "results_sha256": "85080260eaf0c0e8f35f18ba7980d659f382aacd67eb62f4d45337ece5ddcc1e",
+      "result_sha256": "934f52cc34b3433c53737c5bde74fe30abd45acf970243cda8f6dd4fddf4dd49",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "B",
+          "index": 0,
+          "complete": true,
+          "elapsed_seconds": 685.0205211669672,
+          "error": null,
+          "detail": null,
+          "candidate_data_preparation_seconds": 19.901252791984007
+        },
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": true,
+          "elapsed_seconds": 463.02333487500437,
+          "error": null,
+          "detail": null,
+          "candidate_data_preparation_seconds": 18.466356290969998
+        }
+      ]
+    },
+    {
+      "label": "qat-96-canary1",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 395.6175341249909,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 4,
+      "unsettled_requests": 1,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "2ed0a3747a78134710684cf0ccf3220d2d7b1a1b108f7f894ecc7021df949576",
+      "results_sha256": "4ef359df597616bb625446a9d87c39606e3796fa8cd109aa6d19118df26fbfb5",
+      "result_sha256": "6455ccd8d3e0ce2d2b392bfe0cd35df6725b0badca92f3d1d9bfa221b66e8f47",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 395.59602529206313,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='qat-96-canary1.ordinary.A.0.research')",
+          "candidate_data_preparation_seconds": 10.378446375019848
+        }
+      ]
+    },
+    {
+      "label": "qat-final-canary1",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 75.84816666599363,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 4,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "a303d9532d35aff5746ba659c9f9604790a4c2b0b363f8656988b8efaba9ea37",
+      "results_sha256": "ea671a92ea589f8c09be8337945b118f82d374b20822db1ea7fea7ccd638e5f6",
+      "result_sha256": "80fcaf03aebec03f01942911ef4f8df9e3d83dd5df5b6d78822235e3b8bebeab",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 75.8238692919258,
+          "error": "ValueError",
+          "detail": "Multiple top-level JSON elements found in strict mode.",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    },
+    {
+      "label": "qat-final-canary2",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 303.8105870420113,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 5,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "4f0d1a306ebb3b0c8ec40e5077be6f43c0ac0a68f5944dd2bb7df8279beef295",
+      "results_sha256": "04eec312b19c92d65159fbcbc3a22ddd4f7f26a951a599db60f6555fd6045665",
+      "result_sha256": "cb47b6899ba5d5a472d75459de8ad45d420a320f218d71f60cdf1ee5985c2b00",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 303.79213520814665,
+          "error": "RuntimeError",
+          "detail": "Incomplete decision: PendingReview(reason='research_run_incomplete', continuation_ref='qat-final-canary2.ordinary.A.0.research')",
+          "candidate_data_preparation_seconds": 7.141670624958351
+        }
+      ]
+    },
+    {
+      "label": "qat-prefix-canary1",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 0.12183087505400181,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 0,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "81c8e0a8f8199e1068f31e47bd7fa4d237abc41f1d40faeed29e34c1674952d7",
+      "results_sha256": "3802cff0b0cabc21dfc16d6cdcf37e430093fe4950b1012189fd994929644952",
+      "result_sha256": "dc2886fe9cbdab166e4efa6aaa7b1acd00598fabbf33871f11daa4ce27eb640b",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 0.11191795812919736,
+          "error": "PermissionError",
+          "detail": "privileged Run Journal events require a root-authenticated signer",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    },
+    {
+      "label": "qat-prefix-canary2",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 85.74689316703007,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 3,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "9a0f964cdad065143bb2aed532cdfe0d4eec0395532de0dac1cbcf95f12627f1",
+      "results_sha256": "e5b3331964d54abe48153be828b6c3f711f900ef46abfe57d23e40cede2b1002",
+      "result_sha256": "dfcaa9965da10db18cd8dc55712c91e5878a06e91b02cb14adefcec6a289c852",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 85.72826549992897,
+          "error": "ValueError",
+          "detail": "compaction requires completed nonempty text, not tool calls",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    },
+    {
+      "label": "qat-prefix-canary3",
+      "kind": "integration_qualification",
+      "elapsed_seconds": 55.00072283297777,
+      "completed_pairs": 0,
+      "completed_account_days": 0,
+      "incomplete_account_days": 1,
+      "physical_requests": 2,
+      "unsettled_requests": 0,
+      "frozen_code_unchanged": true,
+      "registration_sha256": "1dead0f113c72c8f7c9b260fab2f6114b5edbf2f189ebb1798aa90faac2d9a3e",
+      "results_sha256": "e49666366f9b3cf3b6600ee2d572b2cc417c2fb7924697d3e38b2d21be140cce",
+      "result_sha256": "bd32cad948d5f36ec0ea5328e9d68ca97994e7b7027d27104002677c5309458e",
+      "days": [
+        {
+          "window": "ordinary",
+          "arm": "A",
+          "index": 0,
+          "complete": false,
+          "elapsed_seconds": 54.985314584104344,
+          "error": "PermissionError",
+          "detail": "role exhausted its read-only tool budget",
+          "candidate_data_preparation_seconds": null
+        }
+      ]
+    }
+  ],
+  "integration_seconds": 2307.7315569990315,
+  "integration_complete_days": 1,
+  "operator_interruptions": [
+    {
+      "at": "2026-09-08T15:38:43.299841+00:00",
+      "reason": "Operator stopped after identifying regime labels in research Run IDs before any accepted answer; first discovery request had already begun",
+      "physical_model_requests": 1,
+      "completed_responses": 0,
+      "business_timer_started": true,
+      "first_segment_started_at": "2026-09-08T15:37:21.615105+00:00",
+      "original_deadline_utc": "2026-09-08T15:57:21.615105+00:00",
+      "original_artifacts_preserved": true,
+      "complete_pairs": 0,
+      "usage_unknown_requests": 1,
+      "server_cancellation_observed": true
+    }
+  ]
+}
