@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -51,6 +52,7 @@ from market_impact_agent.paired_skill_ablation_runner import (
     run_paired_method_skill_ablation,
 )
 from market_impact_agent.paired_skill_execution_audit import (
+    _copy_run_for_audit,  # pyright: ignore[reportPrivateUsage]
     audit_paired_execution_state,
     validate_judgment_execution_binding,
 )
@@ -574,7 +576,9 @@ class _CompletedAvailableProvider(BusinessModelFixture):
         )
 
 
-def test_completed_paired_execution_audit_binds_terminal_judgments(tmp_path: Path) -> None:
+def test_completed_paired_execution_audit_binds_terminal_judgments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     provider = _CompletedAvailableProvider()
     result = asyncio.run(
         run_paired_method_skill_ablation(
@@ -608,18 +612,38 @@ def test_completed_paired_execution_audit_binds_terminal_judgments(tmp_path: Pat
         dict[str, object],
         json.loads((experiment_root / "registration.json").read_text()),
     )
-    bindings = audit_paired_execution_state(
-        expected_evidence_pack=repository.evidence_pack,
-        eligible_horizon_sessions=1,
-        registration=registration,
-        report=result,
-        experiment_root=experiment_root,
-        evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
-        evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
-        pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
-        provider_profile_path=PROFILE,
-        skill_root=Path("skills"),
-    )
+    artifact_init = ArtifactStore.__init__
+    journal_init = RunJournal.__init__
+    ledger_init = UsageLedger.__init__
+
+    def guarded_artifact_init(store: ArtifactStore, root: Path) -> None:
+        assert not root.resolve().is_relative_to(experiment_root.resolve())
+        artifact_init(store, root)
+
+    def guarded_journal_init(journal: RunJournal, path: Path) -> None:
+        assert not path.resolve().is_relative_to(experiment_root.resolve())
+        journal_init(journal, path)
+
+    def guarded_ledger_init(ledger: UsageLedger, path: Path) -> None:
+        assert not path.resolve().is_relative_to(experiment_root.resolve())
+        ledger_init(ledger, path)
+
+    with monkeypatch.context() as audit_guard:
+        audit_guard.setattr(ArtifactStore, "__init__", guarded_artifact_init)
+        audit_guard.setattr(RunJournal, "__init__", guarded_journal_init)
+        audit_guard.setattr(UsageLedger, "__init__", guarded_ledger_init)
+        bindings = audit_paired_execution_state(
+            expected_evidence_pack=repository.evidence_pack,
+            eligible_horizon_sessions=1,
+            registration=registration,
+            report=result,
+            experiment_root=experiment_root,
+            evidence_pack_path=RECOVERY / "evidence-pack-recovery.json",
+            evidence_documents_path=RECOVERY / "evidence-documents-recovery.json",
+            pattern_pack_paths=(RECOVERY / "pattern-pack.json",),
+            provider_profile_path=PROFILE,
+            skill_root=Path("skills"),
+        )
     assert set(bindings) == {"general_control", "general_plus_expectations_base_rates"}
 
     with pytest.raises(ValueError, match="differs from expected prompt"):
@@ -845,3 +869,21 @@ def test_preparation_rejects_caller_evidence_labels_not_bound_to_the_bundle() ->
             pricing=_cpa_pricing(),
             registered_at=datetime(2026, 8, 27, 10, 5, tzinfo=UTC),
         )
+
+
+def test_audit_replica_includes_committed_wal_state(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "artifacts").mkdir(parents=True)
+    destination = tmp_path / "replica"
+    with closing(sqlite3.connect(source / "run.sqlite3")) as writer:
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("CREATE TABLE probe (value TEXT)")
+        writer.execute("INSERT INTO probe VALUES ('committed-in-wal')")
+        writer.commit()
+        assert (source / "run.sqlite3-wal").stat().st_size > 0
+        _copy_run_for_audit(source, destination)
+        with closing(sqlite3.connect(destination / "run.sqlite3")) as reader:
+            assert reader.execute("SELECT value FROM probe").fetchall() == [("committed-in-wal",)]
+        with closing(sqlite3.connect(source / "run.sqlite3")) as reader:
+            assert reader.execute("SELECT value FROM probe").fetchall() == [("committed-in-wal",)]

@@ -6,6 +6,29 @@ The research engine asks a narrower question than general news sentiment:
 > create a tradable multi-horizon price impact, through which transmission paths, and
 > under what invalidation or exit conditions?
 
+## Current research answer and staged acceptance
+
+Research Thesis v2 binds its target and records direction separately from event
+support. Price-only inputs may support a forecast without establishing an event
+explanation or industry transmission. `unknown` is a valid completed answer;
+event transmission may be empty with explicit gaps even when the event itself is supported. Supported event occurrence still requires source citations. Expectations,
+priced-in analysis, counter-scenario, invalidation and review timing remain explicit.
+A revision explains new facts, prior assumptions and the changed conclusion.
+
+One research result compares up to five source-proven new candidates, recording
+support, counterevidence, transmission, comparison reason and missing data. Cached
+native reads and acquisition successors have equal provenance requirements. Current
+holdings do not consume the new-candidate cap. Only the selected portfolio target
+needs execution qualification, after complete current account review.
+
+[Staged preparation](STAGED_RESEARCH_PREPARATION.md) fixes event-input comparison
+first, dynamic security selection second, and ten-session continuous review third.
+Source eligibility is checked in the registered case order. Already inspected
+windows remain development data. The inclusive rangebound band is frozen from
+20 pre-cutoff daily returns for new experiments only; every registered opportunity,
+unknown answer and system/budget stop remains in reporting. Direction coverage and
+completed-response coverage are distinct. Two windows do not support promotion.
+
 ## Event representation
 
 An event record separates occurrence, publication, market visibility, retrieval, source
@@ -175,3 +198,12 @@ technology-to-dividend/low-volatility rotation and El Niño-to-agriculture slice
 
 The project fails this stage if the complex system cannot beat simple baselines after
 costs or if the result depends on a few hand-selected episodes.
+
+The [completed Stage 1 pilot](STAGE1_MODEL_PILOT_RESULTS_20260906.md) records the
+matched Luna/Terra evidence, costs and source-quality decision. Two complete
+historical windows do not establish investment effectiveness or authorize later
+execution stages.
+
+The [source-first follow-up](STAGE1_FOLLOWUP_20260906.md) retains the same spending
+authority and tests corrected input semantics on two new historical development
+windows, with a frozen simple baseline and a separate actual-receipt observation.

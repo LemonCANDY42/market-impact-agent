@@ -909,10 +909,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     continuous_study_parser = agent_subparsers.add_parser(
         "continuous-study",
-        help="Prepare and inspect the bounded 18-window continuous coverage study",
+        help="Prepare, inspect, or retrospectively diagnose a continuous study",
     )
     continuous_study_parser.add_argument(
-        "action", choices=("prepare", "preflight", "report", "prepare-experiment", "run")
+        "action",
+        choices=(
+            "prepare",
+            "preflight",
+            "report",
+            "prepare-experiment",
+            "run",
+            "retrospective",
+            "prepare-execution",
+            "qualify-execution",
+            "run-execution",
+            "report-execution",
+        ),
     )
     continuous_study_parser.add_argument(
         "--state-root", type=Path, default=Path(".market-impact/continuous-20260905/study")
@@ -925,6 +937,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     continuous_study_parser.add_argument("--prior-usage-audit", type=Path)
     continuous_study_parser.add_argument("--research-inputs-root", type=Path)
+    continuous_study_parser.add_argument("--study-spec", type=Path)
+    continuous_study_parser.add_argument("--authority-root", type=Path)
+    continuous_study_parser.add_argument("--provider-profile", type=Path)
+    continuous_study_parser.add_argument("--report-path", type=Path)
+    continuous_study_parser.add_argument("--preflight-hash")
+    continuous_study_parser.add_argument("--execution-config", type=Path)
+    continuous_study_parser.add_argument("--panel-id", default="paired-v1")
+    continuous_study_parser.add_argument("--offline-verification", type=Path)
+    continuous_study_parser.add_argument("--prior-qualification-root", type=Path)
     prospective_discovery_parser = agent_subparsers.add_parser(
         "prospective-discovery",
         help="Research actual receipts with durable dynamic source continuation",
@@ -3825,6 +3846,53 @@ def _run_watch_wake_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_staged_execution_command(args: argparse.Namespace) -> int:
+    study_result: Mapping[str, object]
+    from market_impact_agent.staged_research_execution import (
+        create_staged_authorization,
+        prepare_stage1_execution,
+        qualify_stage1_execution,
+        run_stage1_execution,
+        stage1_execution_report,
+    )
+
+    if args.action == "prepare-execution":
+        if args.execution_config is None:
+            raise ValueError("execution preparation requires --execution-config")
+        config = cast(dict[str, object], json.loads(args.execution_config.read_text()))
+        create_staged_authorization(args.state_root, authorized_at=datetime.now(UTC))
+        study_result = prepare_stage1_execution(
+            root=args.state_root,
+            panel_id=args.panel_id,
+            preparation_root=Path(str(config["preparation_root"])),
+            source_authority_root=Path(str(config["source_authority_root"])).expanduser(),
+            input_root=Path(str(config["input_root"])),
+            profiles=tuple(
+                load_model_provider_profile(Path(path))
+                for path in cast(list[str], config["profiles"])
+            ),
+            supplements=json.loads(Path(str(config["source_supplements"])).read_text()),
+            budget_scope=str(config.get("budget_scope", "paired_research")),
+        )
+    elif args.action == "qualify-execution":
+        if args.offline_verification is None:
+            raise ValueError("qualification requires --offline-verification")
+        study_result = asyncio.run(
+            qualify_stage1_execution(
+                args.state_root,
+                args.panel_id,
+                args.offline_verification,
+                prior_qualification_root=args.prior_qualification_root,
+            )
+        )
+    elif args.action == "run-execution":
+        study_result = asyncio.run(run_stage1_execution(args.state_root, args.panel_id))
+    else:
+        study_result = stage1_execution_report(args.state_root, args.panel_id)
+    print(json.dumps(study_result, ensure_ascii=False, indent=2))
+    return 0 if study_result.get("stage_passed", True) else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "runtime":
@@ -5306,45 +5374,144 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     if args.command == "agent" and args.agent_command == "continuous-study":
-        from market_impact_agent.continuous_study_runner import (
-            preflight_continuous_study,
-            prepare_continuous_study,
-            report_continuous_study,
-        )
-
         try:
-            if args.action == "prepare":
-                if args.prior_usage_audit is None:
-                    raise ValueError("continuous study preparation requires prior usage audit")
-                result = prepare_continuous_study(
-                    args.state_root,
-                    dataset_path=args.dataset,
-                    panel_root=args.panel_root,
-                    prior_usage_audit_path=args.prior_usage_audit,
+            study_result: Mapping[str, object]
+            if args.action in {
+                "prepare-execution",
+                "qualify-execution",
+                "run-execution",
+                "report-execution",
+            }:
+                return _run_staged_execution_command(args)
+            if args.study_spec is not None:
+                if args.action not in {"prepare", "preflight", "report"}:
+                    raise PermissionError(
+                        "staged study execution requires separate paid authorization"
+                    )
+                from market_impact_agent.staged_research_study import (
+                    preflight_staged_study,
+                    prepare_staged_study,
+                    report_staged_study,
                 )
-            elif args.action == "preflight":
-                result = preflight_continuous_study(args.state_root)
-            elif args.action in {"prepare-experiment", "run"}:
-                from market_impact_agent.continuous_study_entry import continuous_study_entry
 
-                if args.prior_usage_audit is None:
-                    raise ValueError("continuous experiment requires its bound prior usage audit")
-                result = asyncio.run(
-                    continuous_study_entry(
-                        action=args.action,
-                        study_root=args.state_root,
-                        input_root=args.research_inputs_root or args.state_root / "research-inputs",
+                if args.action == "report":
+                    study_result = report_staged_study(args.state_root, spec_path=args.study_spec)
+                else:
+                    if (
+                        args.authority_root is None
+                        or args.research_inputs_root is None
+                        or args.provider_profile is None
+                    ):
+                        raise ValueError(
+                            "staged preparation requires explicit authority, research inputs, "
+                            "and provider profile paths"
+                        )
+                    staged = {
+                        "spec_path": args.study_spec,
+                        "output_root": args.state_root,
+                        "authority_root": args.authority_root,
+                        "input_root": args.research_inputs_root,
+                        "profile_path": args.provider_profile,
+                    }
+                    study_result = (
+                        prepare_staged_study(**staged)
+                        if args.action == "prepare"
+                        else preflight_staged_study(**staged)
+                    )
+            elif args.action == "retrospective":
+                if (
+                    args.report_path is None
+                    or args.preflight_hash is None
+                    or args.authority_root is None
+                ):
+                    raise ValueError(
+                        "retrospective requires report path, preflight hash, and authority root"
+                    )
+                from dataclasses import asdict
+
+                from market_impact_agent.continuous_retrospective import (
+                    ContinuousRetrospectivePaths,
+                    run_continuous_retrospective,
+                )
+
+                retrospective = run_continuous_retrospective(
+                    ContinuousRetrospectivePaths(
+                        report_path=args.report_path,
+                        runtime_store_root=args.authority_root,
+                        preflight_artifact_hash=args.preflight_hash,
+                    )
+                )
+                args.state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+                args.state_root.chmod(0o700)
+                private_path = args.state_root / "continuous-retrospective-private.json"
+                private_payload = json.dumps(asdict(retrospective), indent=2, sort_keys=True) + "\n"
+                if private_path.exists():
+                    if private_path.read_text() != private_payload:
+                        raise ValueError("frozen retrospective private output differs")
+                else:
+                    with private_path.open("x") as stream:
+                        stream.write(private_payload)
+                    private_path.chmod(0o600)
+                study_result = {
+                    "schema_version": "market-impact.continuous-retrospective-cli.v1",
+                    "stage_passed": True,
+                    "private_output": str(private_path),
+                    "costs": retrospective.costs,
+                    "thesis_summary": retrospective.thesis_summary,
+                    "proxy_outcome_summary": retrospective.proxy_outcome_summary,
+                    "matched_momentum_summary": [
+                        {
+                            key: row[key]
+                            for key in ("stage", "model", "n", "model_hits", "momentum_hits")
+                        }
+                        for row in retrospective.matched_momentum
+                    ],
+                    "model_calls": 0,
+                    "broker_access": False,
+                }
+            else:
+                from market_impact_agent.continuous_study_runner import (
+                    preflight_continuous_study,
+                    prepare_continuous_study,
+                    report_continuous_study,
+                )
+
+                if args.action == "prepare":
+                    if args.prior_usage_audit is None:
+                        raise ValueError("continuous study preparation requires prior usage audit")
+                    study_result = prepare_continuous_study(
+                        args.state_root,
                         dataset_path=args.dataset,
                         panel_root=args.panel_root,
                         prior_usage_audit_path=args.prior_usage_audit,
                     )
-                )
-            else:
-                result = report_continuous_study(args.state_root)
+                elif args.action == "preflight":
+                    study_result = preflight_continuous_study(args.state_root)
+                elif args.action in {"prepare-experiment", "run"}:
+                    from market_impact_agent.continuous_study_entry import continuous_study_entry
+
+                    if args.prior_usage_audit is None:
+                        raise ValueError(
+                            "continuous experiment requires its bound prior usage audit"
+                        )
+                    study_result = asyncio.run(
+                        continuous_study_entry(
+                            action=args.action,
+                            study_root=args.state_root,
+                            input_root=args.research_inputs_root
+                            or args.state_root / "research-inputs",
+                            dataset_path=args.dataset,
+                            panel_root=args.panel_root,
+                            prior_usage_audit_path=args.prior_usage_audit,
+                        )
+                    )
+                else:
+                    study_result = report_continuous_study(args.state_root)
         except (
             OSError,
             RuntimeError,
             ValueError,
+            PermissionError,
             KeyError,
             TypeError,
             json.JSONDecodeError,
@@ -5358,8 +5525,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
             return 1
-        print(json.dumps(result, indent=2, sort_keys=True))
-        return 0 if result.get("stage_passed", True) else 1
+        print(json.dumps(study_result, indent=2, sort_keys=True))
+        return 0 if study_result.get("stage_passed", True) else 1
     if args.command == "agent" and args.agent_command == "dynamic-effectiveness":
         from market_impact_agent.dynamic_effectiveness_runner import (
             accept_dynamic_route_qualification,
