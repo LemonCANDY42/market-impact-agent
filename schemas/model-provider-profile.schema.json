@@ -40,7 +40,8 @@
         "supported_efforts": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "request_options": {"type": "object"},
         "quota_model": {"type": "string", "minLength": 1},
-        "cache_namespace": {"type": "string", "minLength": 1}
+        "cache_namespace": {"type": "string", "minLength": 1},
+        "context_estimator": {"const": "pi-usage-v1"}
       }
     },
     "profile_id": {"type": "string", "pattern": "^model-provider-[0-9a-f]{64}$"},

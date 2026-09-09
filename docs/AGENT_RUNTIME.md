@@ -243,6 +243,25 @@ repinned outside the summary. Original history is retained. Summaries are
 neither original evidence nor new permission. Summary calls share parent budget
 and cancellation; an incomplete summary never replaces history.
 
+Profiles may explicitly select `runtime.context_estimator="pi-usage-v1"`.
+That generic pi mode uses the pinned public `estimateContextTokens` and
+`estimateTokens`: latest valid Provider usage plus estimated subsequent messages,
+or message-size estimates when no current-context usage is available. System
+and tool definitions are estimated when no usage receipt already includes them.
+Imported prior history and pre-compaction retained messages do not supply usage
+for the rebuilt context; fresh decision responses restore usage-based estimates.
+Original native messages and opaque reasoning metadata are unchanged.
+
+The existing Harness callback uses this estimate for both compaction and request
+admission, still applying the frozen input/output, cost and turn budgets. Estimates
+and their usage/size components are saved with the frozen native request in the
+original Journal. They are estimates, not exact tokenizer counts or billing usage.
+Provider overflow stays fail-closed under existing failure policy. This mode uses
+pi's default recent-history retention target and public compaction/replay APIs;
+there is no local-model-specific tokenizer service or alternate token ledger.
+Omitted mode preserves old UTF-8-bound behavior and route identities. Selecting
+the mode changes Profile/route and Agent execution-estimator identity.
+
 High cache reuse is a measurement goal, not a guarantee. Compare the same pinned
 pi/model/route with matching prefixes and alternate execution order. Report
 cold, warm, expired and first-after-compaction calls separately. Missing counts

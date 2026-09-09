@@ -168,14 +168,20 @@ class ModelProviderProfile:
 
     def _validate_pi_runtime(self) -> None:
         assert self.runtime is not None
-        if set(self.runtime) != {
+        required = {
             "api",
             "supported_efforts",
             "request_options",
             "quota_model",
             "cache_namespace",
-        }:
+        }
+        if not required <= set(self.runtime) <= required | {"context_estimator"}:
             raise ValueError("pi Profile runtime fields are invalid")
+        if (
+            "context_estimator" in self.runtime
+            and self.runtime["context_estimator"] != "pi-usage-v1"
+        ):
+            raise ValueError("unsupported pi context estimator")
         api = self.runtime["api"]
         if api not in {"openai-responses", "openai-completions"}:
             raise ValueError("native API has no accepted public pi factory")

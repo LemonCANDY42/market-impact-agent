@@ -47,6 +47,7 @@ def runtime_identity() -> dict[str, object]:
         "authority_callbacks": Path(__file__).with_name("pi_execution.py"),
         "profile_contract": Path(__file__).with_name("model_provider.py"),
         "context_contract": Path(__file__).with_name("agent_runtime.py"),
+        "method_catalog": Path(__file__).with_name("method_catalog.py"),
         "answer_parser": Path(__file__).with_name("model_json.py"),
         "budget": Path(__file__).with_name("model_budget.py"),
         "deployment": Path(__file__).with_name("pi_deployment.py"),

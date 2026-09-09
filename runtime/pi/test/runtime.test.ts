@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type AssistantMessage, type Model } from "@earendil-works/pi-ai";
 import type { AgentContext } from "@earendil-works/pi-agent-core";
-import { run, type Callback, type RunInput } from "../src/runtime.ts";
+import { run, estimatePiContext, type Callback, type RunInput } from "../src/runtime.ts";
 
 const model: Model<"openai-responses"> = {
   id: "gpt-5.6-luna", name: "Luna", provider: "fixture", api: "openai-responses",
@@ -79,7 +79,9 @@ test("imported native history precedes the new task without losing opaque state"
 test("two upstream compactions retain fixed policy and use incremental summaries", async () => {
   let decisions = 0, summaries = 0, checkpoints = 0;
   const artifacts: unknown[] = [];
-  await run({ ...input, compaction: { reserveTokens: 1024, keepRecentTokens: 0 } }, async (method, payload) => {
+  await run({ ...input, profile: { ...input.profile, runtime: { ...input.profile.runtime, context_estimator: "pi-usage-v1" } },
+    skills: [{ name: "optional-risk", description: "Review concentration", filePath: "/frozen/optional-risk/SKILL.md" }],
+    compaction: { reserveTokens: 1024, keepRecentTokens: 0 } }, async (method, payload) => {
     if (method === "model_admit") {
       if (payload.purpose === "compaction") {
         summaries++;
@@ -88,7 +90,11 @@ test("two upstream compactions retain fixed policy and use incremental summaries
       }
       decisions++;
       assert.match(JSON.stringify(payload.context), /Frozen policy/);
-      if (decisions > 1) assert.match(JSON.stringify(payload.context), /previous-summary/);
+      assert.match(JSON.stringify(payload.context), /optional-risk/);
+      if (decisions > 1) {
+        assert.match(JSON.stringify(payload.context), /previous-summary/);
+        assert.equal((payload.context_estimate as { usageTokens: number }).usageTokens, 0);
+      }
       return { replay: decisions <= 2 ? { ...message, stopReason: "toolUse", content: [
         { type: "toolCall", id: `call-${decisions}`, name: "read_selected", arguments: {} },
       ] } : message };
@@ -101,4 +107,78 @@ test("two upstream compactions retain fixed policy and use incremental summaries
   }, new AbortController().signal);
   assert.equal(checkpoints, 2); assert.equal(summaries, 2); assert.equal(decisions, 3);
   assert.equal(artifacts.length, 2);
+});
+
+test("UTF-8 tool history compacts below admission while preserving the pinned task", async () => {
+  let decisions = 0, checkpoints = 0;
+  const limit = 65536 - 8192;
+  await run({ ...input, profile: { ...input.profile, context_window_tokens: 65536, reserved_output_tokens: 8192 } }, async (method, payload) => {
+    if (method === "context_check") return { compact: Buffer.byteLength(JSON.stringify(payload.context)) >= limit };
+    if (method === "model_admit") {
+      if (payload.purpose === "compaction") {
+        assert.match(JSON.stringify(payload.context), /Read selected evidence/);
+        assert.match(JSON.stringify(payload.context), /Frozen policy/);
+        return { replay: { ...message, content: [{ type: "text", text: "Evidence e1 and e2 read; finish the pinned task." }] } };
+      }
+      assert.ok(Buffer.byteLength(JSON.stringify(payload.context)) < limit);
+      decisions++;
+      return { replay: decisions <= 2 ? { ...message, stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "Analysis ".repeat(700) },
+        { type: "toolCall", id: `utf8-${decisions}`, name: "read_selected", arguments: {} },
+      ] } : message };
+    }
+    if (method === "tool") return { content: "证据".repeat(5000) };
+    if (method === "turn_end") return { stop: decisions > 2 };
+    if (method === "compaction_commit") checkpoints++;
+    return {};
+  }, new AbortController().signal);
+  assert.equal(checkpoints, 1);
+  assert.equal(decisions, 3);
+});
+
+test("native pi usage avoids byte-triggered compaction of a large request", async () => {
+  let decisions = 0;
+  const limit = 98304 - 16384;
+  const pinned = "Read selected evidence. " + "x".repeat(42000);
+  await run({ ...input, messages: [...input.messages.slice(0, 1), { role: "user", content: pinned }],
+    profile: { ...input.profile, context_window_tokens: 98304, reserved_output_tokens: 16384,
+      runtime: { ...input.profile.runtime, context_estimator: "pi-usage-v1" } } }, async (method, payload) => {
+    if (method === "context_check") {
+      return { compact: Number((payload.context_estimate as { tokens: number }).tokens) >= limit };
+    }
+    if (method === "model_admit") {
+      if (payload.purpose === "compaction") {
+        assert.fail("Native token usage does not require a summary");
+      }
+      assert.ok(Number((payload.context_estimate as { tokens: number }).tokens) < limit);
+      assert.ok(JSON.stringify(payload.context).includes(pinned));
+      decisions++;
+      if (decisions === 3) {
+        assert.match(JSON.stringify(payload.context), /large-2/);
+        assert.match(JSON.stringify(payload.context), /large-1/);
+        assert.ok(Buffer.byteLength(JSON.stringify(payload.context)) > limit);
+      }
+      return { replay: decisions <= 2 ? { ...message, usage: { ...message.usage, input: 35000, output: 5000, totalTokens: 40000 }, stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "Analysis ".repeat(2000) },
+        { type: "toolCall", id: `large-${decisions}`, name: "read_selected", arguments: {} },
+      ] } : message };
+    }
+    if (method === "tool") return { content: "证据".repeat(500) };
+    if (method === "turn_end") return { stop: decisions > 2 };
+    return {};
+  }, new AbortController().signal);
+  assert.equal(decisions, 3);
+});
+
+test("rebuilt context ignores stale pre-compaction usage and counts pinned inputs", () => {
+  const context = { systemPrompt: "pinned ".repeat(100), tools: [], messages: [
+    { ...message, usage: { ...message.usage, input: 90000, output: 5000, totalTokens: 95000 } },
+    { role: "user" as const, content: "New task and retained evidence.", timestamp: 0 },
+  ] };
+  assert.ok(estimatePiContext(context).tokens >= 95000);
+  const rebuilt = estimatePiContext(context, false);
+  assert.equal(rebuilt.usageTokens, 0);
+  assert.ok(rebuilt.fixedTokens > 0);
+  assert.ok(rebuilt.tokens < 1000);
+  assert.equal((context.messages[0] as AssistantMessage).usage.totalTokens, 95000);
 });

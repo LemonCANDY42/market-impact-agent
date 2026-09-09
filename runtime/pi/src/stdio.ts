@@ -5,7 +5,7 @@ import { RUNTIME, type Callback, type RunInput } from "./runtime.ts";
 
 export function serve(runner: (input: RunInput, callback: Callback, signal: AbortSignal) => Promise<unknown>) {
   const maximum = 4_000_000;
-  for (const name of ["pi-ai", "pi-agent-core"]) {
+  for (const name of ["pi-ai", "pi-agent-core", "pi-coding-agent"]) {
     const metadata = JSON.parse(readFileSync(new URL(`../node_modules/@earendil-works/${name}/package.json`, import.meta.url), "utf8"));
     if (metadata.version !== RUNTIME.upstream) throw new Error("Installed pi version differs from frozen runtime");
   }

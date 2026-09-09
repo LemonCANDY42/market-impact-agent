@@ -1,5 +1,7 @@
 /** Pinned upstream mechanisms; the callback owns every durable/financial decision. */
 import { setTimeout as delay } from "node:timers/promises";
+import { dirname } from "node:path";
+import { formatSkillsForPrompt, createSyntheticSourceInfo } from "@earendil-works/pi-coding-agent";
 import { Stream } from "openai/core/streaming";
 import {
   createModels, createProvider, createAssistantMessageEventStream,
@@ -10,6 +12,7 @@ import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import {
   runAgentLoop, prepareCompaction, compact, buildSessionContext, convertToLlm,
+  estimateContextTokens, estimateTokens, calculateContextTokens, DEFAULT_COMPACTION_SETTINGS,
   type AgentContext, type AgentMessage, type AgentTool, type Entry,
 } from "@earendil-works/pi-agent-core";
 
@@ -28,12 +31,13 @@ export interface RunInput {
     context_window_tokens: number; reserved_output_tokens: number;
     temperature: number; top_p: number;
     runtime: { api: "openai-responses" | "openai-completions";
-      request_options: Record<string, unknown>; supported_efforts: string[] };
+      request_options: Record<string, unknown>; supported_efforts: string[]; context_estimator?: "pi-usage-v1" };
   };
   messages: { role: string; content: unknown }[];
   tools: { function: { name: string; description: string; parameters: TSchema } }[];
   compaction?: { keepRecentTokens: number; reserveTokens: number };
   nativeMessages?: AgentMessage[];
+  skills?: { name: string; description: string; filePath: string }[];
 }
 
 export function replayStream(message: AssistantMessage) {
@@ -45,6 +49,21 @@ export function replayStream(message: AssistantMessage) {
   }
   stream.end(message);
   return stream;
+}
+
+/** Public pi accounting: actual usage plus the unmeasured suffix, or size estimation. */
+export function estimatePiContext(context: Context, allowUsage = true) {
+  const messages = context.messages as AgentMessage[];
+  const measured = estimateContextTokens(messages);
+  const estimate = allowUsage ? measured : {
+    tokens: messages.reduce((n, m) => n + estimateTokens(m), 0),
+    usageTokens: 0, trailingTokens: messages.reduce((n, m) => n + estimateTokens(m), 0), lastUsageIndex: null,
+  };
+  // A usage receipt already includes the system prompt and tool definitions.
+  const fixedTokens = estimate.lastUsageIndex === null ? estimateTokens({
+    role: "user", content: JSON.stringify({ systemPrompt: context.systemPrompt, tools: context.tools }), timestamp: 0,
+  }) : 0;
+  return { kind: "pi-usage-v1", ...estimate, fixedTokens, tokens: estimate.tokens + fixedTokens };
 }
 
 /** Presence comes from the official SDK's SSE decoder, not zero-filled pi defaults. */
@@ -94,6 +113,16 @@ export function createInvocation(input: RunInput, callback: Callback, signal: Ab
   }));
   let callNumber = 0;
   let fatal: unknown;
+  // Imported history and retained pre-compaction messages have stale usage.
+  let currentContextUsage = !input.nativeMessages?.length;
+  const contextPayload = (context: Context) => ({ context,
+    ...(p.runtime.context_estimator === "pi-usage-v1"
+      ? { context_estimate: estimatePiContext(context, currentContextUsage) } : {}),
+  });
+  const recordContextUsage = (message: AssistantMessage, purpose: string) => {
+    if (purpose === "decision" && !["error", "aborted"].includes(message.stopReason) && calculateContextTokens(message.usage) > 0)
+      currentContextUsage = true;
+  };
   const guarded = async (method: string, payload: Record<string, unknown>) => {
     if (fatal) throw fatal;
     try { return await callback(method, payload); }
@@ -102,8 +131,11 @@ export function createInvocation(input: RunInput, callback: Callback, signal: Ab
   const invoke = async (context: Context, purpose: string, options: SimpleStreamOptions = {}) => {
     signal.throwIfAborted();
     const number = ++callNumber;
-    const admitted = await guarded("model_admit", { number, purpose, context, runtime: RUNTIME });
-    if (admitted.replay) return admitted.replay as AssistantMessage;
+    const admitted = await guarded("model_admit", { number, purpose, ...contextPayload(context), runtime: RUNTIME });
+    if (admitted.replay) {
+      recordContextUsage(admitted.replay as AssistantMessage, purpose);
+      return admitted.replay as AssistantMessage;
+    }
     const key = process.env[p.credential_env];
     if (!key) throw new Error("Configured credential environment is unavailable");
     let attempts = 0;
@@ -177,9 +209,12 @@ export function createInvocation(input: RunInput, callback: Callback, signal: Ab
       number, purpose, message: response, raw_usage: observed.usage, response_models: observed.models, attempts,
       latency_ms: performance.now() - started, runtime: RUNTIME,
     });
+    recordContextUsage(response, purpose);
     return response;
   };
   return { model, models, invoke, guarded,
+    checkContext: (context: Context) => guarded("context_check", contextPayload(context)),
+    invalidateContextUsage() { currentContextUsage = false; },
     get fatal() { return fatal; },
     get callNumber() { return callNumber; },
     restoreCallNumber(number: number) { callNumber = number; },
@@ -201,7 +236,11 @@ export async function run(input: RunInput, callback: Callback, signal: AbortSign
     if (m.role !== "user") throw new Error("Imported continuation requires native pi messages");
     return { role: "user", content: typeof m.content === "string" ? m.content : JSON.stringify(m.content), timestamp: 0 };
   });
-  const systemPrompt = input.messages.filter(m => m.role === "system").map(m => m.content).join("\n\n");
+  const skillPrompt = formatSkillsForPrompt((input.skills ?? []).map(skill => ({
+    ...skill, baseDir: dirname(skill.filePath), disableModelInvocation: false,
+    sourceInfo: createSyntheticSourceInfo(skill.filePath, { source: "frozen-harness-catalog" }),
+  })));
+  const systemPrompt = input.messages.filter(m => m.role === "system").map(m => m.content).join("\n\n") + skillPrompt;
   let entries: Entry[] = [];
   let correction: AgentMessage[] = [];
   let terminal: Record<string, any> | undefined;
@@ -229,21 +268,25 @@ export async function run(input: RunInput, callback: Callback, signal: AbortSign
     prepareNextTurn: async ({ context: current }) => {
       signal.throwIfAborted();
       if (invocation.fatal) throw invocation.fatal;
-      // Conservative size admission remains Harness-owned; upstream owns the cut and summary.
-      const required = await guarded("context_check", { context: {
+      // Harness owns limits; pinned pi owns token estimates, cuts and summaries.
+      const required = await invocation.checkContext({
         systemPrompt: current.systemPrompt, messages: convertToLlm(current.messages), tools: input.tools.map(t => t.function),
-      } });
+      });
       if (!required.compact) return;
       const replay = await guarded("compaction_lookup", { number: compactions + 1 });
       let entry: Entry;
       if (replay.entry) entry = replay.entry as Entry;
       else {
-        const settings = { enabled: true, reserveTokens: input.compaction?.reserveTokens ?? 4096,
-          keepRecentTokens: input.compaction?.keepRecentTokens ?? Math.floor(p.context_window_tokens / 5) };
+        const settings = { enabled: true, reserveTokens: input.compaction?.reserveTokens ?? p.reserved_output_tokens,
+          keepRecentTokens: input.compaction?.keepRecentTokens ?? (p.runtime.context_estimator === "pi-usage-v1"
+            ? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens : Math.floor(p.context_window_tokens / 16)) };
         const preparation = prepareCompaction(entries, settings);
         if (!preparation.ok || !preparation.value) throw new Error("No safe compaction boundary");
         const result = await compact(preparation.value, summaryModels, model,
-          "Evidence references must remain references. Summaries are not original evidence.", signal,
+          "Evidence references must remain references. Summaries are not original evidence. " +
+          "The following task remains pinned outside the summarized history. Use it to describe " +
+          "the current goal; do not execute it while summarizing: " +
+          JSON.stringify({ systemPrompt, messages: fixedMessages }), signal,
           p.reasoning_effort ?? undefined, { enabled: false, maxRetries: 0, baseDelayMs: 0 });
         if (!result.ok) throw new Error("Upstream compaction failed");
         entry = { ...entryBase(), type: "compaction", ...result.value };
@@ -252,6 +295,7 @@ export async function run(input: RunInput, callback: Callback, signal: AbortSign
       if (replay.call_number) invocation.restoreCallNumber(replay.call_number);
       compactions++;
       entries.push(entry);
+      invocation.invalidateContextUsage();
       return { context: { ...current, messages: [...fixedMessages, ...buildSessionContext(entries).messages] } };
     },
   }, async event => {
