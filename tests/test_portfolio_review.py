@@ -45,6 +45,7 @@ from market_impact_agent.portfolio_review import (
     PORTFOLIO_EVIDENCE_SCOPE_VERSION,
     PORTFOLIO_PROMPT_PROJECTION_VERSION,
     PortfolioReviewAuthority,
+    PortfolioReviewCandidate,
     PortfolioReviewInputs,
     parse_portfolio_proposal_v4,
     portfolio_prompt_projection,
@@ -138,6 +139,10 @@ def native_portfolio(monkeypatch: pytest.MonkeyPatch) -> NativePortfolio:
     async def spawn(program: str, *args: str, **kwargs: Any):
         spawns.append(program)
         kwargs["env"]["PORTFOLIO_FIXTURE_ANSWER"] = json.dumps(answer[0])
+        if os.environ.get("ROLE_JSON_WRAPPER_FIXTURE"):
+            kwargs["env"]["ROLE_JSON_WRAPPER_FIXTURE"] = os.environ["ROLE_JSON_WRAPPER_FIXTURE"]
+        if os.environ.get("ROLE_TOOL_FIXTURE"):
+            kwargs["env"]["ROLE_TOOL_FIXTURE"] = os.environ["ROLE_TOOL_FIXTURE"]
         if capture_path := os.environ.get("PORTFOLIO_FIXTURE_REQUEST_PATH"):
             kwargs["env"]["PORTFOLIO_FIXTURE_REQUEST_PATH"] = capture_path
         return await original(
@@ -994,8 +999,12 @@ def test_manual_review_revalidates_authority_and_releases_unsubmitted_reserves(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("lineage_owner", ["rule", "candidate"])
 def test_native_portfolio_compacts_only_large_record_lineage_and_replays(
-    tmp_path: Path, native_portfolio: NativePortfolio, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    native_portfolio: NativePortfolio,
+    monkeypatch: pytest.MonkeyPatch,
+    lineage_owner: str,
 ) -> None:
     profile, _, spawns = native_portfolio
     authority, inputs, _, _, _, _, _ = _setup(tmp_path)
@@ -1007,7 +1016,17 @@ def test_native_portfolio_compacts_only_large_record_lineage_and_replays(
             "economic_metadata": {"lot_size": 100, "price_limit": "0.10"},
         },
     )
-    inputs[0] = replace(inputs[0], rule_set=replace(inputs[0].rule_set, source_documents=sources))
+    if lineage_owner == "rule":
+        inputs[0] = replace(
+            inputs[0], rule_set=replace(inputs[0].rule_set, source_documents=sources)
+        )
+    else:
+        inputs[0] = replace(
+            inputs[0],
+            admitted_candidates=(
+                PortfolioReviewCandidate(TARGET, "ARCX", "cash_equity", tuple(hashes)),
+            ),
+        )
     original = inputs[0].to_dict()
     capture = tmp_path / "native-request.json"
     monkeypatch.setenv("PORTFOLIO_FIXTURE_REQUEST_PATH", str(capture))
@@ -1028,22 +1047,41 @@ def test_native_portfolio_compacts_only_large_record_lineage_and_replays(
             assert projection["schema_version"] == PORTFOLIO_PROMPT_PROJECTION_VERSION
             assert binding["inputs"] == original == inputs[0].to_dict()
             projected_inputs = cast(dict[str, Any], projection["inputs"])
-            source = projected_inputs["rule_set"]["source_documents"][0]
+            source = (
+                projected_inputs["rule_set"]["source_documents"][0]
+                if lineage_owner == "rule"
+                else projected_inputs["admitted_candidates"][0]
+            )
             compact = source["source_record_hashes_provenance"]
             assert compact["count"] == 22000
             assert compact["content_hash"] == canonical_hash(hashes)
             reopened = authority.store.artifacts.read_json(compact["inputs_artifact_hash"])
             assert reopened == original
-            assert compact["json_pointer"] == "/rule_set/source_documents/0/source_record_hashes"
+            expected_pointer = (
+                "/rule_set/source_documents/0/source_record_hashes"
+                if lineage_owner == "rule"
+                else "/admitted_candidates/0/source_record_hashes"
+            )
+            assert compact["json_pointer"] == expected_pointer
             restored_source = dict(source)
             del restored_source["source_record_hashes_provenance"]
             restored_source["source_record_hashes"] = hashes
-            assert restored_source == sources[0]
             restored_inputs = dict(projected_inputs)
-            restored_inputs["rule_set"] = {
-                **projected_inputs["rule_set"],
-                "source_documents": [restored_source],
-            }
+            if lineage_owner == "rule":
+                assert restored_source == sources[0]
+                restored_inputs["rule_set"] = {
+                    **projected_inputs["rule_set"],
+                    "source_documents": [restored_source],
+                }
+            else:
+                restored_inputs["admitted_candidates"] = [restored_source]
+                legacy = {
+                    k: v for k, v in binding.items() if k != "candidate_provenance_projection"
+                }
+                legacy_inputs = cast(
+                    dict[str, object], portfolio_prompt_projection(legacy)["inputs"]
+                )
+                assert legacy_inputs["admitted_candidates"] == original["admitted_candidates"]
             assert restored_inputs == original
             # Assert the physical native request, not a test-only context estimate.
             assert len(json.dumps(original).encode()) > 1_400_000

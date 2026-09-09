@@ -188,7 +188,12 @@ def simulated_account_snapshot(
             or basis.instrument_id != instrument
             or basis.currency != currency
             or basis.unit != "per_share"
-            or basis.basis_kind not in {"raw_reference_quote", "reference_quote"}
+            or basis.basis_kind
+            not in (
+                {"raw_reference_quote", "reference_quote", "raw_completed_session_valuation"}
+                if currency == "CNY"
+                else {"raw_reference_quote", "reference_quote"}
+            )
             or not basis.observed_at <= observed_at < basis.valid_until
         ):
             raise PermissionError("Mock account requires an explicit current simulated raw mark")

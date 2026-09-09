@@ -622,13 +622,52 @@ def _validated_measurement(
     }
 
 
-def _compare_rows(reviewed: dict[str, object], control: dict[str, object]) -> dict[str, object]:
+def _compare_rows(
+    reviewed: dict[str, object],
+    control: dict[str, object],
+    *,
+    reviewed_arm: _RollingArm | None = None,
+    control_arm: _RollingArm | None = None,
+) -> dict[str, object]:
     if reviewed["status"] != "completed" or control["status"] != "completed":
         return {
             "status": "incomplete_pair",
             "performance_difference": None,
             "reason": "trajectory_validation_incomplete",
         }
+    if reviewed_arm is not None and control_arm is not None:
+        from market_impact_agent.continuous_economic_conditions import (
+            compare_reopened_continuous_accounts,
+        )
+
+        if tuple(frame.cutoff for frame in reviewed_arm.window.frames) != tuple(
+            frame.cutoff for frame in control_arm.window.frames
+        ):
+            raise PermissionError("paired accounts differ from the frozen source schedule")
+        try:
+            return compare_reopened_continuous_accounts(
+                cast(dict[str, object], reviewed["metrics"]),
+                cast(dict[str, object], control["metrics"]),
+                reviewed_account=reviewed_arm.runtime.account,
+                control_account=control_arm.runtime.account,
+                reviewed_inputs=reviewed_arm.window.market,
+                control_inputs=control_arm.window.market,
+                sessions=tuple(frame.cutoff.date() for frame in reviewed_arm.window.frames),
+                symbols=tuple(
+                    sorted(
+                        set(reviewed_arm.window.candidate_symbols)
+                        | set(control_arm.window.candidate_symbols)
+                        | set(reviewed_arm.runtime.account.specs)
+                        | set(control_arm.runtime.account.specs)
+                    )
+                ),
+            )
+        except ValueError as error:
+            return {
+                "status": "economic_conditions_unverified",
+                "performance_difference": None,
+                "reason": str(error),
+            }
     return compare_continuous_accounts(
         cast(dict[str, object], reviewed["metrics"]), cast(dict[str, object], control["metrics"])
     )
@@ -863,7 +902,16 @@ async def run_continuous_experiment(
                             "cell_id": cell.cell_id,
                             "profile_arm": profile.arm,
                             "cadence": row["cadence"],
-                            **_compare_rows(row, control),
+                            **_compare_rows(
+                                row,
+                                control,
+                                reviewed_arm=next(
+                                    (item for item in rolling if item.row is row), None
+                                ),
+                                control_arm=next(
+                                    (item for item in rolling if item.row is control), None
+                                ),
+                            ),
                         }
                     )
         result: dict[str, object] = {

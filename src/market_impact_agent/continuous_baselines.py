@@ -16,6 +16,7 @@ from typing import Literal, cast
 
 from market_impact_agent.account_state import opaque_account_reference_hash
 from market_impact_agent.agent_contracts import canonical_hash
+from market_impact_agent.continuous_economic_conditions import reopen_common_economic_conditions
 from market_impact_agent.continuous_metrics import measure_continuous_account
 from market_impact_agent.continuous_study import ContinuousStudyRegistration, ContinuousStudyWindow
 from market_impact_agent.domain import (
@@ -427,6 +428,15 @@ def evaluate_continuous_baseline_window(
             if execution_incomplete
             else "complete"
         )
+        if status == "complete":
+            try:
+                metrics["common_economic_conditions"] = reopen_common_economic_conditions(
+                    account=account,
+                    historical_inputs=historical_inputs,
+                    sessions=registered_window.sessions,
+                )
+            except ValueError as exc:
+                metrics["economic_comparison_unavailable"] = str(exc)
         return {
             **common,
             "status": status,

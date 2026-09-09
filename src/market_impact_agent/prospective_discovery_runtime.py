@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import cast
 
+from market_impact_agent.account_review_entry import run_once as run_account_review_once
 from market_impact_agent.account_state import AccountStateSnapshot
 from market_impact_agent.agent_contracts import EvidencePack, canonical_hash, pattern_pack_from_dict
 from market_impact_agent.agent_runtime import ToolCall
@@ -24,6 +25,7 @@ from market_impact_agent.dynamic_ashare_admission import (
 )
 from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.model_provider import ModelProvider
+from market_impact_agent.native_candidate_proof import NativeCandidateProof, prove_native_candidates
 from market_impact_agent.on_demand_research import OnDemandResearch, ResearchContinuation
 from market_impact_agent.pi_execution import native_turn
 from market_impact_agent.portfolio_review import PortfolioReviewAuthority
@@ -63,11 +65,18 @@ def latest_discovery_report(
     return None
 
 
-def discovery_acquisition_wait(proof: dict[str, object]) -> bool:
-    """Recognize existing v1 wait proofs without reopening generic model failures."""
-    return proof.get("status") == "incomplete" and any(
-        _object(item).get("status") in {"pending", "uncertain"}
-        for item in cast(list[object], proof.get("acquisitions", []))
+def discovery_recoverable_wait(proof: dict[str, object]) -> bool:
+    """Recognize explicit data/claim waits without reopening unknown model attempts."""
+    return (
+        proof.get("status") == "in_progress"
+        and isinstance(proof.get("portfolio_run_id"), str)
+        and proof.get("portfolio_terminal_ref") is None
+    ) or (
+        proof.get("status") == "incomplete"
+        and any(
+            _object(item).get("status") in {"pending", "uncertain"}
+            for item in cast(list[object], proof.get("acquisitions", []))
+        )
     )
 
 
@@ -82,6 +91,7 @@ class ProspectiveDiscoveryResult:
     gaps: tuple[str, ...]
     proof_artifact_hash: str
     watch_admission_ids: tuple[str, ...] = ()
+    execution_gaps: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -101,6 +111,7 @@ class ProspectiveDiscoveryResult:
             "gaps": list(self.gaps),
             "proof_artifact_hash": self.proof_artifact_hash,
             "watch_admission_ids": list(self.watch_admission_ids),
+            **({"execution_gaps": list(self.execution_gaps)} if self.execution_gaps else {}),
             "execution_dispatched": False,
         }
 
@@ -111,10 +122,14 @@ class _CandidateSuccessor:
         authority: ResearchThesisAuthority,
         initial: ResearchThesisRunInputs,
         current_sources: bool = False,
+        held_targets: tuple[str, ...] = (),
     ) -> None:
         self.authority, self.initial = authority, initial
         self.current_sources = current_sources
-        self.policy = "native-profile-current-mock-successor-v2" if current_sources else _POLICY
+        self.held_targets = held_targets
+        self.policy = "native-profile-candidates-v3" if current_sources else _POLICY
+        self.candidates: tuple[str, ...] = ()
+        self.identities: tuple[NativeCandidateProof, ...] = ()
         self.candidate: str | None = None
         self.provenance: dict[str, object] = {}
         self.gaps: set[str] = set()
@@ -250,8 +265,42 @@ class _CandidateSuccessor:
         acquisition: OnDemandResearch,
         results: tuple[ResearchContinuation, ...],
     ) -> PreparedResearchSuccessor:
+        if self.current_sources:
+            proven = prove_native_candidates(
+                self.authority,
+                acquisition,
+                results,
+                excluded_targets=self.held_targets,
+                policy=self.policy,
+            )
+            accumulated = {item.symbol: item for item in self.identities}
+            for item in proven:
+                prior = accumulated.get(item.symbol)
+                if (
+                    prior is not None
+                    and prior.provenance["metadata_identity_hash"]
+                    != item.provenance["metadata_identity_hash"]
+                ):
+                    raise PermissionError("candidate metadata has conflicting identities")
+                accumulated[item.symbol] = item
+            candidate_symbols = tuple(dict.fromkeys((*self.candidates, *accumulated)))
+            if len(candidate_symbols) > 5:
+                raise ValueError("candidate_limit_exceeded: narrow to five distinct securities")
+            self.identities = tuple(accumulated.values())
+            self.candidates = candidate_symbols
         if self.candidate is None:
-            identity = self._identity(acquisition, results)
+            if self.current_sources:
+                identity = (
+                    (
+                        self.identities[0].symbol,
+                        self.identities[0].api,
+                        self.identities[0].provenance,
+                    )
+                    if self.identities
+                    else None
+                )
+            else:
+                identity = self._identity(acquisition, results)
             if identity is None:
                 unchanged, frozen = await freeze_acquired_research(inputs, acquisition, results)
                 return PreparedResearchSuccessor(
@@ -262,6 +311,8 @@ class _CandidateSuccessor:
                     "candidate_identity_unverified",
                 )
             self.candidate, api, self.provenance = identity
+            if not self.current_sources:
+                self.candidates = (self.candidate,)
             end = acquisition.cutoff.strftime("%Y%m%d")
             start = (acquisition.cutoff - timedelta(days=30)).strftime("%Y%m%d")
             symbol = self.candidate
@@ -331,6 +382,51 @@ class _CandidateSuccessor:
                         ("lookup_fund_quote", {"ts_code": "510300.SH", "freq": "1MIN"}),
                     ]
                 )
+            if self.current_sources:
+                base_requests = requests
+                requests = []
+                for item in self.identities:
+                    for tool, arguments in base_requests:
+                        if arguments.get("ts_code") == symbol:
+                            mapped_tool = tool
+                            if item.api != api:
+                                pairs = (
+                                    ("lookup_stock_prices", "lookup_fund_prices"),
+                                    ("lookup_company_distributions", "lookup_fund_distributions"),
+                                    ("lookup_company_adjustments", "lookup_fund_adjustments"),
+                                    ("lookup_industry_members", "lookup_fund_constituents"),
+                                    ("lookup_stock_quote", "lookup_fund_quote"),
+                                )
+                                for stock_tool, fund_tool in pairs:
+                                    if tool in {stock_tool, fund_tool}:
+                                        mapped_tool = (
+                                            stock_tool if item.api == "stock_basic" else fund_tool
+                                        )
+                                if (
+                                    mapped_tool == "lookup_fund_asset_class"
+                                    and item.api == "stock_basic"
+                                ):
+                                    continue
+                            mapped_arguments = {**arguments, "ts_code": item.symbol}
+                            if mapped_tool == "lookup_fund_constituents":
+                                mapped_arguments["trade_date"] = end
+                            elif mapped_tool == "lookup_industry_members":
+                                mapped_arguments.pop("trade_date", None)
+                            requests.append((mapped_tool, mapped_arguments))
+                        else:
+                            requests.append((tool, arguments))
+                    if item.api == "etf_basic":
+                        requests.append(("lookup_fund_asset_class", {"ts_code": item.symbol}))
+                    requests.append(
+                        (
+                            "lookup_exchange_calendar",
+                            {
+                                "exchange": "SSE" if item.symbol.endswith(".SH") else "SZSE",
+                                "start_date": start,
+                                "end_date": end,
+                            },
+                        )
+                    )
             for tool, arguments in requests:
                 queued = await acquisition.request(tool, arguments)
                 if queued.get("status") == "data_gap":
@@ -358,7 +454,7 @@ class _CandidateSuccessor:
                 research_question=pack.research_question,
                 evidence=pack.evidence,
                 pattern_packs=pack.pattern_packs,
-                allowed_targets=tuple(sorted(set(pack.allowed_targets) | {self.candidate})),
+                allowed_targets=tuple(sorted(set(pack.allowed_targets) | set(self.candidates))),
                 data_gaps=pack.data_gaps,
             ),
             evidence_documents=documents,
@@ -369,14 +465,40 @@ class _CandidateSuccessor:
                 successor,
                 repository=promoted,
                 target_id=self.candidate,
+                **(
+                    {
+                        "candidate_proofs": {
+                            symbol: tuple(
+                                ref.evidence_id
+                                for ref in pack.evidence
+                                if ref.evidence_id not in frozen.authorized_snapshot_ids
+                                or acquisition.store.get(ref.evidence_id).query.parameters.get(
+                                    "ts_code"
+                                )
+                                in {None, symbol}
+                            )
+                            for symbol in self.candidates
+                        }
+                    }
+                    if self.current_sources
+                    else {}
+                ),
                 research_question=(
-                    f"Assess {self.candidate} using the frozen news and acquired source evidence; "
+                    f"Assess {', '.join(self.candidates)} using frozen news and source evidence; "
                     "report uncertainty and a review horizon."
                 ),
             ),
             frozen,
             results,
-            {**self.provenance, "preparation_gaps": sorted(self.gaps)},
+            {
+                **self.provenance,
+                "preparation_gaps": sorted(self.gaps),
+                **(
+                    {"candidates": [item.provenance for item in self.identities]}
+                    if self.current_sources
+                    else {}
+                ),
+            },
         )
 
 
@@ -392,7 +514,12 @@ async def run_prospective_discovery(
         [ResearchThesisRunInputs, FrozenDataSnapshotInput], HistoricalSecurityEvidenceAuthority
     ],
     portfolio_authority_factory: Callable[
-        [ResearchThesisRunInputs, FrozenDataSnapshotInput, AccountStateSnapshot, SecurityAdmission],
+        [
+            ResearchThesisRunInputs,
+            FrozenDataSnapshotInput,
+            AccountStateSnapshot,
+            SecurityAdmission | None,
+        ],
         PortfolioReviewAuthority,
     ]
     | None = None,
@@ -402,10 +529,13 @@ async def run_prospective_discovery(
     | None = None,
     maximum_runs: int = 4,
     prior_thesis_run_id: str | None = None,
+    held_targets: tuple[str, ...] = (),
 ) -> ProspectiveDiscoveryResult:
     if not 1 <= maximum_runs <= 4 or account_max_age <= timedelta(0):
         raise ValueError("prospective discovery requires a bounded Run count and account age")
-    transform = _CandidateSuccessor(authority, inputs, portfolio_context_source is not None)
+    transform = _CandidateSuccessor(
+        authority, inputs, portfolio_context_source is not None, held_targets=held_targets
+    )
     if prior_thesis_run_id is not None:
         prior, _ = reopen_completed_research_thesis(
             journal=authority.journal,
@@ -427,6 +557,7 @@ async def run_prospective_discovery(
         ):
             raise PermissionError("prospective review requires an earlier exact same-scope thesis")
         transform.candidate = inputs.target_id
+        transform.candidates = tuple(inputs.candidate_proofs) or (inputs.target_id,)
         transform.provenance = {"prior_thesis_run_id": prior_thesis_run_id}
     result = await analyze_with_acquisition(
         authority=authority,
@@ -437,6 +568,7 @@ async def run_prospective_discovery(
         successor_transform=transform,
         successor_transform_id=transform.policy,
         prior_thesis_run_id=prior_thesis_run_id,
+        candidate_excluded_targets=held_targets,
     )
     watch_admission_ids: tuple[str, ...] = ()
     if result.status == "completed" and result.final_inputs.watch_delegation is not None:
@@ -469,8 +601,10 @@ async def run_prospective_discovery(
     thesis_run_id = None
     portfolio_run_id = portfolio_terminal_ref = None
     security: SecurityAdmission | None = None
+    execution_gaps: tuple[str, ...] = ()
     status = "incomplete"
-    if transform.candidate is None:
+    current_policy = result.final_inputs.schema_version == "market-impact.research-thesis-inputs.v2"
+    if transform.candidate is None and not current_policy:
         gaps.update(transform.gaps or {"no_candidate"})
     elif result.status != "completed":
         gaps.add("candidate_research_" + result.status)
@@ -485,9 +619,8 @@ async def run_prospective_discovery(
                 authority.journal.get_run(thesis_run_id).config_hash
             )
         )
-        if (
-            _object(bound["inputs"]) != final.identity_dict()
-            or final.target_id != transform.candidate
+        if _object(bound["inputs"]) != final.identity_dict() or (
+            transform.candidate is not None and final.target_id != transform.candidate
         ):
             raise PermissionError("candidate thesis differs from its verified successor binding")
         portfolio_cutoff = final.repository.evidence_pack.as_of
@@ -505,10 +638,13 @@ async def run_prospective_discovery(
                     "portfolio cutoff must follow thesis completion and account capture"
                 )
         source = admission_authority_factory(final, result.frozen_input)
-        security = DynamicAShareAdmission(source).discover(
-            (transform.candidate,), portfolio_cutoff
-        )[0]
-        gaps.update(security.gaps)
+        security = (
+            DynamicAShareAdmission(source).discover((transform.candidate,), portfolio_cutoff)[0]
+            if transform.candidate is not None
+            else None
+        )
+        if not current_policy and security is not None:
+            gaps.update(security.gaps)
         status = "admission_refused"
         if not gaps:
             try:
@@ -533,37 +669,79 @@ async def run_prospective_discovery(
                     final, result.frozen_input, account, security
                 )
                 current = portfolio.input_source()
-                basis = current.price_bases.get(transform.candidate)
+                basis = (
+                    current.price_bases.get(transform.candidate)
+                    if transform.candidate is not None
+                    else None
+                )
                 if (
                     portfolio.store.root.resolve() != authority.store.root.resolve()
                     or current.account_state != account
                     or current.cutoff != portfolio_cutoff
                     or not isinstance(current.mandate, TradingMandateV3)
-                    or transform.candidate not in current.mandate.allowed_instruments
-                    or basis is None
-                    or security.evidence is None
-                    or basis.source_version != canonical_hash(security.evidence.to_dict())
+                    or (
+                        portfolio.proposal_version != "v6"
+                        and transform.candidate not in current.mandate.allowed_instruments
+                    )
+                    or (
+                        portfolio.proposal_version != "v6"
+                        and (
+                            basis is None
+                            or security is None
+                            or security.evidence is None
+                            or basis.source_version != canonical_hash(security.evidence.to_dict())
+                        )
+                    )
                 ):
                     raise PermissionError(
                         "prospective portfolio lacks exact current dynamic source/account binding"
                     )
-                portfolio_run_id = acquisition.run_id + ".portfolio"
-                review = await portfolio.review(
-                    run_id=portfolio_run_id,
-                    provider=provider,
-                    research_run_ids=(),
-                    research_thesis_run_ids=(thesis_run_id,),
-                )
-                portfolio_terminal_ref = authority.journal.get_run(
-                    portfolio_run_id
-                ).terminal_artifact_id
-                if (
+                legacy_run_id = acquisition.run_id + ".portfolio"
+                try:
+                    portfolio.journal.get_run(legacy_run_id)
+                except KeyError:
+                    review = await run_account_review_once(
+                        authority=portfolio,
+                        provider=provider,
+                        reasons=("watch" if prior_thesis_run_id is not None else "discovery",),
+                        research_run_ids=(),
+                        research_thesis_run_ids=(thesis_run_id,),
+                    )
+                    portfolio_run_id = str(review["opportunity_id"])
+                else:
+                    # Persisted pre-opportunity attempts retain their original
+                    # replay/unknown-generation owner, never a replacement Run.
+                    portfolio_run_id = legacy_run_id
+                    review = await portfolio.review(
+                        run_id=legacy_run_id,
+                        provider=provider,
+                        research_run_ids=(),
+                        research_thesis_run_ids=(thesis_run_id,),
+                    )
+                if review.get("status") == "in_progress":
+                    status = "in_progress"
+                else:
+                    portfolio_terminal_ref = authority.journal.get_run(
+                        portfolio_run_id
+                    ).terminal_artifact_id
+                if status == "in_progress":
+                    pass
+                elif (
                     review.get("status") != "completed"
                     or _object(review.get("decision", {})).get("outcome") == "rejected"
                 ):
                     gaps.add("portfolio_action_not_admitted")
                 else:
                     status = "portfolio_completed"
+                    proposal = _object(review.get("proposal", {}))
+                    selected = proposal.get("instrument_id")
+                    execution_gaps = (
+                        DynamicAShareAdmission(source)
+                        .discover((selected,), portfolio_cutoff)[0]
+                        .gaps
+                        if isinstance(selected, str)
+                        else ()
+                    )
     proof = {
         "schema_version": "market-impact.prospective-discovery-proof.v1",
         "status": status,
@@ -579,6 +757,7 @@ async def run_prospective_discovery(
         "portfolio_terminal_ref": portfolio_terminal_ref,
         "gaps": sorted(gaps),
         "preparation_gaps": sorted(transform.gaps),
+        **({"execution_gaps": list(execution_gaps)} if current_policy else {}),
     }
     proof_hash = authority.store.artifacts.put_json(proof).content_hash
     suffix = "prospective.discovery." + canonical_hash(acquisition.run_id)
@@ -593,10 +772,14 @@ async def run_prospective_discovery(
         suffix = previous.event_id.removeprefix(acquisition.budget.owner_run_id + ".")
         payload = previous.payload
         if previous_hash != proof_hash:
-            if not discovery_acquisition_wait(
-                _object(authority.store.artifacts.read_json(previous_hash))
+            previous_proof = _object(authority.store.artifacts.read_json(previous_hash))
+            if not discovery_recoverable_wait(previous_proof):
+                raise PermissionError("only a known acquisition or review wait can be continued")
+            if (
+                previous_proof.get("status") == "in_progress"
+                and previous_proof.get("portfolio_run_id") != portfolio_run_id
             ):
-                raise PermissionError("only an acquisition wait report can be continued")
+                raise PermissionError("review wait cannot change its portfolio opportunity")
             suffix += ".revision." + previous_hash
             payload = {
                 "proof_artifact_hash": proof_hash,
@@ -617,6 +800,7 @@ async def run_prospective_discovery(
         tuple(sorted(gaps)),
         proof_hash,
         watch_admission_ids,
+        execution_gaps,
     )
 
 

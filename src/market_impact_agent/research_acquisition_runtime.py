@@ -53,8 +53,28 @@ class PreparedResearchSuccessor:
     stop_reason: str | None = None
 
 
-def _yielding_tool(tool: ToolDescriptor) -> ToolDescriptor:
+def _yielding_tool(
+    tool: ToolDescriptor,
+    candidates: set[str] | None = None,
+    excluded_targets: frozenset[str] = frozenset(),
+) -> ToolDescriptor:
     async def read(arguments: dict[str, object]) -> object:
+        if candidates is not None and tool.name in {
+            "lookup_company_profile",
+            "lookup_fund_profile",
+        }:
+            symbol = arguments.get("ts_code")
+            if isinstance(symbol, str) and symbol not in excluded_targets:
+                if symbol not in candidates and len(candidates) >= 5:
+                    return {
+                        "status": "data_gap",
+                        "error_kind": "candidate_limit_exceeded",
+                        "message": (
+                            "At most five distinct new securities may be investigated. "
+                            "Narrow the candidate set; do not add a sixth security."
+                        ),
+                    }
+                candidates.add(symbol)
         result = await tool.handler(arguments)
         if (
             isinstance(result, dict)
@@ -64,7 +84,12 @@ def _yielding_tool(tool: ToolDescriptor) -> ToolDescriptor:
             raise ResearchAcquisitionRequired("outside-Run acquisition required")
         return cast(object, result)
 
-    return replace(tool, handler=read, version="yield-v1-" + tool.manifest_hash)
+    return replace(
+        tool,
+        handler=read,
+        version=("yield-candidates-v3-" if candidates is not None else "yield-v1-")
+        + tool.manifest_hash,
+    )
 
 
 async def freeze_acquired_research(
@@ -177,6 +202,7 @@ async def analyze_with_acquisition(
     ]
     | None = None,
     successor_transform_id: str | None = None,
+    candidate_excluded_targets: tuple[str, ...] = (),
     tool_factory: Callable[
         [ResearchThesisRunInputs, str], tuple[ToolDescriptor, ...]
     ] = lambda _inputs, _run_id: (),
@@ -218,7 +244,16 @@ async def analyze_with_acquisition(
             "prior_thesis_run_id": prior_thesis_run_id,
             **({"prior_adoption_ref": prior_adoption_ref} if prior_adoption_ref else {}),
             **(
-                {"successor_transform_id": successor_transform_id} if successor_transform_id else {}
+                {
+                    "successor_transform_id": successor_transform_id,
+                    **(
+                        {"candidate_excluded_targets": list(candidate_excluded_targets)}
+                        if candidate_excluded_targets
+                        else {}
+                    ),
+                }
+                if successor_transform_id
+                else {}
             ),
         },
     )
@@ -236,6 +271,9 @@ async def analyze_with_acquisition(
             status, tuple(run_ids), terminal, tuple(receipts), inputs, frozen
         )
 
+    multi_candidate_discovery = successor_transform_id == "native-profile-candidates-v3"
+    excluded_targets = frozenset(candidate_excluded_targets)
+    discovered: set[str] = set(inputs.candidate_proofs) - excluded_targets
     for number in range(maximum_runs):
         try:
             existing = authority.journal.get_run(current.run_id)
@@ -254,18 +292,33 @@ async def analyze_with_acquisition(
             inputs=inputs,
             prior_thesis_run_id=prior_thesis_run_id,
             prior_adoption_ref=prior_adoption_ref,
-            readonly_tools=tuple(_yielding_tool(tool) for tool in current.descriptors())
+            readonly_tools=tuple(
+                _yielding_tool(
+                    tool, discovered if multi_candidate_discovery else None, excluded_targets
+                )
+                for tool in current.descriptors()
+            )
             + tool_factory(inputs, current.run_id),
         )
         # The authority still verifies the complete immutable binding on replay.
         # Expiry prevents new work; it cannot erase an already signed terminal.
         terminal = await analysis if replaying else await asyncio.wait_for(analysis, remaining)
-        if terminal.get("status") == "completed":
+        completed_discovery = terminal.get("status") == "completed" and multi_candidate_discovery
+        if completed_discovery:
+            from market_impact_agent.native_candidate_proof import prove_native_candidates
+
+            proven = prove_native_candidates(
+                authority, current, excluded_targets=tuple(excluded_targets)
+            )
+            if not any(item.symbol not in inputs.candidate_proofs for item in proven):
+                return outcome("completed", terminal)
+        if terminal.get("status") == "completed" and not completed_discovery:
             return outcome("completed", terminal)
         cancellation_proof = _undispatched_cancellation(authority, current, terminal)
         if (
             terminal.get("reason") != ResearchAcquisitionRequired.__name__
             and cancellation_proof is None
+            and not completed_discovery
         ):
             return outcome("incomplete", terminal)
         # The signed old Run is now terminal, and the upstream invocation has ended.
@@ -276,7 +329,9 @@ async def analyze_with_acquisition(
         transform_proof: dict[str, object] | None = None
         if cancellation_proof is None:
             results = await current.fulfill_pending()
-            if not results or any(item.status in {"pending", "uncertain"} for item in results):
+            if (not results and not completed_discovery) or any(
+                item.status in {"pending", "uncertain"} for item in results
+            ):
                 receipts.extend(results)
                 return outcome("acquisition_wait", terminal)
             if successor_transform is None:
@@ -312,6 +367,8 @@ async def analyze_with_acquisition(
                     transformed.frozen_input,
                     transformed.acquisitions,
                 )
+                if multi_candidate_discovery:
+                    discovered.update(inputs.candidate_proofs)
                 transform_proof = transformed.provenance
                 if transformed.stop_reason is not None:
                     receipts.extend(results)

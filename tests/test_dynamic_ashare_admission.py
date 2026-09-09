@@ -57,6 +57,21 @@ def _mandate(root: Path) -> TradingMandateV3:
     return TradingMandateV3(**values, universe_binding_hash="0" * 64)
 
 
+def test_historical_holiday_validity_preserves_paper_and_source_freshness_limits(
+    tmp_path: Path,
+) -> None:
+    mandate = replace(_mandate(tmp_path), valid_until=AT + timedelta(days=11))
+    assert mandate.execution_scope == "historical_backtest"
+    with pytest.raises(ValueError, match="fourteen days"):
+        replace(mandate, valid_until=AT + timedelta(days=15))
+    with pytest.raises(ValueError, match="cannot exceed one day"):
+        replace(mandate, environment=TradingEnvironment.PAPER, execution_scope="local_mock")
+    with pytest.raises(ValueError, match="environment"):
+        replace(mandate, environment=TradingEnvironment.LIVE, valid_until=AT + timedelta(hours=1))
+    admission = DynamicAShareAdmission(SourceAuthority(_evidence()))
+    assert not admission.discover(("600519.SH",), AT + timedelta(days=2))[0].execution_ready
+
+
 def test_discovery_does_not_require_existing_pair_or_grant_missing_authority(
     tmp_path: Path,
 ) -> None:

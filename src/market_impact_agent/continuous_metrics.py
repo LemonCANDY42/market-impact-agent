@@ -18,6 +18,7 @@ def measure_continuous_account(
     execution_policy_hash: str,
     initial_account_hash: str,
     model_cost_microusd: int,
+    common_economic_conditions: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if not initial_nav.is_finite() or initial_nav <= 0 or expected_sessions < 1:
         raise ValueError("account metrics require positive initial NAV and registered length")
@@ -86,12 +87,16 @@ def measure_continuous_account(
             ],
             "investment_effectiveness_accepted": False,
         }
+    if common_economic_conditions is not None:
+        result["common_economic_conditions"] = common_economic_conditions
     return result
 
 
 def compare_continuous_accounts(
     reviewed: dict[str, object], control: dict[str, object]
 ) -> dict[str, object]:
+    if reviewed["complete"] is not True or control["complete"] is not True:
+        return {"status": "incomplete_pair", "performance_difference": None}
     for key in (
         "execution_policy_hash",
         "initial_account_hash",
@@ -101,8 +106,6 @@ def compare_continuous_accounts(
     ):
         if reviewed[key] != control[key]:
             raise ValueError("cadence comparison requires the same account/execution conditions")
-    if reviewed["complete"] is not True or control["complete"] is not True:
-        return {"status": "incomplete_pair", "performance_difference": None}
     if reviewed["as_of"] != control["as_of"]:
         raise ValueError("cadence comparison requires the same observation endpoint")
     reviewed_dates = [

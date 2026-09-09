@@ -99,6 +99,12 @@ class TushareDailyRangeCache:
     async def acquire(
         self, *, query: DataQuery, source: DataSourceBinding, saved_only: bool = False
     ) -> tuple[tuple[str, str, str, bool], ...]:
+        """Reuse saved responses without new provider I/O when ``saved_only``.
+
+        The acquisition store still owns writable initialization and transactions;
+        this flag does not make its source directory physically immutable.
+        """
+
         scope_id, start, end = self._scope(query, source)
         token = uuid.uuid4().hex
         if saved_only:

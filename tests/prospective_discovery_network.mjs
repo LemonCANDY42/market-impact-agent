@@ -19,9 +19,13 @@ globalThis.fetch = async (input, init) => {
   if (followup && !portfolio) {
     assert.ok(text.includes('invalidation_conditions'));
     assert.ok(text.includes('counterevidence_refs'));
-    const answer = {...common, evidence_refs:data.evidence.map(x => x.reference.evidence_id),
+    if (process.env.DISCOVERY_WATCH_WAIT === '1' && !text.includes('read_tool')) {
+      item = {type:'function_call',id:'fc-followup-profile',call_id:'followup-profile',name:'lookup_company_profile',arguments:JSON.stringify({ts_code:'000001.SZ'})};
+    } else {
+    const answer = {...common, ...(data.schema_version?.endsWith('.v2') ? {event_support:"supported", expectations:"The policy announcement was anticipated.", revision_conclusion:"New source updates the prior thesis."} : {}), evidence_refs:data.evidence.map(x => x.reference.evidence_id),
       base_case_direction:'up',thesis:'New actual receipt updates the counted prior thesis.', typed_unknowns:[]};
     item = {type:'message',id:'watch-followup',role:'assistant',content:[{type:'output_text',text:JSON.stringify(answer),annotations:[]}]};
+    }
   } else   if (!portfolio && !candidate && process.env.DISCOVERY_NO_CANDIDATE !== '1') {
     assert.ok(body.tools.some(t => t.name === 'lookup_company_profile'));
     assert.ok(text.includes('headline'));
@@ -45,6 +49,16 @@ globalThis.fetch = async (input, init) => {
       answer = {...common,requested_action:'open',rationale:'Qualified candidate fits the reconciled account budget.',
         evidence_refs:['account_state','exposure_view'],instrument_id:'000001.SZ',venue:'XSHE',instrument_class:'equity',
         direction:'long',target_gross_exposure_ratio:'0.30'};
+      if (data.targets) {
+        for (const field of ['horizon_band','instrument_id','venue','instrument_class','direction']) delete answer[field];
+        answer.target_ref = 'candidate:000001.SZ';
+        answer.evidence_refs = Object.keys(data.evidence_choices).filter(key => ['account_state','exposure_view'].includes(data.evidence_choices[key]));
+        if (process.env.DISCOVERY_NO_CANDIDATE === '1') {
+          answer.requested_action = 'hold';
+          delete answer.target_ref;
+          delete answer.target_gross_exposure_ratio;
+        }
+      }
     } else {
       if (candidate) {
         assert.ok(JSON.stringify(body.input).includes('Synthetic discovered company'));
@@ -52,6 +66,10 @@ globalThis.fetch = async (input, init) => {
         assert.ok(text.includes('data-snapshot-'));
       }
       answer = {...common,base_case_direction:'up',thesis:candidate ? 'Candidate research grounded in the acquired metadata and news.' : 'No candidate selected.',typed_unknowns:['Execution eligibility remains unverified.']};
+      if (data.schema_version?.endsWith('.v2')) Object.assign(answer, {
+        event_support:'supported', expectations:'Reported revenue was expected to remain flat.',
+        revision_conclusion:'The received release supports a positive revision.',
+      });
     }
     item = {type:'message',id:'discovery-answer',role:'assistant',content:[{type:'output_text',text:JSON.stringify(answer),annotations:[]}]};
   }

@@ -186,8 +186,10 @@ def test_ca_exclusion_halts_and_unsupported_identity_stay_fail_closed(
     assert "halt_status_unverified" in no_halts.session(SYMBOL, DAY).gaps
     assert not DynamicAShareAdmission(no_halts).discover((SYMBOL,), CUTOFF)[0].execution_ready
     stock = qualified.session("000001.SZ", DAY)
-    assert "qualified_limit_instrument_or_regime_unsupported" in stock.gaps
-    assert not stock.execution_ready
+    # The ETF-derived reference applies only to funds. A stock with its own
+    # source-backed limit remains eligible and never inherits the ETF fallback.
+    assert stock.execution_ready
+    assert stock.limit_diagnostics is None
 
 
 @pytest.mark.parametrize("missing", ["rule_qualification", "prior_daily"])

@@ -1,6 +1,34 @@
 # Agent Runtime Acceptance Boundary
 
-## Status
+## Current source and preserved acceptance
+
+The 2026-09-08 [optional-method extension](SKILLS_ABLATION_20260908.md) changes
+the packaged runtime and role input surfaces. Its local Q5/QAT qualification,
+native tests and bounded business evidence are separate from earlier CPA route
+acceptance; old route acceptance does not automatically certify these changes.
+
+The 2026-09-07 Portfolio v6 singleton-narrative policy is owned by the
+[account loop](ACCOUNT_DECISION_LOOP.md). Its source hash changes the account-pilot
+binding. The shared pi runtime/route admission still matches; it does not grant
+the changed pilot matching synthetic acceptance or transfer an old authorization.
+Exact saved-answer offline diagnostics retain separate run and budget authority.
+
+The 2026-09-06 research protocol uses `ResearchThesisV2`, Portfolio Review v6,
+source-derived evidence choices and at most five source-proven candidates. The
+[account loop](ACCOUNT_DECISION_LOOP.md#current-agent-handoff-and-activation-boundary)
+owns the contracts; [staged preparation](STAGED_RESEARCH_PREPARATION.md) freezes
+its exact prompt/input/runtime surfaces. Legacy bindings still select their original
+parsers and signed responses. No failed terminal is reinterpreted as successful.
+
+Complete comparison groups are admitted by the existing `ModelBudget` owner before
+physical calls, with a protected request/cost ceiling per arm. Allocations do not
+appear as known spend or physical requests; actual request reservations and Usage
+settlement remain separate, and unknown calls keep their reservation after restart.
+Offline preparation does not invoke group admission, create a budget owner or
+transfer an earlier stage's balance. The changed budget source changes the runtime
+fingerprint; the historical qualification below is not acceptance of the new build.
+
+### Preserved 2026-09-03 qualification
 
 The exact pi build `ad861366ae8b690df1964ad5558a11ea31e75e57e68a700bae4930d44b6ac400`
 was formally admitted on 2026-09-03 Singapore for CPA/Luna `max` Responses and
@@ -55,6 +83,10 @@ or authorize new model names automatically.
 One real completed response exposed harmless surrounding whitespace in a
 narrative array item. Current Research Thesis and Portfolio V4 parsing therefore
 perform a bounded trim only on narrative text and persist the affected field paths.
+Research Thesis V2 also accepts a single narrative string for a candidate's
+`transmission` or `gaps`, records the singleton conversion, and emits the canonical
+array form required by its result schema. Candidate proof and evidence arrays
+remain strict.
 They do not normalize evidence IDs, model identity, enums, tool calls or
 Harness-owned fields, and they never extract an answer from reasoning or mixed
 prose. This removes avoidable Provider-format friction without relaxing financial
@@ -98,7 +130,11 @@ budget in a new Evidence Pack and Run; acquisition waiting is never a portfolio
 hold. Explicit modeled historical continuation permits bounded completed-session
 `daily` and `fund_daily` records through the existing source routes. Actual receipts
 remain current; a separate modeled projection preserves the historical cutoff.
-Current news, profiles and constituents remain prohibited in that lane. The final
+Current news and constituent graphs remain prohibited in that lane. The explicitly
+registered `dynamic_ashare_sources_v1` projection permits historical listing identity
+from profile sources, removing current names/classifications and future listing facts.
+Native cache hits and acquisition receipts are reopened against that projection;
+receipt time never becomes historical availability. The final
 signed research successor binds its concrete native-query candidates and source
 graph to portfolio admission and replay; aggregate research targets are not securities.
 A signed `CancelledError` terminal may consume the next existing bounded
@@ -285,6 +321,25 @@ context. Skills cannot grant account or execution access. Traces bind offered,
 loaded and Agent-reported use/influence to the actual Run and evidence; these
 observations do not prove incremental effectiveness.
 
+ResearchThesisAuthority, PortfolioReviewAuthority and ContinuousPortfolioRuntime
+also accept an explicit FrozenMethodCatalog for `on-demand-v1` experiments. The
+initial system context uses the public `formatSkillsForPrompt` API from pinned
+`@earendil-works/pi-coding-agent` 0.84.4 and contains only names, descriptions and
+locations. This imports no upstream session owner or filesystem discovery. The
+existing SkillRegistry validates the frozen bodies/capabilities; exact allowlisted
+`read(path)` calls use the existing read-only tool budget, CAS and Journal. The
+model can read none, one or several methods. Method read receipts are not market
+evidence or proof of efficacy. Bodies cannot enlarge data or execution permissions.
+Unlisted locations and changed bodies are rejected; completed replay reopens its
+saved artifacts without rereading source files. Catalog identity survives context
+compaction in the fixed policy and binds both role/opportunity identity and prior
+research compatibility. Portfolio attempt receipts are request-specific and its
+terminal binds the final native response, including after tool turns.
+
+Omitting the catalog retains prior preload/role semantics. The experimental
+[2026-09-08 protocol](SKILLS_ABLATION_20260908.md) owns its method corpus and
+evaluation; it does not promote those cards into the production method router.
+
 Outcome-opened discovery and candidate conflict governance are owned by
 [Skill Governance](SKILL_GOVERNANCE.md). Strategy/Skill promotion is owned only by
 [Agent Effectiveness Acceptance](AGENT_EFFECTIVENESS_ACCEPTANCE.md). Analyst/Judge
@@ -409,3 +464,13 @@ this runtime test. Only genuine eligibility, required Query Gate, nonempty
 auditable Intent and existing risk/approval permit the Mock path. Runtime,
 investment effectiveness, Mock execution and broker readiness are separate
 claims.
+
+The [Stage 1 model pilot](STAGE1_MODEL_PILOT.md) reuses the same research authority,
+pi provider, native qualification and deployment permit. Its explicit two-route
+qualification is charged to the pilot's durable shared budget parent.
+
+For optional-method account runs, upstream pi compaction uses the frozen Profile's output reservation as its summary reserve. The physical response remains capped by the same admitted output budget. A truncated or tool-calling summary is retained as a failed receipt and cannot become restored context. This avoids a second, smaller hard-coded summary allowance for reasoning models.
+
+The compaction bridge keeps frozen role inputs outside the mutable transcript and supplies them as context to upstream summarization. Legacy byte-estimated Profiles retain their one-sixteenth-window tail target. New `pi-usage-v1` Profiles follow the upstream accounting and retention behavior described above; all resulting requests still pass the same Harness-owned limits in the selected accounting units.
+
+JSON-returning research and portfolio roles with optional read-only capabilities may request at most two format-only corrections through the existing pi follow-up callback. The original native replies and subsequent contexts remain journaled; replay reconstructs the same bounded correction sequence. These calls consume the original role budgets. The existing parser still rejects surrounding prose or ambiguous answers, and business semantic validation remains with the owning role. The answer policy is bound to the existing initial-history receipt; changing it during replay is rejected. No second Agent loop or response-extraction parser is added.

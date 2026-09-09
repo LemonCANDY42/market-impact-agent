@@ -62,8 +62,19 @@ cannot accumulate more than 256 MiB of response bodies.
 
 Collection retains the exact response pages and selected record bytes, sorts and deduplicates by the
 route-specific primary key, and records actual receipt as prospective availability and authority.
+For the short-news `news` route, a repeat with the same primary key is accepted only when all
+returned fields (including `channels`) are canonically identical. It normalizes to one Observation;
+the original response pages and the existing record identity remain intact. Conflicting fields
+under the same key fail closed, within or across pages. Existing full-row disclosure identities
+retain their exact-repeat behavior; other routes do not inherit the news exception. Pagination
+completion always uses the raw response row count, before deduplication. A failed earlier capture
+is not upgraded: a fresh capture establishes its own receipt time and coverage.
 The same private capture bundle must reproduce an identical Snapshot in an isolated store before a
-route passes. No-data, permission denial, field mismatch, duplicate keys, page overflow, response
+route passes. The 2026-09-06 bounded news repair probe re-collected the original failed time window
+with the existing entitlement: five raw pages (1,000 / 1,000 / 1,000 / 1,000 / 13 rows), one exact
+repeat and 4,012 normalized Observations, complete pagination and identical isolated replay. This
+new actual-receipt Snapshot does not upgrade the old failed capture or frozen forecasts. See the
+[probe receipt](research/efficient-progress-20260906/news-result.json). No-data, permission denial, field mismatch, duplicate keys, page overflow, response
 overflow, and transport failure remain distinct typed outcomes. The CLI performs one capture,
 Journal write, rights-page capture, isolated replay, and seven-gate qualification:
 
@@ -409,7 +420,8 @@ fees, and references the captured source document. `stock_basic`/`etf_basic` lis
 and exchange fields provide corroboration; current index/ETF mappings never replace
 the explicit historical rule. Missing or overlapping versions fail closed.
 
-`reopen_security(symbol, cutoff)` is the 09:25 Shanghai preopen decision projection.
+With the default `review_timing="preopen"`, `reopen_security(symbol, cutoff)` is
+the 09:25 Shanghai preopen decision projection.
 Raw price and turnover come exclusively from the calendar's previous completed
 trading session, with `raw_price_observed_at` retained as that prior close. Today's
 calendar, price limits and full-day halt information are usable only under the
@@ -418,6 +430,34 @@ ends at 09:30:00.000001, covering the single opening tick through the named
 `opening_tick_validity_microseconds=1` policy. This is not a general extension of
 price freshness. Actual provider receipt timestamps remain unchanged; backfilled
 2025 rows captured in 2026 cannot become StrictPIT observations.
+
+The explicitly selected `review_timing="after_close"` uses the just-completed
+session's raw close and turnover. It accepts cutoffs strictly after 15:00 Shanghai
+and before midnight. The next open comes from the exchange calendar; normal
+price bounds are provisional calculations from the current close and effective
+rule, not the next session's reported limits. Its diagnostics require separate
+execution-session qualification. No future OHLC, factor, halt or reported limit
+is read to make the decision. An announced next-session ex-date blocks the normal
+bound assumption. The caller must settle the current account prefix first and
+qualify actual source inputs before advancing the next session; a current close
+does not authorize execution at that same close. Default policy serialization and
+earlier preopen replays retain their original identities.
+V3 historical-backtest mandates may span at most fourteen calendar days so a
+close-to-next-open instruction can cross exchange holidays. The next-open source
+validity still limits the actual order; this longer mandate ceiling does not make
+stale evidence current. V2 and V3 local-paper mandates retain their one-day ceiling,
+and V3 has no live environment. The pilot uses only the next registered trading
+session and fails closed on missing execution qualification.
+
+The registered `dynamic_ashare_sources_v1` research projection can reopen a
+listing identity without an accepted execution rule. It strips current names,
+status and classifications and future listing/delisting facts; documented exchange
+aliases map to the same venue. Research eligibility never grants trading permission.
+ETF-specific calculated-limit policies apply only to ETFs in mixed portfolios;
+stocks retain their actual reported-limit checks. For a cash-only account, stock
+distributions with both record and ex-dates before inception create no entitlement,
+even when a historical stock-only distribution has no cash payment date. Other
+unverified stock corporate-action settlement remains a gap.
 
 `session(symbol, date)` is an executor-only projection and may contain that session's
 full raw OHLC/volume. It returns a source-backed instrument specification, an

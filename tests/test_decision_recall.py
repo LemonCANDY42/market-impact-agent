@@ -18,6 +18,8 @@ from market_impact_agent.decision_thesis import (
     BaseCaseDirection,
     HorizonBand,
     ResearchThesisV1,
+    ResearchThesisV2,
+    parse_research_thesis_v2,
 )
 from market_impact_agent.research_thesis_runtime import (
     ResearchThesisAuthority,
@@ -109,6 +111,7 @@ def _entry(store: LocalDataSnapshotStore, thesis: ResearchThesisV1) -> RecallPro
     authored = thesis.to_dict()
     for key in ("schema_version", "root_event_id", "thesis_epoch", "as_of", "thesis_id"):
         authored.pop(key)
+    authored.pop("target_id", None)
     profile = pi_profile()
     assistant: dict[str, object] = {"role": "assistant", "content": json.dumps(authored)}
     provider = FixtureProvider(
@@ -142,6 +145,11 @@ def _entry(store: LocalDataSnapshotStore, thesis: ResearchThesisV1) -> RecallPro
             run_id=run_id,
             provider=provider,
             inputs=ResearchThesisRunInputs(
+                schema_version=(
+                    "market-impact.research-thesis-inputs.v2"
+                    if isinstance(thesis, ResearchThesisV2)
+                    else "market-impact.research-thesis-inputs.v1"
+                ),
                 repository=_repository(
                     at=thesis.as_of,
                     event_id=thesis.root_event_id,
@@ -161,7 +169,10 @@ def _entry(store: LocalDataSnapshotStore, thesis: ResearchThesisV1) -> RecallPro
         source_as_of=thesis.as_of,
         instrument_ids=("ETF-1",),
         industry_tags=("technology",),
-        summary="research_thesis direction=up horizon_sessions=5",
+        summary=(
+            f"research_thesis direction={thesis.base_case_direction.value} "
+            f"horizon_sessions={thesis.primary_horizon_sessions}"
+        ),
     )
 
 
@@ -381,3 +392,92 @@ def test_recall_tools_enforce_scope_without_owning_run_cumulative_context(tmp_pa
     # Cumulative allowance belongs to the pi Run, never this reusable projection.
     for _ in range(30):
         assert asyncio.run(invoke(read.handler, {"ids": [entry.recall_id]}))
+
+
+def test_scope_precedes_limit_and_empty_scope_is_empty(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "harness")
+    journal = RunJournal.authoritative(store)
+    projection = DecisionRecallProjection(
+        tmp_path / "recall.sqlite3", artifact_store=store.artifacts, journal=journal
+    )
+    authorized = _entry(store, _thesis(NOW - timedelta(hours=2), "allowed"))
+    newer = tuple(
+        _entry(store, _thesis(NOW - timedelta(minutes=i), f"other-{i}")) for i in range(9)
+    )
+    projection.rebuild((authorized, *newer))
+    scope = frozenset({authorized.source_run_id})
+    hits = projection.search_prior_decisions(as_of=NOW, allowed_source_run_ids=scope, limit=1)
+    assert hits == (authorized,)
+    assert (
+        projection.read_current_thesis(
+            root_event_id="earnings-root", as_of=NOW, allowed_source_run_ids=scope
+        )
+        == authorized
+    )
+    tools = {
+        item.name: item
+        for item in decision_recall_tools(
+            projection,
+            as_of=NOW,
+            current_root_event_id="earnings-root",
+            allowed_source_run_ids=scope,
+        )
+    }
+    assert authorized.recall_id in json.dumps(
+        _run_awaitable(tools["read_current_thesis"].handler({}))
+    )
+    assert projection.search_prior_decisions(as_of=NOW, allowed_source_run_ids=frozenset()) == ()
+    assert (
+        projection.read_current_thesis(
+            root_event_id="earnings-root", as_of=NOW, allowed_source_run_ids=frozenset()
+        )
+        is None
+    )
+
+
+def test_v2_unknown_recall_indexes_reads_and_reopens_signed_thesis(tmp_path: Path) -> None:
+    store = LocalDataSnapshotStore(tmp_path / "harness")
+    journal = RunJournal.authoritative(store)
+    projection = DecisionRecallProjection(
+        tmp_path / "recall.sqlite3", artifact_store=store.artifacts, journal=journal
+    )
+    authored = _thesis(NOW, "unknown-v2").core_dict()
+    for key in ("schema_version", "root_event_id", "thesis_epoch", "as_of"):
+        authored.pop(key)
+    authored.update(
+        {
+            "base_case_direction": "unknown",
+            "event_support": "unsupported",
+            "expectations": "No event surprise is established.",
+            "revision_conclusion": "Await event evidence.",
+            "evidence_refs": [],
+            "transmission": [],
+            "typed_unknowns": ["No event-specific transmission evidence."],
+        }
+    )
+    thesis = parse_research_thesis_v2(
+        authored,
+        root_event_id="earnings-root",
+        thesis_epoch="unknown-v2",
+        as_of=NOW,
+        target_id="INDEX.ETF",
+        evidence_ids=frozenset(),
+    )
+    entry = _entry(store, thesis)
+    projection.rebuild((entry,))
+    scoped = frozenset({entry.source_run_id})
+    assert projection.search_prior_decisions(as_of=NOW, allowed_source_run_ids=scoped) == (entry,)
+    tools = {
+        item.name: item
+        for item in decision_recall_tools(
+            projection,
+            as_of=NOW,
+            current_root_event_id="earnings-root",
+            allowed_source_run_ids=scoped,
+        )
+    }
+    current = _run_awaitable(tools["read_current_thesis"].handler({}))
+    assert '"base_case_direction": "unknown"' in json.dumps(current)
+    assert '"target_id": "INDEX.ETF"' in json.dumps(current)
+    reopened = projection.read_prior_decisions((entry.recall_id,), as_of=NOW)
+    assert reopened[0].source == thesis.to_dict()

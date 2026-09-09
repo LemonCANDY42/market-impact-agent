@@ -213,7 +213,11 @@ def read_sse_fund_suspensions(
     symbol: str | None = None,
 ) -> VerifiedFundSuspensions:
     """Verify a fresh CAS/receipt graph before admitting immutable projections."""
-    journal = RunJournal.authoritative(store)
+    from market_impact_agent.offline_authority import ReadOnlyRunJournal
+
+    journal = ReadOnlyRunJournal(store.root)
+    if journal.harness_authority_id != store.harness_authority_id:
+        raise PermissionError("fund suspension receipts belong to another Harness authority")
     coverages: list[_VerifiedCoverage] = []
     for artifact_hash in artifact_hashes:
         artifact = cast(dict[str, object], store.artifacts.read_json(artifact_hash))

@@ -894,7 +894,7 @@ def _observations_from_pages(
     config: TushareObservationSourceConfig,
     retrieved_at: datetime,
 ) -> tuple[tuple[SourceObservation, bytes], ...]:
-    seen_primary_keys: set[str] = set()
+    seen_primary_keys: dict[str, bytes] = {}
     observations: list[tuple[SourceObservation, bytes]] = []
     for page in pages:
         for row in page.rows:
@@ -902,16 +902,11 @@ def _observations_from_pages(
             _validate_row_temporal_fields(values, config=config)
             primary_values = {field: values[field] for field in config.primary_key_fields}
             primary_key_json = canonical_json_bytes(primary_values).decode()
-            if primary_key_json in seen_primary_keys:
-                if config.primary_key_fields == config.fields:
-                    # Full-row source identity: identical repeated disclosures are
-                    # retained in raw pages but normalize to one observation.
-                    continue
-                raise TushareObservationDuplicateError(
-                    "Tushare response contains duplicate primary keys"
-                )
-            seen_primary_keys.add(primary_key_json)
             raw_record = canonical_json_bytes({"fields": list(config.fields), "values": list(row)})
+            if not _register_primary_key(
+                seen_primary_keys, primary_key_json, raw_record, config=config
+            ):
+                continue
             upstream_record_id = f"tushare-record-{canonical_hash(primary_values)}"
             publisher_time = _optional_configured_datetime(
                 values,
@@ -980,16 +975,34 @@ def _validate_page_primary_keys(
     *,
     config: TushareObservationSourceConfig,
 ) -> None:
-    seen_primary_keys: set[str] = set()
+    seen_primary_keys: dict[str, bytes] = {}
     for row in page.rows:
         values = dict(zip(config.fields, row, strict=True))
         primary_values = {field: values[field] for field in config.primary_key_fields}
         primary_key_json = canonical_json_bytes(primary_values).decode()
-        if primary_key_json in seen_primary_keys and config.primary_key_fields != config.fields:
-            raise TushareObservationDuplicateError(
-                "Tushare response contains duplicate primary keys"
-            )
-        seen_primary_keys.add(primary_key_json)
+        raw_record = canonical_json_bytes({"fields": list(config.fields), "values": list(row)})
+        _register_primary_key(seen_primary_keys, primary_key_json, raw_record, config=config)
+
+
+def _register_primary_key(
+    seen: dict[str, bytes],
+    primary_key: str,
+    raw_record: bytes,
+    *,
+    config: TushareObservationSourceConfig,
+) -> bool:
+    previous = seen.get(primary_key)
+    if previous is not None:
+        # News can repeat identical records even though channels is outside its
+        # primary key. Preserve raw pages; never discard conflicting payloads.
+        permits_exact_repeat = (
+            config.api_name == "news" or config.primary_key_fields == config.fields
+        )
+        if permits_exact_repeat and previous == raw_record:
+            return False
+        raise TushareObservationDuplicateError("Tushare response contains duplicate primary keys")
+    seen[primary_key] = raw_record
+    return True
 
 
 def _validate_capture_page_completeness(

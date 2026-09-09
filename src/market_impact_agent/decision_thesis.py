@@ -28,6 +28,7 @@ class BaseCaseDirection(StrEnum):
     UP = "up"
     DOWN = "down"
     RANGEBOUND = "rangebound"
+    UNKNOWN = "unknown"
 
 
 class ReviewCadence(StrEnum):
@@ -102,6 +103,11 @@ class ResearchThesisV1:
     typed_unknowns: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if self.base_case_direction is BaseCaseDirection.UNKNOWN:
+            raise ValueError("V1 does not support unknown direction")
+        self._validate_common(require_event=True)
+
+    def _validate_common(self, *, require_event: bool) -> None:
         for value, name in (
             (self.root_event_id, "root_event_id"),
             (self.thesis_epoch, "thesis_epoch"),
@@ -117,8 +123,8 @@ class ResearchThesisV1:
             or not 1 <= self.review_after_sessions <= self.primary_horizon_sessions
         ):
             raise ValueError("review_after_sessions must fit the primary horizon")
-        _unique_text(self.transmission, "transmission", required=True)
-        _unique_text(self.evidence_refs, "evidence_refs", required=True)
+        _unique_text(self.transmission, "transmission", required=require_event)
+        _unique_text(self.evidence_refs, "evidence_refs", required=require_event)
         _unique_text(self.counterevidence_refs, "counterevidence_refs")
         _unique_text(self.invalidation_conditions, "invalidation_conditions", required=True)
         _unique_text(self.typed_unknowns, "typed_unknowns")
@@ -149,6 +155,224 @@ class ResearchThesisV1:
 
     def to_dict(self) -> dict[str, object]:
         return {**self.core_dict(), "thesis_id": self.thesis_id}
+
+
+class EventSupport(StrEnum):
+    SUPPORTED = "supported"
+    UNCERTAIN = "uncertain"
+    UNSUPPORTED = "unsupported"
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateComparison:
+    candidate_ref: str
+    transmission: tuple[str, ...]
+    support_refs: tuple[str, ...]
+    counter_refs: tuple[str, ...]
+    comparison_reason: str
+    gaps: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        _text(self.candidate_ref, "candidate_ref")
+        _text(self.comparison_reason, "comparison_reason")
+        for name in ("transmission", "support_refs", "counter_refs", "gaps"):
+            _unique_text(getattr(self, name), name)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "candidate_ref": self.candidate_ref,
+            "transmission": list(self.transmission),
+            "support_refs": list(self.support_refs),
+            "counter_refs": list(self.counter_refs),
+            "comparison_reason": self.comparison_reason,
+            "gaps": list(self.gaps),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchThesisV2(ResearchThesisV1):
+    target_id: str = ""
+    event_support: EventSupport = EventSupport.UNCERTAIN
+    expectations: str = ""
+    revision_new_facts: tuple[str, ...] = ()
+    revision_old_assumptions: tuple[str, ...] = ()
+    revision_conclusion: str = "initial analysis"
+    candidate_comparisons: tuple[CandidateComparison, ...] = ()
+
+    def __post_init__(self) -> None:
+        self._validate_common(require_event=False)
+        _text(self.target_id, "target_id")
+        _text(self.expectations, "expectations")
+        _text(self.revision_conclusion, "revision_conclusion")
+        _unique_text(self.revision_new_facts, "revision_new_facts")
+        _unique_text(self.revision_old_assumptions, "revision_old_assumptions")
+        if (not self.transmission or not self.evidence_refs) and not self.typed_unknowns:
+            raise ValueError("absent event evidence or transmission requires explicit gaps")
+        if self.event_support is EventSupport.SUPPORTED and not self.evidence_refs:
+            raise ValueError("supported event requires evidence")
+        if len(self.candidate_comparisons) > 5:
+            raise ValueError("candidate comparisons exceed five")
+        _unique_text(
+            tuple(item.candidate_ref for item in self.candidate_comparisons),
+            "candidate comparisons",
+        )
+
+    @property
+    def thesis_id(self) -> str:
+        return "research-thesis-v2-" + canonical_hash(self.core_dict())
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            **ResearchThesisV1.core_dict(self),
+            "schema_version": "market-impact.research-thesis.v2",
+            "target_id": self.target_id,
+            "event_support": self.event_support.value,
+            "expectations": self.expectations,
+            "revision_new_facts": list(self.revision_new_facts),
+            "revision_old_assumptions": list(self.revision_old_assumptions),
+            "revision_conclusion": self.revision_conclusion,
+            "candidate_comparisons": [item.to_dict() for item in self.candidate_comparisons],
+        }
+
+
+def parse_research_thesis_v2(
+    value: object,
+    *,
+    root_event_id: str,
+    thesis_epoch: str,
+    as_of: datetime,
+    target_id: str,
+    evidence_ids: frozenset[str],
+    candidate_proofs: Mapping[str, tuple[str, ...]] | None = None,
+    evidence_choices: Mapping[str, str] | None = None,
+    requires_revision: bool = False,
+    allowed_horizons: frozenset[int] = frozenset({1, 3, 5, 10, 20, 60}),
+) -> ResearchThesisV2:
+    fields = dict(_object(value))
+    event_support = EventSupport(_required_string(fields, "event_support"))
+    expectations = _narrative_string(fields, "expectations")
+    new_facts = _string_tuple(
+        fields.get("revision_new_facts", []), "revision_new_facts", trim_items=True
+    )
+    assumptions = _string_tuple(
+        fields.get("revision_old_assumptions", []), "revision_old_assumptions", trim_items=True
+    )
+    conclusion = _narrative_string(fields, "revision_conclusion")
+    if requires_revision and (not new_facts or not assumptions):
+        raise ValueError("prior thesis review requires new facts and old assumptions explanation")
+    choices = evidence_choices or {}
+    raw_comparisons = fields.get("candidate_comparisons", [])
+    if not isinstance(raw_comparisons, list) or len(cast(list[object], raw_comparisons)) > 5:
+        raise ValueError("candidate comparisons must be an array of at most five")
+    comparisons: list[CandidateComparison] = []
+    for raw in cast(list[object], raw_comparisons):
+        item = _object(raw)
+        if set(item) - {
+            "candidate_ref",
+            "transmission",
+            "support_refs",
+            "counter_refs",
+            "comparison_reason",
+            "gaps",
+        }:
+            raise ValueError("candidate comparison has unauthorized fields")
+        ref = _required_string(item, "candidate_ref")
+        if candidate_proofs is None or ref not in candidate_proofs:
+            raise ValueError("candidate comparison is outside frozen candidate proofs")
+        support = _string_tuple(item.get("support_refs", []), "support_refs")
+        counter = _string_tuple(item.get("counter_refs", []), "counter_refs")
+        support = tuple(choices.get(ref, ref) for ref in support)
+        counter = tuple(choices.get(ref, ref) for ref in counter)
+        if not set(support + counter) <= set(candidate_proofs[ref]):
+            raise ValueError("candidate comparison cites evidence outside candidate proof map")
+        comparisons.append(
+            CandidateComparison(
+                ref,
+                _string_tuple(
+                    item.get("transmission", []),
+                    "transmission",
+                    allow_singleton=True,
+                    trim_items=True,
+                ),
+                support,
+                counter,
+                _narrative_string(item, "comparison_reason"),
+                _string_tuple(item.get("gaps", []), "gaps", allow_singleton=True, trim_items=True),
+            )
+        )
+    for key in (
+        "event_support",
+        "expectations",
+        "revision_new_facts",
+        "revision_old_assumptions",
+        "revision_conclusion",
+        "candidate_comparisons",
+    ):
+        fields.pop(key, None)
+    direction = BaseCaseDirection(_required_string(fields, "base_case_direction"))
+    evidence = _string_tuple(fields.get("evidence_refs", []), "evidence_refs")
+    counter = _string_tuple(fields.get("counterevidence_refs", []), "counterevidence_refs")
+    choices = evidence_choices or {}
+    evidence = tuple(choices.get(ref, ref) for ref in evidence)
+    counter = tuple(choices.get(ref, ref) for ref in counter)
+    if not set(evidence + counter) <= evidence_ids:
+        raise ValueError("research thesis cites evidence outside the frozen input")
+    transmission = _string_tuple(
+        fields.get("transmission", []), "transmission", allow_singleton=True, trim_items=True
+    )
+    allowed = {
+        "horizon_band",
+        "primary_horizon_sessions",
+        "base_case_direction",
+        "thesis",
+        "priced_in_assessment",
+        "transmission",
+        "counter_scenario",
+        "evidence_refs",
+        "counterevidence_refs",
+        "invalidation_conditions",
+        "review_after_sessions",
+        "typed_unknowns",
+    }
+    if set(fields) - allowed:
+        raise ValueError("research thesis contains unauthorized fields")
+    horizon = _integer(fields, "primary_horizon_sessions")
+    if horizon not in allowed_horizons:
+        raise ValueError("research thesis chose an unregistered horizon")
+    if "horizon_band" in fields:
+        HorizonBand(_required_string(fields, "horizon_band"))
+    return ResearchThesisV2(
+        root_event_id=root_event_id,
+        thesis_epoch=thesis_epoch,
+        as_of=as_of,
+        horizon_band=horizon_band_for_sessions(horizon),
+        primary_horizon_sessions=horizon,
+        base_case_direction=direction,
+        thesis=_narrative_string(fields, "thesis"),
+        priced_in_assessment=_narrative_string(fields, "priced_in_assessment"),
+        transmission=transmission,
+        counter_scenario=_narrative_string(fields, "counter_scenario"),
+        evidence_refs=evidence,
+        counterevidence_refs=counter,
+        invalidation_conditions=_string_tuple(
+            fields.get("invalidation_conditions"),
+            "invalidation_conditions",
+            required=True,
+            allow_singleton=True,
+            trim_items=True,
+        ),
+        review_after_sessions=_integer(fields, "review_after_sessions"),
+        typed_unknowns=_string_tuple(
+            fields.get("typed_unknowns", []), "typed_unknowns", trim_items=True
+        ),
+        target_id=target_id,
+        event_support=event_support,
+        expectations=expectations,
+        revision_new_facts=new_facts,
+        revision_old_assumptions=assumptions,
+        revision_conclusion=conclusion,
+        candidate_comparisons=tuple(comparisons),
+    )
 
 
 def parse_research_thesis(
@@ -228,15 +452,27 @@ def parse_research_thesis(
 
 
 def research_thesis_text_normalizations(value: object) -> tuple[dict[str, str], ...]:
-    """Describe harmless narrative whitespace normalization without exposing content."""
+    """Describe harmless narrative normalization without exposing content."""
 
     fields = _object(value)
     edits: list[dict[str, str]] = []
-    for name in ("thesis", "priced_in_assessment", "counter_scenario"):
+    for name in (
+        "thesis",
+        "priced_in_assessment",
+        "counter_scenario",
+        "expectations",
+        "revision_conclusion",
+    ):
         item = fields.get(name)
         if isinstance(item, str) and item != item.strip():
             edits.append({"path": name, "operation": "trim_surrounding_whitespace"})
-    for name in ("transmission", "invalidation_conditions", "typed_unknowns"):
+    for name in (
+        "transmission",
+        "invalidation_conditions",
+        "typed_unknowns",
+        "revision_new_facts",
+        "revision_old_assumptions",
+    ):
         item = fields.get(name)
         values: list[object]
         if isinstance(item, str):
@@ -253,6 +489,20 @@ def research_thesis_text_normalizations(value: object) -> tuple[dict[str, str], 
                         "operation": "trim_surrounding_whitespace",
                     }
                 )
+    comparisons = fields.get("candidate_comparisons", [])
+    if isinstance(comparisons, list):
+        for index, raw in enumerate(cast(list[object], comparisons)):
+            if not isinstance(raw, dict):
+                continue
+            item = cast(dict[str, object], raw)
+            for name in ("transmission", "gaps"):
+                if isinstance(item.get(name), str):
+                    edits.append(
+                        {
+                            "path": f"candidate_comparisons[{index}].{name}",
+                            "operation": "narrative_string_to_singleton_array",
+                        }
+                    )
     return tuple(edits)
 
 

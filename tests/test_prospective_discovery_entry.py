@@ -366,7 +366,7 @@ def test_v2_wait_revises_same_episode_and_replays_terminal_without_provider(
             "proof_artifact_hash": proof.content_hash,
             "run_ids": [acquisition.run_id],
         }
-        return SimpleNamespace(to_dict=lambda: row, portfolio_run_id=None)
+        return SimpleNamespace(to_dict=lambda: row, portfolio_run_id=None, execution_gaps=())
 
     def spent(_: ModelBudget) -> dict[str, int]:
         return {

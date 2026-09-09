@@ -64,6 +64,22 @@ The connected implementation and its exact acceptance state are owned by
 [Account decision loop](docs/ACCOUNT_DECISION_LOOP.md#current-agent-handoff-and-activation-boundary).
 Legacy research/Signal/Order contracts remain replayable without retrospective reinterpretation.
 
+Research Thesis v2 binds one research target and separates `up/down/rangebound/unknown`
+from event support (`supported/uncertain/unsupported`). Unknown is a completed
+analytical conclusion, not a bearish signal, cash target, failed call or incomplete
+account review. Candidate comparisons contain zero to five new source-proven
+securities; current holdings remain account authority and do not consume that bound.
+The Harness resolves exact evidence choices and holding/candidate references; the
+Agent supplies the economic reasoning and desired exposure. Execution eligibility
+is evaluated only for the chosen target, after complete account review and any
+required source-close reconciliation.
+
+The explicit `account_review_entry.run_once` uses full frozen account, policy, cutoff
+and input identity to combine Watch and scheduled reasons. A new source version is
+a new opportunity. Research status, account-review status and execution readiness
+are distinct; neither preparation nor a completed review activates execution.
+
+
 ## Evidence and events
 
 **Evidence Item**:

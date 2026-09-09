@@ -11,6 +11,7 @@ from market_impact_agent.agent_contracts import EvidencePack, EvidenceReference,
 from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.historical_ashare_inputs import HistoricalAShareInputs
 from market_impact_agent.research import EvidenceTier
+from market_impact_agent.research_thesis_runtime import research_evidence_metadata
 
 _QUESTION = (
     "Using only information visible at the cutoff, explain the incremental economic impact, "
@@ -24,12 +25,16 @@ _CONTEXT = frozenset(
 )
 
 
-async def continuous_event_facts(repository: FrozenResearchRepository) -> tuple[str, ...]:
+async def continuous_event_facts(
+    repository: FrozenResearchRepository, *, version: str = "source-v2"
+) -> tuple[str, ...]:
     """Stable source fact IDs and a frozen 3% completed-session price threshold.
 
     Context envelope/cutoff changes alone are not new facts. The coordinator
     consumes these identities across thesis renewals and combines same-cutoff causes.
     """
+    if version not in {"legacy-v1", "source-v2"}:
+        raise ValueError("unknown continuous fact projection")
     facts: set[str] = set()
     for reference in repository.evidence_pack.evidence:
         loaded = cast(
@@ -40,9 +45,12 @@ async def continuous_event_facts(repository: FrozenResearchRepository) -> tuple[
         if not isinstance(value, dict):
             continue
         document = cast(dict[str, object], value)
-        if reference.evidence_id in _CONTEXT:
+        if version == "source-v2" or reference.evidence_id in _CONTEXT:
             for key in ("articles", "records", "rows"):
-                for item in cast(list[dict[str, object]], document.get(key, [])):
+                for raw in cast(list[object], document.get(key, [])):
+                    if not isinstance(raw, dict):
+                        continue
+                    item = cast(dict[str, object], raw)
                     identity = item.get("evidence_record_id")
                     available = item.get("available_at")
                     if not isinstance(identity, str) or not isinstance(available, str):
@@ -50,8 +58,21 @@ async def continuous_event_facts(repository: FrozenResearchRepository) -> tuple[
                     at = datetime.fromisoformat(available.replace("Z", "+00:00"))
                     if at.tzinfo is not None and at <= repository.evidence_pack.as_of:
                         facts.add("qualified-fact:" + canonical_hash(identity))
-        if reference.evidence_id.startswith("price-"):
-            rows = cast(list[list[object]], document.get("rows", []))
+        price_history = (
+            research_evidence_metadata(reference, document, repository.evidence_pack.as_of)[
+                "category"
+            ]
+            == "price_session_history"
+            if version == "source-v2"
+            else reference.evidence_id.startswith("price-")
+        )
+        if price_history:
+            raw_rows = cast(list[object], document.get("rows", []))
+            rows = [
+                cast(list[object], row)
+                for row in raw_rows
+                if isinstance(row, list) and len(cast(list[object], row)) >= 3
+            ]
             if len(rows) >= 2 and rows[-1][2] is not None and rows[-2][2] is not None:
                 previous, current = Decimal(str(rows[-2][2])), Decimal(str(rows[-1][2]))
                 if previous > 0 and abs(current / previous - 1) >= Decimal("0.03"):
@@ -99,6 +120,15 @@ async def continuous_research_repository(
             "pit_lane": market.policy.lane,
             "strict_pit_accepted": False,
             "fields": ["trade_date", "raw_close", "cutoff_adjusted_close", "volume_lots"],
+            "field_semantics": {
+                "trade_date": "completed exchange-session date",
+                "raw_close": "actual quoted session close; do not mix it with adjusted closes",
+                "cutoff_adjusted_close": (
+                    "research-only close normalized with factors through this cutoff; compare "
+                    "returns only on this consistent adjusted-close basis"
+                ),
+                "volume_lots": "source-reported session volume in lots",
+            },
             "rows": [
                 [
                     row[key]
@@ -107,6 +137,10 @@ async def continuous_research_repository(
                 for row in rows
             ],
             "source_projection_hash": proof.content_hash,
+            "source_projection_proof": (
+                "source_projection_hash identifies the complete source and factor proof "
+                "retained in CAS"
+            ),
             "gaps": projection["gaps"],
         }
         documents[evidence_id] = document
@@ -118,7 +152,8 @@ async def continuous_research_repository(
                 EvidenceTier.REGULATED,
                 cutoff,
                 canonical_hash(document),
-                "Completed-session raw and cutoff-adjusted research prices; prices do not "
+                "Completed-session prices: raw_close is the actual quote and "
+                "cutoff_adjusted_close is the consistent return-comparison basis. Prices do not "
                 "establish execution eligibility or original historical receipt.",
             )
         )

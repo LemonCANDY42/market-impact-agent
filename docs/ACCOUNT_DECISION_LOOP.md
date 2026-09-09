@@ -1,5 +1,14 @@
 # Account decision loop
 
+New Portfolio v6 bindings record `narrative_input_policy=singleton-narrative-v1`.
+Only `transmission` and `invalidation_conditions` may arrive as one narrative
+string; the Harness preserves that text as a one-item list and records the
+normalization. Blank text, objects, evidence references and financial/identity
+fields retain their existing validation. Canonical proposal schemas still contain
+arrays. Bindings without the policy retain strict list input; unknown policies
+fail closed. Failed historical terminals remain failed. Saved-answer diagnostics
+use separate bindings, journals and explicit offline authority.
+
 This document owns the path from admitted research or a holdings review to a controlled account action. It does
 not grant paper or live capability. The Harness remains the only orchestration, portfolio-policy,
 approval, execution-state and reconciliation authority.
@@ -72,13 +81,49 @@ The first reassessment increment is deliberately Judgment-only; its
 [input and terminal boundary](EVENT_IMPACT_TRIAGE.md#current-time-reassessment-initial-judgment-boundary)
 does not implement the scheduled portfolio loop or inherit any account/Signal authority.
 
-The minimum continuous-loop activation still has three unfinished bindings. A Wake callback must
-reopen the parent Watch question, prior thesis, counterevidence and invalidation conditions; a
-versioned scheduler must admit recurring portfolio reviews; and either trigger must reach the same
-account-aware Portfolio Review and sizing composition. The current callable components and tested
-recovery paths do not by themselves prove that this loop is operating continuously. The first real
-acceptance must start from an actual new receipt or a due scheduled review and end in exactly one
-reconciled `hold` or controlled Intent without duplicated model or Provider work.
+`account_review_entry.run_once` is the explicit shared account-review entry. Discovery and the
+prospective Watch callback use the same Portfolio Review opportunity identity as a supplied due
+scheduled review: the complete frozen account, policy, cutoff, evidence, research, model and budget
+binding. Trigger reasons append to the existing Episode budget journal; they do not change the
+decision identity or reopen its sealed terminal. Changed full inputs create another opportunity.
+The result reports `research_status`, `account_review_status`, and `execution_readiness`
+separately, including closed/unknown calendar, missing quotes, hold and completed-without-dispatch
+outcomes. Concurrent callers reuse the existing claim and receive `in_progress`.
+The Portfolio Review authority retains the only account-review claim and its completed/unknown
+generation recovery; Watch dispatch retains its existing independent callback lifecycle.
+An actual acquisition wait leaves the callback Run pending. Restart reopens the same native
+research and data-request identities; a crash after entering an attempt without a durable wait
+still requires reconciliation. The original frozen selection timestamp and delegate Profile
+remain stable while waiting, rather than creating replacement research inputs on each retry.
+
+A scheduled invocation requires same-root, frozen, actually received calendar evidence. A verified
+closed day can still review a valid supplied account valuation; absent or conflicting calendar
+facts return `pending_calendar`. This entry never dispatches orders. Reference valuation and
+research readiness do not establish executable quote readiness. New prospective candidate inputs
+use Portfolio Review v6: exact profile receipts bind candidate identities independently of
+executable qualification, and an optional stale candidate does not block a hold or a completed
+recommendation. Missing selected execution evidence remains in `execution_gaps`, and sizing
+cannot authorize that order. Existing v5 captures retain their original reconstruction.
+Completed v2 research with zero mapped candidates still reaches account review using actual
+holdings. Its broad research target is never converted to a fabricated security; the factory
+receives no Security Admission for that case. Only the signed portfolio proposal's selected
+target determines execution gaps, and a hold has none.
+A fully cash account with no executable candidate can still hold under the existing review
+mandate template, with no prices or sizing rules and no claimed dynamic admission.
+Prospective Mock account capture can value an actual holding with a received raw completed-session
+close while the market is closed. The `raw_completed_session_valuation` basis preserves the close's
+original observation time and requires continuous, non-conflicting received calendar coverage
+through the review day. It expires at that day's end, or at the next current-day open for a
+pre-open review. Missing calendar/close authority remains a typed valuation gap. This basis is
+accepted for CNY account valuation only and cannot size or authorize an order.
+Review expiry depends on the mandate, account and held valuations; an unused optional candidate
+quote does not end a hold review. Execution admission separately checks its selected quote at the
+current clock, including after a completed recommendation. A portfolio claim that exists before
+its Run is created returns a durable `in_progress` report with no invented terminal, then resumes
+the same opportunity after release. Preparation and imports start no background work.
+A recurring supervisor and real reconciled execution acceptance
+remain separate gates; offline native-runtime/Watch fixtures establish explicit invocation,
+deduplication and replay only.
 
 The Agent keeps three conclusions distinct:
 
@@ -134,7 +179,23 @@ The producer has two explicit entrances:
 - `review_account(...)` starts an independently admitted holdings review with no research Run IDs.
   The supplied account facts still require complete, fresh authority before model dispatch.
 
-The model sees a versioned, immutable `market-impact.portfolio-prompt-projection.v1`
+New v2 research compositions and explicit v6 reviews use `market-impact.portfolio-prompt-projection.v2`.
+The model selects `target_ref` from current holdings or admitted candidate identities;
+Harness derives the symbol, venue, concrete instrument class and direction. Candidate
+identity includes the exact admission source record hashes in frozen full inputs.
+The model selects a registered session horizon; Harness derives its horizon band.
+Evidence references accept either exact descriptive choices or exact authorized IDs
+from the frozen choice map; both bind to the same permitted full references without
+fuzzy matching. Unknown references, ambiguous label/ID collisions, and model-supplied
+identity fields are refused.
+Whole-account hold needs no candidates. Rotation separately selects a current long
+holding source; only its full close may execute before reconciliation and a fresh review.
+The persisted v6 proposal retains full bound identities for deterministic sizing and replay.
+Versions v3/v4/v5 retain their existing parsing; stored bindings retain their original projection.
+V6 may leave event transmission empty when it is unsupported; the economic account
+rationale, counter-scenario, invalidation and review conditions remain required.
+
+Legacy v3–v5 models see the immutable `market-impact.portfolio-prompt-projection.v1`
 and bound research in one pi invocation, without a second retrieval loop. The projection
 preserves all account, risk, price, operational rule and other source metadata fields;
 only `rule_set.source_documents[].source_record_hashes` becomes a digest, count and
@@ -142,6 +203,11 @@ full-input CAS artifact/JSON pointer. Complete inputs remain frozen in the signe
 and reopenable CAS artifact as the validation authority. Replay reconstructs the projection
 and checks its source artifact; older bindings remain replayable. This business-context
 projection does not change the pi runtime or its route qualification.
+Fresh reviews with admitted candidates additionally bind
+`candidate_provenance_projection: hash-reference-v1`. The same lossless representation
+applies to `admitted_candidates[].source_record_hashes`; identity, economic inputs,
+and full provenance remain in the signed input authority. Bindings without this
+marker preserve the previous candidate projection during replay.
 Fresh reviews bind `market-impact.portfolio-evidence-scope.v2`: permitted references
 also include only the evidence/counterevidence IDs of reopened, same-root signed
 research theses. The projection lists these permitted IDs explicitly; arbitrary thesis
@@ -149,8 +215,8 @@ text cannot grant a reference. Initial adoption derives this scope from the sign
 source portfolio Run and reopens its bound research at the destination cutoff.
 Legacy bindings and projection-only recovery successors
 retain their original reference scope and prompt. Existing failed terminals remain
-failed; this change does not authorize another successor or model retry. New dynamic-horizon Runs use `AgentPortfolioProposalV4`; v3 remains replayable.
-V4 contains the account recommendation, target exposure, selected thesis horizon, priced-in
+failed; this change does not authorize another successor or model retry. The preserved dynamic-horizon epoch uses `AgentPortfolioProposalV4`/V5; new
+compositions select v6. The legacy V4 contains the account recommendation, target exposure, selected thesis horizon, priced-in
 assessment, transmission, review point, evidence, counterevidence and invalidation. Harness injects identities and
 computes quantities. Completion, raw native response, JSON normalization, physical Usage and
 signed terminal ancestry persist before execution admission. A completed Run replays rather than
@@ -170,17 +236,29 @@ normalization paths; evidence identities and Harness-owned fields remain strict.
 The old terminals remain incomplete and no Mock action was produced from the
 diagnostic replay.
 
-The corresponding `ResearchThesisV1` is an analytical answer, not an order. It
-chooses one of 1/3, 5/10 or 20/60 trading sessions; the Harness derives the
-corresponding `immediate`/`tactical`/`swing` band rather than asking the model
-to echo that redundant classification. It states `up`, `down` or
-`rangebound`; distinguishes incremental information from what appears priced
-in; and records a counter-scenario, observable invalidation and suggested review
-offset. It has no `abstain` action. Missing optional evidence becomes a typed
-unknown; missing PIT identity or required account authority makes the Run
-incomplete. The Portfolio Agent still maps every completed thesis to
-`hold/open/increase/reduce/close/rotate` for the exact account, while only
-deterministic Harness sizing may produce order quantity.
+New research Runs freeze `market-impact.research-thesis-inputs.v2` and produce
+`ResearchThesisV2`, an analytical answer bound to the Harness's research target.
+V1 artifact bytes and legacy input/prompt/parser replay remain unchanged. Both
+versions choose 1/3, 5/10 or 20/60 trading sessions with a Harness-derived band.
+V2 direction is `up`, `down`, `rangebound`, or `unknown`, independently of
+`event_support` (`supported`, `uncertain`, `unsupported`). Missing event evidence
+may yield empty transmission and citations with explicit gaps. A supported event still requires citations, but may have unknown target transmission with explicit gaps; factual event support does not establish target exposure or a price effect. Unknown never
+implies short, cash, or rangebound exposure, and its directional evaluation remains
+unscored. The account-authorized Portfolio Agent still decides the portfolio action.
+
+V2 records expectations, priced-in assessment, counter-scenario, invalidation,
+review offset, and revision new facts, old assumptions, and conclusion. When a prior
+thesis is supplied, new facts and old assumptions require nonempty explanations,
+including explicit absence of new facts. Initial analyses may leave those arrays empty.
+Descriptive evidence choices resolve only to exact frozen evidence IDs, including
+candidate support and counterevidence. Candidate proof maps contain only offered
+targets and actual frozen evidence. Source API and document shape distinguish price
+sessions, security identity, dated publications, and background. Coverage reflects
+actual records and session ranges; availability, publication, and event ages remain
+separate, with missing timestamps explicitly unknown. Retrieval age is not event
+novelty. Up to five candidate comparisons cite the corresponding frozen proof map.
+Candidate metadata establishes identity/investability,
+not event linkage. Judge, Watch, and Recall retain the complete signed analysis.
 
 `Decision Recall v1` is a rebuildable projection over signed Research Thesis
 artifacts in the existing Journal, not another decision ledger. Its
@@ -190,7 +268,9 @@ hash-checked, tied to its signed completed source Run, and rebound to its own cu
 The projection cannot admit a standalone CAS object, even when that object has a
 valid content hash and thesis-shaped JSON. Current account and portfolio state
 still come from their dedicated authorities rather than this disposable index.
-Search is capped at eight candidates; the implementation conservatively limits
+Authorization scope and cutoff apply before sorting and limiting; an empty
+authorization set returns no results. Current-thesis selection specifically queries
+research-thesis sources. Search is capped at eight candidates; the implementation conservatively limits
 cumulative historical injection to 12,000 UTF-8 bytes, rather than measuring actual
 model tokens. New Runs return a verified input reference for an already injected
 current opinion; older opinions remain available through bounded reopening. Recall enforces the
@@ -375,6 +455,32 @@ and each sized leg plus the sizing decision identity records the exact raw Price
 
 Deposits, withdrawals, credential access, account-profile or permission changes, data-entitlement
 purchases and broker-session administration are outside the Agent tool surface.
+
+## Reopen continuous candidate and comparison evidence
+
+`ContinuousPortfolioRuntime(protocol_version="research-continuous-v2")` is the new
+historical composition. The default `legacy-v1` and old study entrance retain their
+frozen behavior. V2 keeps the original research target while comparing zero to five
+source-proven candidates in the same thesis. Native profile cache results and acquired
+successors both reopen their exact tool call, result, projected listing identity and
+source snapshot. Historical projections remove current classifications and future
+listings. Merely preparing a query or mentioning a symbol grants no candidate authority.
+
+The signed successor stores the candidate reference map alongside its existing source
+binding. Context reopening reconstructs the native proof and original acquisition
+scope before rebuilding portfolio inputs. Five new securities and existing holdings
+remain separate; a sixth native profile lookup returns an explicit limit response.
+A new candidate can remain research-only until its selected execution inputs qualify.
+The original research target, valid whole-account hold, and old failures are preserved.
+
+`compare_reopened_continuous_accounts` reopens each real Nautilus account journal and
+source calendar, prices, instrument/fee rules, fill assumptions and corporate actions.
+It derives initial cash and positions from the reconstructed seed and validates the
+entire measured curve. Strategy/account hashes remain distinct; equal economics may
+compare despite different identities, while equal NAV alone is insufficient. Optional
+missing candidate data remains typed and must match. Required held/ordered source data
+cannot be missing. Incomplete pairs never produce a performance difference. A report's
+copied `common_economic_conditions` dictionary alone grants no comparison authority.
 
 ## State ownership
 
@@ -819,3 +925,23 @@ reconciliation owner remains accessible and reports
 `reconciliation_input` supplies current marks. `reconcile_prospective_mock_review`
 uses that source input for the explicit fill adapter and existing reconciliation
 owner, preserving the original review and order identities.
+
+Local composition acceptance covers two explicit scheduled review calls: an OPEN
+review and ACK, a later received source minute producing one fee-bearing T+1
+Mock fill, restart without duplicate economics, and a fresh HOLD review whose
+native model input contains the filled account. This proves callable composition;
+it does not activate a scheduler or satisfy broker/live acceptance.
+
+On execution reopen, an existing canonical lease must bind the exact Provider,
+account, mandate and routes before Provider reconciliation. Lease resolution and
+that observation share the authority transaction with revocation; local account
+projection follows the authorized observation outside that transaction. Expiry
+alone preserves reconciliation access. A persisted active claim permits only the
+existing execution owner's crash recovery, with account authority unavailable
+until explicit reconciliation. Recovery makes no initial Provider observation,
+marks interrupted submissions UNKNOWN, never resubmits them, and finalizes any
+pending revocation before a subsequent reconciliation can call the Provider.
+
+Revoking a lease does not cancel orders already accepted by the simulated venue.
+Source-qualified fill facts for those orders may still be recorded; this does not
+authorize new submissions or make revoked reconciliation complete.

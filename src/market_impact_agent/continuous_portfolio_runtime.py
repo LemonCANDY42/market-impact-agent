@@ -20,6 +20,7 @@ from market_impact_agent.agent_contracts import (
     evidence_pack_from_dict,
     pattern_pack_from_dict,
 )
+from market_impact_agent.agent_runtime import ToolDescriptor
 from market_impact_agent.authorized_decision_view import AuthorizedDecisionView
 from market_impact_agent.checkpoint_market_universe import (
     ExchangeInstrumentRule,
@@ -40,7 +41,9 @@ from market_impact_agent.domain import ExecutableOrder, Side, TradingEnvironment
 from market_impact_agent.dynamic_ashare_admission import DynamicAShareAdmission
 from market_impact_agent.frozen_research import FrozenResearchRepository
 from market_impact_agent.historical_ashare_inputs import HistoricalAShareInputs
+from market_impact_agent.method_catalog import FrozenMethodCatalog
 from market_impact_agent.model_provider import ModelProvider
+from market_impact_agent.native_candidate_proof import prove_native_candidates
 from market_impact_agent.on_demand_research import (
     OnDemandResearch,
     ResearchContinuation,
@@ -55,6 +58,7 @@ from market_impact_agent.portfolio_decision import (
 )
 from market_impact_agent.portfolio_review import (
     PortfolioReviewAuthority,
+    PortfolioReviewCandidate,
     PortfolioReviewInputs,
     RotationReconciliationAuthority,
     RotationSourceCompletion,
@@ -215,9 +219,17 @@ class ContinuousPortfolioRuntime:
         historical_research_templates: tuple[ResearchSourceTemplate, ...] = (),
         research_episode_deadline: datetime | None = None,
         acquisition_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        protocol_version: str = "legacy-v1",
+        method_catalog: FrozenMethodCatalog | None = None,
+        readonly_tools: Callable[[ReviewFrame], tuple[ToolDescriptor, ...]] = lambda _: (),
     ) -> None:
         if not experiment_id or not arm_id:
             raise ValueError("continuous runtime needs registered experiment/arm scope")
+        if protocol_version not in {"legacy-v1", "research-continuous-v2"}:
+            raise ValueError("unknown continuous research/portfolio protocol")
+        self.protocol_version = protocol_version
+        self.method_catalog = method_catalog
+        self.readonly_tools = readonly_tools
         if provider.budget is None:
             raise ValueError("continuous model stages require one configured parent ModelBudget")
         self.store = store
@@ -282,6 +294,9 @@ class ContinuousPortfolioRuntime:
             historical_research_templates=self.historical_research_templates,
             research_episode_deadline=self.research_episode_deadline,
             acquisition_clock=self.acquisition_clock,
+            protocol_version=self.protocol_version,
+            method_catalog=self.method_catalog,
+            readonly_tools=self.readonly_tools,
         )
 
     async def _persist_successor(
@@ -298,7 +313,11 @@ class ContinuousPortfolioRuntime:
             for ref in pack.evidence
         }
         value = {
-            "schema_version": "market-impact.continuous-research-successor.v1",
+            "schema_version": (
+                "market-impact.continuous-research-successor.v2"
+                if self.protocol_version == "research-continuous-v2"
+                else "market-impact.continuous-research-successor.v1"
+            ),
             "experiment_id": self.experiment_id,
             "arm_id": self.arm_id,
             "account_id": self.account.account_id,
@@ -315,6 +334,16 @@ class ContinuousPortfolioRuntime:
             if result.frozen_input
             else [],
             "acquisitions": [item.to_dict() for item in result.acquisitions],
+            **(
+                {
+                    "candidate_proofs": {
+                        key: list(refs)
+                        for key, refs in result.final_inputs.candidate_proofs.items()
+                    }
+                }
+                if self.protocol_version == "research-continuous-v2"
+                else {}
+            ),
         }
         ref = self.store.artifacts.put_json(value).content_hash
         budget = self.provider.budget
@@ -416,6 +445,15 @@ class ContinuousPortfolioRuntime:
             "base_snapshot_ids": list(market.snapshot_ids),
             "rule_artifact_hashes": list(market.rule_artifact_hashes),
             **(
+                {
+                    "qualification_policy_artifact_hash": (
+                        market.qualification_policy.policy_artifact_hash
+                    )
+                }
+                if market.qualification_policy is not None
+                else {}
+            ),
+            **(
                 {"fund_halt_artifact_hashes": list(market.fund_halt_artifact_hashes)}
                 if market.fund_halt_artifact_hashes
                 else {}
@@ -456,7 +494,8 @@ class ContinuousPortfolioRuntime:
                     )
                 acquired.add(snapshot.snapshot_id)
                 if (
-                    receipt.get("status") == "fulfilled"
+                    value.get("schema_version") == "market-impact.continuous-research-successor.v1"
+                    and receipt.get("status") == "fulfilled"
                     and requested.payload.get("origin") == "agent_tool"
                     and (str(request_binding["run_id"]), template.tool_name, arguments)
                     in native_queries
@@ -465,6 +504,87 @@ class ContinuousPortfolioRuntime:
                     # Research scopes can contain aggregate IDs. Only an exact signed
                     # native security query adds a new executable candidate.
                     executable_candidates.add(str(arguments["ts_code"]))
+        if value.get("schema_version") == "market-impact.continuous-research-successor.v2":
+            if self.protocol_version != "research-continuous-v2":
+                raise PermissionError("research successor requires its registered v2 protocol")
+            proof_refs: dict[str, tuple[str, ...]] = {}
+            held = tuple(
+                position.target_id
+                for position in self._account_prefix(frame)[-1].account_state.positions or ()
+            )
+            for child_id in runs:
+                binding_event = self.journal.event(
+                    budget.owner_run_id + ".binding." + canonical_hash(child_id)
+                )
+                if binding_event is None:
+                    raise PermissionError("native candidate Run has no frozen acquisition scope")
+                binding = binding_event.payload
+                if (
+                    binding.get("historical_policy") != expected_policy
+                    or binding.get("cutoff") != frame.cutoff.isoformat()
+                    or binding.get("episode_id")
+                    != self.arm_id + ":" + runs[0].removesuffix(".research")
+                    or self.research_episode_deadline is None
+                    or binding.get("episode_deadline") != self.research_episode_deadline.isoformat()
+                ):
+                    raise PermissionError("native candidate scope differs from registered sources")
+                current = OnDemandResearch(
+                    store=self.store,
+                    parent_budget=budget,
+                    episode_id=str(binding["episode_id"]),
+                    episode_deadline=self.research_episode_deadline,
+                    run_id=child_id,
+                    cutoff=frame.cutoff,
+                    pit_lane=DataPITLane.MODELED,
+                    templates=self.historical_research_templates,
+                    frozen_input=FrozenDataSnapshotInput(
+                        frozenset(cast(list[str], binding["snapshot_ids"]))
+                    ),
+                    historical_inputs=market,
+                    clock=self.acquisition_clock,
+                )
+                child_receipts: list[ResearchContinuation] = []
+                for receipt in cast(list[dict[str, object]], value["acquisitions"]):
+                    requested = self.journal.event(
+                        budget.owner_run_id + "." + str(receipt["request_id"]) + ".requested"
+                    )
+                    if (
+                        requested is None
+                        or _object(requested.payload["binding"]).get("run_id") != child_id
+                    ):
+                        continue
+                    child_receipts.append(
+                        ResearchContinuation(
+                            str(receipt["request_id"]),
+                            str(receipt["status"]),
+                            cast(str | None, receipt.get("snapshot_id")),
+                            None
+                            if receipt.get("successor_cutoff") is None
+                            else datetime.fromisoformat(str(receipt["successor_cutoff"])),
+                            cast(str | None, receipt.get("error_kind")),
+                        )
+                    )
+                for proof in prove_native_candidates(
+                    authority, current, tuple(child_receipts), excluded_targets=held
+                ):
+                    proof_refs[proof.symbol] = tuple(
+                        sorted(
+                            {
+                                proof.snapshot_id,
+                                *(ref.evidence_id for ref in original.evidence_pack.evidence),
+                            }
+                        )
+                    )
+            expected_refs = {key: list(refs) for key, refs in proof_refs.items()}
+            if (
+                value.get("candidate_proofs") != expected_refs
+                or _object(final["inputs"]).get("candidate_proofs") != expected_refs
+                or set(pack.allowed_targets)
+                != set(original.evidence_pack.allowed_targets) | set(proof_refs)
+                or len(set(proof_refs) - set(held)) > 5
+            ):
+                raise PermissionError("candidate comparison differs from reopened native proof")
+            executable_candidates.update(proof_refs)
         snapshots = tuple(cast(list[str], value["snapshots"]))
         if set(snapshots) != set(frame.snapshot_ids) | acquired:
             raise PermissionError("successor source set contains unbound snapshots")
@@ -622,13 +742,20 @@ class ContinuousPortfolioRuntime:
         symbols = tuple(sorted(set(self.symbol_source(frame) + held)))
         admission = DynamicAShareAdmission(market)
         discovered = admission.discover(symbols, frame.cutoff)
-        if not any(item.execution_ready for item in discovered):
+        if (
+            not any(item.execution_ready for item in discovered)
+            and self.protocol_version == "legacy-v1"
+        ):
             raise _InputGap(
                 "security_evidence_incomplete:"
                 + ",".join(sorted({gap for item in discovered for gap in item.gaps}))
             )
-        bound = admission.bind(symbols, frame.cutoff, mandate)
-        evidence = {item.symbol: item.evidence for item in bound.securities if item.execution_ready}
+        bound_mandate = (
+            admission.bind(symbols, frame.cutoff, mandate).mandate
+            if any(item.execution_ready for item in discovered)
+            else mandate
+        )
+        evidence = {item.symbol: item.evidence for item in discovered if item.execution_ready}
         if not set(held) <= evidence.keys():
             raise _InputGap("held_security_raw_mark_authority_missing")
         prices: dict[str, PriceBasis] = {}
@@ -665,7 +792,7 @@ class ContinuousPortfolioRuntime:
             if pair in rules and rules[pair] != rule:
                 raise _InputGap("venue_class_rule_variants_require_exact_sizing_support")
             rules[pair] = rule
-        expiry = min(bound.mandate.valid_until, *(item.valid_until for item in prices.values()))
+        expiry = min((bound_mandate.valid_until, *(item.valid_until for item in prices.values())))
         position = state.project_positions(evaluated_at=frame.cutoff, max_age=max_age)
         view = AuthorizedDecisionView.build(
             cutoff=frame.cutoff,
@@ -737,9 +864,51 @@ class ContinuousPortfolioRuntime:
                 "symbol": item.symbol,
                 "source_record_hashes": list(item.evidence.source_record_hashes),
             }
-            for item in bound.securities
+            for item in discovered
             if item.execution_ready and item.evidence is not None
         )
+        candidates: tuple[PortfolioReviewCandidate, ...] = ()
+        if self.protocol_version == "research-continuous-v2":
+            candidates = tuple(
+                PortfolioReviewCandidate(
+                    item.symbol,
+                    item.evidence.venue,
+                    item.evidence.instrument_class,
+                    item.evidence.source_record_hashes,
+                )
+                for item in discovered
+                if item.evidence is not None and item.symbol not in held
+            )
+            represented = {candidate.symbol for candidate in candidates}
+            unresolved: list[PortfolioReviewCandidate] = []
+            for item in discovered:
+                if item.symbol in held or item.symbol in represented:
+                    continue
+                identity = market.research_identity(item.symbol, frame.cutoff)
+                if identity is not None:
+                    venue, instrument_class, source_hashes = identity
+                    unresolved.append(
+                        PortfolioReviewCandidate(
+                            item.symbol, venue, instrument_class, source_hashes
+                        )
+                    )
+            candidates += tuple(unresolved)
+            # Research identities need not yet have executable prices. Keep their
+            # exact provenance in the same frozen input for selection and replay.
+            sources = tuple(
+                dict[str, object](
+                    symbol=item.symbol,
+                    source_record_hashes=list(item.evidence.source_record_hashes),
+                )
+                for item in discovered
+                if item.evidence is not None
+            ) + tuple(
+                dict[str, object](
+                    symbol=candidate.symbol,
+                    source_record_hashes=list(candidate.source_record_hashes),
+                )
+                for candidate in unresolved
+            )
         rule_set = ExchangeInstrumentRuleSet(
             "exchange-instrument-rule-set-"
             + canonical_hash(
@@ -750,7 +919,16 @@ class ContinuousPortfolioRuntime:
             tuple(rules.values()),
         )
         return PortfolioReviewInputs(
-            state, position, view, exposure, bound.mandate, prices, rule_set, frame.cutoff, expiry
+            state,
+            position,
+            view,
+            exposure,
+            bound_mandate,
+            prices,
+            rule_set,
+            frame.cutoff,
+            expiry,
+            admitted_candidates=candidates,
         )
 
     def _portfolio_authority(self, frame: ReviewFrame) -> PortfolioReviewAuthority:
@@ -763,12 +941,14 @@ class ContinuousPortfolioRuntime:
                 {exposure.exposure_view_id: exposure}
             ),
             clock=lambda: frame.cutoff,
-            proposal_version="v5",
+            proposal_version="v6" if self.protocol_version == "research-continuous-v2" else "v5",
             rotation_authority=self.rotation_authority
             or HistoricalRotationReconciliationAuthority(
                 self.account, self._rotation_source_order, frame.cutoff
             ),
             initial_rotation_source=self._adopted_rotation_source,
+            method_catalog=self.method_catalog,
+            readonly_tools=self.readonly_tools(frame),
         )
         inputs.assert_complete(
             self.store.harness_authority_id, authority.exposure_authority, frame.cutoff
@@ -903,7 +1083,7 @@ class ContinuousPortfolioRuntime:
         del (
             resume
         )  # Child authorities reopen their exact identities; unknown dispatch never retries.
-        repository, _ = self._frame_sources(frame)
+        repository, market = self._frame_sources(frame)
         research_id, portfolio_id = run_id + ".research", run_id + ".portfolio"
         prior_id = None
         if prior is not None:
@@ -963,10 +1143,37 @@ class ContinuousPortfolioRuntime:
             arm_id=self.arm_id,
             account_scope=self.account.account_id,
             prior_adoption_validator=self._verify_adopted_prior,
+            method_catalog=self.method_catalog,
             clock=lambda: frame.cutoff,
         )
+        offered_proofs: dict[str, tuple[str, ...]] = {}
+        if self.protocol_version == "research-continuous-v2":
+            held = {
+                position.target_id
+                for position in self._account_prefix(frame)[-1].account_state.positions or ()
+            }
+            for symbol in self.symbol_source(frame):
+                if symbol in held or symbol not in repository.evidence_pack.allowed_targets:
+                    continue
+                # A source-backed identity is enough to research a frozen offered
+                # candidate. Tradability is separately checked after research.
+                if market.reopen_security(symbol, frame.cutoff) is not None or (
+                    market.research_identity(symbol, frame.cutoff) is not None
+                ):
+                    offered_proofs[symbol] = tuple(
+                        reference.evidence_id for reference in repository.evidence_pack.evidence
+                    )
         inputs = ResearchThesisRunInputs(
-            repository, target, self.experiment_id + ":" + self.arm_id, allowed_horizons
+            repository,
+            target,
+            self.experiment_id + ":" + self.arm_id,
+            allowed_horizons,
+            candidate_proofs=offered_proofs,
+            schema_version=(
+                "market-impact.research-thesis-inputs.v2"
+                if self.protocol_version == "research-continuous-v2"
+                else "market-impact.research-thesis-inputs.v1"
+            ),
         )
         allowed_runs = self._recall_runs(
             frame,
@@ -977,7 +1184,7 @@ class ContinuousPortfolioRuntime:
             as_of=frame.cutoff,
             current_root_event_id=repository.evidence_pack.event_id,
             allowed_source_run_ids=allowed_runs,
-        )
+        ) + self.readonly_tools(frame)
         for child_id, terminal_event in (
             (research_id, research_id + ".research-thesis.terminal"),
             (portfolio_id, portfolio_id + ".portfolio.terminal"),
@@ -1012,6 +1219,72 @@ class ContinuousPortfolioRuntime:
                 current: OnDemandResearch,
                 receipts: tuple[ResearchContinuation, ...],
             ) -> PreparedResearchSuccessor:
+                if self.protocol_version == "research-continuous-v2":
+                    held = tuple(
+                        position.target_id
+                        for position in self._account_prefix(frame)[-1].account_state.positions
+                        or ()
+                    )
+                    proven = prove_native_candidates(
+                        research, current, receipts, excluded_targets=held
+                    )
+                    updated_inputs, frozen = await freeze_acquired_research(
+                        current_inputs, current, receipts
+                    )
+                    pack = updated_inputs.repository.evidence_pack
+                    proof_refs = dict(current_inputs.candidate_proofs)
+                    for proof in proven:
+                        proof_refs[proof.symbol] = tuple(
+                            sorted(
+                                {
+                                    proof.snapshot_id,
+                                    *(ref.evidence_id for ref in repository.evidence_pack.evidence),
+                                }
+                            )
+                        )
+                    if len(set(proof_refs) - set(held)) > 5:
+                        raise ValueError("candidate_limit_exceeded: narrow to five new securities")
+                    documents = {
+                        ref.evidence_id: _object(
+                            await updated_inputs.repository.read_evidence(
+                                {"evidence_id": ref.evidence_id}
+                            )
+                        )["document"]
+                        for ref in pack.evidence
+                    }
+                    promoted = EvidencePack.build(
+                        event_id=pack.event_id,
+                        as_of=pack.as_of,
+                        research_question=pack.research_question,
+                        evidence=pack.evidence,
+                        pattern_packs=pack.pattern_packs,
+                        allowed_targets=tuple(sorted(set(pack.allowed_targets) | set(proof_refs))),
+                        data_gaps=pack.data_gaps,
+                    )
+                    return PreparedResearchSuccessor(
+                        replace(
+                            updated_inputs,
+                            repository=FrozenResearchRepository(
+                                evidence_pack=promoted,
+                                evidence_documents=documents,
+                                pattern_packs={
+                                    ref.pack_id: pattern_pack_from_dict(
+                                        await updated_inputs.repository.read_pattern_pack(
+                                            {"pack_id": ref.pack_id}
+                                        )
+                                    )
+                                    for ref in pack.pattern_packs
+                                },
+                            ),
+                            candidate_proofs=proof_refs,
+                        ),
+                        frozen,
+                        receipts,
+                        {
+                            "policy": "native-profile-candidates-v3",
+                            "native_candidates": [proof.provenance for proof in proven],
+                        },
+                    )
                 research.replay(current.run_id)
                 native_symbols: set[str] = set()
                 for event in self.journal.events(current.run_id):
@@ -1093,7 +1366,15 @@ class ContinuousPortfolioRuntime:
                 if prior is None or prior_id is None
                 else prior.initial_adoption_ref,
                 successor_transform=successor,
-                successor_transform_id="historical-native-price-successor-v1",
+                successor_transform_id=(
+                    "native-profile-candidates-v3"
+                    if self.protocol_version == "research-continuous-v2"
+                    else "historical-native-price-successor-v1"
+                ),
+                candidate_excluded_targets=tuple(
+                    position.target_id
+                    for position in self._account_prefix(frame)[-1].account_state.positions or ()
+                ),
                 tool_factory=lambda _inputs, _run: tools,
             )
             terminal = acquired.terminal
@@ -1110,7 +1391,10 @@ class ContinuousPortfolioRuntime:
                 )
                 operation_runtime, operation_frame = self.resolve_decision_context(temporary, frame)
                 new_target = acquired.final_inputs.target_id
-                if new_target not in repository.evidence_pack.allowed_targets:
+                if (
+                    self.protocol_version == "legacy-v1"
+                    and new_target not in repository.evidence_pack.allowed_targets
+                ):
                     candidate = DynamicAShareAdmission(
                         operation_runtime.market_source(operation_frame)
                     ).discover((new_target,), frame.cutoff)[0]

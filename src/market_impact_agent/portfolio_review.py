@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from typing import Protocol, cast
@@ -25,11 +26,17 @@ from market_impact_agent.agent_engine import (
     _PrivilegedEventSink,  # pyright: ignore[reportPrivateUsage]
     reopen_authoritative_agent_terminal,
 )
+from market_impact_agent.agent_runtime import ToolDescriptor
 from market_impact_agent.authorized_decision_view import AuthorizedDecisionView
 from market_impact_agent.checkpoint_market_universe import ExchangeInstrumentRuleSet
 from market_impact_agent.data_inputs import LocalDataSnapshotStore
-from market_impact_agent.decision_thesis import HorizonBand, validate_horizon
+from market_impact_agent.decision_thesis import (
+    HorizonBand,
+    horizon_band_for_sessions,
+    validate_horizon,
+)
 from market_impact_agent.domain import OrderKind, PortfolioOrderIntent, Side, TradingMandateV2
+from market_impact_agent.method_catalog import FrozenMethodCatalog
 from market_impact_agent.model_json import load_model_json
 from market_impact_agent.model_provider import ModelProvider
 from market_impact_agent.paper_execution import PriceBasis
@@ -97,8 +104,8 @@ def portfolio_prompt_projection(binding: Mapping[str, object]) -> dict[str, obje
     inputs_hash = canonical_hash(full_inputs)
     inputs = dict(full_inputs)
     rule_set = dict(_object(inputs["rule_set"]))
-    sources: list[dict[str, object]] = []
-    for index, raw in enumerate(cast(list[object], rule_set["source_documents"])):
+
+    def compact_lineage(raw: object, pointer: str) -> dict[str, object]:
         source = dict(_object(raw))
         if "source_record_hashes" in source:
             if "source_record_hashes_provenance" in source:
@@ -113,11 +120,20 @@ def portfolio_prompt_projection(binding: Mapping[str, object]) -> dict[str, obje
                 "content_hash": canonical_hash(hashes),
                 "count": len(hashes),
                 "inputs_artifact_hash": inputs_hash,
-                "json_pointer": f"/rule_set/source_documents/{index}/source_record_hashes",
+                "json_pointer": pointer + "/source_record_hashes",
             }
-        sources.append(source)
-    rule_set["source_documents"] = sources
+        return source
+
+    rule_set["source_documents"] = [
+        compact_lineage(raw, f"/rule_set/source_documents/{index}")
+        for index, raw in enumerate(cast(list[object], rule_set["source_documents"]))
+    ]
     inputs["rule_set"] = rule_set
+    if binding.get("candidate_provenance_projection") == "hash-reference-v1":
+        inputs["admitted_candidates"] = [
+            compact_lineage(raw, f"/admitted_candidates/{index}")
+            for index, raw in enumerate(cast(list[object], inputs.get("admitted_candidates", [])))
+        ]
     return {
         "schema_version": PORTFOLIO_PROMPT_PROJECTION_VERSION,
         "inputs": inputs,
@@ -134,6 +150,114 @@ def portfolio_prompt_projection(binding: Mapping[str, object]) -> dict[str, obje
     }
 
 
+PORTFOLIO_REVIEW_PROMPT_V3 = """Recommend hold/open/increase/reduce/close/rotate
+for the entire account.
+Return JSON with requested_action, rationale, primary_horizon_sessions (1,3,5,10,20,60),
+priced_in_assessment, transmission (strings; may be empty when event transmission
+is unsupported or unknown), counter_scenario,
+review_after_sessions (positive and within the horizon), evidence_refs (nonempty),
+optional counterevidence_refs, and invalidation_conditions (nonempty strings).
+For evidence_refs and counterevidence_refs, copy an exact descriptive key or its exact
+authorized ID from evidence_choices; the Harness binds their full references.
+For non-hold actions select target_ref from targets and target_gross_exposure_ratio
+(0..1 of mandate gross exposure limit, not NAV; zero only for close).
+Hold maintains the whole account including cash and omits target fields.
+For rotate also select rotation_source_ref from holdings: only its full close executes;
+destination needs reconciliation and a fresh review which may choose cash. Rotation is long-only.
+Do not supply identity, venue, instrument_class, direction, horizon_band or quantity.
+Explain transmission, priced-in risk, counter-scenario, invalidation and review timing.
+Positive research can justify reducing concentrated holdings. Never invent missing arguments.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioReviewCandidate:
+    symbol: str
+    venue: str
+    instrument_class: str
+    source_record_hashes: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if any(
+            not value or value != value.strip()
+            for value in (
+                self.symbol,
+                self.venue,
+                self.instrument_class,
+                *self.source_record_hashes,
+            )
+        ):
+            raise ValueError("candidate identity and provenance must be exact")
+        if not self.source_record_hashes:
+            raise ValueError("candidate requires admitted source provenance")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "symbol": self.symbol,
+            "venue": self.venue,
+            "instrument_class": self.instrument_class,
+            "source_record_hashes": list(self.source_record_hashes),
+        }
+
+
+def _portfolio_choices(
+    binding: Mapping[str, object],
+) -> tuple[dict[str, dict[str, object]], dict[str, str]]:
+    inputs = _object(binding["inputs"])
+    targets: dict[str, dict[str, object]] = {}
+    for raw in cast(list[object], _object(inputs["position_snapshot"]).get("positions") or []):
+        item = _object(raw)
+        symbol, side = _string(item, "target_id"), _string(item, "side")
+        ref = f"holding:{symbol}:{side}"
+        targets[ref] = {
+            "instrument_id": symbol,
+            "venue": item["venue"],
+            "instrument_class": item["instrument_class"],
+            "direction": "long" if side == "buy" else "short",
+        }
+    seen: set[str] = set()
+    for raw in cast(list[object], inputs.get("admitted_candidates", [])):
+        item = _object(raw)
+        symbol = _string(item, "symbol")
+        if symbol in seen or not _strings(item.get("source_record_hashes")):
+            raise ValueError("candidate identity requires unique admitted provenance")
+        seen.add(symbol)
+        targets[f"candidate:{symbol}"] = {
+            "instrument_id": symbol,
+            "venue": _string(item, "venue"),
+            "instrument_class": _string(item, "instrument_class"),
+            "direction": "long",
+        }
+    refs = PortfolioReviewAuthority._evidence_ids(dict(binding))  # pyright: ignore[reportPrivateUsage]
+    descriptions = {
+        "account_state": "Current account cash and positions",
+        "position_snapshot": "Current position quantities and concentration",
+        "authorized_view": "Current authorized decision evidence",
+        "exposure_view": "Current portfolio exposure and risk limits",
+        "mandate": "Current trading mandate",
+    }
+    descriptions.update(
+        {ref: f"Raw reference price for {ref}" for ref in _object(inputs["price_bases"])}
+    )
+    choices = {
+        descriptions.get(ref, f"Research evidence {index + 1}"): ref
+        for index, ref in enumerate(sorted(refs))
+    }
+    return targets, choices
+
+
+def portfolio_prompt_projection_v2(binding: Mapping[str, object]) -> dict[str, object]:
+    projection = portfolio_prompt_projection(binding)
+    targets, choices = _portfolio_choices(binding)
+    projection.pop("evidence_ids")
+    projection.update(
+        schema_version="market-impact.portfolio-prompt-projection.v2",
+        targets=targets,
+        evidence_choices=choices,
+    )
+    return projection
+
+
 @dataclass(frozen=True, slots=True)
 class PortfolioReviewInputs:
     account_state: AccountStateSnapshot
@@ -145,6 +269,7 @@ class PortfolioReviewInputs:
     rule_set: ExchangeInstrumentRuleSet
     cutoff: datetime
     expires_at: datetime
+    admitted_candidates: tuple[PortfolioReviewCandidate, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -159,6 +284,11 @@ class PortfolioReviewInputs:
             "rule_set": self.rule_set.to_dict(),
             "cutoff": _timestamp(self.cutoff),
             "expires_at": _timestamp(self.expires_at),
+            **(
+                {"admitted_candidates": [item.to_dict() for item in self.admitted_candidates]}
+                if self.admitted_candidates
+                else {}
+            ),
         }
 
     def assert_complete(
@@ -340,13 +470,115 @@ class AgentPortfolioProposalV5(AgentPortfolioProposalV4):
         }
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AgentPortfolioProposalV6(AgentPortfolioProposalV5):
+    @property
+    def proposal_id(self) -> str:
+        return "agent-portfolio-proposal-v6-" + canonical_hash(self.core_dict())
+
+    def core_dict(self) -> dict[str, object]:
+        return {
+            **AgentPortfolioProposalV5.core_dict(self),
+            "schema_version": "market-impact.agent-portfolio-proposal.v6",
+        }
+
+
+def parse_portfolio_proposal_v6(
+    value: object, *, binding_hash: str, evidence_ids: frozenset[str], binding: Mapping[str, object]
+) -> AgentPortfolioProposalV6:
+    payload = dict(_object(value))
+    narrative_policy = binding.get("narrative_input_policy")
+    if narrative_policy not in {None, "singleton-narrative-v1"}:
+        raise PermissionError("unsupported portfolio narrative input policy")
+    if narrative_policy == "singleton-narrative-v1":
+        for name in ("transmission", "invalidation_conditions"):
+            if isinstance(payload.get(name), str):
+                payload[name] = [payload[name]]
+    if set(payload) & {
+        "instrument_id",
+        "venue",
+        "instrument_class",
+        "direction",
+        "horizon_band",
+        "rotation_source_instrument_id",
+    }:
+        raise ValueError("portfolio proposal contains Harness-owned identity fields")
+    targets, choices = _portfolio_choices(binding)
+    target = payload.pop("target_ref", None)
+    source = payload.pop("rotation_source_ref", None)
+    action = PortfolioAction(_string(payload, "requested_action"))
+    if action is PortfolioAction.HOLD:
+        if target is not None or source is not None:
+            raise ValueError("whole-account hold must not invent a target")
+    else:
+        if not isinstance(target, str) or target not in targets:
+            raise ValueError("unknown portfolio target_ref")
+        if action in {
+            PortfolioAction.INCREASE,
+            PortfolioAction.REDUCE,
+            PortfolioAction.CLOSE,
+        } and not target.startswith("holding:"):
+            raise ValueError("position action requires a holding target_ref")
+        payload.update(targets[target])
+    if action is PortfolioAction.ROTATE:
+        if (
+            not isinstance(source, str)
+            or source not in targets
+            or not source.startswith("holding:")
+            or targets[source]["direction"] != "long"
+        ):
+            raise ValueError("rotation requires an authoritative long holding source")
+        payload["rotation_source_instrument_id"] = targets[source]["instrument_id"]
+    elif source is not None:
+        raise ValueError("only rotation may name a source")
+    horizon = payload.get("primary_horizon_sessions")
+    if type(horizon) is not int:
+        raise ValueError("portfolio primary horizon must be an integer")
+    payload["horizon_band"] = horizon_band_for_sessions(horizon).value
+    authorized_ids = frozenset(choices.values())
+    for field in ("evidence_refs", "counterevidence_refs"):
+        selected = _strings(payload.get(field, []), require_trimmed=True)
+        if any(
+            ref in choices and ref in authorized_ids and choices[ref] != ref for ref in selected
+        ):
+            raise ValueError("ambiguous portfolio evidence choice")
+        resolved = [choices.get(ref, ref) for ref in selected]
+        if not set(resolved) <= authorized_ids & evidence_ids:
+            raise ValueError("unknown portfolio evidence choice")
+        payload[field] = resolved
+    base = _parse_portfolio_proposal_v5(
+        payload,
+        binding_hash=binding_hash,
+        evidence_ids=evidence_ids,
+        allow_empty_transmission=True,
+    )
+    return AgentPortfolioProposalV6(
+        **{field.name: getattr(base, field.name) for field in fields(base)}
+    )
+
+
 def parse_portfolio_proposal_v5(
     value: object, *, binding_hash: str, evidence_ids: frozenset[str]
 ) -> AgentPortfolioProposalV5:
+    return _parse_portfolio_proposal_v5(
+        value, binding_hash=binding_hash, evidence_ids=evidence_ids, allow_empty_transmission=False
+    )
+
+
+def _parse_portfolio_proposal_v5(
+    value: object,
+    *,
+    binding_hash: str,
+    evidence_ids: frozenset[str],
+    allow_empty_transmission: bool,
+) -> AgentPortfolioProposalV5:
     payload = dict(_object(value))
     source = payload.pop("rotation_source_instrument_id", None)
-    base = parse_portfolio_proposal_v4(
-        payload, binding_hash=binding_hash, evidence_ids=evidence_ids
+    base = _parse_portfolio_proposal_v4(
+        payload,
+        binding_hash=binding_hash,
+        evidence_ids=evidence_ids,
+        allow_empty_transmission=allow_empty_transmission,
     )
     if base.requested_action is PortfolioAction.ROTATE:
         if not isinstance(source, str) or not source or source != source.strip():
@@ -436,6 +668,18 @@ def parse_portfolio_proposal_v4(
     binding_hash: str,
     evidence_ids: frozenset[str],
 ) -> AgentPortfolioProposalV4:
+    return _parse_portfolio_proposal_v4(
+        value, binding_hash=binding_hash, evidence_ids=evidence_ids, allow_empty_transmission=False
+    )
+
+
+def _parse_portfolio_proposal_v4(
+    value: object,
+    *,
+    binding_hash: str,
+    evidence_ids: frozenset[str],
+    allow_empty_transmission: bool,
+) -> AgentPortfolioProposalV4:
     fields = _object(value)
     common = {
         "requested_action",
@@ -479,7 +723,7 @@ def parse_portfolio_proposal_v4(
     if (
         not evidence
         or not invalidation
-        or not transmission
+        or (not transmission and not allow_empty_transmission)
         or not set(evidence + counter) <= evidence_ids
     ):
         raise ValueError(
@@ -523,7 +767,7 @@ def parse_portfolio_proposal_v4(
 
 
 def portfolio_proposal_text_normalizations(value: object) -> tuple[dict[str, str], ...]:
-    """Describe bounded narrative whitespace normalization without exposing content."""
+    """Describe bounded narrative normalization without exposing content."""
 
     fields = _object(value)
     edits: list[dict[str, str]] = []
@@ -533,6 +777,9 @@ def portfolio_proposal_text_normalizations(value: object) -> tuple[dict[str, str
             edits.append({"path": name, "operation": "trim_surrounding_whitespace"})
     for name in ("transmission", "invalidation_conditions"):
         item = fields.get(name)
+        if isinstance(item, str):
+            edits.append({"path": name, "operation": "wrap_singleton_narrative"})
+            item = [item]
         if not isinstance(item, list):
             continue
         for index, entry in enumerate(cast(list[object], item)):
@@ -750,12 +997,16 @@ class PortfolioReviewAuthority:
         proposal_version: str = "v4",
         rotation_authority: RotationReconciliationAuthority | None = None,
         initial_rotation_source: Callable[[str], dict[str, object]] | None = None,
+        method_catalog: FrozenMethodCatalog | None = None,
+        readonly_tools: tuple[ToolDescriptor, ...] = (),
     ) -> None:
-        if proposal_version not in {"v4", "v5"}:
+        if proposal_version not in {"v4", "v5", "v6"}:
             raise ValueError("unsupported portfolio producer version")
         self.proposal_version = proposal_version
         self.rotation_authority = rotation_authority
         self.initial_rotation_source = initial_rotation_source
+        self.method_catalog = method_catalog
+        self.readonly_tools = readonly_tools
         self.store = store
         self.journal = RunJournal.authoritative(store)
         self.input_source = input_source
@@ -768,6 +1019,15 @@ class PortfolioReviewAuthority:
             authority_id=store.harness_authority_id,
             signer=lambda value: hmac.new(key, value, sha256).hexdigest(),
         )
+
+    def _optional_capabilities(self) -> dict[str, object]:
+        # Omission preserves the existing role binding and opportunity identities.
+        result: dict[str, object] = {}
+        if self.method_catalog is not None:
+            result["method_catalog"] = self.method_catalog.identity()
+        if self.readonly_tools:
+            result["readonly_tool_hashes"] = sorted(t.manifest_hash for t in self.readonly_tools)
+        return result
 
     def _rotation_completion(
         self, source_run_id: str, inputs: PortfolioReviewInputs, adoption_ref: str | None = None
@@ -794,7 +1054,11 @@ class PortfolioReviewAuthority:
         completion = self.rotation_authority.reopen_source_completion(source_run_id)
         if (
             terminal.get("status") != "completed"
-            or proposal.get("schema_version") != "market-impact.agent-portfolio-proposal.v5"
+            or proposal.get("schema_version")
+            not in {
+                "market-impact.agent-portfolio-proposal.v5",
+                "market-impact.agent-portfolio-proposal.v6",
+            }
             or proposal.get("requested_action") != "rotate"
             or (
                 adopted_order is not None
@@ -877,7 +1141,7 @@ class PortfolioReviewAuthority:
     async def review_after_rotation(
         self, *, run_id: str, source_run_id: str, provider: ModelProvider
     ) -> dict[str, object]:
-        if self.proposal_version != "v5" or run_id == source_run_id:
+        if self.proposal_version not in {"v5", "v6"} or run_id == source_run_id:
             raise PermissionError("rotation destination requires a fresh v5 model Run")
         return await self.review(
             run_id=run_id,
@@ -888,6 +1152,8 @@ class PortfolioReviewAuthority:
 
     @staticmethod
     def _parse_bound_proposal(binding: Mapping[str, object]):
+        if binding.get("schema_version") == "market-impact.portfolio-review-binding.v6":
+            return partial(parse_portfolio_proposal_v6, binding=binding)
         return (
             parse_portfolio_proposal_v5
             if binding.get("schema_version") == "market-impact.portfolio-review-binding.v5"
@@ -1050,6 +1316,49 @@ class PortfolioReviewAuthority:
         ):
             raise PermissionError("projection recovery changed its original authority or budget")
 
+    def review_opportunity_id(
+        self,
+        *,
+        provider: ModelProvider,
+        research_run_ids: tuple[str, ...] = (),
+        research_thesis_run_ids: tuple[str, ...] = (),
+        resolved_inputs: PortfolioReviewInputs | None = None,
+    ) -> str:
+        """Resolve the current full authority before deduplicating a review trigger."""
+        inputs = self.input_source() if resolved_inputs is None else resolved_inputs
+        return self._resolved_opportunity_id(
+            provider=provider,
+            inputs=inputs,
+            research=self._research(research_run_ids, inputs.cutoff),
+            research_theses=self._research_theses(research_thesis_run_ids, inputs.cutoff),
+        )
+
+    def _resolved_opportunity_id(
+        self,
+        *,
+        provider: ModelProvider,
+        inputs: PortfolioReviewInputs,
+        research: list[dict[str, object]],
+        research_theses: list[dict[str, object]],
+    ) -> str:
+        return "portfolio-opportunity-" + canonical_hash(
+            {
+                "harness_authority_id": self.store.harness_authority_id,
+                "proposal_version": self.proposal_version,
+                **self._optional_capabilities(),
+                "inputs": inputs.to_dict(),
+                "research": research,
+                "research_theses": research_theses,
+                "profile": provider.profile.to_dict(),
+                "runtime": provider.runtime_identity,
+                "budget_binding": None if provider.budget is None else provider.budget.binding,
+                "budget_owner": None if provider.budget is None else provider.budget.owner_run_id,
+                "budget_journal": None
+                if provider.budget is None
+                else str(provider.budget.journal.path),
+            }
+        )
+
     async def review(
         self,
         *,
@@ -1078,6 +1387,14 @@ class PortfolioReviewAuthority:
             except KeyError:
                 previous = None
             if previous is not None:
+                prior_binding = _object(self.store.artifacts.read_json(previous.config_hash))
+                optional = {
+                    key: prior_binding[key]
+                    for key in ("method_catalog", "readonly_tool_hashes")
+                    if key in prior_binding
+                }
+                if optional != self._optional_capabilities():
+                    raise PermissionError("portfolio replay changed frozen optional capabilities")
                 if previous.status.terminal:
                     self._record_usage(run_id)
                     return self.replay(run_id)
@@ -1119,8 +1436,23 @@ class PortfolioReviewAuthority:
             )
             research = self._research(research_run_ids, inputs.cutoff)
             research_theses = self._research_theses(research_thesis_run_ids, inputs.cutoff)
+            if run_id.startswith(
+                "portfolio-opportunity-"
+            ) and run_id != self._resolved_opportunity_id(
+                provider=provider,
+                inputs=inputs,
+                research=research,
+                research_theses=research_theses,
+            ):
+                raise PermissionError("portfolio opportunity authority changed before freeze")
             binding: dict[str, object] = {
                 "schema_version": "market-impact.portfolio-review-binding." + self.proposal_version,
+                **self._optional_capabilities(),
+                **(
+                    {"narrative_input_policy": "singleton-narrative-v1"}
+                    if self.proposal_version == "v6"
+                    else {}
+                ),
                 "harness_authority_id": self.store.harness_authority_id,
                 "run_id": run_id,
                 "inputs": inputs.to_dict(),
@@ -1148,10 +1480,14 @@ class PortfolioReviewAuthority:
                 },
             }
             if projection_recovery_of is None:
+                if inputs.admitted_candidates:
+                    binding["candidate_provenance_projection"] = "hash-reference-v1"
                 binding["evidence_scope_version"] = PORTFOLIO_EVIDENCE_SCOPE_VERSION
                 binding["prompt"] = cast(str, binding["prompt"]).replace(
                     PORTFOLIO_REVIEW_PROMPT, PORTFOLIO_REVIEW_PROMPT_V2, 1
                 )
+            if self.proposal_version == "v6":
+                binding["prompt"] = PORTFOLIO_REVIEW_PROMPT_V3
             if rotation_completion is not None:
                 binding["rotation_completion"] = rotation_completion
             if projection_recovery_of is not None:
@@ -1159,7 +1495,11 @@ class PortfolioReviewAuthority:
                 binding["projection_recovery"] = reference
                 self._verify_projection_recovery(binding)
             self.store.artifacts.put_json(binding["inputs"])
-            binding["prompt_projection"] = portfolio_prompt_projection(binding)
+            binding["prompt_projection"] = (
+                portfolio_prompt_projection_v2(binding)
+                if self.proposal_version == "v6"
+                else portfolio_prompt_projection(binding)
+            )
             binding_hash = self.store.artifacts.put_json(binding).content_hash
             self.journal.start_run(run_id=run_id, config_hash=binding_hash, created_at=self.clock())
             self._events.append(
@@ -1192,6 +1532,9 @@ class PortfolioReviewAuthority:
                     max_output_tokens=output_limit,
                     timeout_seconds=provider.profile.budget.max_wall_seconds,
                     attempt_observer=lambda event: self._observe_attempt(run_id, event),
+                    method_catalog=self.method_catalog,
+                    readonly_tools=self.readonly_tools,
+                    expect_json=bool(self.method_catalog or self.readonly_tools),
                 )
                 content = _string(turn.assistant_message, "content")
                 parsed = load_model_json(content)
@@ -1271,7 +1614,10 @@ class PortfolioReviewAuthority:
     def _observe_attempt(self, run_id: str, event: ProviderAttemptEvent) -> None:
         self._events.append(
             run_id=run_id,
-            event_id=f"{run_id}.portfolio.attempt.{event.physical_attempt}.{event.phase.value}",
+            event_id=(
+                f"{run_id}.portfolio.attempt.{canonical_hash(event.request_id)}."
+                f"{event.physical_attempt}.{event.phase.value}"
+            ),
             event_type="portfolio.model.attempt",
             observed_at=self.clock(),
             payload={
@@ -1330,11 +1676,14 @@ class PortfolioReviewAuthority:
         )
         return UsageRecord(
             experiment_id=(
-                "portfolio-review-v5"
+                "portfolio-review-v6"
+                if binding.get("schema_version") == "market-impact.portfolio-review-binding.v6"
+                else "portfolio-review-v5"
                 if binding.get("schema_version") == "market-impact.portfolio-review-binding.v5"
                 else "portfolio-review-v4"
                 if binding.get("schema_version")
                 in {
+                    "market-impact.portfolio-review-binding.v6",
                     "market-impact.portfolio-review-binding.v4",
                     "market-impact.portfolio-review-binding.v5",
                 }
@@ -1394,7 +1743,11 @@ class PortfolioReviewAuthority:
         ):
             raise PermissionError("portfolio review belongs to another root or run")
         if "prompt_projection" in binding:
-            if binding["prompt_projection"] != portfolio_prompt_projection(binding):
+            if binding["prompt_projection"] != (
+                portfolio_prompt_projection_v2(binding)
+                if binding.get("schema_version") == "market-impact.portfolio-review-binding.v6"
+                else portfolio_prompt_projection(binding)
+            ):
                 raise PermissionError("portfolio prompt projection differs from frozen inputs")
             if (
                 self.store.artifacts.read_json(canonical_hash(binding["inputs"]))
@@ -1424,7 +1777,13 @@ class PortfolioReviewAuthority:
                 or terminal.get("status") != "completed"
             ):
                 raise PermissionError("portfolio completion lacks privileged validation")
-            native = self.journal.event(f"{run_id}.pi-invocation.1.turn.1")
+            responses = [
+                event
+                for event in self.journal.events(run_id)
+                if event.event_type == "pi.role.response.completed"
+                and event.event_id.startswith(f"{run_id}.pi-invocation.1.turn.")
+            ]
+            native = responses[-1] if responses else None
             if (
                 native is None
                 or native.payload.get("artifact_hash") != terminal.get("raw_response_hash")
@@ -1443,6 +1802,7 @@ class PortfolioReviewAuthority:
                 )
                 if binding.get("schema_version")
                 in {
+                    "market-impact.portfolio-review-binding.v6",
                     "market-impact.portfolio-review-binding.v4",
                     "market-impact.portfolio-review-binding.v5",
                 }
@@ -1483,7 +1843,7 @@ class PortfolioReviewAuthority:
         inputs.assert_complete(
             self.store.harness_authority_id, self.exposure_authority, self.clock()
         )
-        if self.proposal_version != "v5":
+        if self.proposal_version not in {"v5", "v6"}:
             raise PermissionError("initial adoption requires explicit v5 policy")
         evidence_ids = frozenset(
             {
@@ -1496,6 +1856,7 @@ class PortfolioReviewAuthority:
                 *inputs.price_bases,
             }
         )
+        scoped: dict[str, object] | None = None
         if source_portfolio_run_id is not None:
             terminal = self.replay(source_portfolio_run_id)
             source_binding = _object(
@@ -1519,9 +1880,28 @@ class PortfolioReviewAuthority:
                     raise PermissionError("initial adoption research differs from signed source")
                 scoped = {**source_binding, "inputs": inputs.to_dict()}
                 evidence_ids = self._evidence_ids(scoped)
-        proposal = parse_portfolio_proposal_v5(
-            parsed_proposal, binding_hash=binding_hash, evidence_ids=evidence_ids
+                if self.proposal_version == "v6":
+                    old_targets, old_choices = _portfolio_choices(source_binding)
+                    new_targets, new_choices = _portfolio_choices(scoped)
+                    selected = _object(parsed_proposal)
+                    for field in ("target_ref", "rotation_source_ref"):
+                        ref = selected.get(field)
+                        if isinstance(ref, str) and old_targets.get(ref) != new_targets.get(ref):
+                            raise PermissionError("adoption target differs from signed source")
+                    for field in ("evidence_refs", "counterevidence_refs"):
+                        for ref in _strings(selected.get(field, []), require_trimmed=True):
+                            if old_choices.get(ref) != new_choices.get(ref):
+                                raise PermissionError(
+                                    "adoption evidence differs from signed source"
+                                )
+        if self.proposal_version == "v6" and scoped is None:
+            raise PermissionError("v6 adoption requires its signed source binding")
+        parser = (
+            self._parse_bound_proposal(scoped)
+            if scoped is not None and self.proposal_version == "v6"
+            else parse_portfolio_proposal_v5
         )
+        proposal = parser(parsed_proposal, binding_hash=binding_hash, evidence_ids=evidence_ids)
         decision = evaluate_portfolio_decision_v3(proposal, inputs, decided_at=self.clock())
         if decision.outcome is PortfolioDecisionOutcome.REJECTED:
             raise PermissionError("adopted initial recommendation violates destination policy")
@@ -1600,6 +1980,7 @@ class PortfolioReviewAuthority:
             )
             if binding.get("schema_version")
             in {
+                "market-impact.portfolio-review-binding.v6",
                 "market-impact.portfolio-review-binding.v4",
                 "market-impact.portfolio-review-binding.v5",
             }
@@ -1615,6 +1996,16 @@ class PortfolioReviewAuthority:
         decision = evaluate_portfolio_decision_v3(proposal, inputs, decided_at=decided_at)
         if decision.to_dict() != terminal["decision"]:
             raise PermissionError("portfolio decision differs from deterministic evaluation")
+        # Recommendation replay uses decision time. New execution admission must
+        # also retain a usable quote now, even if another candidate expires later.
+        now = self.clock()
+        if any(
+            (basis := inputs.price_bases.get(leg.instrument_id)) is None
+            or basis.basis_kind not in {"reference_quote", "raw_reference_quote", "limit_price"}
+            or not basis.observed_at <= now < basis.valid_until
+            for leg in decision.legs
+        ):
+            raise PermissionError("portfolio recommendation has no accepted executable target")
         sizing = size_portfolio_decision_v2(
             portfolio_decision=decision,
             authorized_view=inputs.authorized_view,

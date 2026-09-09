@@ -37,7 +37,11 @@ from market_impact_agent.portfolio_decision import (
     RawMarkedPositionV2,
     RegisteredPortfolioExposureViewAuthorityV2,
 )
-from market_impact_agent.portfolio_review import PortfolioReviewAuthority, PortfolioReviewInputs
+from market_impact_agent.portfolio_review import (
+    PortfolioReviewAuthority,
+    PortfolioReviewCandidate,
+    PortfolioReviewInputs,
+)
 from market_impact_agent.prospective_ashare_inputs import ProspectiveAShareInputs
 from market_impact_agent.providers import MockExecutionProvider, ReconciliationSnapshot
 from market_impact_agent.research_thesis_runtime import ResearchThesisRunInputs
@@ -143,6 +147,12 @@ class ProspectiveMockComposition:
             raise PermissionError("current portfolio account has not been captured")
         return self._context[0]
 
+    def held_targets(self) -> tuple[str, ...]:
+        """Read existing inventory without creating an opening account or a task."""
+        with self.provider._connect() as connection:  # pyright: ignore[reportPrivateUsage]
+            configured = connection.execute("SELECT 1 FROM mock_account_configuration").fetchone()
+        return () if configured is None else self._symbols()
+
     def _symbols(self) -> tuple[str, ...]:
         with self.provider._connect() as connection:  # pyright: ignore[reportPrivateUsage]
             opening = json.loads(
@@ -186,6 +196,20 @@ class ProspectiveMockComposition:
             )
         return result
 
+    def _valuation_prices(
+        self, market: ProspectiveAShareInputs, symbols: tuple[str, ...], cutoff: datetime
+    ) -> dict[str, PriceBasis]:
+        securities = DynamicAShareAdmission(market).discover(symbols, cutoff)
+        prices = self._prices(tuple(item for item in securities if item.execution_ready))
+        for symbol in symbols:
+            if symbol not in prices:
+                try:
+                    prices[symbol] = market.reference_valuation(symbol, cutoff)
+                except PermissionError as error:
+                    gaps = next(item.gaps for item in securities if item.symbol == symbol)
+                    raise PermissionError(str(error) + "; execution:" + ",".join(gaps)) from error
+        return prices
+
     def capture_context(
         self, inputs: ResearchThesisRunInputs, frozen: FrozenDataSnapshotInput
     ) -> tuple[AccountStateSnapshot, datetime]:
@@ -210,12 +234,25 @@ class ProspectiveMockComposition:
             )
             return self._context
         market = self.market_factory(frozen)
-        symbols = tuple(sorted({inputs.target_id, *self._symbols()}))
-        prices = self._prices(DynamicAShareAdmission(market).discover(symbols, self.clock()))
+        symbols = (
+            self._symbols()
+            if inputs.schema_version == "market-impact.research-thesis-inputs.v2"
+            else tuple(sorted({inputs.target_id, *self._symbols()}))
+        )
+        current_policy = inputs.schema_version == "market-impact.research-thesis-inputs.v2"
+        prices = (
+            self._valuation_prices(market, symbols, self.clock())
+            if current_policy
+            else self._prices(DynamicAShareAdmission(market).discover(symbols, self.clock()))
+        )
         account = self.provider.simulated_account_snapshot(price_bases=prices)
         # Freeze only after capturing actual account facts; never reuse the thesis cutoff.
         cutoff = self.clock()
-        prices = self._prices(DynamicAShareAdmission(market).discover(symbols, cutoff))
+        prices = (
+            self._valuation_prices(market, symbols, cutoff)
+            if current_policy
+            else self._prices(DynamicAShareAdmission(market).discover(symbols, cutoff))
+        )
         if any(price.observed_at > account.as_of for price in prices.values()):
             raise PermissionError("account_capture_precedes_revalidated_mark")
         self._ledger = self._execution_ledger()
@@ -242,16 +279,23 @@ class ProspectiveMockComposition:
         inputs: ResearchThesisRunInputs,
         frozen: FrozenDataSnapshotInput,
         account: AccountStateSnapshot,
-        security: SecurityAdmission,
+        security: SecurityAdmission | None,
     ) -> PortfolioReviewAuthority:
         self.frozen_snapshot_input, self.research_inputs = frozen, inputs
         if self._context is None or self._context[0] != account:
             raise PermissionError("portfolio account differs from captured context")
         cutoff = self._context[1]
         market = self.market_factory(frozen)
+        current_policy = inputs.schema_version == "market-impact.research-thesis-inputs.v2"
         symbols = tuple(
-            sorted({inputs.target_id, *(item.target_id for item in account.positions or ())})
-        )
+            sorted(
+                {
+                    *(() if current_policy else (inputs.target_id,)),
+                    *inputs.candidate_proofs,
+                    *(item.target_id for item in account.positions or ()),
+                }
+            )
+        ) or ("510300.SH",)
         template = TradingMandateV3(
             mandate_id="prospective-template-" + canonical_hash([self.seed, cutoff.isoformat()]),
             account_id=self.account_scope,
@@ -276,12 +320,37 @@ class ProspectiveMockComposition:
             universe_binding_hash=canonical_hash(symbols),
             execution_scope="local_mock",
         )
-        binding = DynamicAShareAdmission(market).bind(symbols, cutoff, template)
-        prices = self._prices(binding.securities)
-        if next(item for item in binding.securities if item.symbol == security.symbol) != security:
+        admission_owner = DynamicAShareAdmission(market)
+        securities = admission_owner.discover(symbols, cutoff)
+        binding = (
+            admission_owner.bind(symbols, cutoff, template)
+            if not current_policy or any(item.execution_ready for item in securities)
+            else None
+        )
+        # A fully cash account can review under the existing template even when
+        # no candidate has executable evidence. No dynamic admission is claimed.
+        bound_mandate = template if binding is None else binding.mandate
+        candidates = self._candidate_identities(inputs, market, cutoff)
+        prices = self._prices(
+            tuple(item for item in securities if item.execution_ready)
+            if current_policy
+            else securities
+        )
+        if current_policy:
+            held = tuple(item.target_id for item in account.positions or ())
+            prices.update(self._valuation_prices(market, held, cutoff))
+        if any(item.target_id not in prices for item in account.positions or ()):
+            raise PermissionError("held_position_valuation_missing")
+        if (
+            security is not None
+            and security.symbol in symbols
+            and next(item for item in securities if item.symbol == security.symbol) != security
+        ):
             raise PermissionError("portfolio security differs from current admission")
         rules: dict[tuple[str, str], ExchangeInstrumentRule] = {}
-        for admission in binding.securities:
+        for admission in securities:
+            if current_policy and not admission.execution_ready:
+                continue
             item = admission.evidence
             assert (
                 item is not None and item.buy_lot_size is not None and item.price_tick is not None
@@ -306,7 +375,15 @@ class ProspectiveMockComposition:
                 instrument_class=item.instrument_class,
                 qualification_hash=qualification.qualification_artifact_hash,
             )
-        expiry = min(binding.mandate.valid_until, *(price.valid_until for price in prices.values()))
+        expiry = min(
+            [
+                bound_mandate.valid_until,
+                account.as_of + timedelta(minutes=5),
+                *(prices[item.target_id].valid_until for item in account.positions or ()),
+            ]
+            if current_policy
+            else [bound_mandate.valid_until, *(price.valid_until for price in prices.values())]
+        )
         position = account.project_positions(
             evaluated_at=account.reconciled_at, max_age=timedelta(minutes=5)
         )
@@ -404,7 +481,7 @@ class ProspectiveMockComposition:
                 "symbol": item.symbol,
                 "source_record_hashes": list(item.evidence.source_record_hashes),
             }
-            for item in binding.securities
+            for item in securities
             if item.evidence is not None
         )
         rule_set = ExchangeInstrumentRuleSet(
@@ -415,12 +492,28 @@ class ProspectiveMockComposition:
             tuple(rules.values()),
         )
         current = PortfolioReviewInputs(
-            account, position, view, exposure, binding.mandate, prices, rule_set, cutoff, expiry
+            account,
+            position,
+            view,
+            exposure,
+            bound_mandate,
+            prices,
+            rule_set,
+            cutoff,
+            expiry,
+            admitted_candidates=candidates,
         )
         artifact = self.store.artifacts.put_json(
             {
                 "inputs": current.to_dict(),
-                "universe": binding.to_dict(),
+                "universe": (
+                    binding.to_dict()
+                    if binding is not None
+                    else {
+                        "securities": [item.to_dict() for item in securities],
+                        "dynamic_admission_accepted": False,
+                    }
+                ),
                 "nav": str(nav),
                 "cutoff": cutoff.isoformat(),
             }
@@ -440,12 +533,48 @@ class ProspectiveMockComposition:
                 {exposure.exposure_view_id: exposure}
             ),
             clock=self.clock,
-            proposal_version="v5",
+            proposal_version="v6" if current_policy else "v5",
         )
         current.assert_complete(
             self.store.harness_authority_id, self.portfolio.exposure_authority, cutoff
         )
         return self.portfolio
+
+    @staticmethod
+    def _candidate_identities(
+        inputs: ResearchThesisRunInputs,
+        market: ProspectiveAShareInputs,
+        cutoff: datetime,
+    ) -> tuple[PortfolioReviewCandidate, ...]:
+        """Project only exact profile receipts in the signed candidate evidence map."""
+        candidates: list[PortfolioReviewCandidate] = []
+        for symbol, refs in inputs.candidate_proofs.items():
+            identities: dict[tuple[str, str], str] = {}
+            for table in market._tables():  # pyright: ignore[reportPrivateUsage]
+                if (
+                    table.api not in {"stock_basic", "etf_basic"}
+                    or table.snapshot.snapshot_id not in refs
+                    or table.snapshot.query.parameters.get("ts_code") != symbol
+                    or table.snapshot.completed_at > cutoff
+                ):
+                    continue
+                for row, digest in table.rows:
+                    if row.get("ts_code") == symbol and row.get("exchange") == (
+                        "SSE" if symbol.endswith(".SH") else "SZSE"
+                    ):
+                        identities[(table.api, canonical_hash(row))] = digest
+            if len(identities) != 1:
+                raise PermissionError("candidate_profile_identity_missing_or_conflicting:" + symbol)
+            (api, _), digest = next(iter(identities.items()))
+            candidates.append(
+                PortfolioReviewCandidate(
+                    symbol,
+                    "XSHG" if symbol.endswith(".SH") else "XSHE",
+                    "equity" if api == "stock_basic" else "exchange_traded_fund",
+                    (digest,),
+                )
+            )
+        return tuple(candidates)
 
     def _execution_ledger(self) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
         with self.provider._connect() as connection:  # pyright: ignore[reportPrivateUsage]

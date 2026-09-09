@@ -60,5 +60,83 @@ def test_research_ignores_future_factors_and_does_not_require_trading_rules(tmp_
     assert "private-case-label" not in str(repository.evidence_pack.to_dict())
     assert repository.evidence_pack.as_of == cutoff
     assert any("coverage is missing" in gap for gap in repository.evidence_pack.data_gaps)
+    price_reference = repository.evidence_pack.evidence[0]
+    loaded = cast(
+        dict[str, object],
+        asyncio.run(repository.read_evidence({"evidence_id": price_reference.evidence_id})),
+    )
+    document = cast(dict[str, object], loaded["document"])
+    assert document["fields"] == [
+        "trade_date",
+        "raw_close",
+        "cutoff_adjusted_close",
+        "volume_lots",
+    ]
+    semantics = cast(dict[str, str], document["field_semantics"])
+    assert semantics["raw_close"] == (
+        "actual quoted session close; do not mix it with adjusted closes"
+    )
+    assert "consistent adjusted-close basis" in semantics["cutoff_adjusted_close"]
+    proof_hash = cast(str, document["source_projection_hash"])
+    assert store.artifacts.read_json(proof_hash) == projection
     # Raw halving with its sourced factor adjustment is not a market-move trigger.
     assert asyncio.run(continuous_event_facts(repository)) == ()
+
+
+def test_fact_projection_uses_source_records_not_evidence_names() -> None:
+    from dataclasses import replace
+
+    from market_impact_agent.agent_contracts import EvidencePack, EvidenceReference, canonical_hash
+    from market_impact_agent.frozen_research import FrozenResearchRepository
+    from market_impact_agent.research import EvidenceTier
+
+    cutoff = datetime(2025, 1, 6, 1, 25, tzinfo=UTC)
+    published = datetime(2025, 1, 3, 0, tzinfo=UTC)
+    document: dict[str, object] = {
+        "records": [
+            {
+                "evidence_record_id": "publisher-version-a",
+                "published_at": published.isoformat(),
+                "available_at": published.isoformat(),
+            }
+        ],
+        "retrieved_at": cutoff.isoformat(),
+    }
+    reference = EvidenceReference(
+        "arbitrary-source-name",
+        "source-publication",
+        "source://publisher/version-a",
+        EvidenceTier.OFFICIAL,
+        published,
+        canonical_hash(document),
+        "Dated publisher record",
+    )
+
+    def repository(ref: EvidenceReference, value: dict[str, object]):
+        return FrozenResearchRepository(
+            evidence_pack=EvidencePack.build(
+                event_id="event",
+                as_of=cutoff,
+                research_question="Review the source.",
+                evidence=(ref,),
+                pattern_packs=(),
+                allowed_targets=("510300.SH",),
+                data_gaps=(),
+            ),
+            evidence_documents={ref.evidence_id: value},
+            pattern_packs={},
+        )
+
+    first = asyncio.run(continuous_event_facts(repository(reference, document)))
+    renamed = asyncio.run(
+        continuous_event_facts(
+            repository(replace(reference, evidence_id="price-not-an-event"), document)
+        )
+    )
+    assert first == renamed == ("qualified-fact:" + canonical_hash("publisher-version-a"),)
+    receipt_only: dict[str, object] = {
+        "retrieved_at": cutoff.isoformat(),
+        "source_api": "stock_basic",
+    }
+    ref = replace(reference, content_hash=canonical_hash(receipt_only), available_at=cutoff)
+    assert asyncio.run(continuous_event_facts(repository(ref, receipt_only))) == ()

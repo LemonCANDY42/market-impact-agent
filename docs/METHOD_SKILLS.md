@@ -6,6 +6,13 @@ convert a name into authority. A method is eligible only when the frozen point-i
 for its analysis and contains its declared evidence. Selection never uses realized case labels or
 returns.
 
+The v1 routed/preloaded catalog and historical experiments below keep their
+original semantics. The separately authorized [27B on-demand experiment](
+SKILLS_ABLATION_20260908.md) gives the model a frozen optional catalog and a bounded
+read tool. Its [initial research corpus](research/skills-ablation-20260908/method-sources.json)
+is experimental, uses sources available by 2021-09-07, and records conflicting
+evidence and gaps. It does not satisfy or replace the production promotion gates.
+
 ## Frozen v1 catalog
 
 | Skill | Public lineage | Best-fit question | Required evidence | Explicit non-capability |
